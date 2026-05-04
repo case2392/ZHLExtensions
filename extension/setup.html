@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ZHL Productivity Pack — Setup</title>
+  <link rel="stylesheet" href="setup.css" />
+</head>
+<body>
+  <header class="page-header">
+    <div class="brand">
+      <div class="brand-mark">ZHL</div>
+      <div class="brand-text">
+        <h1>ZHL Productivity Pack</h1>
+        <p class="tagline">Five workflow tweaks bundled into one extension. Toggle the ones you want — the rest stay quiet.</p>
+      </div>
+    </div>
+    <div id="save-status" class="save-status"></div>
+  </header>
+
+  <main class="modules">
+
+    <!-- ============== Module: Gmail Tweaks ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Gmail &amp; Salesforce QoL</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code>, <code>*.lightning.force.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_gmailTweaks" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/gmail-tweaks.svg" alt="Gmail with Reply All button next to Reply" />
+        </div>
+        <ul class="module-features">
+          <li><strong>Reply All button</strong> in every message header — no need to open the ⋮ menu.</li>
+          <li><strong>Delete key deletes</strong> the open thread / selected emails (no need to remember <kbd>#</kbd>).</li>
+          <li><strong>Inline compose</strong> moves to the top of the thread so the message you're replying to stays visible.</li>
+          <li><strong>Stops the sidebar "More" section</strong> from auto-expanding while dragging an email.</li>
+          <li><strong>Salesforce Lead pages:</strong> auto-disables the "Show Promotions" toggle.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Salesforce SMS ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Salesforce Contact SMS Quick Open</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.salesforce.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_contactSms" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/contact-sms.svg" alt="Salesforce contact phone with Open SMS button next to it" />
+        </div>
+        <ul class="module-features">
+          <li>Adds an <strong>Open SMS</strong> button next to phone numbers on Contact records.</li>
+          <li>Clicking it opens the <strong>Messaging utility</strong>, finds an existing thread, or starts a new one with that number pre-filled.</li>
+          <li>Skips Highlights panel, datatables, TCPA / DNC sections, and non-Contact records to avoid clutter.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Loan Amount Field ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>ZHL Loan Amount Field</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_loanAmount" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/loan-amount.svg" alt="Loan amount editable field beneath purchase price and down payment" />
+        </div>
+        <ul class="module-features">
+          <li>Adds an editable <strong>Loan amount</strong> field below the purchase price / down payment row in Pricing &amp; Scenarios.</li>
+          <li>Edit loan amount and the down payment / down payment % update automatically (loan = purchase − down).</li>
+          <li>Edit purchase or down payment and the loan amount recalculates live.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: VA Calc + Student Loans ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>VA Residual Income &amp; Student Loan Calc</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_vaCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/va-calc.svg" alt="Residual income panel showing taxes, debts, and VA table requirement" />
+        </div>
+        <ul class="module-features">
+          <li><strong>Run Residual Income Calc</strong> button shows up on VA loans (Regular military / National Guard / reserves). Reads income, debts, PITI, family size, and property state, then shows residual vs. the VA table requirement.</li>
+          <li>Editable rows for Non-Taxable Income, Maintenance &amp; Utilities, and Childcare — tweak and re-run.</li>
+          <li><strong>Calc Student Loans</strong> button on the Liabilities table fills monthly payments using FHA / DU / LPA / VA formulas.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Caller ID ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Genesys Caller ID for Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.mypurecloud.com</code> + related</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_callerId" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/caller-id.svg" alt="Genesys widget showing matched name badge next to caller phone number" />
+        </div>
+        <ul class="module-features">
+          <li>Watches for phone numbers in the Genesys softphone widget and looks them up against Salesforce <strong>Lead</strong>, <strong>Contact</strong>, and <strong>Loan__c</strong> records.</li>
+          <li>Displays the matched record's name as a blue badge next to the number — works on incoming calls, voicemail rows, and call history.</li>
+          <li>Uses your existing Salesforce session cookie (no Connected App setup needed).</li>
+        </ul>
+
+        <div class="caller-id-config">
+          <h3>Caller ID configuration</h3>
+          <label>Salesforce My Domain host
+            <input id="cid-myDomainHost" placeholder="zillowhomeloans.my.salesforce.com" />
+          </label>
+          <label>API version
+            <input id="cid-apiVersion" placeholder="v59.0" />
+          </label>
+          <label>Cache TTL (ms)
+            <input id="cid-cacheTtlMs" placeholder="300000" />
+          </label>
+          <label>Objects (JSON)
+            <textarea id="cid-objects" rows="6"></textarea>
+          </label>
+          <div class="row">
+            <button id="cid-save" type="button">Save Caller ID config</button>
+            <button id="cid-clear" type="button" class="secondary">Clear lookup cache</button>
+            <span id="cid-status" class="cid-status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="page-footer">
+    <p>Toggle changes save automatically. Reload any open tab on the affected site for changes to take effect.</p>
+  </footer>
+
+  <script src="setup.js"></script>
+</body>
+</html>

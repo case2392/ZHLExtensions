@@ -1,0 +1,78 @@
+/* Gmail Reply All Button — styling to match Gmail's native icon buttons */
+
+.gm-reply-all-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #202124;
+  user-select: none;
+  vertical-align: middle;
+  transition: background-color 0.15s ease;
+}
+
+.gm-reply-all-btn:hover {
+  background-color: rgba(60, 64, 67, 0.08);
+}
+
+.gm-reply-all-btn:active {
+  background-color: rgba(60, 64, 67, 0.16);
+}
+
+.gm-reply-all-btn:focus {
+  outline: none;
+  background-color: rgba(60, 64, 67, 0.12);
+}
+
+.gm-reply-all-btn img {
+  display: block;
+  pointer-events: none;
+}
+
+/* Dark theme support */
+@media (prefers-color-scheme: dark) {
+  .gm-reply-all-btn {
+    color: #e8eaed;
+  }
+  .gm-reply-all-btn:hover {
+    background-color: rgba(232, 234, 237, 0.08);
+  }
+  .gm-reply-all-btn:active {
+    background-color: rgba(232, 234, 237, 0.16);
+  }
+}
+
+/* Gmail's dark theme uses a body class — cover that too */
+body.dark .gm-reply-all-btn,
+html[dir] body[class*="dark"] .gm-reply-all-btn {
+  color: #e8eaed;
+}
+
+/* Mask Gmail's auto-expansion of the sidebar "More" section during an
+   email drag. content.js tags the expanded sibling <div> with this class
+   as soon as Gmail flips the toggle to "Less labels" during a drag, then
+   removes the class when the drag ends. Hides only that single node, so
+   the rest of the sidebar (Labels section, drop targets) stays live. */
+.gm-more-drag-mask-target {
+  display: none !important;
+}
+
+/* Inline compose wrapper needs an explicit positioning context when we
+   move it to the top of the thread. Gmail's compose has internal
+   position:absolute children (.aDj, .Ur's toolbar wrapper) that assume
+   they resolve against a positioned ancestor set up by the thread's
+   bottom slot; when the compose moves, they end up resolving against
+   the viewport and the formatting toolbar can land on top of the
+   To/Cc/Bcc recipient row. position:relative on the compose wrapper
+   pins absolute children to the compose box, where they're designed
+   to live. */
+.aDg {
+  position: relative !important;
+}

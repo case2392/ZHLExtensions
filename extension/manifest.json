@@ -1,0 +1,115 @@
+{
+  "manifest_version": 3,
+  "name": "ZHL Productivity Pack",
+  "version": "1.0.0",
+  "description": "Five workflow tweaks for Zillow Home Loans, Salesforce, Genesys, and Gmail bundled into one extension. Pick which ones you want from the setup page.",
+  "permissions": [
+    "storage",
+    "cookies",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://operator.zillowhomeloans.com/*",
+    "https://*.lightning.force.com/*",
+    "https://*.my.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://*.salesforce.com/*",
+    "https://*.salesforce-setup.com/*",
+    "https://*.salesforce-experience.com/*",
+    "https://*.visualforce.com/*",
+    "https://*.vf.force.com/*",
+    "https://*.visual.force.com/*",
+    "https://*.cloudforce.com/*",
+    "https://apps.mypurecloud.com/*",
+    "https://*.mypurecloud.com/*",
+    "https://*.mypurecloud.ie/*",
+    "https://*.mypurecloud.de/*",
+    "https://*.mypurecloud.com.au/*",
+    "https://*.mypurecloud.jp/*",
+    "https://*.pure.cloud/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "setup.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "ZHL Productivity Pack — Setup",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["modules/gmail-tweaks.js"],
+      "css": ["modules/gmail-tweaks.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://*.lightning.force.com/*"],
+      "js": ["modules/salesforce-promotions.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.lightning.force.com/*",
+        "https://*.salesforce.com/*",
+        "https://*.salesforce-setup.com/*"
+      ],
+      "js": ["modules/contact-sms.js"],
+      "css": ["modules/contact-sms.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://operator.zillowhomeloans.com/loan-officer-portal/*"],
+      "js": ["modules/loan-amount.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://operator.zillowhomeloans.com/*"],
+      "js": ["modules/va-calc.js"],
+      "css": ["modules/va-calc.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.lightning.force.com/*",
+        "https://*.force.com/*",
+        "https://*.salesforce.com/*",
+        "https://*.visualforce.com/*",
+        "https://*.vf.force.com/*",
+        "https://*.visual.force.com/*",
+        "https://*.cloudforce.com/*",
+        "https://apps.mypurecloud.com/*",
+        "https://*.mypurecloud.com/*",
+        "https://*.mypurecloud.ie/*",
+        "https://*.mypurecloud.de/*",
+        "https://*.mypurecloud.com.au/*",
+        "https://*.mypurecloud.jp/*",
+        "https://*.pure.cloud/*"
+      ],
+      "js": ["modules/caller-id.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["images/*.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
