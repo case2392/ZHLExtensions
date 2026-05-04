@@ -148,27 +148,6 @@
           <li>Displays the matched record's name as a blue badge next to the number — works on incoming calls, voicemail rows, and call history.</li>
           <li>Uses your existing Salesforce session cookie (no Connected App setup needed).</li>
         </ul>
-
-        <div class="caller-id-config">
-          <h3>Caller ID configuration</h3>
-          <label>Salesforce My Domain host
-            <input id="cid-myDomainHost" placeholder="zillowhomeloans.my.salesforce.com" />
-          </label>
-          <label>API version
-            <input id="cid-apiVersion" placeholder="v59.0" />
-          </label>
-          <label>Cache TTL (ms)
-            <input id="cid-cacheTtlMs" placeholder="300000" />
-          </label>
-          <label>Objects (JSON)
-            <textarea id="cid-objects" rows="6"></textarea>
-          </label>
-          <div class="row">
-            <button id="cid-save" type="button">Save Caller ID config</button>
-            <button id="cid-clear" type="button" class="secondary">Clear lookup cache</button>
-            <span id="cid-status" class="cid-status"></span>
-          </div>
-        </div>
       </div>
     </section>
 
