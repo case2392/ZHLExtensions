@@ -297,11 +297,45 @@
     return location.href || '';
   }
 
-  function isOnContactRecord(_el) {
-    // URL-only check — the previous DOM-walking entity detector wrongly
-    // matched on Lead pages because related fields like "Buyer's Agent" or
-    // "Lead Owner" carry standard:contact icons that the upward querySelector
-    // would pick up before reaching the page's own highlights panel.
+  // Find the record container that owns this phone element. Lightning
+  // Console can have multiple record pages in the same DOM (workspace
+  // subtabs) and the URL can reflect either of them after navigation, so
+  // URL alone isn't enough — we need the highlights panel that lives in
+  // the SAME record container as our phone.
+  const RECORD_CONTAINER_SELECTOR = [
+    'flexipage-record-home',
+    'one-record-home-template-desktop2',
+    'one-record-home-template',
+    'one-record-home2',
+    'one-record-home-flexipage2',
+    '[data-aura-class="forceRecordLayout"]'
+  ].join(', ');
+
+  function isOnContactRecord(el) {
+    // Prefer the record-container icon — it identifies the specific record
+    // this phone belongs to, even when other records share the document
+    // (Lightning Console workspace subtabs).
+    const container = el.closest(RECORD_CONTAINER_SELECTOR);
+    if (container) {
+      const iconEl = container.querySelector(
+        'records-highlights2 lightning-icon[icon-name], ' +
+        'records-highlights-3 lightning-icon[icon-name], ' +
+        '[class*="highlightsPanel"] lightning-icon[icon-name], ' +
+        '[class*="HighlightsPanel"] lightning-icon[icon-name]'
+      );
+      if (!iconEl) {
+        // Container present but its highlights panel hasn't rendered yet.
+        // Be strict: skip now. MutationObserver will re-scan when it
+        // shows up. This prevents URL-based misclassification when a
+        // Lead's record container is in the DOM but the URL currently
+        // points at a sibling Contact workspace tab.
+        return false;
+      }
+      const m = /standard:(\w+)/.exec(iconEl.getAttribute('icon-name') || '');
+      return !!m && m[1].toLowerCase() === 'contact';
+    }
+    // No record container found at all — fall back to URL match. Used for
+    // older Salesforce layouts that don't expose the templates above.
     const urlMatch = /\/lightning\/r\/(\w+)\//i.exec(getPageUrl());
     if (!urlMatch) return false;
     return urlMatch[1].toLowerCase() === 'contact';
