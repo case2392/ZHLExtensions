@@ -119,6 +119,9 @@
         if (!parent) return NodeFilter.FILTER_REJECT;
         if (parent.classList && parent.classList.contains(BADGE_CLASS)) return NodeFilter.FILTER_REJECT;
         if (parent.closest("." + BADGE_CLASS)) return NodeFilter.FILTER_REJECT;
+        // Skip Genesys notification / toast banners — these are transient
+        // status messages ("Failed to save…", etc.) and don't need a badge.
+        if (parent.closest(".notification-container, .notification-message, .alert, .toast, [class*='notification'], [class*='Notification'], [class*='toast'], [class*='Toast']")) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       }
     });
