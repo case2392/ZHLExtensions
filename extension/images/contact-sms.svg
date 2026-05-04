@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f3f3f3"/>
+  <!-- Salesforce-style contact card -->
+  <rect x="16" y="16" width="328" height="188" rx="6" fill="#ffffff" stroke="#dddbda"/>
+  <!-- Header -->
+  <rect x="16" y="16" width="328" height="36" rx="6" fill="#fafaf9"/>
+  <circle cx="36" cy="34" r="10" fill="#1589ee"/>
+  <text x="36" y="38" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">C</text>
+  <text x="54" y="32" font-size="12" font-weight="700" fill="#16325c">Contact</text>
+  <text x="54" y="46" font-size="10" fill="#54698d">Jane Doe</text>
+
+  <!-- Phone field -->
+  <text x="32" y="84" font-size="10" font-weight="700" fill="#3e3e3c">Phone</text>
+  <text x="32" y="106" font-size="13" fill="#005fb2" text-decoration="underline">(402) 555-0188</text>
+
+  <!-- Open SMS button -->
+  <rect x="155" y="92" width="74" height="20" rx="10" fill="#1589ee" stroke="#0070d2"/>
+  <text x="192" y="106" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff">Open SMS</text>
+  <!-- callout arrow -->
+  <path d="M155 102 L143 102" stroke="#1589ee" stroke-width="2" fill="none"/>
+  <polygon points="143,98 137,102 143,106" fill="#1589ee"/>
+
+  <!-- Mobile field -->
+  <text x="32" y="138" font-size="10" font-weight="700" fill="#3e3e3c">Mobile</text>
+  <text x="32" y="160" font-size="13" fill="#005fb2" text-decoration="underline">(319) 555-0413</text>
+  <rect x="155" y="146" width="74" height="20" rx="10" fill="#1589ee" stroke="#0070d2"/>
+  <text x="192" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff">Open SMS</text>
+
+  <!-- Note -->
+  <text x="32" y="190" font-size="10" fill="#706e6b">Click to open Salesforce Messaging utility with that number ready</text>
+</svg>
