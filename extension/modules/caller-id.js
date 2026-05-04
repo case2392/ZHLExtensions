@@ -10,13 +10,13 @@
 // up in Salesforce, and annotates the node with the matched record name.
 
 (() => {
-  // Only run inside iframes. The Genesys widget is rendered inside a Visualforce
-  // iframe; the top-level Salesforce page contains its own tel: links (Lead phone,
-  // DNC widget, etc.) that we must not annotate.
-  if (window.top === window.self) {
-    console.log("[CallerID] skipping top-level frame", location.href);
-    return;
-  }
+  // Modern Genesys Cloud utility-bar widget renders inline in the top
+  // Salesforce frame (no iframe), so we have to allow the top frame too.
+  // To avoid annotating Salesforce's own page-level phone fields (Phone,
+  // Mobile, Work Phone on the record) we restrict the top-frame scan to
+  // utility-bar panels and Genesys-branded containers — see getScanRoots.
+  // In iframes (legacy Visualforce-embedded Genesys), scan the whole frame.
+  const IS_TOP_FRAME = window.top === window.self;
 
   // Diagnostic: confirms the script actually loaded in this frame and which version.
   // If the version logged here is older than the manifest.json on disk, Chrome is
@@ -154,6 +154,28 @@
     }
   }
 
+  // In the top Salesforce frame, only scan inside utility-bar panels and
+  // Genesys-branded containers. This keeps badges out of Salesforce's own
+  // record fields (Phone, Mobile, Work Phone) where they'd be redundant.
+  const TOP_FRAME_ROOTS_SELECTOR = [
+    "div.oneUtilityBarPanel",
+    "div[data-aura-class*='utilityBar']",
+    "div[class*='utilityBar']",
+    "[class*='purecloud']",
+    "[class*='Purecloud']",
+    "[class*='PureCloud']",
+    "[class*='genesys']",
+    "[class*='Genesys']",
+    "[id*='purecloud']",
+    "[id*='genesys']"
+  ].join(", ");
+
+  function getScanRoots() {
+    if (!IS_TOP_FRAME) return [document.body || document.documentElement];
+    const roots = document.querySelectorAll(TOP_FRAME_ROOTS_SELECTOR);
+    return roots.length ? Array.from(roots) : [];
+  }
+
   let scheduled = false;
   function scheduleScan() {
     if (scheduled) return;
@@ -161,7 +183,7 @@
     setTimeout(() => {
       scheduled = false;
       try {
-        scanTextNodes(document.body || document.documentElement);
+        for (const root of getScanRoots()) scanTextNodes(root);
       } catch (e) {
         console.warn("[CallerID] scan failed", e);
       }
