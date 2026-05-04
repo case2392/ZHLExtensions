@@ -285,33 +285,26 @@
     }
   }
 
-  function getPhoneRecordEntityType(el) {
-    let cur = el.parentElement;
-    while (cur && cur !== document.body) {
-      const iconEl = cur.querySelector(
-        'records-highlights2 lightning-icon[icon-name], ' +
-        'records-highlights-3 lightning-icon[icon-name], ' +
-        '[class*="highlightsPanel"] lightning-icon[icon-name], ' +
-        '[class*="HighlightsPanel"] lightning-icon[icon-name]'
-      );
-      if (iconEl) {
-        const name = iconEl.getAttribute('icon-name') || '';
-        const m = /standard:(\w+)/.exec(name);
-        return m ? m[1].toLowerCase() : null;
+  function getPageUrl() {
+    // The script runs in iframes too (all_frames: true). Salesforce frames
+    // (Visualforce, etc.) won't have /lightning/r/ in their own URL. Try the
+    // top frame first; fall back to local href if cross-origin blocks it.
+    try {
+      if (window.top && window.top.location && window.top.location.href) {
+        return window.top.location.href;
       }
-      cur = cur.parentElement;
-    }
-    return null;
+    } catch (_) { /* cross-origin */ }
+    return location.href || '';
   }
 
-  function isOnContactRecord(el) {
-    const entity = getPhoneRecordEntityType(el);
-    if (entity) return entity === 'contact';
-
-    const urlMatch = /\/lightning\/r\/(\w+)\//i.exec(location.href || '');
-    if (urlMatch) return urlMatch[1].toLowerCase() === 'contact';
-
-    return false;
+  function isOnContactRecord(_el) {
+    // URL-only check — the previous DOM-walking entity detector wrongly
+    // matched on Lead pages because related fields like "Buyer's Agent" or
+    // "Lead Owner" carry standard:contact icons that the upward querySelector
+    // would pick up before reaching the page's own highlights panel.
+    const urlMatch = /\/lightning\/r\/(\w+)\//i.exec(getPageUrl());
+    if (!urlMatch) return false;
+    return urlMatch[1].toLowerCase() === 'contact';
   }
 
   function shouldSkipInjection(el) {
