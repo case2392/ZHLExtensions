@@ -119,11 +119,28 @@
 
   // ---- SMS panel detection ----------------------------------------------
 
-  // Find the New SMS Conversation panel via deep text-walk (pierces LWC
-  // shadow roots). From the matched text node, walk up the parent chain
-  // until an ancestor also contains the participant search input. Both
-  // searches deep-query to handle nested shadow roots.
+  // Two-track panel detection. Track A: find the participant input by
+  // placeholder (works whether the heading is in light DOM or shadow
+  // DOM, since the input is the most distinctive element). Walk up
+  // until an ancestor also contains the "New SMS Conversation" text.
+  // Track B (fallback): keep the old text-first walk, in case the
+  // input renders later than the heading.
   function findNewSmsPanel() {
+    // Track A — input first.
+    const inputs = deepQuerySelectorAll(document, 'input[placeholder*="phone or name" i]');
+    for (const input of inputs) {
+      if (input.offsetParent === null) continue;
+      let cur = input.parentElement;
+      for (let i = 0; i < 25 && cur; i++) {
+        const text = (cur.textContent || '').slice(0, 4000);
+        if (/New SMS Conversation/i.test(text)) {
+          if (cur.offsetParent === null) break;
+          return cur;
+        }
+        cur = cur.parentElement;
+      }
+    }
+    // Track B — text first.
     const textNode = deepWalkText(document, (n) =>
       n.nodeValue && /New SMS Conversation/i.test(n.nodeValue)
     );
@@ -142,6 +159,36 @@
 
   function findSmsParticipantInput(panel) {
     return deepQuerySelector(panel, 'input[placeholder*="phone or name" i]');
+  }
+
+  // One-shot diagnostic so we can see exactly what the script can find.
+  let diagDone = false;
+  function dumpDiag() {
+    if (diagDone) return;
+    diagDone = true;
+    try {
+      const lightH3 = Array.from(document.querySelectorAll('h3'));
+      const deepH3 = deepQuerySelectorAll(document, 'h3');
+      const lightInputs = document.querySelectorAll('input[placeholder*="phone or name" i]').length;
+      const deepInputs = deepQuerySelectorAll(document, 'input[placeholder*="phone or name" i]').length;
+      const shadowHosts = Array.from(document.querySelectorAll('*')).filter((el) => el.shadowRoot).length;
+      const innerTextHas = (document.body.innerText || '').includes('New SMS Conversation');
+      const innerHTMLHas = (document.body.innerHTML || '').includes('New SMS Conversation');
+      console.log('[SMS Add Participants DIAG]', {
+        urlIsLead: /\/lightning\/r\/Lead\//i.test(location.href),
+        lightH3Count: lightH3.length,
+        deepH3Count: deepH3.length,
+        lightH3Texts: lightH3.slice(0, 8).map((h) => (h.textContent || '').slice(0, 60)),
+        deepH3Texts: deepH3.slice(0, 12).map((h) => (h.textContent || '').slice(0, 60)),
+        lightParticipantInputs: lightInputs,
+        deepParticipantInputs: deepInputs,
+        openShadowHosts: shadowHosts,
+        innerTextHasNewSMS: innerTextHas,
+        innerHTMLHasNewSMS: innerHTMLHas
+      });
+    } catch (e) {
+      console.warn('[SMS Add Participants DIAG] failed', e);
+    }
   }
 
   // ---- Adding a participant programmatically ----------------------------
@@ -364,7 +411,13 @@
     console.log('[SMS Add Participants]', msg);
   }
 
+  let scanCount = 0;
   function scan() {
+    scanCount++;
+    // After ~3 seconds of failing to find the panel, dump the diagnostic
+    // once so we can see what's actually visible to the script.
+    if (scanCount > 15 && !diagDone) dumpDiag();
+
     const panel = findNewSmsPanel();
     if (!panel) {
       pruneButtons();
