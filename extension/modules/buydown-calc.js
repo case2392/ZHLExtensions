@@ -78,6 +78,12 @@
       && text.indexOf('Interest rate') !== -1;
   }
 
+  // ZHL doesn't offer 2-1 buydowns on FHA or VA loans, so skip those cards.
+  // Card titles look like "FHA 30 Yr Fixed", "VA 30 Yr Fixed", etc.
+  function isFhaOrVaProgram(title) {
+    return /\b(FHA|VA)\b/i.test(title || '');
+  }
+
   function getCardTitle(card) {
     // The card title is in the first <p> matching things like "Conf 30 Yr Fixed".
     const ps = card.querySelectorAll('p');
@@ -271,8 +277,18 @@
     if (!isScenarioCard(card)) return;
     const wrapperParent = card.parentElement;
     if (!wrapperParent) return;
-    // Already injected for this card?
-    if (wrapperParent.querySelector(':scope > .' + WRAPPER_CLASS)) return;
+
+    const existingWrapper = wrapperParent.querySelector(':scope > .' + WRAPPER_CLASS);
+
+    // ZHL doesn't offer 2-1 buydowns on FHA / VA. If the card identifies
+    // as one of those, remove any button that was already injected and
+    // skip — handles cases where the title rendered after our first scan.
+    if (isFhaOrVaProgram(getCardTitle(card))) {
+      if (existingWrapper) existingWrapper.remove();
+      return;
+    }
+
+    if (existingWrapper) return;
 
     const wrapper = document.createElement('div');
     wrapper.className = WRAPPER_CLASS;
