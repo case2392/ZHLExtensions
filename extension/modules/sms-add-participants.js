@@ -105,7 +105,9 @@
   }
 
   function getBuyersAgentInfo() {
-    // Phone — read from the "Buyer's Agent Phone" field.
+    // Phone — read from the "Buyer's Agent Phone" field on the Lead.
+    // Used as fallback if the Salesforce API lookup of the agent's
+    // MobilePhone fails.
     let phone = null;
     let phoneDisplay = null;
     const labels = deepQuerySelectorAll(document, 'span.test-id__field-label, .test-id__field-label, [class*="field-label"]');
@@ -125,12 +127,13 @@
         break;
       }
     }
-    if (!phone) return null;
 
-    // Name — read from the separate "Buyer's Agent" record-lookup field.
-    // field-label varies between straight and curly apostrophe, so iterate
-    // and normalize.
+    // Name + Contact id — from the separate "Buyer's Agent" record-lookup
+    // field. The Contact id lets us fetch the agent's MobilePhone via the
+    // background Salesforce API call (the Lead page itself only exposes
+    // Phone, not Mobile, for the agent).
     let name = null;
+    let contactId = null;
     const items = deepQuerySelectorAll(document, 'records-record-layout-item');
     for (const item of items) {
       const label = normalizeLabel(item.getAttribute('field-label'));
@@ -138,11 +141,15 @@
       if (item.offsetParent === null) continue;
       const link = deepQuerySelector(item, 'a[href*="/lightning/r/Contact/"]');
       if (!link) continue;
+      const m = /\/lightning\/r\/Contact\/(\w+)\//.exec(link.getAttribute('href') || '');
+      if (m) contactId = m[1];
       const linkName = (link.textContent || '').trim();
-      if (linkName) { name = linkName; break; }
+      if (linkName) name = linkName;
+      break;
     }
 
-    return { phone, displayText: phoneDisplay, name };
+    if (!phone && !contactId) return null;
+    return { phone, displayText: phoneDisplay, name, contactId };
   }
 
   // ---- SMS panel detection ----------------------------------------------
@@ -390,17 +397,30 @@
     wrapper.setAttribute('style', WRAPPER_STYLE);
 
     if (leadCtx.buyersAgent) {
-      const phone = leadCtx.buyersAgent.phone;
+      const fallbackPhone = leadCtx.buyersAgent.phone;
       const name = leadCtx.buyersAgent.name;
-      const display = leadCtx.buyersAgent.displayText;
-      // Prefer the agent's name; fall back to the phone if the name field
-      // wasn't populated.
-      const labelSuffix = name || display;
+      const contactId = leadCtx.buyersAgent.contactId;
+      const labelSuffix = name || leadCtx.buyersAgent.displayText || 'Add';
       const btn = makeAddButton(`Add Buyer’s Agent (${labelSuffix})`, async (b) => {
         const orig = b.textContent;
         b.disabled = true;
+        // Prefer the agent's MobilePhone (fetched by Contact id via the
+        // background Salesforce API). Fall back to the Lead's
+        // "Buyer's Agent Phone" field if the API doesn't return one.
+        let phoneToUse = null;
+        if (contactId) {
+          b.textContent = 'Looking up mobile…';
+          phoneToUse = await fetchContactPhone(contactId);
+        }
+        if (!phoneToUse) phoneToUse = fallbackPhone;
+        if (!phoneToUse) {
+          b.textContent = orig;
+          b.disabled = false;
+          alert('Could not find a phone number for the Buyer’s Agent.');
+          return;
+        }
         b.textContent = 'Adding…';
-        const ok = await addParticipant(panel, phone);
+        const ok = await addParticipant(panel, phoneToUse);
         b.textContent = orig;
         b.disabled = false;
         if (!ok) alert('Could not add Buyer’s Agent — see console for details.');
