@@ -16,8 +16,15 @@
   try {
     if (window.__zhlOpenShadowOverride) return;
     window.__zhlOpenShadowOverride = true;
+    let shadowCount = 0;
+    let firstLogged = false;
     const orig = Element.prototype.attachShadow;
     Element.prototype.attachShadow = function (init) {
+      shadowCount++;
+      if (!firstLogged) {
+        firstLogged = true;
+        console.log('[ZHL Open-Shadow] override active — first shadow root being created');
+      }
       try {
         const newInit = init ? Object.assign({}, init, { mode: 'open' }) : { mode: 'open' };
         return orig.call(this, newInit);
@@ -25,5 +32,8 @@
         return orig.call(this, init);
       }
     };
+    // Expose a count getter so we can confirm in DevTools.
+    window.__zhlShadowCount = function () { return shadowCount; };
+    console.log('[ZHL Open-Shadow] override installed at document_start');
   } catch (_) { /* never block the page */ }
 })();
