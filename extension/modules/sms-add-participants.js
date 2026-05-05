@@ -15,6 +15,60 @@
     ? chrome.runtime.getManifest().version : '?';
   console.log('[SMS Add Participants v' + VERSION + '] loaded in', location.href);
 
+  // ---- Shadow-DOM-piercing helpers --------------------------------------
+  // Lightning Web Components on lightning.force.com use real shadow DOM.
+  // document.querySelector / TreeWalker on document.body don't see inside
+  // shadow roots, so anything injected by an LWC (the SMS panel header,
+  // the participant input, the record fields) is invisible without these.
+
+  function deepQuerySelector(root, selector) {
+    if (!root) return null;
+    if (root.querySelector) {
+      const direct = root.querySelector(selector);
+      if (direct) return direct;
+    }
+    const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (const el of all) {
+      if (el.shadowRoot) {
+        const result = deepQuerySelector(el.shadowRoot, selector);
+        if (result) return result;
+      }
+    }
+    return null;
+  }
+
+  function deepQuerySelectorAll(root, selector, out) {
+    out = out || [];
+    if (!root) return out;
+    if (root.querySelectorAll) {
+      root.querySelectorAll(selector).forEach((el) => out.push(el));
+    }
+    const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (const el of all) {
+      if (el.shadowRoot) deepQuerySelectorAll(el.shadowRoot, selector, out);
+    }
+    return out;
+  }
+
+  function deepWalkText(root, predicate) {
+    if (!root) return null;
+    if (root.nodeType !== undefined) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (predicate(node)) return node;
+      }
+    }
+    const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (const el of all) {
+      if (el.shadowRoot) {
+        const result = deepWalkText(el.shadowRoot, predicate);
+        if (result) return result;
+      }
+    }
+    return null;
+  }
+
   // ---- Lead page detection ----------------------------------------------
 
   // Don't require finding a flexipage-record-home — the embedded SMS panel
@@ -32,10 +86,10 @@
   }
 
   function getCoBorrowerInfo() {
-    const items = document.querySelectorAll('records-record-layout-item[field-label="Co-Borrower"]');
+    const items = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Co-Borrower"]');
     for (const item of items) {
       if (item.offsetParent === null) continue;
-      const link = item.querySelector('a[href*="/lightning/r/Contact/"]');
+      const link = deepQuerySelector(item, 'a[href*="/lightning/r/Contact/"]');
       if (!link) continue;
       const m = /\/lightning\/r\/Contact\/(\w+)\//.exec(link.getAttribute('href') || '');
       if (!m) continue;
@@ -46,14 +100,15 @@
   }
 
   function getBuyersAgentInfo() {
-    const labels = document.querySelectorAll('span.test-id__field-label, .test-id__field-label, [class*="field-label"]');
+    const labels = deepQuerySelectorAll(document, 'span.test-id__field-label, .test-id__field-label, [class*="field-label"]');
     for (const label of labels) {
       const text = (label.textContent || '').replace(/[’‘']/g, '').trim();
       if (!/^Buyers\s+Agent\s+Phone$/i.test(text)) continue;
+      // closest() works within the same shadow root.
       const formElement = label.closest('.slds-form-element');
       if (!formElement) continue;
       if (formElement.offsetParent === null) continue;
-      const phoneLink = formElement.querySelector('lightning-click-to-dial a, a[href^="javascript:"], a');
+      const phoneLink = deepQuerySelector(formElement, 'lightning-click-to-dial a, a[href^="javascript:"], a');
       if (!phoneLink) continue;
       const phoneText = (phoneLink.textContent || '').trim();
       const digits = phoneText.replace(/\D/g, '');
@@ -64,41 +119,29 @@
 
   // ---- SMS panel detection ----------------------------------------------
 
-  // Find the New SMS Conversation panel by walking text nodes for the
-  // string "New SMS Conversation", then climbing the parent chain until
-  // we land on an ancestor that also contains the participant search
-  // input. Element-name agnostic — works on the utility-bar version,
-  // the right-column embedded version, and anything else with the same
-  // header text.
+  // Find the New SMS Conversation panel via deep text-walk (pierces LWC
+  // shadow roots). From the matched text node, walk up the parent chain
+  // until an ancestor also contains the participant search input. Both
+  // searches deep-query to handle nested shadow roots.
   function findNewSmsPanel() {
-    const walker = document.createTreeWalker(
-      document.body || document.documentElement,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode(node) {
-          if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
-          if (!/New SMS Conversation/i.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
+    const textNode = deepWalkText(document, (n) =>
+      n.nodeValue && /New SMS Conversation/i.test(n.nodeValue)
     );
-    while (walker.nextNode()) {
-      const node = walker.currentNode;
-      let cur = node.parentElement;
-      for (let i = 0; i < 25 && cur; i++) {
-        const input = cur.querySelector && cur.querySelector('input[placeholder*="phone or name" i]');
-        if (input) {
-          if (cur.offsetParent === null) break;
-          return cur;
-        }
-        cur = cur.parentElement;
+    if (!textNode) return null;
+    let cur = textNode.parentElement;
+    for (let i = 0; i < 25 && cur; i++) {
+      const input = deepQuerySelector(cur, 'input[placeholder*="phone or name" i]');
+      if (input) {
+        if (cur.offsetParent === null) break;
+        return cur;
       }
+      cur = cur.parentElement;
     }
     return null;
   }
 
   function findSmsParticipantInput(panel) {
-    return panel.querySelector('input[placeholder*="phone or name" i]');
+    return deepQuerySelector(panel, 'input[placeholder*="phone or name" i]');
   }
 
   // ---- Adding a participant programmatically ----------------------------
@@ -204,11 +247,40 @@
 
   // ---- Button injection -------------------------------------------------
 
+  // Inline styles so the buttons render correctly even when injected into
+  // an LWC shadow root (where our content_scripts CSS file doesn't apply).
+  const BTN_STYLE_BASE =
+    'display: inline-flex;' +
+    'align-items: center;' +
+    'padding: 4px 12px;' +
+    'margin: 2px;' +
+    'font-size: 12px;' +
+    'line-height: 16px;' +
+    'font-weight: 600;' +
+    'color: #ffffff;' +
+    'background-color: #1589ee;' +
+    'border: 1px solid #0070d2;' +
+    'border-radius: 12px;' +
+    'cursor: pointer;' +
+    'font-family: inherit;' +
+    'white-space: nowrap;';
+
+  const WRAPPER_STYLE =
+    'display: flex;' +
+    'flex-wrap: wrap;' +
+    'gap: 6px;' +
+    'padding: 8px 12px;' +
+    'width: 100%;' +
+    'box-sizing: border-box;';
+
   function makeAddButton(label, onClick) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = BUTTON_CLASS;
     btn.textContent = label;
+    btn.setAttribute('style', BTN_STYLE_BASE);
+    btn.addEventListener('mouseenter', () => { btn.style.backgroundColor = '#0070d2'; });
+    btn.addEventListener('mouseleave', () => { btn.style.backgroundColor = '#1589ee'; });
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -222,10 +294,11 @@
     if (!input) return;
 
     // Already injected anywhere in this panel? skip.
-    if (panel.querySelector('.' + WRAPPER_CLASS)) return;
+    if (deepQuerySelector(panel, '.' + WRAPPER_CLASS)) return;
 
     const wrapper = document.createElement('div');
     wrapper.className = WRAPPER_CLASS;
+    wrapper.setAttribute('style', WRAPPER_STYLE);
 
     if (leadCtx.buyersAgent) {
       const phone = leadCtx.buyersAgent.phone;
@@ -279,7 +352,7 @@
   }
 
   function pruneButtons() {
-    document.querySelectorAll('.' + WRAPPER_CLASS).forEach((w) => w.remove());
+    deepQuerySelectorAll(document, '.' + WRAPPER_CLASS).forEach((w) => w.remove());
   }
 
   // ---- Scan loop --------------------------------------------------------
