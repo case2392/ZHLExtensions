@@ -11,6 +11,10 @@
   const BUTTON_CLASS = 'zhlap-add-button';
   const WRAPPER_CLASS = 'zhlap-buttons-wrapper';
 
+  const VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
+    ? chrome.runtime.getManifest().version : '?';
+  console.log('[SMS Add Participants v' + VERSION + '] loaded in', location.href);
+
   // ---- Lead page detection ----------------------------------------------
 
   // Don't require finding a flexipage-record-home — the embedded SMS panel
@@ -60,14 +64,27 @@
 
   // ---- SMS panel detection ----------------------------------------------
 
-  // Find the New SMS Conversation panel by locating the header text and
-  // walking up until we find an ancestor that also contains the
-  // participant search input. That ancestor is our panel.
+  // Find the New SMS Conversation panel by walking text nodes for the
+  // string "New SMS Conversation", then climbing the parent chain until
+  // we land on an ancestor that also contains the participant search
+  // input. Element-name agnostic — works on the utility-bar version,
+  // the right-column embedded version, and anything else with the same
+  // header text.
   function findNewSmsPanel() {
-    const headerCandidates = document.querySelectorAll('h3, h2, .panelTitle, .header-title');
-    for (const h of headerCandidates) {
-      if (!/New SMS Conversation/i.test(h.textContent || '')) continue;
-      let cur = h;
+    const walker = document.createTreeWalker(
+      document.body || document.documentElement,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
+          if (!/New SMS Conversation/i.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      let cur = node.parentElement;
       for (let i = 0; i < 25 && cur; i++) {
         const input = cur.querySelector && cur.querySelector('input[placeholder*="phone or name" i]');
         if (input) {
@@ -276,10 +293,14 @@
 
   function scan() {
     const panel = findNewSmsPanel();
-    if (!panel) { pruneButtons(); return; }
+    if (!panel) {
+      pruneButtons();
+      debugOnce('No "New SMS Conversation" panel visible right now (this log will print again only when the state changes).');
+      return;
+    }
     if (!isOnLeadPage()) {
       pruneButtons();
-      debugOnce('SMS panel found but not on a Lead URL — buttons skipped.');
+      debugOnce('SMS panel found but not on a Lead URL — current URL: ' + (location.href || ''));
       return;
     }
     const ctx = {
@@ -288,7 +309,7 @@
     };
     if (!ctx.coBorrower && !ctx.buyersAgent) {
       pruneButtons();
-      debugOnce('SMS panel found but Lead has no Co-Borrower or Buyer’s Agent Phone visible — nothing to add.');
+      debugOnce('SMS panel found, on Lead URL, but neither Co-Borrower link nor Buyer’s Agent Phone found in the DOM yet.');
       return;
     }
     debugOnce('Injecting buttons. coBorrower=' + (ctx.coBorrower ? ctx.coBorrower.name : 'none') +

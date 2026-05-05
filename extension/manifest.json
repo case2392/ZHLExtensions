@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZHL Productivity Pack",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Five workflow tweaks for Zillow Home Loans, Salesforce, Genesys, and Gmail. To open the setup page, click the puzzle-piece icon in the Chrome toolbar and pin this extension, then click its icon — or click Details below and choose Extension options.",
   "permissions": [
     "storage",
