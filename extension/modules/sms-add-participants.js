@@ -163,19 +163,18 @@
 
   // One-shot diagnostic so we can see exactly what the script can find.
   let diagDone = false;
-  function dumpDiag() {
-    if (diagDone) return;
-    diagDone = true;
+  function dumpDiag(label) {
     try {
       const lightH3 = Array.from(document.querySelectorAll('h3'));
       const deepH3 = deepQuerySelectorAll(document, 'h3');
       const lightInputs = document.querySelectorAll('input[placeholder*="phone or name" i]').length;
       const deepInputs = deepQuerySelectorAll(document, 'input[placeholder*="phone or name" i]').length;
       const shadowHosts = Array.from(document.querySelectorAll('*')).filter((el) => el.shadowRoot).length;
-      const innerTextHas = (document.body.innerText || '').includes('New SMS Conversation');
-      const innerHTMLHas = (document.body.innerHTML || '').includes('New SMS Conversation');
-      console.log('[SMS Add Participants DIAG]', {
+      const innerTextHas = (document.body && document.body.innerText || '').includes('New SMS Conversation');
+      const innerHTMLHas = (document.body && document.body.innerHTML || '').includes('New SMS Conversation');
+      console.log('[SMS Add Participants DIAG ' + (label || 'auto') + ']', {
         urlIsLead: /\/lightning\/r\/Lead\//i.test(location.href),
+        readyState: document.readyState,
         lightH3Count: lightH3.length,
         deepH3Count: deepH3.length,
         lightH3Texts: lightH3.slice(0, 8).map((h) => (h.textContent || '').slice(0, 60)),
@@ -456,6 +455,21 @@
   const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   schedule();
+
+  // Always emit at least one diagnostic dump so we can confirm the script
+  // is running even if no MutationObserver events fire. Three samples:
+  // immediately, after 3s, and after 8s (gives the page time to render
+  // its right-column components).
+  dumpDiag('init');
+  setTimeout(() => dumpDiag('+3s'), 3000);
+  setTimeout(() => dumpDiag('+8s'), 8000);
+  // Heartbeat every 4s — confirms the timer / event loop are alive.
+  let heartbeatCount = 0;
+  const heartbeatId = setInterval(() => {
+    heartbeatCount++;
+    if (heartbeatCount > 6) { clearInterval(heartbeatId); return; }
+    schedule();
+  }, 4000);
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
