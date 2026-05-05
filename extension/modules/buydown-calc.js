@@ -205,12 +205,29 @@
     addRow('Term', (f.term / 12) + ' years');
 
     addSubhead('Monthly Payments');
-    addRow('Year 1 — rate ' + y1Rate.toFixed(3) + '%', fmt(y1Pmt) + ' P&I', { emphasis: true });
-    if (escrow > 0) addRow('  + escrow → total payment', fmt(y1Pmt + escrow), { muted: true });
-    addRow('Year 2 — rate ' + y2Rate.toFixed(3) + '%', fmt(y2Pmt) + ' P&I', { emphasis: true });
-    if (escrow > 0) addRow('  + escrow → total payment', fmt(y2Pmt + escrow), { muted: true });
-    addRow('Year 3+ — rate ' + f.rate.toFixed(3) + '%', fmt(fullPmt) + ' P&I', { emphasis: true });
-    if (escrow > 0) addRow('  + escrow → total payment', fmt(fullPmt + escrow), { muted: true });
+    // Show the full payment (PITIA) for each year — P&I + the card's
+    // escrow delta (taxes/insurance/HOA, derived from PITI − P&I on the
+    // card). If the card didn't surface PITI, escrow is 0 and we show
+    // P&I only with a note.
+    const showFullPayment = escrow > 0;
+    addRow(
+      'Year 1 — rate ' + y1Rate.toFixed(3) + '%',
+      fmt(y1Pmt + escrow) + (showFullPayment ? '' : ' P&I'),
+      { emphasis: true }
+    );
+    addRow(
+      'Year 2 — rate ' + y2Rate.toFixed(3) + '%',
+      fmt(y2Pmt + escrow) + (showFullPayment ? '' : ' P&I'),
+      { emphasis: true }
+    );
+    addRow(
+      'Year 3+ — rate ' + f.rate.toFixed(3) + '%',
+      fmt(fullPmt + escrow) + (showFullPayment ? '' : ' P&I'),
+      { emphasis: true }
+    );
+    if (!showFullPayment) {
+      addRow('Note', 'Card did not expose PITI — showing P&I only.', { muted: true });
+    }
 
     addSubhead('Buydown Cost');
     addRow('Year 1 savings (12 × monthly delta)', fmt(y1Savings));
