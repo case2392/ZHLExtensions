@@ -73,6 +73,33 @@
       </div>
     </section>
 
+    <!-- ============== Module: SMS Quick-Add Participants ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>SMS Quick-Add Participants</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> — Lead pages with the Messaging utility open</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_smsAddParticipants" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sms-add-participants.svg" alt="New SMS Conversation panel with Add Buyer's Agent and Add Co-Borrower buttons added by the extension" />
+        </div>
+        <ul class="module-features">
+          <li>Adds <strong>Add Buyer&rsquo;s Agent</strong> and <strong>Add Co-Borrower</strong> buttons inside the New SMS Conversation panel.</li>
+          <li>One click fills the participant search input with the right phone and presses + so you don&rsquo;t have to type the number or hover the contact card.</li>
+          <li><strong>Buyer&rsquo;s Agent</strong> phone is read straight from the <em>Buyer&rsquo;s Agent Phone</em> field on the Lead page.</li>
+          <li><strong>Co-Borrower</strong> phone is fetched from Salesforce by Contact id (uses the same session cookie as Caller ID — no Connected App needed).</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Loan Amount Field ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

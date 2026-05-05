@@ -17,7 +17,8 @@ const FEATURE_KEYS = [
   "feature_loanAmount",
   "feature_vaCalc",
   "feature_buydownCalc",
-  "feature_callerId"
+  "feature_callerId",
+  "feature_smsAddParticipants"
 ];
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -120,7 +121,6 @@ async function querySalesforce(host, apiVersion, sid, soql) {
 async function lookupPhone(tenDigit) {
   const cached = callerIdCache.get(tenDigit);
   if (cached && cached.expires > Date.now()) return cached.value;
-
   const cfg = await getCallerIdConfig();
   const sid = await getSessionId(cfg.myDomainHost);
   if (!sid) {
@@ -163,6 +163,35 @@ async function lookupPhone(tenDigit) {
   return value;
 }
 
+// Used by the SMS Quick-Add Participants module: given a Salesforce
+// Contact id, return that contact's Phone / MobilePhone via the same
+// REST plumbing the Caller ID lookup uses.
+async function lookupContactPhone(contactId) {
+  const safeId = String(contactId || "").replace(/[^a-zA-Z0-9]/g, "");
+  if (safeId.length !== 15 && safeId.length !== 18) {
+    return { error: "Invalid Salesforce Contact id" };
+  }
+  const cfg = await getCallerIdConfig();
+  const sid = await getSessionId(cfg.myDomainHost);
+  if (!sid) {
+    return { error: "No Salesforce session. Log into Salesforce in this browser." };
+  }
+  const soql = `SELECT Id, Name, Phone, MobilePhone FROM Contact WHERE Id = '${safeId}' LIMIT 1`;
+  try {
+    const data = await querySalesforce(cfg.myDomainHost, cfg.apiVersion, sid, soql);
+    const rec = data.records && data.records[0];
+    if (!rec) return { error: "Contact not found" };
+    return {
+      id: rec.Id,
+      name: rec.Name,
+      phone: rec.Phone || null,
+      mobilePhone: rec.MobilePhone || null
+    };
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "LOOKUP_PHONE") {
     const ten = normalizePhone(msg.phone);
@@ -172,6 +201,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     lookupPhone(ten).then(
       (match) => sendResponse({ ok: true, match }),
+      (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
+    );
+    return true;
+  }
+  if (msg && msg.type === "GET_CONTACT_PHONE") {
+    lookupContactPhone(msg.contactId).then(
+      (result) => sendResponse(Object.assign({ ok: !result.error }, result)),
       (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
     );
     return true;

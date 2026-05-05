@@ -1,0 +1,47 @@
+/* SMS Quick-Add Participants — buttons inside the New SMS Conversation panel */
+
+.zhlap-buttons-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 12px 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.zhlap-add-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #1589ee;
+  border: 1px solid #0070d2;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.zhlap-add-button:hover {
+  background-color: #0070d2;
+}
+
+.zhlap-add-button:active {
+  background-color: #005fb2;
+}
+
+.zhlap-add-button:focus {
+  outline: 2px solid #1589ee;
+  outline-offset: 1px;
+}
+
+.zhlap-add-button[disabled] {
+  opacity: 0.65;
+  cursor: wait;
+}

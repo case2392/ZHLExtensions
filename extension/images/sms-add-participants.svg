@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f3f3f3"/>
+
+  <!-- Faux SMS panel -->
+  <rect x="40" y="14" width="280" height="192" rx="6" fill="#ffffff" stroke="#dddbda"/>
+  <!-- Header -->
+  <rect x="40" y="14" width="280" height="22" rx="6" fill="#fafaf9"/>
+  <text x="146" y="29" font-size="10" font-weight="700" fill="#16325c">New SMS Conversation</text>
+  <rect x="270" y="18" width="44" height="14" rx="2" fill="#1589ee"/>
+  <text x="292" y="28" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">Start</text>
+
+  <!-- "To:" + existing pill -->
+  <text x="50" y="50" font-size="9" fill="#54698d">To:</text>
+  <rect x="68" y="42" width="100" height="14" rx="7" fill="#e3f1ff" stroke="#1589ee"/>
+  <text x="118" y="52" text-anchor="middle" font-size="8" font-weight="600" fill="#005fb2">Brynna Neff</text>
+
+  <text x="50" y="72" font-size="8.5" fill="#706e6b" font-weight="600">Add conversation participants</text>
+
+  <!-- Search input -->
+  <rect x="50" y="80" width="260" height="22" rx="3" fill="#fff" stroke="#cbd5e1"/>
+  <text x="58" y="94" font-size="9" fill="#a8b3c0">🔍  Find by phone or name…</text>
+
+  <!-- Our injected buttons (highlighted) -->
+  <g>
+    <rect x="50" y="110" width="148" height="20" rx="10" fill="#1589ee" stroke="#0070d2"/>
+    <text x="124" y="124" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff">Add Buyer’s Agent (+1928…)</text>
+  </g>
+  <g>
+    <rect x="50" y="134" width="160" height="20" rx="10" fill="#1589ee" stroke="#0070d2"/>
+    <text x="130" y="148" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff">Add Co-Borrower (Cristopher V.)</text>
+  </g>
+
+  <!-- Arrow + label calling out the new buttons -->
+  <path d="M225 124 L262 124" stroke="#0a7d2c" stroke-width="2" fill="none"/>
+  <polygon points="260,120 268,124 260,128" fill="#0a7d2c"/>
+  <text x="270" y="126" font-size="9" font-weight="700" fill="#0a7d2c">added</text>
+  <text x="270" y="138" font-size="9" font-weight="700" fill="#0a7d2c">by ext</text>
+
+  <!-- Sub-note -->
+  <text x="50" y="180" font-size="8" fill="#706e6b">One click pulls the phone from the Lead page</text>
+  <text x="50" y="194" font-size="8" fill="#706e6b">(Co-Borrower fetched from Salesforce by Contact id)</text>
+</svg>
