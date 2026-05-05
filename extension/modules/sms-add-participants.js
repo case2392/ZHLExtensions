@@ -126,21 +126,24 @@
   // Track B (fallback): keep the old text-first walk, in case the
   // input renders later than the heading.
   function findNewSmsPanel() {
-    // Track A — input first.
+    // Track A — input first. Once we've found a visible participant
+    // input, walk up to the first ancestor whose textContent contains
+    // "New SMS Conversation". That ancestor IS the panel — don't gate
+    // its visibility on offsetParent, because legitimate ancestors here
+    // are <slot> / display:contents layout elements whose offsetParent
+    // is null even when the rendered subtree is fully visible.
     const inputs = deepQuerySelectorAll(document, 'input[placeholder*="phone or name" i]');
     for (const input of inputs) {
       if (input.offsetParent === null) continue;
       let cur = input.parentElement;
       for (let i = 0; i < 25 && cur; i++) {
         const text = (cur.textContent || '').slice(0, 4000);
-        if (/New SMS Conversation/i.test(text)) {
-          if (cur.offsetParent === null) break;
-          return cur;
-        }
+        if (/New SMS Conversation/i.test(text)) return cur;
         cur = cur.parentElement;
       }
     }
-    // Track B — text first.
+    // Track B — text-walker fallback for cases where the input renders
+    // later than the heading. Same reasoning: don't reject on offsetParent.
     const textNode = deepWalkText(document, (n) =>
       n.nodeValue && /New SMS Conversation/i.test(n.nodeValue)
     );
@@ -148,10 +151,7 @@
     let cur = textNode.parentElement;
     for (let i = 0; i < 25 && cur; i++) {
       const input = deepQuerySelector(cur, 'input[placeholder*="phone or name" i]');
-      if (input) {
-        if (cur.offsetParent === null) break;
-        return cur;
-      }
+      if (input) return cur;
       cur = cur.parentElement;
     }
     return null;
