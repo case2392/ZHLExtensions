@@ -242,20 +242,10 @@
       addSubhead('Closing Cost Impact');
       addRow('Current total closing costs', fmt(f.closingCosts));
       addRow('Current seller credit', fmt(f.sellerCredit));
-      // Net cost = closing costs minus credit applied. Show what the
-      // borrower is currently looking at before any buydown.
       addRow('Current net closing costs', fmt(f.closingCosts - f.sellerCredit));
       addRow('+ 2-1 buydown cost', fmt(buydownCost), { divider: true });
-      addRow('= New total closing costs (gross)', fmt(f.closingCosts + buydownCost), { emphasis: true });
-      addRow('  with current seller credit', fmt(f.closingCosts + buydownCost - f.sellerCredit), { muted: true });
-
-      addSubhead('Borrower Out-of-Pocket');
-      // If the seller doesn't add anything, the borrower absorbs the
-      // full buydown cost. If they negotiate the credit up by exactly
-      // the buydown cost, the borrower's net stays flat.
-      addRow('Added cost (current credit, no change)', fmt(buydownCost), { emphasis: true });
-      addRow('Seller credit needed to fully cover buydown', fmt(f.sellerCredit + buydownCost), { emphasis: true });
-      addRow('  (increase from current)', '+' + fmt(buydownCost), { muted: true });
+      addRow('= New total closing costs', fmt(f.closingCosts + buydownCost), { emphasis: true });
+      addRow('= New net closing costs', fmt(f.closingCosts + buydownCost - f.sellerCredit), { emphasis: true });
     }
 
     panel.appendChild(body);
