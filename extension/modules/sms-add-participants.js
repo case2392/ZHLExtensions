@@ -13,48 +13,42 @@
 
   // ---- Lead page detection ----------------------------------------------
 
-  // The active Lead record container is the visible flexipage-record-home
-  // whose own highlights panel icon is standard:lead.
-  function findActiveLead() {
-    const candidates = document.querySelectorAll(
-      'flexipage-record-home, [data-aura-class*="forceRecordLayout"]'
-    );
-    for (const c of candidates) {
-      if (c.offsetParent === null) continue;
-      const r = c.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) continue;
-      const icon = c.querySelector('records-highlights2 lightning-icon[icon-name="standard:lead"]');
-      if (icon) return c;
-    }
-    return null;
+  // Don't require finding a flexipage-record-home — the embedded SMS panel
+  // can sit inside the Lead's right-column tabs and the page structure
+  // varies. Trust the URL for "are we on a Lead?", then read the fields
+  // from anywhere on the page.
+  function isOnLeadPage() {
+    let href = location.href || '';
+    try {
+      if (window.top && window.top.location && window.top.location.href) {
+        href = window.top.location.href;
+      }
+    } catch (_) { /* cross-origin */ }
+    return /\/lightning\/r\/Lead\//i.test(href);
   }
 
-  // Co-Borrower is a related-record lookup — the phone isn't on the Lead
-  // page, but the link to the Contact is. Pull the Contact id; the phone
-  // gets fetched on demand via the background worker.
-  function getCoBorrowerInfo(leadContainer) {
-    const items = leadContainer.querySelectorAll('records-record-layout-item');
+  function getCoBorrowerInfo() {
+    const items = document.querySelectorAll('records-record-layout-item[field-label="Co-Borrower"]');
     for (const item of items) {
-      const label = item.getAttribute('field-label') || '';
-      if (label !== 'Co-Borrower') continue;
+      if (item.offsetParent === null) continue;
       const link = item.querySelector('a[href*="/lightning/r/Contact/"]');
-      if (!link) return null;
+      if (!link) continue;
       const m = /\/lightning\/r\/Contact\/(\w+)\//.exec(link.getAttribute('href') || '');
-      if (!m) return null;
+      if (!m) continue;
       const name = (link.textContent || '').trim();
       return { contactId: m[1], name };
     }
     return null;
   }
 
-  // Buyer's Agent Phone IS rendered on the Lead page as plain text.
-  function getBuyersAgentInfo(leadContainer) {
-    const labels = leadContainer.querySelectorAll('span.test-id__field-label, .test-id__field-label');
+  function getBuyersAgentInfo() {
+    const labels = document.querySelectorAll('span.test-id__field-label, .test-id__field-label, [class*="field-label"]');
     for (const label of labels) {
-      const text = (label.textContent || '').replace(/[’']/g, "").trim();
+      const text = (label.textContent || '').replace(/[’‘']/g, '').trim();
       if (!/^Buyers\s+Agent\s+Phone$/i.test(text)) continue;
       const formElement = label.closest('.slds-form-element');
       if (!formElement) continue;
+      if (formElement.offsetParent === null) continue;
       const phoneLink = formElement.querySelector('lightning-click-to-dial a, a[href^="javascript:"], a');
       if (!phoneLink) continue;
       const phoneText = (phoneLink.textContent || '').trim();
@@ -66,15 +60,21 @@
 
   // ---- SMS panel detection ----------------------------------------------
 
-  // The Salesforce Messaging utility renders the New SMS view inside a
-  // c-slds-sms-container with a header reading "New SMS Conversation".
+  // Find the New SMS Conversation panel by locating the header text and
+  // walking up until we find an ancestor that also contains the
+  // participant search input. That ancestor is our panel.
   function findNewSmsPanel() {
-    const containers = document.querySelectorAll('c-slds-sms-container');
-    for (const c of containers) {
-      if (c.offsetParent === null) continue;
-      const headers = c.querySelectorAll('h3');
-      for (const h of headers) {
-        if (/New SMS Conversation/i.test(h.textContent || '')) return c;
+    const headerCandidates = document.querySelectorAll('h3, h2, .panelTitle, .header-title');
+    for (const h of headerCandidates) {
+      if (!/New SMS Conversation/i.test(h.textContent || '')) continue;
+      let cur = h;
+      for (let i = 0; i < 25 && cur; i++) {
+        const input = cur.querySelector && cur.querySelector('input[placeholder*="phone or name" i]');
+        if (input) {
+          if (cur.offsetParent === null) break;
+          return cur;
+        }
+        cur = cur.parentElement;
       }
     }
     return null;
@@ -204,12 +204,8 @@
     const input = findSmsParticipantInput(panel);
     if (!input) return;
 
-    // Insert as a sibling layout-item right after the search input. If we
-    // can't find a layout-item ancestor (different Salesforce versions),
-    // fall back to inserting after the input's closest div.
-    const layoutItem = input.closest('lightning-layout-item') || input.closest('div');
-    if (!layoutItem || !layoutItem.parentElement) return;
-    if (layoutItem.parentElement.querySelector(':scope > .' + WRAPPER_CLASS)) return;
+    // Already injected anywhere in this panel? skip.
+    if (panel.querySelector('.' + WRAPPER_CLASS)) return;
 
     const wrapper = document.createElement('div');
     wrapper.className = WRAPPER_CLASS;
@@ -253,7 +249,16 @@
     }
 
     if (!wrapper.firstChild) return;
-    layoutItem.insertAdjacentElement('afterend', wrapper);
+
+    // Insertion strategy: prefer the input's containing div so the buttons
+    // sit immediately under the search input. Fall back to the panel's
+    // container if needed.
+    const inputContainer = input.closest('lightning-layout-item') || input.parentElement;
+    if (inputContainer && inputContainer.parentElement) {
+      inputContainer.insertAdjacentElement('afterend', wrapper);
+    } else {
+      panel.appendChild(wrapper);
+    }
   }
 
   function pruneButtons() {
@@ -262,16 +267,32 @@
 
   // ---- Scan loop --------------------------------------------------------
 
+  let lastDebug = '';
+  function debugOnce(msg) {
+    if (msg === lastDebug) return;
+    lastDebug = msg;
+    console.log('[SMS Add Participants]', msg);
+  }
+
   function scan() {
     const panel = findNewSmsPanel();
     if (!panel) { pruneButtons(); return; }
-    const lead = findActiveLead();
-    if (!lead) { pruneButtons(); return; }
+    if (!isOnLeadPage()) {
+      pruneButtons();
+      debugOnce('SMS panel found but not on a Lead URL — buttons skipped.');
+      return;
+    }
     const ctx = {
-      coBorrower: getCoBorrowerInfo(lead),
-      buyersAgent: getBuyersAgentInfo(lead)
+      coBorrower: getCoBorrowerInfo(),
+      buyersAgent: getBuyersAgentInfo()
     };
-    if (!ctx.coBorrower && !ctx.buyersAgent) { pruneButtons(); return; }
+    if (!ctx.coBorrower && !ctx.buyersAgent) {
+      pruneButtons();
+      debugOnce('SMS panel found but Lead has no Co-Borrower or Buyer’s Agent Phone visible — nothing to add.');
+      return;
+    }
+    debugOnce('Injecting buttons. coBorrower=' + (ctx.coBorrower ? ctx.coBorrower.name : 'none') +
+      ', buyersAgent=' + (ctx.buyersAgent ? ctx.buyersAgent.displayText : 'none'));
     injectButtons(panel, ctx);
   }
 
