@@ -167,24 +167,36 @@
     try {
       const lightH3 = Array.from(document.querySelectorAll('h3'));
       const deepH3 = deepQuerySelectorAll(document, 'h3');
-      const lightInputs = document.querySelectorAll('input[placeholder*="phone or name" i]').length;
-      const deepInputs = deepQuerySelectorAll(document, 'input[placeholder*="phone or name" i]').length;
+      const lightInputs = Array.from(document.querySelectorAll('input[placeholder*="phone or name" i]'));
+      const deepInputs = deepQuerySelectorAll(document, 'input[placeholder*="phone or name" i]');
       const shadowHosts = Array.from(document.querySelectorAll('*')).filter((el) => el.shadowRoot).length;
       const innerTextHas = (document.body && document.body.innerText || '').includes('New SMS Conversation');
       const innerHTMLHas = (document.body && document.body.innerHTML || '').includes('New SMS Conversation');
-      console.log('[SMS Add Participants DIAG ' + (label || 'auto') + ']', {
-        urlIsLead: /\/lightning\/r\/Lead\//i.test(location.href),
-        readyState: document.readyState,
-        lightH3Count: lightH3.length,
-        deepH3Count: deepH3.length,
-        lightH3Texts: lightH3.slice(0, 8).map((h) => (h.textContent || '').slice(0, 60)),
-        deepH3Texts: deepH3.slice(0, 12).map((h) => (h.textContent || '').slice(0, 60)),
-        lightParticipantInputs: lightInputs,
-        deepParticipantInputs: deepInputs,
-        openShadowHosts: shadowHosts,
-        innerTextHasNewSMS: innerTextHas,
-        innerHTMLHasNewSMS: innerHTMLHas
-      });
+      const tag = '[SMS Add Participants DIAG ' + (label || 'auto') + ']';
+      // One field per line — Chrome console doesn't truncate these.
+      console.log(tag, 'urlIsLead =', /\/lightning\/r\/Lead\//i.test(location.href));
+      console.log(tag, 'readyState =', document.readyState);
+      console.log(tag, 'lightH3Count =', lightH3.length, '| deepH3Count =', deepH3.length);
+      console.log(tag, 'lightParticipantInputs =', lightInputs.length, '| deepParticipantInputs =', deepInputs.length);
+      console.log(tag, 'openShadowHosts =', shadowHosts);
+      console.log(tag, 'innerText has "New SMS Conversation" =', innerTextHas);
+      console.log(tag, 'innerHTML has "New SMS Conversation" =', innerHTMLHas);
+      console.log(tag, 'all h3 texts (light) =', lightH3.map((h) => (h.textContent || '').trim().slice(0, 80)));
+      console.log(tag, 'all h3 texts (deep)  =', deepH3.map((h) => (h.textContent || '').trim().slice(0, 80)));
+      // If the input is reachable, also report whether walking up from
+      // it can find an ancestor whose textContent contains "New SMS
+      // Conversation". That tells us if Track A would have worked.
+      if (deepInputs.length) {
+        const inp = deepInputs[0];
+        let cur = inp.parentElement;
+        let foundAt = -1;
+        for (let i = 0; i < 25 && cur; i++) {
+          if (/New SMS Conversation/i.test(cur.textContent || '')) { foundAt = i; break; }
+          cur = cur.parentElement;
+        }
+        console.log(tag, 'walk-up from input found "New SMS Conversation" at depth', foundAt,
+          '| visible =', !!(cur && cur.offsetParent !== null));
+      }
     } catch (e) {
       console.warn('[SMS Add Participants DIAG] failed', e);
     }
