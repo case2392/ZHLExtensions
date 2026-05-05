@@ -56,13 +56,40 @@
 
   const inFlight = new Map(); // phone -> Promise<match|null>
 
+  // Reloading the extension (or it auto-updating) invalidates the content
+  // script's connection to the background worker. chrome.runtime.sendMessage
+  // then throws "Extension context invalidated" forever after. Track that
+  // state, stop the observer + interval, and quietly resolve null instead
+  // of spamming the error log.
+  let extensionDead = false;
+  function isExtensionAlive() {
+    try { return !!(chrome.runtime && chrome.runtime.id); }
+    catch (_) { return false; }
+  }
+  function isContextInvalidatedError(msg) {
+    return /Extension context invalidated|message port closed|receiving end does not exist/i.test(String(msg || ''));
+  }
+  function markExtensionDead() {
+    if (extensionDead) return;
+    extensionDead = true;
+    try { observer && observer.disconnect(); } catch (_) {}
+    if (intervalId) { clearInterval(intervalId); intervalId = null; }
+  }
+
   function lookup(phone) {
+    if (extensionDead) return Promise.resolve(null);
     if (inFlight.has(phone)) return inFlight.get(phone);
+    if (!isExtensionAlive()) {
+      markExtensionDead();
+      return Promise.resolve(null);
+    }
     const p = new Promise((resolve) => {
       try {
         chrome.runtime.sendMessage({ type: "LOOKUP_PHONE", phone }, (resp) => {
-          if (chrome.runtime.lastError) {
-            console.warn("[CallerID] sendMessage error:", chrome.runtime.lastError.message);
+          const lastErr = chrome.runtime && chrome.runtime.lastError;
+          if (lastErr) {
+            if (isContextInvalidatedError(lastErr.message)) markExtensionDead();
+            else console.warn("[CallerID] sendMessage error:", lastErr.message);
             resolve(null);
             return;
           }
@@ -74,7 +101,8 @@
           resolve(resp.match || null);
         });
       } catch (e) {
-        console.warn("[CallerID] sendMessage threw:", e);
+        if (isContextInvalidatedError(e && e.message)) markExtensionDead();
+        else console.warn("[CallerID] sendMessage threw:", e);
         resolve(null);
       }
     });
@@ -178,10 +206,12 @@
 
   let scheduled = false;
   function scheduleScan() {
+    if (extensionDead) return;
     if (scheduled) return;
     scheduled = true;
     setTimeout(() => {
       scheduled = false;
+      if (extensionDead) return;
       try {
         for (const root of getScanRoots()) scanTextNodes(root);
       } catch (e) {
@@ -190,7 +220,8 @@
     }, 200);
   }
 
-  const observer = new MutationObserver(scheduleScan);
+  // Forward-declared up top so markExtensionDead can disconnect / clear them.
+  var observer = new MutationObserver(scheduleScan);
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
@@ -198,7 +229,7 @@
   });
 
   // Also scan periodically as a safety net for frameworks that mutate via canvas/shadow.
-  setInterval(scheduleScan, 3000);
+  var intervalId = setInterval(scheduleScan, 3000);
   scheduleScan();
 })();
   }
