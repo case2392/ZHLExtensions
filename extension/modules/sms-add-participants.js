@@ -99,12 +99,19 @@
     return null;
   }
 
+  // Strip curly / straight apostrophes for label comparison.
+  function normalizeLabel(s) {
+    return (s || '').replace(/[’‘']/g, '').replace(/\s+/g, ' ').trim();
+  }
+
   function getBuyersAgentInfo() {
+    // Phone — read from the "Buyer's Agent Phone" field.
+    let phone = null;
+    let phoneDisplay = null;
     const labels = deepQuerySelectorAll(document, 'span.test-id__field-label, .test-id__field-label, [class*="field-label"]');
     for (const label of labels) {
-      const text = (label.textContent || '').replace(/[’‘']/g, '').trim();
+      const text = normalizeLabel(label.textContent);
       if (!/^Buyers\s+Agent\s+Phone$/i.test(text)) continue;
-      // closest() works within the same shadow root.
       const formElement = label.closest('.slds-form-element');
       if (!formElement) continue;
       if (formElement.offsetParent === null) continue;
@@ -112,9 +119,30 @@
       if (!phoneLink) continue;
       const phoneText = (phoneLink.textContent || '').trim();
       const digits = phoneText.replace(/\D/g, '');
-      if (digits.length >= 10) return { phone: digits, displayText: phoneText };
+      if (digits.length >= 10) {
+        phone = digits;
+        phoneDisplay = phoneText;
+        break;
+      }
     }
-    return null;
+    if (!phone) return null;
+
+    // Name — read from the separate "Buyer's Agent" record-lookup field.
+    // field-label varies between straight and curly apostrophe, so iterate
+    // and normalize.
+    let name = null;
+    const items = deepQuerySelectorAll(document, 'records-record-layout-item');
+    for (const item of items) {
+      const label = normalizeLabel(item.getAttribute('field-label'));
+      if (label !== 'Buyers Agent') continue;
+      if (item.offsetParent === null) continue;
+      const link = deepQuerySelector(item, 'a[href*="/lightning/r/Contact/"]');
+      if (!link) continue;
+      const linkName = (link.textContent || '').trim();
+      if (linkName) { name = linkName; break; }
+    }
+
+    return { phone, displayText: phoneDisplay, name };
   }
 
   // ---- SMS panel detection ----------------------------------------------
@@ -238,15 +266,23 @@
     });
   }
 
-  // Same shape as the Open SMS module's add-button finder: prefer a
-  // class-based match, then fall back to label/aria heuristics.
-  function findAddButton(panel) {
-    const direct = panel.querySelector(
+  // The + button appears as a search-result row inside c-slds-start-thread,
+  // which is a sibling of the header (where our "panel" was located), so
+  // panel.querySelector misses it. Search the whole document with the deep
+  // helper instead. The .add-button class is specific enough that we don't
+  // need to scope further.
+  function findAddButton() {
+    const direct = deepQuerySelectorAll(
+      document,
       'lightning-button-icon-stateful.add-button button, .add-button button'
     );
-    if (direct && direct.offsetParent !== null && !direct.disabled) return direct;
-
-    const buttons = Array.from(panel.querySelectorAll('button'));
+    for (const b of direct) {
+      if (b.offsetParent === null || b.disabled) continue;
+      return b;
+    }
+    // Fallback heuristics — any visible icon-border button that isn't the
+    // panel's Back / Start / search icon.
+    const buttons = deepQuerySelectorAll(document, 'button');
     for (const b of buttons) {
       if (b.offsetParent === null || b.disabled) continue;
       if (b.getAttribute('aria-haspopup') === 'true') continue;
@@ -254,14 +290,9 @@
       if (b.classList.contains('start-button')) continue;
       if (b.classList.contains('btn-whatsapp-pulse')) continue; // Start
       if (b.getAttribute('title') === 'Back') continue;
-      if (b.classList.contains('slds-button_icon-border')) return b;
-    }
-    for (const b of buttons) {
-      if (b.offsetParent === null || b.disabled) continue;
-      const label = (b.textContent || '').trim();
-      const title = (b.getAttribute('title') || '').trim();
-      const aria = (b.getAttribute('aria-label') || '').trim();
-      if (label === '+' || title === '+' || /^add(\s+participant)?$/i.test(aria) || /^add$/i.test(title)) return b;
+      // Must look like the + icon — has a child svg with data-key="add"
+      const addSvg = b.querySelector && b.querySelector('svg[data-key="add"]');
+      if (addSvg) return b;
     }
     return null;
   }
@@ -272,7 +303,7 @@
     input.focus();
     setNativeInputValue(input, phoneDigits);
     await new Promise((r) => setTimeout(r, 400));
-    const addBtn = await waitFor(() => findAddButton(panel), 5000);
+    const addBtn = await waitFor(() => findAddButton(), 5000);
     if (!addBtn) {
       console.warn('[SMS Add Participants] + button not found after typing');
       return false;
@@ -360,8 +391,12 @@
 
     if (leadCtx.buyersAgent) {
       const phone = leadCtx.buyersAgent.phone;
+      const name = leadCtx.buyersAgent.name;
       const display = leadCtx.buyersAgent.displayText;
-      const btn = makeAddButton(`Add Buyer’s Agent (${display})`, async (b) => {
+      // Prefer the agent's name; fall back to the phone if the name field
+      // wasn't populated.
+      const labelSuffix = name || display;
+      const btn = makeAddButton(`Add Buyer’s Agent (${labelSuffix})`, async (b) => {
         const orig = b.textContent;
         b.disabled = true;
         b.textContent = 'Adding…';
