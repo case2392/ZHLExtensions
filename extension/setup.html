@@ -125,6 +125,33 @@
       </div>
     </section>
 
+    <!-- ============== Module: 2-1 Buydown Calc ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>2-1 Buydown Calculator</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — scenarios page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_buydownCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/buydown-calc.svg" alt="Calc 2-1 Buydown button under a scenario card with a popup showing year 1, 2, and 3+ payments" />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Calc 2-1 Buydown</strong> button under every scenario card on the Pricing &amp; Scenarios page (works for up to 10 cards).</li>
+          <li>Reads the card's loan amount, note rate, term, and monthly P&amp;I/PITI automatically.</li>
+          <li>Pop-up shows the <strong>Year 1</strong> (rate − 2%), <strong>Year 2</strong> (rate − 1%), and <strong>Year 3+</strong> P&amp;I payments — plus total payment with escrow if PITI is on the card.</li>
+          <li>Computes the exact buydown cost (sum of monthly P&amp;I savings × 12 over years 1 and 2) and shows what it does to the total closing costs. Result is typically ~2.0–2.5% of the loan amount, varying by rate.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Caller ID ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
