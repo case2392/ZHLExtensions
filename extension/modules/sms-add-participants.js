@@ -161,15 +161,12 @@
   // Track B (fallback): keep the old text-first walk, in case the
   // input renders later than the heading.
   function findNewSmsPanel() {
-    // Track A — input first. Once we've found a visible participant
-    // input, walk up to the first ancestor whose textContent contains
-    // "New SMS Conversation". That ancestor IS the panel — don't gate
-    // its visibility on offsetParent, because legitimate ancestors here
-    // are <slot> / display:contents layout elements whose offsetParent
-    // is null even when the rendered subtree is fully visible.
+    // Track A — input first. Skip inputs inside a utility-bar panel; we
+    // only want the right-column embedded SMS panel.
     const inputs = deepQuerySelectorAll(document, 'input[placeholder*="phone or name" i]');
     for (const input of inputs) {
       if (input.offsetParent === null) continue;
+      if (input.closest && input.closest('.oneUtilityBarPanel, [class*="utilityBarPanel"], [class*="UtilityBarPanel"]')) continue;
       let cur = input.parentElement;
       for (let i = 0; i < 25 && cur; i++) {
         const text = (cur.textContent || '').slice(0, 4000);
@@ -177,12 +174,15 @@
         cur = cur.parentElement;
       }
     }
-    // Track B — text-walker fallback for cases where the input renders
-    // later than the heading. Same reasoning: don't reject on offsetParent.
+    // Track B — text-walker fallback. Same utility-bar skip.
     const textNode = deepWalkText(document, (n) =>
       n.nodeValue && /New SMS Conversation/i.test(n.nodeValue)
     );
     if (!textNode) return null;
+    if (textNode.parentElement && textNode.parentElement.closest &&
+        textNode.parentElement.closest('.oneUtilityBarPanel, [class*="utilityBarPanel"], [class*="UtilityBarPanel"]')) {
+      return null;
+    }
     let cur = textNode.parentElement;
     for (let i = 0; i < 25 && cur; i++) {
       const input = deepQuerySelector(cur, 'input[placeholder*="phone or name" i]');
@@ -273,31 +273,38 @@
     });
   }
 
-  // The + button appears as a search-result row inside c-slds-start-thread,
-  // which is a sibling of the header (where our "panel" was located), so
-  // panel.querySelector misses it. Search the whole document with the deep
-  // helper instead. The .add-button class is specific enough that we don't
-  // need to scope further.
-  function findAddButton() {
+  // The + button appears in c-slds-start-thread (search results), a
+  // sibling of the header where our "panel" lives. Walk up from the
+  // panel to its enclosing c-slds-sms-container and scope the search
+  // there so we don't accidentally click the + button from an unrelated
+  // panel (e.g. one in the utility bar that's also showing results).
+  function findSmsContainer(el) {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      if (cur.localName === 'c-slds-sms-container') return cur;
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  function findAddButton(panel) {
+    const root = findSmsContainer(panel) || panel || document;
     const direct = deepQuerySelectorAll(
-      document,
+      root,
       'lightning-button-icon-stateful.add-button button, .add-button button'
     );
     for (const b of direct) {
       if (b.offsetParent === null || b.disabled) continue;
       return b;
     }
-    // Fallback heuristics — any visible icon-border button that isn't the
-    // panel's Back / Start / search icon.
-    const buttons = deepQuerySelectorAll(document, 'button');
+    const buttons = deepQuerySelectorAll(root, 'button');
     for (const b of buttons) {
       if (b.offsetParent === null || b.disabled) continue;
       if (b.getAttribute('aria-haspopup') === 'true') continue;
       if (b.classList.contains('slds-input__icon')) continue;
       if (b.classList.contains('start-button')) continue;
-      if (b.classList.contains('btn-whatsapp-pulse')) continue; // Start
+      if (b.classList.contains('btn-whatsapp-pulse')) continue;
       if (b.getAttribute('title') === 'Back') continue;
-      // Must look like the + icon — has a child svg with data-key="add"
       const addSvg = b.querySelector && b.querySelector('svg[data-key="add"]');
       if (addSvg) return b;
     }
@@ -310,7 +317,7 @@
     input.focus();
     setNativeInputValue(input, phoneDigits);
     await new Promise((r) => setTimeout(r, 400));
-    const addBtn = await waitFor(() => findAddButton(), 5000);
+    const addBtn = await waitFor(() => findAddButton(panel), 5000);
     if (!addBtn) {
       console.warn('[SMS Add Participants] + button not found after typing');
       return false;
