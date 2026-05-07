@@ -104,3 +104,21 @@ html[dir] body[class*="dark"] .gm-reply-all-btn {
 [data-zhl-compose-drag] {
   overflow: hidden !important;
 }
+
+/* The transient scrollbar isn't on the role=dialog itself but on one
+   of Gmail's nested body wrappers (.aoI / .GP / .qz / .aoP / .I5).
+   Hide overflow on those during compose so a brief mismatch between
+   inner content height and wrapper height during restore can't show
+   a scrollbar. We deliberately do NOT target .Am / [contenteditable]
+   so the editable body still scrolls normally when the user types
+   more than fits. */
+[data-zhl-compose-drag] .aoI,
+[data-zhl-compose-drag] .aoP,
+[data-zhl-compose-drag] .GP,
+[data-zhl-compose-drag] .qz,
+[data-zhl-compose-drag] .I5,
+[data-zhl-compose-drag] .HE,
+[data-zhl-compose-drag] .nH.Hd,
+[data-zhl-compose-drag] .M9 {
+  overflow: hidden !important;
+}
