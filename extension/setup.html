@@ -23,6 +23,85 @@
 
   <main class="modules">
 
+    <!-- ============== Module: VA Calc + Student Loans ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>VA Residual Income &amp; Student Loan Calc</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_vaCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/va-calc.svg" alt="Residual income panel showing taxes, debts, and VA table requirement" />
+        </div>
+        <ul class="module-features">
+          <li><strong>Run Residual Income Calc</strong> button shows up on VA loans (Regular military / National Guard / reserves). Reads income, debts, PITI, family size, and property state, then shows residual vs. the VA table requirement.</li>
+          <li>Editable rows for Non-Taxable Income, Maintenance &amp; Utilities, and Childcare — tweak and re-run.</li>
+          <li><strong>Calc Student Loans</strong> button on the Liabilities table fills monthly payments using FHA / DU / LPA / VA formulas.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: 2-1 Buydown Calc ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>2-1 Buydown Calculator</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — scenarios page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_buydownCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/buydown-calc.svg" alt="Calc 2-1 Buydown button under a scenario card with a popup showing year 1, 2, and 3+ payments" />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Calc 2-1 Buydown</strong> button under every scenario card on the Pricing &amp; Scenarios page (works for up to 10 cards).</li>
+          <li>Reads the card's loan amount, note rate, term, and monthly P&amp;I/PITI automatically.</li>
+          <li>Pop-up shows the <strong>Year 1</strong> (rate − 2%), <strong>Year 2</strong> (rate − 1%), and <strong>Year 3+</strong> P&amp;I payments — plus total payment with escrow if PITI is on the card.</li>
+          <li>Computes the exact buydown cost (sum of monthly P&amp;I savings × 12 over years 1 and 2) and shows what it does to the total closing costs. Result is typically ~2.0–2.5% of the loan amount, varying by rate.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Caller ID ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Genesys Caller ID for Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.mypurecloud.com</code> + related</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_callerId" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/caller-id.svg" alt="Genesys widget showing matched name badge next to caller phone number" />
+        </div>
+        <ul class="module-features">
+          <li>Watches for phone numbers in the Genesys softphone widget and looks them up against Salesforce <strong>Lead</strong>, <strong>Contact</strong>, and <strong>Loan__c</strong> records.</li>
+          <li>Displays the matched record's name as a blue badge next to the number — works on incoming calls, voicemail rows, and call history.</li>
+          <li>Uses your existing Salesforce session cookie (no Connected App setup needed).</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Gmail Tweaks ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
@@ -126,85 +205,6 @@
           <li>Adds an editable <strong>Loan amount</strong> field below the purchase price / down payment row in Pricing &amp; Scenarios.</li>
           <li>Edit loan amount and the down payment / down payment % update automatically (loan = purchase − down).</li>
           <li>Edit purchase or down payment and the loan amount recalculates live.</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- ============== Module: VA Calc + Student Loans ============== -->
-    <section class="module-card" data-module>
-      <div class="module-head">
-        <div class="module-title-block">
-          <h2>VA Residual Income &amp; Student Loan Calc</h2>
-          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com</code></p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_vaCalc" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
-      </div>
-
-      <div class="module-body">
-        <div class="module-screenshot">
-          <img src="images/va-calc.svg" alt="Residual income panel showing taxes, debts, and VA table requirement" />
-        </div>
-        <ul class="module-features">
-          <li><strong>Run Residual Income Calc</strong> button shows up on VA loans (Regular military / National Guard / reserves). Reads income, debts, PITI, family size, and property state, then shows residual vs. the VA table requirement.</li>
-          <li>Editable rows for Non-Taxable Income, Maintenance &amp; Utilities, and Childcare — tweak and re-run.</li>
-          <li><strong>Calc Student Loans</strong> button on the Liabilities table fills monthly payments using FHA / DU / LPA / VA formulas.</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- ============== Module: 2-1 Buydown Calc ============== -->
-    <section class="module-card" data-module>
-      <div class="module-head">
-        <div class="module-title-block">
-          <h2>2-1 Buydown Calculator</h2>
-          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — scenarios page</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_buydownCalc" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
-      </div>
-
-      <div class="module-body">
-        <div class="module-screenshot">
-          <img src="images/buydown-calc.svg" alt="Calc 2-1 Buydown button under a scenario card with a popup showing year 1, 2, and 3+ payments" />
-        </div>
-        <ul class="module-features">
-          <li>Adds a <strong>Calc 2-1 Buydown</strong> button under every scenario card on the Pricing &amp; Scenarios page (works for up to 10 cards).</li>
-          <li>Reads the card's loan amount, note rate, term, and monthly P&amp;I/PITI automatically.</li>
-          <li>Pop-up shows the <strong>Year 1</strong> (rate − 2%), <strong>Year 2</strong> (rate − 1%), and <strong>Year 3+</strong> P&amp;I payments — plus total payment with escrow if PITI is on the card.</li>
-          <li>Computes the exact buydown cost (sum of monthly P&amp;I savings × 12 over years 1 and 2) and shows what it does to the total closing costs. Result is typically ~2.0–2.5% of the loan amount, varying by rate.</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- ============== Module: Caller ID ============== -->
-    <section class="module-card" data-module>
-      <div class="module-head">
-        <div class="module-title-block">
-          <h2>Genesys Caller ID for Salesforce</h2>
-          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.mypurecloud.com</code> + related</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_callerId" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
-      </div>
-
-      <div class="module-body">
-        <div class="module-screenshot">
-          <img src="images/caller-id.svg" alt="Genesys widget showing matched name badge next to caller phone number" />
-        </div>
-        <ul class="module-features">
-          <li>Watches for phone numbers in the Genesys softphone widget and looks them up against Salesforce <strong>Lead</strong>, <strong>Contact</strong>, and <strong>Loan__c</strong> records.</li>
-          <li>Displays the matched record's name as a blue badge next to the number — works on incoming calls, voicemail rows, and call history.</li>
-          <li>Uses your existing Salesforce session cookie (no Connected App setup needed).</li>
         </ul>
       </div>
     </section>
