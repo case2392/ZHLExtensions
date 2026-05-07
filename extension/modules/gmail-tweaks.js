@@ -522,11 +522,13 @@
     setImportant(dlg, 'width', rect.width + 'px');
     setImportant(dlg, 'height', rect.height + 'px');
     setImportant(dlg, 'position', 'fixed');
-    setImportant(dlg, 'left', rect.left + 'px');
-    setImportant(dlg, 'top', rect.top + 'px');
+    // Reset the inset shorthand FIRST (it expands to top/right/bottom/left
+    // and would otherwise overwrite the individual values we set below).
+    setImportant(dlg, 'inset', 'auto');
     setImportant(dlg, 'right', 'auto');
     setImportant(dlg, 'bottom', 'auto');
-    setImportant(dlg, 'inset', 'auto');
+    setImportant(dlg, 'left', rect.left + 'px');
+    setImportant(dlg, 'top', rect.top + 'px');
     setImportant(dlg, 'margin', '0');
     setImportant(dlg, 'transform', 'none');
     active = {
@@ -554,11 +556,15 @@
     // it back, but allow them to push it well off the edges otherwise.
     nx = Math.max(-(dlg.offsetWidth - 80), Math.min(nx, window.innerWidth - 80));
     ny = Math.max(0, Math.min(ny, window.innerHeight - 40));
-    setImportant(dlg, 'left', nx + 'px');
-    setImportant(dlg, 'top', ny + 'px');
+    // Reset inset before individual top/left/right/bottom so the
+    // shorthand doesn't undo our values (CSS cascade: last !important
+    // wins, and inset:auto would expand to top:auto;left:auto;... which
+    // would clobber the explicit positions we want).
+    setImportant(dlg, 'inset', 'auto');
     setImportant(dlg, 'right', 'auto');
     setImportant(dlg, 'bottom', 'auto');
-    setImportant(dlg, 'inset', 'auto');
+    setImportant(dlg, 'left', nx + 'px');
+    setImportant(dlg, 'top', ny + 'px');
   }, true);
 
   function endDrag() {
