@@ -1,0 +1,280 @@
+// ZHL Productivity Pack module — feature key: feature_scenarioSort
+// Wraps original module body in a chrome.storage.local feature-flag check.
+// If the user disables this module on the setup page the body never runs.
+(function () {
+  'use strict';
+  const __ZHL_FEATURE_KEY = 'feature_scenarioSort';
+  function __zhlRunModule() {
+(function () {
+  'use strict';
+
+  const TOOLBAR_ID = 'zhl-scenario-sort-toolbar';
+  const STYLED_CARD_SELECTOR = '[class*="StyledCard-c11n"]';
+  const DRAG_HANDLE_CLASS = 'zhl-scenario-drag-handle';
+  const DRAGGING_CLASS = 'zhl-scenario-dragging';
+  const DROP_TARGET_CLASS = 'zhl-scenario-drop-target';
+
+  function isOnScenariosPage() {
+    return /\/loan-officer-portal\/[^/]+\/pricing-and-scenarios/.test(location.pathname);
+  }
+
+  function findRowValue(card, labelText) {
+    const target = labelText.replace(/\s+/g, ' ').trim().toLowerCase();
+    const spans = card.querySelectorAll('span');
+    for (const span of spans) {
+      const t = (span.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (t !== target) continue;
+      const row = span.parentElement;
+      if (!row) continue;
+      const p = row.querySelector('p');
+      if (p) return (p.textContent || '').trim();
+    }
+    return null;
+  }
+
+  function isScenarioCard(card) {
+    const text = card.textContent || '';
+    return text.indexOf('Loan purpose') !== -1
+      && text.indexOf('Total loan amount') !== -1
+      && text.indexOf('Interest rate') !== -1;
+  }
+
+  function parseRate(card) {
+    const raw = findRowValue(card, 'Interest rate');
+    if (!raw) return NaN;
+    const m = /(-?\d+(?:\.\d+)?)/.exec(raw);
+    return m ? parseFloat(m[1]) : NaN;
+  }
+
+  // Each scenario card lives inside a Spacer-c11n wrapper; all wrappers
+  // for the cards row are siblings of one common parent (a flex row).
+  function getCardWrappers() {
+    const cards = Array.from(document.querySelectorAll(STYLED_CARD_SELECTOR));
+    const wrappers = [];
+    for (const card of cards) {
+      if (!isScenarioCard(card)) continue;
+      const w = card.parentElement;
+      if (w) wrappers.push(w);
+    }
+    return wrappers;
+  }
+
+  function commonParent(wrappers) {
+    if (wrappers.length === 0) return null;
+    const parent = wrappers[0].parentElement;
+    if (!parent) return null;
+    for (const w of wrappers) {
+      if (w.parentElement !== parent) return null;
+    }
+    return parent;
+  }
+
+  function sortByRate(direction) {
+    const wrappers = getCardWrappers();
+    if (wrappers.length < 2) return;
+    const parent = commonParent(wrappers);
+    if (!parent) {
+      console.warn('[Scenario Sort] cards do not share a common parent — aborting');
+      return;
+    }
+    const items = wrappers.map((wrapper) => {
+      const card = wrapper.querySelector(STYLED_CARD_SELECTOR);
+      return { wrapper, rate: parseRate(card) };
+    });
+    items.sort((a, b) => {
+      const aBad = !isFinite(a.rate);
+      const bBad = !isFinite(b.rate);
+      if (aBad && bBad) return 0;
+      if (aBad) return 1;
+      if (bBad) return -1;
+      return direction === 'desc' ? b.rate - a.rate : a.rate - b.rate;
+    });
+    for (const item of items) parent.appendChild(item.wrapper);
+    flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
+  }
+
+  // ---- Toolbar UI -----------------------------------------------------
+
+  function makeToolbar() {
+    const bar = document.createElement('div');
+    bar.id = TOOLBAR_ID;
+    bar.setAttribute('style',
+      'display: flex; align-items: center; gap: 8px;' +
+      'padding: 10px 12px; margin: 0 0 12px;' +
+      'background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px;' +
+      'font-family: inherit; font-size: 13px; color: #374151;'
+    );
+    const label = document.createElement('span');
+    label.textContent = 'Sort scenarios:';
+    label.setAttribute('style', 'font-weight: 600;');
+    bar.appendChild(label);
+
+    const ascBtn = makeButton('Rate ↑ (low → high)', () => sortByRate('asc'));
+    const descBtn = makeButton('Rate ↓ (high → low)', () => sortByRate('desc'));
+    bar.appendChild(ascBtn);
+    bar.appendChild(descBtn);
+
+    const hint = document.createElement('span');
+    hint.setAttribute('style', 'margin-left: auto; color: #6b7280; font-size: 12px;');
+    hint.textContent = 'or drag a card to reorder manually';
+    bar.appendChild(hint);
+
+    const status = document.createElement('span');
+    status.id = TOOLBAR_ID + '-status';
+    status.setAttribute('style', 'color: #047857; font-size: 12px; opacity: 0; transition: opacity 0.2s ease; margin-left: 8px;');
+    bar.appendChild(status);
+
+    return bar;
+  }
+
+  function makeButton(label, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.setAttribute('style',
+      'display: inline-flex; align-items: center;' +
+      'padding: 6px 12px; background: #ffffff; color: #006aff;' +
+      'border: 1px solid #006aff; border-radius: 4px;' +
+      'font-family: inherit; font-size: 12.5px; font-weight: 500;' +
+      'cursor: pointer; white-space: nowrap;'
+    );
+    btn.addEventListener('mouseenter', () => { btn.style.background = '#eef4ff'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = '#ffffff'; });
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  function flashStatus(msg) {
+    const el = document.getElementById(TOOLBAR_ID + '-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(flashStatus._t);
+    flashStatus._t = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+  }
+
+  // ---- Drag-and-drop --------------------------------------------------
+
+  let draggingWrapper = null;
+
+  function enableDragAndDrop(wrapper) {
+    if (wrapper.hasAttribute('data-zhl-dnd')) return;
+    wrapper.setAttribute('data-zhl-dnd', '1');
+    wrapper.setAttribute('draggable', 'true');
+    wrapper.style.cursor = 'grab';
+
+    wrapper.addEventListener('dragstart', (e) => {
+      draggingWrapper = wrapper;
+      wrapper.classList.add(DRAGGING_CLASS);
+      wrapper.style.opacity = '0.55';
+      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'zhl'); }
+      catch (_) {}
+    });
+    wrapper.addEventListener('dragend', () => {
+      draggingWrapper = null;
+      wrapper.classList.remove(DRAGGING_CLASS);
+      wrapper.style.opacity = '';
+      document.querySelectorAll('.' + DROP_TARGET_CLASS).forEach((el) => {
+        el.classList.remove(DROP_TARGET_CLASS);
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+      });
+    });
+    wrapper.addEventListener('dragover', (e) => {
+      if (!draggingWrapper || draggingWrapper === wrapper) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+      wrapper.classList.add(DROP_TARGET_CLASS);
+      wrapper.style.outline = '2px dashed #006aff';
+      wrapper.style.outlineOffset = '2px';
+    });
+    wrapper.addEventListener('dragleave', () => {
+      wrapper.classList.remove(DROP_TARGET_CLASS);
+      wrapper.style.outline = '';
+      wrapper.style.outlineOffset = '';
+    });
+    wrapper.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      wrapper.classList.remove(DROP_TARGET_CLASS);
+      wrapper.style.outline = '';
+      wrapper.style.outlineOffset = '';
+      if (!draggingWrapper || draggingWrapper === wrapper) return;
+      const parent = wrapper.parentElement;
+      if (!parent || draggingWrapper.parentElement !== parent) return;
+      // Decide drop side based on cursor x relative to target center.
+      const r = wrapper.getBoundingClientRect();
+      const before = e.clientX < r.left + r.width / 2;
+      if (before) parent.insertBefore(draggingWrapper, wrapper);
+      else parent.insertBefore(draggingWrapper, wrapper.nextSibling);
+      flashStatus('Reordered manually');
+    });
+  }
+
+  // ---- Lifecycle ------------------------------------------------------
+
+  function findInsertionAnchor() {
+    // The cards row's parent is the simplest common container; we insert
+    // the toolbar above the cards row inside that parent.
+    const wrappers = getCardWrappers();
+    if (wrappers.length === 0) return null;
+    const parent = commonParent(wrappers);
+    if (!parent) return null;
+    return { parent: parent.parentElement || parent, before: parent };
+  }
+
+  function ensureToolbar() {
+    if (document.getElementById(TOOLBAR_ID)) return;
+    const anchor = findInsertionAnchor();
+    if (!anchor) return;
+    const bar = makeToolbar();
+    anchor.parent.insertBefore(bar, anchor.before);
+  }
+
+  function ensureDnd() {
+    getCardWrappers().forEach(enableDragAndDrop);
+  }
+
+  function tearDown() {
+    const bar = document.getElementById(TOOLBAR_ID);
+    if (bar) bar.remove();
+  }
+
+  function tick() {
+    if (!isOnScenariosPage()) {
+      tearDown();
+      return;
+    }
+    ensureToolbar();
+    ensureDnd();
+  }
+
+  let scheduled = false;
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      try { tick(); }
+      catch (e) { console.error('[Scenario Sort] tick error', e); }
+    });
+  }
+
+  const observer = new MutationObserver(schedule);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  schedule();
+})();
+  }
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get([__ZHL_FEATURE_KEY], function (data) {
+      if (data[__ZHL_FEATURE_KEY] === false) return;
+      __zhlRunModule();
+    });
+  } else {
+    __zhlRunModule();
+  }
+})();

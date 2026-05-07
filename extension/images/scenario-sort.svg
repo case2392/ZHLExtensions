@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Sort toolbar -->
+  <rect x="14" y="14" width="332" height="32" rx="6" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="22" y="34" font-size="11" font-weight="700" fill="#374151">Sort scenarios:</text>
+  <rect x="116" y="20" width="86" height="20" rx="4" fill="#ffffff" stroke="#006aff"/>
+  <text x="159" y="34" text-anchor="middle" font-size="10" font-weight="600" fill="#006aff">Rate ↑ low → high</text>
+  <rect x="206" y="20" width="86" height="20" rx="4" fill="#ffffff" stroke="#006aff"/>
+  <text x="249" y="34" text-anchor="middle" font-size="10" font-weight="600" fill="#006aff">Rate ↓ high → low</text>
+  <text x="296" y="34" font-size="9" fill="#10b981" font-weight="700">↻ sorted</text>
+
+  <!-- Sorted card row -->
+  <g transform="translate(14, 56)">
+    <rect width="78" height="148" rx="6" fill="#fff" stroke="#d9dee5"/>
+    <text x="39" y="20" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">Scenario A</text>
+    <text x="8" y="42" font-size="9" fill="#374151">Rate</text>
+    <text x="70" y="42" text-anchor="end" font-size="9" font-weight="700" fill="#0a7d2c">5.875%</text>
+    <text x="8" y="60" font-size="9" fill="#374151">P&amp;I</text>
+    <text x="70" y="60" text-anchor="end" font-size="9" fill="#111827">$2,698</text>
+    <rect x="6" y="120" width="66" height="20" rx="3" fill="#006aff"/>
+    <text x="39" y="134" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">Update Pricing</text>
+  </g>
+
+  <g transform="translate(98, 56)">
+    <rect width="78" height="148" rx="6" fill="#fff" stroke="#d9dee5"/>
+    <text x="39" y="20" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">Scenario B</text>
+    <text x="8" y="42" font-size="9" fill="#374151">Rate</text>
+    <text x="70" y="42" text-anchor="end" font-size="9" font-weight="700" fill="#0a7d2c">6.125%</text>
+    <text x="8" y="60" font-size="9" fill="#374151">P&amp;I</text>
+    <text x="70" y="60" text-anchor="end" font-size="9" fill="#111827">$2,737</text>
+    <rect x="6" y="120" width="66" height="20" rx="3" fill="#006aff"/>
+    <text x="39" y="134" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">Update Pricing</text>
+  </g>
+
+  <g transform="translate(182, 56)">
+    <rect width="78" height="148" rx="6" fill="#fff" stroke="#d9dee5"/>
+    <text x="39" y="20" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">Scenario C</text>
+    <text x="8" y="42" font-size="9" fill="#374151">Rate</text>
+    <text x="70" y="42" text-anchor="end" font-size="9" font-weight="700" fill="#374151">6.490%</text>
+    <text x="8" y="60" font-size="9" fill="#374151">P&amp;I</text>
+    <text x="70" y="60" text-anchor="end" font-size="9" fill="#111827">$2,810</text>
+    <rect x="6" y="120" width="66" height="20" rx="3" fill="#006aff"/>
+    <text x="39" y="134" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">Update Pricing</text>
+  </g>
+
+  <g transform="translate(266, 56)">
+    <rect width="78" height="148" rx="6" fill="#fff" stroke="#d9dee5"/>
+    <text x="39" y="20" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">Scenario D</text>
+    <text x="8" y="42" font-size="9" fill="#374151">Rate</text>
+    <text x="70" y="42" text-anchor="end" font-size="9" font-weight="700" fill="#92400e">6.750%</text>
+    <text x="8" y="60" font-size="9" fill="#374151">P&amp;I</text>
+    <text x="70" y="60" text-anchor="end" font-size="9" fill="#111827">$2,922</text>
+    <rect x="6" y="120" width="66" height="20" rx="3" fill="#006aff"/>
+    <text x="39" y="134" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">Update Pricing</text>
+  </g>
+</svg>

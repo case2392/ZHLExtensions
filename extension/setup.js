@@ -11,7 +11,8 @@ const FEATURE_KEYS = [
   "feature_buydownCalc",
   "feature_callerId",
   "feature_smsAddParticipants",
-  "feature_autoCallDetailsTab"
+  "feature_autoCallDetailsTab",
+  "feature_scenarioSort"
 ];
 
 // Gmail Tweaks covers both the Gmail mail.google.com fixes and the
