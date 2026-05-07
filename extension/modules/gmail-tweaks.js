@@ -741,6 +741,17 @@
     if (!dlg || !isComposeDialog(dlg)) return;
     const outer = findOuterContainer(dlg);
     if (!outer) return;
+    // Establish the dialog as the containing block for fixed descendants
+    // even before any drag has happened. Without an actual transform on
+    // the outer, our bottom:0 override on .aDj resolves against the
+    // viewport, so the toolbar ends up pinned to the page bottom-left
+    // instead of the dialog bottom. translate(0,0) triggers the
+    // containing block (per CSS spec, any non-`none` transform value
+    // does) without visually shifting anything.
+    const cs = getComputedStyle(outer);
+    if (!cs.transform || cs.transform === 'none') {
+      setImportant(outer, 'transform', 'translate(0px, 0px)');
+    }
     // Re-apply the toolbar anchor on every scan, not just first attach.
     // Gmail flips .aDj back to position:fixed (with viewport-y values)
     // when the user minimizes and restores the compose, so we need to
