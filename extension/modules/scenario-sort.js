@@ -166,13 +166,30 @@
     'width', 'minWidth', 'maxWidth',
     'flex', 'flexBasis', 'flexGrow', 'flexShrink',
     'marginLeft', 'marginRight', 'marginTop', 'marginBottom',
-    'boxSizing', 'display'
+    'boxSizing', 'display', 'overflow', 'transform'
   ];
   const ASSIGNED_OVERRIDE_ATTR = 'data-zhl-assigned-styled';
 
   function isAssignedWrapper(wrapper) {
     if (!wrapper) return false;
     return /ASSIGNED\s*TO\s*LOAN/i.test(wrapper.textContent || '');
+  }
+
+  function findAssignedBanner(assigned) {
+    // The "ASSIGNED TO LOAN" banner lives INSIDE the StyledCard (not as
+    // a sibling of the card in the wrapper). Find the smallest element
+    // whose normalized text is exactly "ASSIGNED TO LOAN" — that's the
+    // banner element itself, and its height is the offset we need to
+    // compensate for to bottom-align the card body with neighbors.
+    const all = assigned.querySelectorAll('*');
+    let best = null;
+    for (const el of all) {
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (/^ASSIGNED\s*TO\s*LOAN$/i.test(text)) {
+        if (!best || best.contains(el)) best = el;
+      }
+    }
+    return best;
   }
 
   function alignAssignedWrapper(wrappers) {
@@ -209,38 +226,38 @@
     if (refCs.display && refCs.display !== 'block') {
       assigned.style.setProperty('display', refCs.display, 'important');
     }
+    // Don't let the assigned wrapper's banner overflow get clipped above
+    // the row — set overflow visible just in case.
+    assigned.style.setProperty('overflow', 'visible', 'important');
 
-    // The assigned wrapper has the green ASSIGNED TO LOAN banner above
-    // its card body; neighbor wrappers don't. Measure the gap between
-    // the assigned wrapper's top and its inner StyledCard's top, then
-    // apply a negative margin-top + transform so the card body aligns
-    // with neighbor bodies and the banner protrudes above the row.
-    const card = assigned.querySelector(STYLED_CARD_SELECTOR);
-    let offsetAbove = 0;
-    let cardRect = null;
-    let wrapperRect = null;
-    if (card) {
-      cardRect = card.getBoundingClientRect();
-      wrapperRect = assigned.getBoundingClientRect();
-      offsetAbove = cardRect.top - wrapperRect.top;
-    }
+    // The banner is inside the StyledCard, so wrapper.top === card.top.
+    // Find the banner element directly and use its height as the up-shift.
+    const banner = findAssignedBanner(assigned);
+    const bannerRect = banner ? banner.getBoundingClientRect() : null;
+    const bannerHeight = bannerRect ? bannerRect.height : 0;
+    const wrapperRect = assigned.getBoundingClientRect();
     const parent = assigned.parentElement;
     const parentCs = parent ? getComputedStyle(parent) : null;
     console.log('[Scenario Sort align]',
       'wrapper=', shortDescribe(assigned),
-      'card=', shortDescribe(card),
-      'offsetAbove=', offsetAbove,
-      'wrapperRect=', wrapperRect && { top: wrapperRect.top, height: wrapperRect.height },
-      'cardRect=', cardRect && { top: cardRect.top, height: cardRect.height },
+      'banner=', shortDescribe(banner),
+      'bannerHeight=', bannerHeight,
+      'wrapperHeight=', wrapperRect.height,
+      'refHeight=', refRect.height,
       'parent.display=', parentCs && parentCs.display,
-      'parent.alignItems=', parentCs && parentCs.alignItems);
-    if (offsetAbove > 1) {
-      const mt = '-' + Math.round(offsetAbove) + 'px';
+      'parent.alignItems=', parentCs && parentCs.alignItems,
+      'parent.gap=', parentCs && parentCs.gap);
+    if (bannerHeight > 1) {
+      const mt = '-' + Math.round(bannerHeight) + 'px';
       assigned.style.setProperty('margin-top', mt, 'important');
-      console.log('[Scenario Sort align] applied margin-top=', mt, 'computed=', getComputedStyle(assigned).marginTop);
+      // Belt-and-suspenders: also apply transform translateY in case
+      // negative margin-top doesn't visually shift in this layout.
+      assigned.style.setProperty('transform', 'translateY(-' + Math.round(bannerHeight) + 'px)', 'important');
+      console.log('[Scenario Sort align] applied margin-top=' + mt + ' + matching translateY. computed mt=', getComputedStyle(assigned).marginTop, ' transform=', getComputedStyle(assigned).transform);
     } else {
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
-      console.log('[Scenario Sort align] no offset to apply (offsetAbove<=1) — using ref marginTop=', refCs.marginTop);
+      assigned.style.removeProperty('transform');
+      console.log('[Scenario Sort align] no banner found / zero height — using ref marginTop=', refCs.marginTop);
     }
   }
 
@@ -495,13 +512,18 @@
       const r = wrapper.getBoundingClientRect();
       const before = e.clientX < r.left + r.width / 2;
       const movedNode = draggingWrapper;
+      const sourceIdx = sourceParent ? Array.from(sourceParent.children).indexOf(movedNode) : -1;
+      const targetIdx = Array.from(parent.children).indexOf(wrapper);
       try {
         if (before) parent.insertBefore(movedNode, wrapper);
         else parent.insertBefore(movedNode, wrapper.nextSibling);
         const idxAfterDrop = Array.from(parent.children).indexOf(movedNode);
+        const noOp = !crossParent && idxAfterDrop === sourceIdx;
         dndLog('drop OK — moved into', shortDescribe(parent),
           before ? 'before' : 'after', shortDescribe(wrapper),
-          'crossParent=' + crossParent, 'idx=' + idxAfterDrop);
+          'sourceIdx=' + sourceIdx, 'targetIdx=' + targetIdx,
+          'finalIdx=' + idxAfterDrop, 'crossParent=' + crossParent,
+          noOp ? '(NO-OP — dropped at same position)' : '');
         flashStatus('Reordered manually');
         // Re-align the assigned wrapper after a manual reorder — if it
         // was the dragged element OR its position changed in the row,
