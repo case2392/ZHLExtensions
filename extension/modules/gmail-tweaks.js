@@ -740,13 +740,19 @@
   function attachToDialog(dlg) {
     if (!dlg || !isComposeDialog(dlg)) return;
     const outer = findOuterContainer(dlg);
-    if (!outer || outer.hasAttribute(DRAG_ATTR)) return;
+    if (!outer) return;
+    // Re-apply the toolbar anchor on every scan, not just first attach.
+    // Gmail flips .aDj back to position:fixed (with viewport-y values)
+    // when the user minimizes and restores the compose, so we need to
+    // re-override after each restore. unfixInnerToolbars short-circuits
+    // when the position is already what we want.
+    unfixInnerToolbars(dlg);
+    if (outer.hasAttribute(DRAG_ATTR)) return;
     const handle = findHandle(dlg);
     if (!handle) return;
     outer.setAttribute(DRAG_ATTR, '1');
     handle.style.cursor = 'move';
     handle.addEventListener('mousedown', (e) => startDrag(outer, handle, e), true);
-    unfixInnerToolbars(dlg);
     console.log('[Gmail Compose Drag] attached. outer=', outer, 'handle=', handle);
   }
 
