@@ -574,12 +574,12 @@
     };
     document.body.style.userSelect = 'none';
     handle.style.cursor = 'grabbing';
-    console.log('[Gmail Compose Drag] start. startX=', e.clientX, 'startY=', e.clientY,
-      'rect=', { l: rect.left, t: rect.top, w: rect.width, h: rect.height },
-      'startTranslate=', { tx, ty },
-      'vh=', window.innerHeight, 'vw=', window.innerWidth);
+    console.log('[Gmail Compose Drag] start. startX=' + e.clientX + ' startY=' + e.clientY
+      + ' rect=' + JSON.stringify({ l: Math.round(rect.left), t: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) })
+      + ' startTranslate=' + JSON.stringify({ tx: Math.round(tx), ty: Math.round(ty) })
+      + ' vh=' + window.innerHeight + ' vw=' + window.innerWidth);
     const toolbarChain = describeToolbarChain(dlg);
-    console.log('[Gmail Compose Drag] Send button parent chain:', toolbarChain);
+    console.log('[Gmail Compose Drag] Send button parent chain: ' + JSON.stringify(toolbarChain, null, 2));
   }
 
   document.addEventListener('mousemove', (e) => {
@@ -611,10 +611,10 @@
     if (!active.lastLogAt || now - active.lastLogAt > 200) {
       active.lastLogAt = now;
       const cs = getComputedStyle(dlg);
-      console.log('[Gmail Compose Drag] move #' + active.moveCount,
-        'cursor=', e.clientX, e.clientY,
-        'translate=', { tx, ty },
-        'computed transform=', cs.transform);
+      console.log('[Gmail Compose Drag] move #' + active.moveCount
+        + ' cursor=' + e.clientX + ',' + e.clientY
+        + ' translate=' + JSON.stringify({ tx: Math.round(tx), ty: Math.round(ty) })
+        + ' transform=' + cs.transform);
     }
   }, true);
 
@@ -630,11 +630,11 @@
     if ((moveCount || 0) > 0) {
       clickGuardUntil = Date.now() + 200;
     }
-    console.log('[Gmail Compose Drag] end. reason=' + reason,
-      'moveCount=' + (moveCount || 0),
-      'lastTranslate=', { tx: lastTx, ty: lastTy },
-      'computed transform=', cs.transform,
-      'event target=', e && e.target && e.target.tagName);
+    console.log('[Gmail Compose Drag] end. reason=' + reason
+      + ' moveCount=' + (moveCount || 0)
+      + ' lastTranslate=' + JSON.stringify({ tx: Math.round(lastTx || 0), ty: Math.round(lastTy || 0) })
+      + ' transform=' + cs.transform
+      + ' event target=' + (e && e.target && e.target.tagName));
     active = null;
   }
   // Only end on a real mouseup. Don't end on mouseleave: when the
@@ -642,7 +642,15 @@
   // chrome, or over a subframe), mouseleave fires and the drag would
   // appear to "get stuck" — even though the user is still pressing
   // the button. mouseup will fire when they actually release.
-  document.addEventListener('mouseup', (e) => endDrag('mouseup', e), true);
+  document.addEventListener('mouseup', (e) => {
+    // Suppress propagation on a real drag's mouseup so Gmail's title
+    // bar listeners (mouseup or click) don't toggle the compose to
+    // minimized. We end our drag explicitly.
+    if (active && (active.moveCount || 0) > 0) {
+      e.stopImmediatePropagation();
+    }
+    endDrag('mouseup', e);
+  }, true);
   // Also end if the user releases outside the window (window blur).
   window.addEventListener('blur', () => endDrag('blur'), true);
 
