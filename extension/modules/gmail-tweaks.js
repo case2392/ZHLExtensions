@@ -487,6 +487,109 @@
     syntheticMouseClick(btn);
   }, true);
 })();
+
+// Draggable floating compose -------------------------------------------------
+// Lets the user pick up the "New Message" compose dialog by its title bar
+// and drop it anywhere in the Gmail window. Gmail anchors compose to the
+// bottom-right by default; this gives the user free placement so the
+// compose doesn't cover the message they're referencing.
+(function () {
+  'use strict';
+
+  const DRAG_ATTR = 'data-zhl-compose-drag';
+  let active = null;
+
+  function isInteractiveTarget(el) {
+    return !!(el && el.closest && el.closest(
+      'button, [role="button"], img, input, textarea, [contenteditable="true"], a'
+    ));
+  }
+
+  function startDrag(dlg, handle, e) {
+    if (e.button !== 0) return;
+    if (isInteractiveTarget(e.target)) return;
+    e.preventDefault();
+    const rect = dlg.getBoundingClientRect();
+    // Pin the dialog to the viewport at its current position so subsequent
+    // left/top updates work regardless of Gmail's anchoring.
+    dlg.style.position = 'fixed';
+    dlg.style.left = rect.left + 'px';
+    dlg.style.top = rect.top + 'px';
+    dlg.style.right = 'auto';
+    dlg.style.bottom = 'auto';
+    dlg.style.margin = '0';
+    dlg.style.transform = 'none';
+    active = {
+      dlg, handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: rect.left,
+      startTop: rect.top
+    };
+    document.body.style.userSelect = 'none';
+    handle.style.cursor = 'grabbing';
+  }
+
+  document.addEventListener('mousemove', (e) => {
+    if (!active) return;
+    const { dlg, startX, startY, startLeft, startTop } = active;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    let nx = startLeft + dx;
+    let ny = startTop + dy;
+    nx = Math.max(0, Math.min(nx, window.innerWidth - dlg.offsetWidth));
+    ny = Math.max(0, Math.min(ny, window.innerHeight - dlg.offsetHeight));
+    dlg.style.left = nx + 'px';
+    dlg.style.top = ny + 'px';
+  }, true);
+
+  function endDrag() {
+    if (!active) return;
+    document.body.style.userSelect = '';
+    active.handle.style.cursor = 'move';
+    active = null;
+  }
+  document.addEventListener('mouseup', endDrag, true);
+  document.addEventListener('mouseleave', endDrag, true);
+
+  function isComposeDialog(dlg) {
+    // Matches the floating "New Message" / reply compose popups: they're
+    // role=dialog elements with the compose body controls inside.
+    return !!(dlg.querySelector && dlg.querySelector(
+      'textarea[name="to"], input[name="subjectbox"]'
+    ));
+  }
+
+  function findHandle(dlg) {
+    // The compose title bar (the strip showing "New Message" with the
+    // minimize/expand/close icons). Class names vary across Gmail
+    // releases; try the known ones in order, then fall back to the
+    // dialog's first child.
+    return dlg.querySelector('.aDh, .Hp, .nH .aoP, [aria-label*="ompose"]')
+      || dlg.firstElementChild
+      || null;
+  }
+
+  function attachToDialog(dlg) {
+    if (!dlg || dlg.hasAttribute(DRAG_ATTR)) return;
+    if (!isComposeDialog(dlg)) return;
+    const handle = findHandle(dlg);
+    if (!handle) return;
+    dlg.setAttribute(DRAG_ATTR, '1');
+    handle.style.cursor = 'move';
+    handle.addEventListener('mousedown', (e) => startDrag(dlg, handle, e));
+    console.log('[Gmail Compose Drag] attached to compose dialog');
+  }
+
+  function scan() {
+    document.querySelectorAll('div[role="dialog"]').forEach(attachToDialog);
+  }
+
+  const observer = new MutationObserver(() => scan());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  scan();
+})();
+
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get([__ZHL_FEATURE_KEY], function (data) {
