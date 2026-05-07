@@ -505,26 +505,30 @@
     ));
   }
 
+  function setImportant(el, prop, val) {
+    el.style.setProperty(prop, val, 'important');
+  }
+
   function startDrag(dlg, handle, e) {
     if (e.button !== 0) return;
     if (isInteractiveTarget(e.target)) return;
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     const rect = dlg.getBoundingClientRect();
     // Lock the dialog's width and height BEFORE switching positioning
-    // modes. Gmail's compose derives its size from right/bottom anchors
-    // plus the surrounding layout — once we remove right/bottom and
-    // switch to position:fixed, the dialog would collapse to its min
-    // content size (just the title bar).
-    dlg.style.width = rect.width + 'px';
-    dlg.style.height = rect.height + 'px';
-    dlg.style.position = 'fixed';
-    dlg.style.left = rect.left + 'px';
-    dlg.style.top = rect.top + 'px';
-    dlg.style.right = 'auto';
-    dlg.style.bottom = 'auto';
-    dlg.style.margin = '0';
-    dlg.style.transform = 'none';
+    // modes. Gmail's compose derives its size from right/bottom anchors;
+    // without locking it would collapse to min content. Use !important
+    // so Gmail's own snap-to-anchor scripts can't overwrite us mid-drag.
+    setImportant(dlg, 'width', rect.width + 'px');
+    setImportant(dlg, 'height', rect.height + 'px');
+    setImportant(dlg, 'position', 'fixed');
+    setImportant(dlg, 'left', rect.left + 'px');
+    setImportant(dlg, 'top', rect.top + 'px');
+    setImportant(dlg, 'right', 'auto');
+    setImportant(dlg, 'bottom', 'auto');
+    setImportant(dlg, 'inset', 'auto');
+    setImportant(dlg, 'margin', '0');
+    setImportant(dlg, 'transform', 'none');
     active = {
       dlg, handle,
       startX: e.clientX,
@@ -534,6 +538,9 @@
     };
     document.body.style.userSelect = 'none';
     handle.style.cursor = 'grabbing';
+    console.log('[Gmail Compose Drag] start. startX=', e.clientX, 'startY=', e.clientY,
+      'rect=', { l: rect.left, t: rect.top, w: rect.width, h: rect.height },
+      'vh=', window.innerHeight, 'vw=', window.innerWidth);
   }
 
   document.addEventListener('mousemove', (e) => {
@@ -543,10 +550,15 @@
     const dy = e.clientY - startY;
     let nx = startLeft + dx;
     let ny = startTop + dy;
-    nx = Math.max(0, Math.min(nx, window.innerWidth - dlg.offsetWidth));
-    ny = Math.max(0, Math.min(ny, window.innerHeight - dlg.offsetHeight));
-    dlg.style.left = nx + 'px';
-    dlg.style.top = ny + 'px';
+    // Soft clamp: keep ~40px of the dialog visible so the user can grab
+    // it back, but allow them to push it well off the edges otherwise.
+    nx = Math.max(-(dlg.offsetWidth - 80), Math.min(nx, window.innerWidth - 80));
+    ny = Math.max(0, Math.min(ny, window.innerHeight - 40));
+    setImportant(dlg, 'left', nx + 'px');
+    setImportant(dlg, 'top', ny + 'px');
+    setImportant(dlg, 'right', 'auto');
+    setImportant(dlg, 'bottom', 'auto');
+    setImportant(dlg, 'inset', 'auto');
   }, true);
 
   function endDrag() {
@@ -592,16 +604,24 @@
 
   function findHandle(dlg) {
     // The compose title bar (strip showing "New Message" with the
-    // minimize/expand/close icons). Class names vary across Gmail
-    // releases; try the known ones in order, then fall back to the
-    // first element near the dialog top.
-    const candidates = dlg.querySelectorAll('.aDh, .Hp, .aDg, .aoP, [aria-label*="ompose"]');
+    // minimize/expand/close icons). Prefer a wider element (the .Ht
+    // table that spans the full title-bar width) over the inner .Hp
+    // text container — that way the user can grab anywhere on the strip,
+    // not just on the title text.
     const dlgRect = dlg.getBoundingClientRect();
+    // Broadest selectors first; we'll keep the widest match near the top.
+    const candidates = dlg.querySelectorAll(
+      '.Ht, .aCk, .Njo3Cf, .Hy, .aDh, .Hp, .aDg, .aoP'
+    );
+    let best = null;
     for (const el of candidates) {
       const r = el.getBoundingClientRect();
-      if (r.height > 8 && r.height < 80 && r.top - dlgRect.top < 30) return el;
+      if (r.height < 8 || r.height > 80) continue;
+      if (r.top - dlgRect.top > 30) continue;
+      if (r.width < 200) continue;
+      if (!best || r.width > best.rect.width) best = { el, rect: r };
     }
-    return dlg.firstElementChild || null;
+    return (best && best.el) || dlg.firstElementChild || null;
   }
 
   function attachToDialog(dlg) {
