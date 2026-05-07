@@ -430,6 +430,7 @@
         const ok = await addParticipant(panel, phoneToUse);
         b.textContent = orig;
         b.disabled = false;
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_buyers_agent', props: { ok } }); } catch (_) {}
         if (!ok) alert('Could not add Buyer’s Agent — see console for details.');
       });
       wrapper.appendChild(btn);
@@ -453,6 +454,7 @@
         const ok = await addParticipant(panel, phone);
         b.textContent = orig;
         b.disabled = false;
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_coborrower', props: { ok } }); } catch (_) {}
         if (!ok) alert('Could not add Co-Borrower — see console for details.');
       });
       wrapper.appendChild(btn);

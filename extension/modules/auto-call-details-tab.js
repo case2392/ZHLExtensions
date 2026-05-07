@@ -77,6 +77,7 @@
       tab.dispatchEvent(ev);
     }
     console.log('[Auto Call Details Tab] switched Lead', leadId, 'to Call Details');
+    try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'auto_call_details_switched' }); } catch (_) {}
   }
 
   let scheduled = false;

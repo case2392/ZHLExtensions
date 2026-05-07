@@ -21,7 +21,8 @@ const FEATURE_KEYS = [
   "feature_smsAddParticipants",
   "feature_autoCallDetailsTab",
   "feature_autoMessagingTab",
-  "feature_scenarioSort"
+  "feature_scenarioSort",
+  "feature_telemetry"
 ];
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -202,6 +203,113 @@ async function lookupContactPhone(contactId) {
   }
 }
 
+// -------------------------------------------------------------------------
+// Telemetry — sends usage events to a Google Apps Script web app (admin
+// dashboard). Configured ONCE: deploy apps-script/Code.gs as a web app,
+// paste the deployment URL into TELEMETRY_ENDPOINT below, and bump the
+// extension version.
+//
+// Identity = the Google account email captured from any open Gmail tab.
+// Stored in chrome.storage.local; persists across reinstalls because the
+// next time the user opens Gmail we re-detect the same email. Until an
+// email is captured we use an anonymous UUID so we don't lose events.
+// -------------------------------------------------------------------------
+
+const TELEMETRY_ENDPOINT = ""; // ← Paste your Apps Script Web App URL here
+const TELEMETRY_FLUSH_MS = 30 * 1000;
+const TELEMETRY_QUEUE_KEY = "_zhl_tlm_queue";
+const TELEMETRY_USER_KEY = "_zhl_tlm_user";
+const TELEMETRY_ANON_KEY = "_zhl_tlm_anon_id";
+const TELEMETRY_MAX_QUEUE = 500;
+
+function _tlmUuid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+async function getOrCreateAnonId() {
+  const data = await chrome.storage.local.get([TELEMETRY_ANON_KEY]);
+  if (data[TELEMETRY_ANON_KEY]) return data[TELEMETRY_ANON_KEY];
+  const id = "anon-" + _tlmUuid();
+  await chrome.storage.local.set({ [TELEMETRY_ANON_KEY]: id });
+  return id;
+}
+
+async function setTelemetryUser(user) {
+  const data = await chrome.storage.local.get([TELEMETRY_USER_KEY]);
+  const existing = data[TELEMETRY_USER_KEY] || {};
+  const merged = Object.assign(
+    { firstSeen: existing.firstSeen || Date.now() },
+    existing,
+    user || {},
+    { lastSeen: Date.now() }
+  );
+  await chrome.storage.local.set({ [TELEMETRY_USER_KEY]: merged });
+}
+
+async function isTelemetryEnabled() {
+  const data = await chrome.storage.local.get(["feature_telemetry"]);
+  return data.feature_telemetry !== false; // default: on
+}
+
+async function enqueueEvent(event) {
+  if (!(await isTelemetryEnabled())) return;
+  const data = await chrome.storage.local.get([TELEMETRY_QUEUE_KEY]);
+  const queue = data[TELEMETRY_QUEUE_KEY] || [];
+  queue.push(event);
+  if (queue.length > TELEMETRY_MAX_QUEUE) queue.splice(0, queue.length - TELEMETRY_MAX_QUEUE);
+  await chrome.storage.local.set({ [TELEMETRY_QUEUE_KEY]: queue });
+}
+
+async function flushTelemetry() {
+  if (!TELEMETRY_ENDPOINT) return;
+  if (!(await isTelemetryEnabled())) return;
+  const data = await chrome.storage.local.get([TELEMETRY_QUEUE_KEY, TELEMETRY_USER_KEY]);
+  const queue = data[TELEMETRY_QUEUE_KEY] || [];
+  if (queue.length === 0) return;
+  const user = data[TELEMETRY_USER_KEY] || null;
+  const anonId = await getOrCreateAnonId();
+  const payload = {
+    user: {
+      email: (user && user.email) || null,
+      name: (user && user.name) || null,
+      id: anonId,
+      firstSeen: (user && user.firstSeen) || null
+    },
+    extensionVersion: VERSION,
+    sentAt: new Date().toISOString(),
+    events: queue
+  };
+  try {
+    const res = await fetch(TELEMETRY_ENDPOINT, {
+      method: "POST",
+      // text/plain so the request is "simple" and avoids a CORS preflight
+      // — Apps Script reads e.postData.contents either way.
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+    if (res.ok) {
+      // Drop the events we just sent. New events queued during the await
+      // will already be in storage and will be picked up next flush.
+      const after = await chrome.storage.local.get([TELEMETRY_QUEUE_KEY]);
+      const cur = after[TELEMETRY_QUEUE_KEY] || [];
+      const remaining = cur.slice(queue.length); // new events added during fetch
+      await chrome.storage.local.set({ [TELEMETRY_QUEUE_KEY]: remaining });
+    }
+  } catch (_) {
+    // Will retry on next interval. Events stay in the queue.
+  }
+}
+
+setInterval(flushTelemetry, TELEMETRY_FLUSH_MS);
+// Also flush soon after install/startup so events from the first session
+// don't sit around for 30 seconds before being sent.
+setTimeout(flushTelemetry, 5 * 1000);
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "LOOKUP_PHONE") {
     const ten = normalizePhone(msg.phone);
@@ -225,6 +333,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "CLEAR_CACHE") {
     callerIdCache.clear();
     sendResponse({ ok: true });
+    return false;
+  }
+  if (msg && msg.type === "TRACK") {
+    const event = {
+      name: String(msg.event || "unknown"),
+      props: msg.props && typeof msg.props === "object" ? msg.props : {},
+      url: (sender && sender.url) || null,
+      ts: Date.now()
+    };
+    enqueueEvent(event);
+    return false;
+  }
+  if (msg && msg.type === "IDENTIFY") {
+    setTelemetryUser({
+      email: msg.email ? String(msg.email).trim() : null,
+      name: msg.name ? String(msg.name).trim() : null
+    });
     return false;
   }
   return false;

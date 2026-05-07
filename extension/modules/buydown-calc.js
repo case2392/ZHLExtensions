@@ -132,8 +132,13 @@
 
   // ---- panel UI --------------------------------------------------------
 
+  function track(event, props) {
+    try { chrome.runtime.sendMessage({ type: 'TRACK', event, props: props || {} }); } catch (_) {}
+  }
+
   function showPanel(card) {
     const f = readCardFields(card);
+    track('buydown_calc_open');
 
     const existing = document.getElementById(PANEL_ID);
     if (existing) existing.remove();

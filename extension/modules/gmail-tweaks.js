@@ -802,3 +802,55 @@
     __zhlRunModule();
   }
 })();
+
+// Telemetry identity capture — runs regardless of Gmail Tweaks toggle so
+// the admin dashboard can identify the user even with all feature
+// modules disabled. Gated only by feature_telemetry. As long as the user
+// is signed into the same Google account, the email re-binds across
+// reinstalls and version updates the next time they open Gmail.
+(function () {
+  'use strict';
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+  chrome.storage.local.get(['feature_telemetry'], function (data) {
+    if (data.feature_telemetry === false) return;
+
+    function tryCapture() {
+      // The account button's aria-label is e.g.:
+      //   "Google Account: Justin Case (justinca@zillowhomeloans.com)"
+      const candidates = document.querySelectorAll(
+        'a[aria-label*="Google Account"], a[href*="SignOutOptions"]'
+      );
+      for (const a of candidates) {
+        const label = (a.getAttribute('aria-label') || '').trim();
+        if (!label) continue;
+        const both = /:\s*(.+?)\s*\(([^)]+@[^)]+)\)/.exec(label);
+        if (both) {
+          const name = both[1].trim();
+          const email = both[2].trim();
+          try {
+            chrome.runtime.sendMessage({ type: 'IDENTIFY', email, name });
+            chrome.runtime.sendMessage({ type: 'TRACK', event: 'identity_captured', props: { source: 'gmail' } });
+          } catch (_) {}
+          return true;
+        }
+        const onlyEmail = /\(([^)]+@[^)]+)\)/.exec(label);
+        if (onlyEmail) {
+          try {
+            chrome.runtime.sendMessage({ type: 'IDENTIFY', email: onlyEmail[1].trim() });
+          } catch (_) {}
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Gmail's DOM isn't ready at document_start. Try a few times over
+    // the first ~30s; once we capture, stop. Cheap: just a querySelectorAll.
+    let attempts = 0;
+    const t = setInterval(() => {
+      if (tryCapture() || ++attempts > 12) clearInterval(t);
+    }, 2500);
+    setTimeout(tryCapture, 1500);
+  });
+})();
+

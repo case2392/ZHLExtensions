@@ -102,8 +102,10 @@
           }
           if (resp.match) {
             console.log("[CallerID] match for", phone, "→", resp.match.sobject, resp.match.id, resp.match.name);
+            try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'caller_id_match', props: { sobject: resp.match.sobject } }); } catch (_) {}
           } else {
             console.log("[CallerID] no match for", phone);
+            try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'caller_id_no_match' }); } catch (_) {}
           }
           resolve(resp.match || null);
         });

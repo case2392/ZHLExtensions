@@ -465,6 +465,10 @@
     return false;
   }
 
+  function track(event, props) {
+    try { chrome.runtime.sendMessage({ type: 'TRACK', event, props: props || {} }); } catch (_) {}
+  }
+
   function applyResults(state, result) {
     const residualField = findFieldByLabel('VA residual income');
     if (residualField) setReactInputValue(residualField, result.residualIncome.toFixed(2));
@@ -472,11 +476,13 @@
     if (deductionsField && result.requirement != null) {
       setReactInputValue(deductionsField, result.requirement.toFixed(2));
     }
+    track('va_calc_apply');
     // Fire and forget — don't block panel rendering on the save round-trip.
     autoClickSave();
   }
 
   function showPanel(initialState) {
+    track('va_calc_open');
     const existing = document.getElementById(PANEL_ID);
     if (existing) existing.remove();
 

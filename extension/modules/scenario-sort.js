@@ -12,6 +12,10 @@
     ? chrome.runtime.getManifest().version : '?';
   console.log('[Scenario Sort v' + VERSION + '] loaded in', location.href);
 
+  function track(event, props) {
+    try { chrome.runtime.sendMessage({ type: 'TRACK', event, props: props || {} }); } catch (_) {}
+  }
+
   const TOOLBAR_ID = 'zhl-scenario-sort-toolbar';
   const STYLED_CARD_SELECTOR = '[class*="StyledCard-c11n"]';
   const DRAG_HANDLE_CLASS = 'zhl-scenario-drag-handle';
@@ -152,6 +156,7 @@
     clearAssignedWrapperOverrides();
     refreshSelectionsToMatchDom();
     flashStatus('Reverted to original order');
+    track('scenario_sort_reset');
   }
 
   // The assigned-card wrapper has its own outer styling (green border,
@@ -358,6 +363,7 @@
     console.log('[Scenario Sort] sorted ' + items.length + ' wrappers (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
     refreshSelectionsToMatchDom();
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
+    track('scenario_sort_rate', { direction, count: items.length });
   }
 
   // After we move cards around, the page's React selection state can
@@ -415,6 +421,7 @@
       else if (!anyUnchecked && cb.checked) { cb.click(); changed++; }
     }
     flashStatus(anyUnchecked ? ('Selected all (' + changed + ')') : ('Deselected all (' + changed + ')'));
+    track('scenario_sort_select_all', { action: anyUnchecked ? 'select' : 'deselect', changed });
     updateSelectAllLabel();
   }
 

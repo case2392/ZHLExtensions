@@ -13,7 +13,8 @@ const FEATURE_KEYS = [
   "feature_smsAddParticipants",
   "feature_autoCallDetailsTab",
   "feature_autoMessagingTab",
-  "feature_scenarioSort"
+  "feature_scenarioSort",
+  "feature_telemetry"
 ];
 
 // Gmail Tweaks covers both the Gmail mail.google.com fixes and the

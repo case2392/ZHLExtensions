@@ -360,6 +360,7 @@
     btn.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'contact_sms_click' }); } catch (_) {}
       openSmsFor(phoneText, btn);
     });
 

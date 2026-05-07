@@ -287,6 +287,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: Anonymous Telemetry ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Anonymous usage telemetry</h2>
+          <p class="module-runs-on">Runs in: background — no page-level UI</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_telemetry" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Sends a small event ping to the extension admin (Justin) when you use a tool — which feature, which version, when. Helps decide which modules to invest in.</li>
+          <li>Identifies you by your work Gmail address (read once from the Google account button when you have Gmail open) so the admin can see who's using what without anything else to set up.</li>
+          <li>No email contents, no SMS contents, no Salesforce record contents — just feature names and counts.</li>
+          <li>Toggle off any time. Events drop on the floor when disabled; nothing is sent.</li>
+        </ul>
+      </div>
+    </section>
+
   </main>
 
   <footer class="page-footer">

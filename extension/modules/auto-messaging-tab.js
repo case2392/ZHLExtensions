@@ -71,6 +71,7 @@
       tab.dispatchEvent(ev);
     }
     console.log('[Auto Messaging Tab] switched Contact', contactId, 'to Messaging');
+    try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'auto_messaging_switched' }); } catch (_) {}
   }
 
   let scheduled = false;
