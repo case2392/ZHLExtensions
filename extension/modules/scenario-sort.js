@@ -170,6 +170,7 @@
   ];
   const ASSIGNED_OVERRIDE_ATTR = 'data-zhl-assigned-styled';
   const PARENT_ALIGN_ATTR = 'data-zhl-parent-align-saved';
+  const WRAPPER_LAYOUT_ATTR = 'data-zhl-wrapper-layout-saved';
 
   function isAssignedWrapper(wrapper) {
     if (!wrapper) return false;
@@ -249,21 +250,38 @@
       'parent.alignItems=', parentCs && parentCs.alignItems,
       'parent.gap=', parentCs && parentCs.gap);
     if (bannerHeight > 1) {
-      // Bottom-align the row instead of guessing a shift amount. With
-      // align-items: flex-end on the parent, every wrapper sits flush
-      // with the row's bottom edge: neighbor wrappers (shorter, no
-      // banner) get pushed down to match the assigned wrapper's bottom,
-      // and the assigned wrapper's banner naturally lives at the top of
-      // its own wrapper. Body bottoms align without any manual offset.
+      // Bottom-align card bodies WITHOUT pushing the whole row down.
+      // align-items:flex-end on the parent moved every wrapper to the
+      // bottom of the parent's cross-axis — but the parent has extra
+      // height beyond the cards, so the row visibly dropped on the
+      // page. Instead: keep parent at its default stretch (so wrappers
+      // fill row height naturally), and turn each wrapper into a flex
+      // column with content justified to the bottom. Wrappers stretch
+      // to row height (= max natural item height = assigned wrapper's
+      // height), and inside each wrapper the card content sits at the
+      // bottom — so neighbor card bodies and the assigned card body
+      // share the same bottom Y, and the row itself stays at top.
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
       assigned.style.removeProperty('transform');
-      if (parent) {
-        if (!parent.hasAttribute(PARENT_ALIGN_ATTR)) {
-          parent.setAttribute(PARENT_ALIGN_ATTR, parent.style.alignItems || '');
-        }
-        parent.style.setProperty('align-items', 'flex-end', 'important');
+      if (parent && parent.hasAttribute(PARENT_ALIGN_ATTR)) {
+        const orig = parent.getAttribute(PARENT_ALIGN_ATTR);
+        parent.style.alignItems = orig || '';
+        parent.removeAttribute(PARENT_ALIGN_ATTR);
       }
-      console.log('[Scenario Sort align] applied parent align-items=flex-end. parent now has alignItems=', parent && getComputedStyle(parent).alignItems);
+      for (const w of wrappers) {
+        if (!w.hasAttribute(WRAPPER_LAYOUT_ATTR)) {
+          const orig = {
+            display: w.style.display || '',
+            flexDirection: w.style.flexDirection || '',
+            justifyContent: w.style.justifyContent || ''
+          };
+          try { w.setAttribute(WRAPPER_LAYOUT_ATTR, JSON.stringify(orig)); } catch (_) {}
+        }
+        w.style.setProperty('display', 'flex', 'important');
+        w.style.setProperty('flex-direction', 'column', 'important');
+        w.style.setProperty('justify-content', 'flex-end', 'important');
+      }
+      console.log('[Scenario Sort align] applied per-wrapper flex-column + justify-content:flex-end to', wrappers.length, 'wrappers');
     } else {
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
       assigned.style.removeProperty('transform');
@@ -282,6 +300,14 @@
       const original = el.getAttribute(PARENT_ALIGN_ATTR);
       el.style.alignItems = original || '';
       el.removeAttribute(PARENT_ALIGN_ATTR);
+    });
+    document.querySelectorAll('[' + WRAPPER_LAYOUT_ATTR + ']').forEach((el) => {
+      let orig = {};
+      try { orig = JSON.parse(el.getAttribute(WRAPPER_LAYOUT_ATTR)) || {}; } catch (_) {}
+      el.style.display = orig.display || '';
+      el.style.flexDirection = orig.flexDirection || '';
+      el.style.justifyContent = orig.justifyContent || '';
+      el.removeAttribute(WRAPPER_LAYOUT_ATTR);
     });
   }
 
