@@ -112,21 +112,22 @@
   }
 
   // Snapshot the ORIGINAL parent → ordered children list once, the very
-  // first time the user takes any reordering action. Reset replays that
-  // list on every parent — so even after multiple sorts / drags, Reset
-  // returns to the layout that existed when the page first loaded.
-  // Keyed by parent so the assigned card's sub-container and the
-  // unassigned-cards sub-container both restore independently.
-  const originalState = new Map(); // parent -> [wrapper, wrapper, ...]
+  // first time the user takes any reordering action. We capture EVERY
+  // child of each affected parent (not just our tracked wrappers) so a
+  // sibling like the unassigned-cards sub-container slots back into its
+  // original position rather than getting pushed to the end by appendChild.
+  const originalState = new Map(); // parent -> [...all original children]
   function captureOriginalIfNeeded() {
     if (originalState.size > 0) return;
     const cards = getScenarioCardElements();
     const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
+    const parents = new Set();
     for (const w of wrappers) {
-      const p = w.parentElement;
-      if (!p) continue;
-      if (!originalState.has(p)) originalState.set(p, []);
-      originalState.get(p).push(w);
+      if (w.parentElement) parents.add(w.parentElement);
+    }
+    for (const p of parents) {
+      // Snapshot all current children, not only the wrappers we know about.
+      originalState.set(p, Array.from(p.children));
     }
   }
 
@@ -137,6 +138,10 @@
     }
     for (const [parent, kids] of originalState) {
       if (!parent || !parent.isConnected) continue;
+      // appendChild moves the node if it's already in the DOM. Iterating in
+      // original order and appending each places them at the end of `parent`
+      // in their original order — so the tracked siblings end up right after
+      // any non-tracked children (toolbar etc.) stayed put.
       for (const kid of kids) {
         if (kid && kid.isConnected) parent.appendChild(kid);
       }
@@ -279,9 +284,9 @@
     if (opts.secondary) { bg = '#ffffff'; fg = '#374151'; border = '#d1d5db'; hoverBg = '#f3f4f6'; }
     btn.setAttribute('style',
       'display: inline-flex; align-items: center;' +
-      'padding: 5px 10px; background: ' + bg + '; color: ' + fg + ';' +
-      'border: 1px solid ' + border + '; border-radius: 4px;' +
-      'font-family: inherit; font-size: 12.5px; font-weight: 500;' +
+      'padding: 8px 15px; background: ' + bg + '; color: ' + fg + ';' +
+      'border: 1px solid ' + border + '; border-radius: 5px;' +
+      'font-family: inherit; font-size: 19px; font-weight: 500;' +
       'cursor: pointer; white-space: nowrap; line-height: 1.2;'
     );
     btn.addEventListener('mouseenter', () => { btn.style.background = hoverBg; if (opts.primary) btn.style.color = '#ffffff'; });
