@@ -18,7 +18,8 @@ const FEATURE_KEYS = [
   "feature_vaCalc",
   "feature_buydownCalc",
   "feature_callerId",
-  "feature_smsAddParticipants"
+  "feature_smsAddParticipants",
+  "feature_autoCallDetailsTab"
 ];
 
 chrome.runtime.onInstalled.addListener(async (details) => {
