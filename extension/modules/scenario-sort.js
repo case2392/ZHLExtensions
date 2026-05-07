@@ -150,45 +150,39 @@
     flashStatus('Reverted to original order');
   }
 
-  // Pick the parent that already holds the most cards. Moving everyone
-  // into THAT element preserves the gap / padding / styling that container
-  // applies to its children — far less visually jarring than dumping
-  // cards into deepestCommonAncestor (which may strip the layout).
-  function pickSortTarget(wrappers) {
-    const counts = new Map();
-    for (const w of wrappers) {
-      const p = w.parentElement;
-      if (!p) continue;
-      counts.set(p, (counts.get(p) || 0) + 1);
-    }
-    let best = null, max = 0;
-    for (const [p, c] of counts) {
-      if (c > max) { max = c; best = p; }
-    }
-    return best;
-  }
-
+  // Sort within each parent independently. Different parents (e.g.
+  // assigned-card sub-container vs unassigned-cards grid) have different
+  // layout styles; merging everything into one parent strips that styling
+  // and reformats the cards. Keeping each group in its own parent
+  // preserves the original visual layout and just reorders siblings.
   function sortByRate(direction) {
     const cards = getScenarioCardElements();
     if (cards.length < 2) return;
     captureOriginalIfNeeded();
     const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
-    const target = pickSortTarget(wrappers) || deepestCommonAncestor(wrappers);
-    if (!target) {
-      console.warn('[Scenario Sort] no sort target — aborting');
-      return;
-    }
-    const items = wrappers.map((wrapper, i) => ({ wrapper, rate: parseRate(cards[i]) }));
-    items.sort((a, b) => {
+    const groups = new Map(); // parent -> [{ wrapper, rate }]
+    wrappers.forEach((wrapper, i) => {
+      const p = wrapper.parentElement;
+      if (!p) return;
+      if (!groups.has(p)) groups.set(p, []);
+      groups.get(p).push({ wrapper, rate: parseRate(cards[i]) });
+    });
+    const cmp = (a, b) => {
       const aBad = !isFinite(a.rate);
       const bBad = !isFinite(b.rate);
       if (aBad && bBad) return 0;
       if (aBad) return 1;
       if (bBad) return -1;
       return direction === 'desc' ? b.rate - a.rate : a.rate - b.rate;
-    });
-    for (const item of items) target.appendChild(item.wrapper);
-    console.log('[Scenario Sort] sorted ' + items.length + ' cards (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
+    };
+    let total = 0;
+    for (const [parent, items] of groups) {
+      if (items.length < 2) continue; // singleton group — nothing to sort
+      items.sort(cmp);
+      for (const item of items) parent.appendChild(item.wrapper);
+      total += items.length;
+    }
+    console.log('[Scenario Sort] sorted ' + total + ' cards (' + direction + ') across ' + groups.size + ' group(s)');
     refreshSelectionsToMatchDom();
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
   }
