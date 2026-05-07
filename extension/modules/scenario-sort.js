@@ -381,6 +381,23 @@
 
   // ---- Select all checkboxes -----------------------------------------
 
+  // Keep the Select all / Deselect all label in sync with the actual
+  // checkbox state — flips to "Deselect all" once every card is checked,
+  // back to "Select all" otherwise. Called from toggleSelectAll() and
+  // from tick() so it tracks clicks on individual card checkboxes too.
+  function updateSelectAllLabel() {
+    const btn = document.getElementById(TOOLBAR_ID + '-select-all-btn');
+    if (!btn) return;
+    const boxes = findScenarioCheckboxes();
+    if (boxes.length === 0) {
+      btn.textContent = 'Select all';
+      return;
+    }
+    const allChecked = boxes.every((cb) => cb.checked);
+    const desired = allChecked ? 'Deselect all' : 'Select all';
+    if (btn.textContent !== desired) btn.textContent = desired;
+  }
+
   function findScenarioCheckboxes() {
     return Array.from(document.querySelectorAll('input[name="selectScenario"]'));
   }
@@ -398,6 +415,7 @@
       else if (!anyUnchecked && cb.checked) { cb.click(); changed++; }
     }
     flashStatus(anyUnchecked ? ('Selected all (' + changed + ')') : ('Deselected all (' + changed + ')'));
+    updateSelectAllLabel();
   }
 
   // ---- Toolbar UI -----------------------------------------------------
@@ -431,7 +449,9 @@
     sep.setAttribute('style', 'width: 1px; height: 18px; background: #d1d5db; margin: 0 4px;');
     bar.appendChild(sep);
 
-    bar.appendChild(makeButton('Select all', () => toggleSelectAll(), { primary: true }));
+    const selectAllBtn = makeButton('Select all', () => toggleSelectAll(), { primary: true });
+    selectAllBtn.id = TOOLBAR_ID + '-select-all-btn';
+    bar.appendChild(selectAllBtn);
 
     const status = document.createElement('span');
     status.id = TOOLBAR_ID + '-status';
@@ -749,6 +769,7 @@
     diag('found ' + cards.length + ' cards. common ancestor=' + describe(ancestor));
     ensureToolbar(ancestor);
     ensureDnd();
+    updateSelectAllLabel();
   }
 
   let scheduled = false;
