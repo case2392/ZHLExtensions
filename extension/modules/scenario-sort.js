@@ -251,21 +251,35 @@
 
   // ---- Lifecycle ------------------------------------------------------
 
+  function isFlexRow(el) {
+    if (!el || el.nodeType !== 1) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display !== 'flex' && cs.display !== 'inline-flex') return false;
+    const dir = cs.flexDirection || 'row';
+    return dir === 'row' || dir === 'row-reverse';
+  }
+
   function ensureToolbar() {
     if (document.getElementById(TOOLBAR_ID)) return;
     const wrappers = getCardWrappers();
     if (wrappers.length === 0) return;
     const cardsRow = commonParent(wrappers);
     if (!cardsRow) return;
-    const bar = makeToolbar();
-    bar.style.flex = '1 0 100%'; // ensure full row inside flex parents
 
-    // Insert the toolbar as the FIRST child of the same row that contains
-    // the cards. That way it appears above them on its own line (the row
-    // is wrap-friendly) and doesn't fight any wrapping container.
-    if (cardsRow.firstChild) cardsRow.insertBefore(bar, cardsRow.firstChild);
-    else cardsRow.appendChild(bar);
-    console.log('[Scenario Sort] toolbar inserted into <' + cardsRow.tagName.toLowerCase() + '> with', wrappers.length, 'cards');
+    // Walk up past every flex-row ancestor — inserting a sibling there
+    // would push the cards sideways. Stop at the first ancestor that is
+    // block / flex-column / grid — that's safe to take a full-width
+    // sibling without disrupting the horizontal card layout.
+    let pathChild = cardsRow;
+    while (pathChild.parentElement && isFlexRow(pathChild.parentElement)) {
+      pathChild = pathChild.parentElement;
+    }
+    const container = pathChild.parentElement;
+    if (!container) return;
+
+    const bar = makeToolbar();
+    container.insertBefore(bar, pathChild);
+    console.log('[Scenario Sort] toolbar inserted in <' + container.tagName.toLowerCase() + '> before <' + pathChild.tagName.toLowerCase() + '> (' + wrappers.length + ' cards)');
   }
 
   function ensureDnd() {
