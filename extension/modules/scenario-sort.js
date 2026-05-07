@@ -248,12 +248,24 @@
       'parent.alignItems=', parentCs && parentCs.alignItems,
       'parent.gap=', parentCs && parentCs.gap);
     if (bannerHeight > 1) {
-      const mt = '-' + Math.round(bannerHeight) + 'px';
-      assigned.style.setProperty('margin-top', mt, 'important');
-      // Belt-and-suspenders: also apply transform translateY in case
-      // negative margin-top doesn't visually shift in this layout.
+      // Use translateY ONLY — combining negative margin-top + translateY
+      // doubled the shift (40px when banner is 19.5) and over-corrected.
+      // translateY keeps the wrapper's layout box in place; visually it
+      // pulls the assigned card up by exactly the banner height so the
+      // body aligns with neighbor bodies, with the banner protruding
+      // above the row.
+      assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
       assigned.style.setProperty('transform', 'translateY(-' + Math.round(bannerHeight) + 'px)', 'important');
-      console.log('[Scenario Sort align] applied margin-top=' + mt + ' + matching translateY. computed mt=', getComputedStyle(assigned).marginTop, ' transform=', getComputedStyle(assigned).transform);
+      // Also lift the parent's overflow so the protruding banner isn't
+      // clipped by an inherited overflow:hidden somewhere above.
+      if (parent) parent.style.setProperty('overflow', 'visible', 'important');
+      // Pad the row's parent (or the row itself) so the banner has room
+      // to render above without overlapping the toolbar.
+      const grandparent = parent && parent.parentElement;
+      if (grandparent) {
+        grandparent.style.setProperty('overflow', 'visible', 'important');
+      }
+      console.log('[Scenario Sort align] applied translateY only. transform=', getComputedStyle(assigned).transform);
     } else {
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
       assigned.style.removeProperty('transform');
@@ -510,10 +522,23 @@
       const sourceParent = draggingWrapper.parentElement;
       const crossParent = sourceParent !== parent;
       const r = wrapper.getBoundingClientRect();
-      const before = e.clientX < r.left + r.width / 2;
+      let before = e.clientX < r.left + r.width / 2;
       const movedNode = draggingWrapper;
       const sourceIdx = sourceParent ? Array.from(sourceParent.children).indexOf(movedNode) : -1;
       const targetIdx = Array.from(parent.children).indexOf(wrapper);
+      // Auto-flip the drop side when it would be a no-op for an
+      // adjacent drop. Dragging from idx N onto idx N+1 with side
+      // "before" leaves the dragged element at idx N (unchanged).
+      // Treat that as the user wanting to move PAST the target.
+      const requestedSide = before ? 'before' : 'after';
+      let flipped = false;
+      if (!crossParent) {
+        if (before && sourceIdx < targetIdx && targetIdx === sourceIdx + 1) {
+          before = false; flipped = true;
+        } else if (!before && sourceIdx > targetIdx && targetIdx === sourceIdx - 1) {
+          before = true; flipped = true;
+        }
+      }
       try {
         if (before) parent.insertBefore(movedNode, wrapper);
         else parent.insertBefore(movedNode, wrapper.nextSibling);
@@ -521,9 +546,11 @@
         const noOp = !crossParent && idxAfterDrop === sourceIdx;
         dndLog('drop OK — moved into', shortDescribe(parent),
           before ? 'before' : 'after', shortDescribe(wrapper),
+          'requestedSide=' + requestedSide,
+          flipped ? '(auto-flipped to avoid no-op)' : '',
           'sourceIdx=' + sourceIdx, 'targetIdx=' + targetIdx,
           'finalIdx=' + idxAfterDrop, 'crossParent=' + crossParent,
-          noOp ? '(NO-OP — dropped at same position)' : '');
+          noOp ? '(STILL NO-OP)' : '');
         flashStatus('Reordered manually');
         // Re-align the assigned wrapper after a manual reorder — if it
         // was the dragged element OR its position changed in the row,
