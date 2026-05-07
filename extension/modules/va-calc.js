@@ -440,6 +440,31 @@
     return getComputedStyle(document.body).fontFamily || '';
   }
 
+  function findSaveButton() {
+    const btn = document.querySelector('button[data-cy="save-loan-file-button"]');
+    if (!btn) return null;
+    if (btn.disabled) return null;
+    if (btn.getAttribute('aria-disabled') === 'true') return null;
+    return btn;
+  }
+
+  async function autoClickSave() {
+    // Give the form library a moment to register the dirty state and
+    // re-enable the Save button after our setReactInputValue calls.
+    await waitMs(300);
+    for (let elapsed = 0; elapsed < 4000; elapsed += 100) {
+      const btn = findSaveButton();
+      if (btn) {
+        try { btn.click(); } catch (_) { simulateClick(btn); }
+        console.log('[Residual Income Calc] auto-clicked Save');
+        return true;
+      }
+      await waitMs(100);
+    }
+    console.warn('[Residual Income Calc] Save button did not become enabled within 4s — values were filled but not auto-saved.');
+    return false;
+  }
+
   function applyResults(state, result) {
     const residualField = findFieldByLabel('VA residual income');
     if (residualField) setReactInputValue(residualField, result.residualIncome.toFixed(2));
@@ -447,6 +472,8 @@
     if (deductionsField && result.requirement != null) {
       setReactInputValue(deductionsField, result.requirement.toFixed(2));
     }
+    // Fire and forget — don't block panel rendering on the save round-trip.
+    autoClickSave();
   }
 
   function showPanel(initialState) {
