@@ -509,81 +509,85 @@
     el.style.setProperty(prop, val, 'important');
   }
 
+  function readTranslate(dlg) {
+    const cs = getComputedStyle(dlg);
+    if (!cs.transform || cs.transform === 'none') return { tx: 0, ty: 0 };
+    const m = /^matrix\(([^)]+)\)$/.exec(cs.transform);
+    if (!m) return { tx: 0, ty: 0 };
+    const p = m[1].split(',').map((s) => parseFloat(s.trim()));
+    if (p.length < 6) return { tx: 0, ty: 0 };
+    return { tx: p[4], ty: p[5] };
+  }
+
   function startDrag(dlg, handle, e) {
     if (e.button !== 0) return;
     if (isInteractiveTarget(e.target)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     const rect = dlg.getBoundingClientRect();
-    // Lock the dialog's width and height BEFORE switching positioning
-    // modes. Gmail's compose derives its size from right/bottom anchors;
-    // without locking it would collapse to min content. Use !important
-    // so Gmail's own snap-to-anchor scripts can't overwrite us mid-drag.
-    setImportant(dlg, 'width', rect.width + 'px');
-    setImportant(dlg, 'height', rect.height + 'px');
-    setImportant(dlg, 'position', 'fixed');
-    // Reset the inset shorthand FIRST (it expands to top/right/bottom/left
-    // and would otherwise overwrite the individual values we set below).
-    setImportant(dlg, 'inset', 'auto');
-    setImportant(dlg, 'right', 'auto');
-    setImportant(dlg, 'bottom', 'auto');
-    setImportant(dlg, 'left', rect.left + 'px');
-    setImportant(dlg, 'top', rect.top + 'px');
-    setImportant(dlg, 'margin', '0');
-    setImportant(dlg, 'transform', 'none');
+    const { tx, ty } = readTranslate(dlg);
     active = {
       dlg, handle,
       startX: e.clientX,
       startY: e.clientY,
-      startLeft: rect.left,
-      startTop: rect.top
+      startTx: tx,
+      startTy: ty,
+      startRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
     };
     document.body.style.userSelect = 'none';
     handle.style.cursor = 'grabbing';
     console.log('[Gmail Compose Drag] start. startX=', e.clientX, 'startY=', e.clientY,
       'rect=', { l: rect.left, t: rect.top, w: rect.width, h: rect.height },
+      'startTranslate=', { tx, ty },
       'vh=', window.innerHeight, 'vw=', window.innerWidth);
   }
 
   document.addEventListener('mousemove', (e) => {
     if (!active) return;
-    const { dlg, startX, startY, startLeft, startTop } = active;
+    const { dlg, startX, startY, startTx, startTy, startRect } = active;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    let nx = startLeft + dx;
-    let ny = startTop + dy;
-    // Soft clamp: keep ~40px of the dialog visible so the user can grab
-    // it back, but allow them to push it well off the edges otherwise.
-    nx = Math.max(-(dlg.offsetWidth - 80), Math.min(nx, window.innerWidth - 80));
-    ny = Math.max(0, Math.min(ny, window.innerHeight - 40));
-    setImportant(dlg, 'inset', 'auto');
-    setImportant(dlg, 'right', 'auto');
-    setImportant(dlg, 'bottom', 'auto');
-    setImportant(dlg, 'left', nx + 'px');
-    setImportant(dlg, 'top', ny + 'px');
+    let tx = startTx + dx;
+    let ty = startTy + dy;
+    // Visual position after applying transform.
+    const visLeft = startRect.left + (tx - startTx);
+    const visTop = startRect.top + (ty - startTy);
+    // Clamp so at least ~80px stays in the viewport on each side.
+    if (visLeft + dlg.offsetWidth < 80) tx = startTx + (80 - dlg.offsetWidth - startRect.left);
+    if (visLeft > window.innerWidth - 80) tx = startTx + (window.innerWidth - 80 - startRect.left);
+    if (visTop < 0) ty = startTy + (-startRect.top);
+    if (visTop > window.innerHeight - 40) ty = startTy + (window.innerHeight - 40 - startRect.top);
+    // Use CSS transform — moves the dialog visually WITHOUT touching its
+    // position, and (critically) creates a containing block for any
+    // position:fixed descendants. Gmail's bottom send/format toolbar is
+    // position:fixed and was anchored to the viewport otherwise; with
+    // transform on the dialog it now resolves against the dialog and
+    // follows on every drag.
+    setImportant(dlg, 'transform', 'translate(' + tx + 'px, ' + ty + 'px)');
     active.moveCount = (active.moveCount || 0) + 1;
+    active.lastTx = tx;
+    active.lastTy = ty;
     const now = Date.now();
     if (!active.lastLogAt || now - active.lastLogAt > 200) {
       active.lastLogAt = now;
       const cs = getComputedStyle(dlg);
       console.log('[Gmail Compose Drag] move #' + active.moveCount,
         'cursor=', e.clientX, e.clientY,
-        'set top/left=', ny + '/' + nx,
-        'computed top/left=', cs.top + '/' + cs.left,
-        'computed inset=', cs.inset);
+        'translate=', { tx, ty },
+        'computed transform=', cs.transform);
     }
   }, true);
 
   function endDrag(reason, e) {
     if (!active) return;
-    const { dlg, moveCount } = active;
-    const finalTop = getComputedStyle(dlg).top;
-    const finalLeft = getComputedStyle(dlg).left;
+    const { dlg, moveCount, lastTx, lastTy } = active;
+    const cs = getComputedStyle(dlg);
     document.body.style.userSelect = '';
     active.handle.style.cursor = 'move';
     console.log('[Gmail Compose Drag] end. reason=' + reason,
       'moveCount=' + (moveCount || 0),
-      'finalTop/Left=', finalTop + '/' + finalLeft,
+      'lastTranslate=', { tx: lastTx, ty: lastTy },
+      'computed transform=', cs.transform,
       'event target=', e && e.target && e.target.tagName);
     active = null;
   }
