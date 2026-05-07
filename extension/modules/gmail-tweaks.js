@@ -713,21 +713,28 @@
   function unfixInnerToolbars(dlg) {
     // Gmail wraps the bottom Send/formatting toolbar in a div with
     // class .aDj (often .aDj.ahe). That wrapper is position:fixed and
-    // anchored to viewport coordinates — so when we transform the
-    // dialog, the toolbar doesn't follow even though transform creates
-    // a new containing block (Gmail's `top` value pins it outside the
-    // dialog's local coordinate space). Force any fixed-positioned
-    // descendant of the dialog back to position:static so it rides
-    // along with the dialog naturally.
+    // anchored via a viewport-y `top` value — so when we transform the
+    // dialog, the new containing block doesn't help because Gmail's
+    // top still points outside the dialog's local space.
+    //
+    // Keep position:fixed (so the toolbar stays out of the dialog's
+    // normal flow — switching it to static caused a scrollbar because
+    // it added vertical content the dialog frame couldn't fit). But
+    // override the inset values so it pins to the dialog's BOTTOM edge:
+    // top:auto + bottom:0 (resolved against the dialog because our
+    // transform makes the dialog the containing block).
     const candidates = dlg.querySelectorAll('.aDj, .ahe, .aDj.ahe');
     let count = 0;
     candidates.forEach((el) => {
-      if (getComputedStyle(el).position === 'fixed') {
-        el.style.setProperty('position', 'static', 'important');
-        count++;
-      }
+      if (getComputedStyle(el).position !== 'fixed') return;
+      el.style.setProperty('top', 'auto', 'important');
+      el.style.setProperty('right', '0', 'important');
+      el.style.setProperty('bottom', '0', 'important');
+      el.style.setProperty('left', '0', 'important');
+      el.style.setProperty('width', 'auto', 'important');
+      count++;
     });
-    if (count > 0) console.log('[Gmail Compose Drag] unfixed', count, 'inner toolbar wrapper(s)');
+    if (count > 0) console.log('[Gmail Compose Drag] re-anchored', count, 'inner toolbar wrapper(s) to dialog bottom');
   }
 
   function attachToDialog(dlg) {
