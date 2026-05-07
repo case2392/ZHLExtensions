@@ -8,6 +8,10 @@
 (function () {
   'use strict';
 
+  const VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
+    ? chrome.runtime.getManifest().version : '?';
+  console.log('[Scenario Sort v' + VERSION + '] loaded in', location.href);
+
   const TOOLBAR_ID = 'zhl-scenario-sort-toolbar';
   const STYLED_CARD_SELECTOR = '[class*="StyledCard-c11n"]';
   const DRAG_HANDLE_CLASS = 'zhl-scenario-drag-handle';
@@ -217,22 +221,21 @@
 
   // ---- Lifecycle ------------------------------------------------------
 
-  function findInsertionAnchor() {
-    // The cards row's parent is the simplest common container; we insert
-    // the toolbar above the cards row inside that parent.
-    const wrappers = getCardWrappers();
-    if (wrappers.length === 0) return null;
-    const parent = commonParent(wrappers);
-    if (!parent) return null;
-    return { parent: parent.parentElement || parent, before: parent };
-  }
-
   function ensureToolbar() {
     if (document.getElementById(TOOLBAR_ID)) return;
-    const anchor = findInsertionAnchor();
-    if (!anchor) return;
+    const wrappers = getCardWrappers();
+    if (wrappers.length === 0) return;
+    const cardsRow = commonParent(wrappers);
+    if (!cardsRow) return;
     const bar = makeToolbar();
-    anchor.parent.insertBefore(bar, anchor.before);
+    bar.style.flex = '1 0 100%'; // ensure full row inside flex parents
+
+    // Insert the toolbar as the FIRST child of the same row that contains
+    // the cards. That way it appears above them on its own line (the row
+    // is wrap-friendly) and doesn't fight any wrapping container.
+    if (cardsRow.firstChild) cardsRow.insertBefore(bar, cardsRow.firstChild);
+    else cardsRow.appendChild(bar);
+    console.log('[Scenario Sort] toolbar inserted into <' + cardsRow.tagName.toLowerCase() + '> with', wrappers.length, 'cards');
   }
 
   function ensureDnd() {
@@ -244,11 +247,29 @@
     if (bar) bar.remove();
   }
 
+  let diagDone = false;
+  function diag(msg) {
+    if (diagDone) return;
+    diagDone = true;
+    console.log('[Scenario Sort DIAG]', msg);
+  }
+
   function tick() {
     if (!isOnScenariosPage()) {
       tearDown();
       return;
     }
+    const wrappers = getCardWrappers();
+    if (wrappers.length === 0) {
+      diag('on scenarios page but no scenario cards visible yet (waiting for render)');
+      return;
+    }
+    const parent = commonParent(wrappers);
+    if (!parent) {
+      diag('found ' + wrappers.length + ' cards but they do not share a common parent — DOM layout unexpected');
+      return;
+    }
+    diag('found ' + wrappers.length + ' cards. Common parent: <' + parent.tagName.toLowerCase() + '>, grandparent: <' + (parent.parentElement ? parent.parentElement.tagName.toLowerCase() : 'null') + '>');
     ensureToolbar();
     ensureDnd();
   }
