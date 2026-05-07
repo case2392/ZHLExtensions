@@ -574,6 +574,8 @@
     };
     document.body.style.userSelect = 'none';
     handle.style.cursor = 'grabbing';
+    // Re-apply in case Gmail re-set position:fixed since attach.
+    unfixInnerToolbars(dlg);
     console.log('[Gmail Compose Drag] start. startX=' + e.clientX + ' startY=' + e.clientY
       + ' rect=' + JSON.stringify({ l: Math.round(rect.left), t: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) })
       + ' startTranslate=' + JSON.stringify({ tx: Math.round(tx), ty: Math.round(ty) })
@@ -708,6 +710,26 @@
     return (best && best.el) || dlg.firstElementChild || null;
   }
 
+  function unfixInnerToolbars(dlg) {
+    // Gmail wraps the bottom Send/formatting toolbar in a div with
+    // class .aDj (often .aDj.ahe). That wrapper is position:fixed and
+    // anchored to viewport coordinates — so when we transform the
+    // dialog, the toolbar doesn't follow even though transform creates
+    // a new containing block (Gmail's `top` value pins it outside the
+    // dialog's local coordinate space). Force any fixed-positioned
+    // descendant of the dialog back to position:static so it rides
+    // along with the dialog naturally.
+    const candidates = dlg.querySelectorAll('.aDj, .ahe, .aDj.ahe');
+    let count = 0;
+    candidates.forEach((el) => {
+      if (getComputedStyle(el).position === 'fixed') {
+        el.style.setProperty('position', 'static', 'important');
+        count++;
+      }
+    });
+    if (count > 0) console.log('[Gmail Compose Drag] unfixed', count, 'inner toolbar wrapper(s)');
+  }
+
   function attachToDialog(dlg) {
     if (!dlg || !isComposeDialog(dlg)) return;
     const outer = findOuterContainer(dlg);
@@ -716,10 +738,8 @@
     if (!handle) return;
     outer.setAttribute(DRAG_ATTR, '1');
     handle.style.cursor = 'move';
-    // Capture phase so we run BEFORE Gmail's own title-bar mousedown
-    // listeners (which on some builds toggle minimize / resize). We
-    // also stopPropagation inside startDrag.
     handle.addEventListener('mousedown', (e) => startDrag(outer, handle, e), true);
+    unfixInnerToolbars(dlg);
     console.log('[Gmail Compose Drag] attached. outer=', outer, 'handle=', handle);
   }
 
