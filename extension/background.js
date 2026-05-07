@@ -215,7 +215,7 @@ async function lookupContactPhone(contactId) {
 // email is captured we use an anonymous UUID so we don't lose events.
 // -------------------------------------------------------------------------
 
-const TELEMETRY_ENDPOINT = ""; // ← Paste your Apps Script Web App URL here
+const TELEMETRY_ENDPOINT = "https://script.google.com/a/macros/zillowgroup.com/s/AKfycbzMWkGDZEDBBMBBD6mYMNEZJlwEUh3I41_iJgSaCz52abIBWNjf3YfbQ-fmA_1bLp75/exec";
 const TELEMETRY_FLUSH_MS = 30 * 1000;
 const TELEMETRY_QUEUE_KEY = "_zhl_tlm_queue";
 const TELEMETRY_USER_KEY = "_zhl_tlm_user";

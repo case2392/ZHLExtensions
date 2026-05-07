@@ -57,6 +57,29 @@ This is a one-time setup. End-users don't need to do anything beyond reloading t
 - **Reinstall:** The anonymous UUID is wiped, but the next Gmail capture re-binds the same email. The existing row in `Users` is updated; no new user is created.
 - **New version:** Same. Every event includes the running extension version, so you can see adoption per release in the `Events.Version` column.
 
+## Admin dashboard
+
+Open the same Web App URL in your browser (the one ending in `/exec`). You'll see the dashboard:
+
+- **Summary cards** — total users, total events, events in the last 24h, latest version in the wild.
+- **Events per day** chart — see usage trend over the selected window.
+- **Top tools** — bar list, click any tool to filter the rest of the page to just that event.
+- **Users table** — sorted by event count desc; click any row to drill into just that user.
+- **Recent events** — last 100 events, newest first.
+
+The dashboard auto-refreshes every 60 seconds and reads live from the `Events` and `Users` sheets, so changes show up immediately. Window is adjustable (1 day → 1 year).
+
+Because the deployment URL is domain-restricted (`/a/macros/zillowgroup.com/`), only people signed into a `zillowgroup.com` Google account can load it. That's how it stays admin-only without an explicit login.
+
+## Updating the dashboard / receiver code
+
+Apps Script needs an explicit "new deployment version" for changes to take effect:
+
+1. Open your Apps Script project.
+2. Edit `Code.gs`, save.
+3. **Deploy → Manage deployments** → pencil icon next to your active deployment → **Version: New version** → **Deploy**.
+4. The URL stays the same. Refresh the dashboard tab in your browser.
+
 ## Adding more events
 
 Inside any module file, after the file's existing setup:
