@@ -730,6 +730,24 @@
   function tearDown() {
     const bar = document.getElementById(TOOLBAR_ID);
     if (bar) bar.remove();
+    // Strip draggable=true / cursor:grab from anything we tagged. Without
+    // this, navigating from the scenarios page to another LOP page leaves
+    // the hand cursor on whichever wrappers React keeps in memory.
+    document.querySelectorAll('[data-zhl-dnd]').forEach((el) => {
+      el.removeAttribute('data-zhl-dnd');
+      el.removeAttribute('draggable');
+      el.style.cursor = '';
+      el.style.opacity = '';
+      el.style.outline = '';
+      el.style.outlineOffset = '';
+      el.classList.remove(DRAGGING_CLASS, DROP_TARGET_CLASS);
+    });
+    document.querySelectorAll('[data-zhl-dnd-parent]').forEach((el) => {
+      el.removeAttribute('data-zhl-dnd-parent');
+    });
+    // Also clear any alignment overrides we left on assigned wrapper /
+    // its parent / sibling wrappers — same lingering-state risk.
+    clearAssignedWrapperOverrides();
   }
 
   let lastDiag = '';
