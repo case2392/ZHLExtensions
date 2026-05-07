@@ -122,11 +122,14 @@
     const cards = getScenarioCardElements();
     const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
     const parents = new Set();
-    for (const w of wrappers) {
-      if (w.parentElement) parents.add(w.parentElement);
-    }
+    // Capture parents of BOTH the cards themselves and their wrappers.
+    // Sort moves the StyledCard elements directly (so we need their
+    // original parent — e.g. the assigned sub-container — to put each
+    // card back). Drag-and-drop moves wrappers (so we need the wrapper
+    // parents too, in case the user only ever drags).
+    for (const c of cards) if (c.parentElement) parents.add(c.parentElement);
+    for (const w of wrappers) if (w.parentElement) parents.add(w.parentElement);
     for (const p of parents) {
-      // Snapshot all current children, not only the wrappers we know about.
       originalState.set(p, Array.from(p.children));
     }
   }
@@ -150,39 +153,47 @@
     flashStatus('Reverted to original order');
   }
 
-  // Sort within each parent independently. Different parents (e.g.
-  // assigned-card sub-container vs unassigned-cards grid) have different
-  // layout styles; merging everything into one parent strips that styling
-  // and reformats the cards. Keeping each group in its own parent
-  // preserves the original visual layout and just reorders siblings.
+  // Pick the parent that already directly contains the most StyledCards.
+  // That's the grid layout we want all cards to share when sorting.
+  function pickCardTarget(cards) {
+    const counts = new Map();
+    for (const c of cards) {
+      const p = c.parentElement;
+      if (!p) continue;
+      counts.set(p, (counts.get(p) || 0) + 1);
+    }
+    let best = null, max = 0;
+    for (const [p, n] of counts) {
+      if (n > max) { max = n; best = p; }
+    }
+    return best;
+  }
+
+  // Sort by moving the StyledCard elements themselves into the most
+  // populated parent (the unassigned-cards grid). Moving the assigned
+  // card's outer sub-container into that grid was visually broken — its
+  // own styling didn't slot into a grid cell. Moving just the card joins
+  // the grid as a peer and preserves the layout for every card.
   function sortByRate(direction) {
     const cards = getScenarioCardElements();
     if (cards.length < 2) return;
     captureOriginalIfNeeded();
-    const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
-    const groups = new Map(); // parent -> [{ wrapper, rate }]
-    wrappers.forEach((wrapper, i) => {
-      const p = wrapper.parentElement;
-      if (!p) return;
-      if (!groups.has(p)) groups.set(p, []);
-      groups.get(p).push({ wrapper, rate: parseRate(cards[i]) });
-    });
-    const cmp = (a, b) => {
+    const target = pickCardTarget(cards);
+    if (!target) {
+      console.warn('[Scenario Sort] no sort target — aborting');
+      return;
+    }
+    const items = cards.map((card) => ({ card, rate: parseRate(card) }));
+    items.sort((a, b) => {
       const aBad = !isFinite(a.rate);
       const bBad = !isFinite(b.rate);
       if (aBad && bBad) return 0;
       if (aBad) return 1;
       if (bBad) return -1;
       return direction === 'desc' ? b.rate - a.rate : a.rate - b.rate;
-    };
-    let total = 0;
-    for (const [parent, items] of groups) {
-      if (items.length < 2) continue; // singleton group — nothing to sort
-      items.sort(cmp);
-      for (const item of items) parent.appendChild(item.wrapper);
-      total += items.length;
-    }
-    console.log('[Scenario Sort] sorted ' + total + ' cards (' + direction + ') across ' + groups.size + ' group(s)');
+    });
+    for (const item of items) target.appendChild(item.card);
+    console.log('[Scenario Sort] sorted ' + items.length + ' cards (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
     refreshSelectionsToMatchDom();
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
   }
