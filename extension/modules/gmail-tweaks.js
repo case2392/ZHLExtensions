@@ -560,34 +560,63 @@
 
   function isComposeDialog(dlg) {
     // Matches the floating "New Message" / reply compose popups: they're
-    // role=dialog elements with the compose body controls inside.
-    return !!(dlg.querySelector && dlg.querySelector(
-      'textarea[name="to"], input[name="subjectbox"]'
-    ));
+    // role=dialog elements with the compose body controls inside. Skip
+    // nested role=dialogs — we only want the outermost compose container.
+    if (!dlg.querySelector) return false;
+    if (!dlg.querySelector('textarea[name="to"], input[name="subjectbox"]')) return false;
+    const parentDlg = dlg.parentElement && dlg.parentElement.closest('[role="dialog"]');
+    return !parentDlg;
+  }
+
+  // Walk up from the role=dialog to find the OUTERMOST positioned
+  // ancestor (the .dw wrapper Gmail uses for the compose). We need to
+  // move that wrapper, not just the inner dialog — Gmail's bottom send
+  // toolbar lives inside the outer wrapper but anchors itself
+  // independently, so moving the inner dialog leaves the toolbar
+  // behind on the screen.
+  function findOuterContainer(dlg) {
+    let outermost = dlg;
+    let cur = dlg;
+    while (cur.parentElement && cur.parentElement !== document.body) {
+      const parent = cur.parentElement;
+      const cs = getComputedStyle(parent);
+      if (cs.position === 'absolute' || cs.position === 'fixed') {
+        outermost = parent;
+        cur = parent;
+      } else {
+        break;
+      }
+    }
+    return outermost;
   }
 
   function findHandle(dlg) {
-    // The compose title bar (the strip showing "New Message" with the
+    // The compose title bar (strip showing "New Message" with the
     // minimize/expand/close icons). Class names vary across Gmail
     // releases; try the known ones in order, then fall back to the
-    // dialog's first child.
-    return dlg.querySelector('.aDh, .Hp, .nH .aoP, [aria-label*="ompose"]')
-      || dlg.firstElementChild
-      || null;
+    // first element near the dialog top.
+    const candidates = dlg.querySelectorAll('.aDh, .Hp, .aDg, .aoP, [aria-label*="ompose"]');
+    const dlgRect = dlg.getBoundingClientRect();
+    for (const el of candidates) {
+      const r = el.getBoundingClientRect();
+      if (r.height > 8 && r.height < 80 && r.top - dlgRect.top < 30) return el;
+    }
+    return dlg.firstElementChild || null;
   }
 
   function attachToDialog(dlg) {
-    if (!dlg || dlg.hasAttribute(DRAG_ATTR)) return;
-    if (!isComposeDialog(dlg)) return;
+    if (!dlg || !isComposeDialog(dlg)) return;
+    const outer = findOuterContainer(dlg);
+    if (!outer || outer.hasAttribute(DRAG_ATTR)) return;
     const handle = findHandle(dlg);
     if (!handle) return;
-    dlg.setAttribute(DRAG_ATTR, '1');
+    outer.setAttribute(DRAG_ATTR, '1');
     handle.style.cursor = 'move';
     // Capture phase so we run BEFORE Gmail's own title-bar mousedown
     // listeners (which on some builds toggle minimize / resize). We
     // also stopPropagation inside startDrag.
-    handle.addEventListener('mousedown', (e) => startDrag(dlg, handle, e), true);
-    console.log('[Gmail Compose Drag] attached to compose dialog');
+    handle.addEventListener('mousedown', (e) => startDrag(outer, handle, e), true);
+    console.log('[Gmail Compose Drag] attached. outer=', outer, 'handle=', handle);
   }
 
   function scan() {
