@@ -498,6 +498,18 @@
 
   const DRAG_ATTR = 'data-zhl-compose-drag';
   let active = null;
+  // Mousedown + mouseup on the same element fires a click. Gmail's title
+  // bar click toggles minimize, so right after a drag ends the compose
+  // would minimize. Track a short window during which we swallow clicks
+  // that come from a real drag (moveCount > 0).
+  let clickGuardUntil = 0;
+  document.addEventListener('click', (e) => {
+    if (Date.now() < clickGuardUntil) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      console.log('[Gmail Compose Drag] click swallowed (post-drag guard)');
+    }
+  }, true);
 
   function isInteractiveTarget(el) {
     return !!(el && el.closest && el.closest(
@@ -517,6 +529,32 @@
     const p = m[1].split(',').map((s) => parseFloat(s.trim()));
     if (p.length < 6) return { tx: 0, ty: 0 };
     return { tx: p[4], ty: p[5] };
+  }
+
+  function describeToolbarChain(dlg) {
+    // Find the bottom Send button and walk up to <body>, recording each
+    // ancestor's tag, classes, position, and whether it's inside the
+    // dialog. This tells us whether the toolbar follows the dialog
+    // naturally (transform creates a containing block for fixed
+    // descendants) or whether we need to move it separately.
+    const sendBtn = document.querySelector(
+      '[role="button"][data-tooltip^="Send"], [role="button"][aria-label="Send"]'
+    );
+    if (!sendBtn) return null;
+    const chain = [];
+    let cur = sendBtn;
+    while (cur && cur !== document.body) {
+      const cs = getComputedStyle(cur);
+      chain.push({
+        tag: cur.tagName,
+        cls: (cur.className || '').toString().slice(0, 60),
+        id: cur.id || '',
+        position: cs.position,
+        inDialog: dlg.contains(cur)
+      });
+      cur = cur.parentElement;
+    }
+    return chain;
   }
 
   function startDrag(dlg, handle, e) {
@@ -540,6 +578,8 @@
       'rect=', { l: rect.left, t: rect.top, w: rect.width, h: rect.height },
       'startTranslate=', { tx, ty },
       'vh=', window.innerHeight, 'vw=', window.innerWidth);
+    const toolbarChain = describeToolbarChain(dlg);
+    console.log('[Gmail Compose Drag] Send button parent chain:', toolbarChain);
   }
 
   document.addEventListener('mousemove', (e) => {
@@ -584,6 +624,12 @@
     const cs = getComputedStyle(dlg);
     document.body.style.userSelect = '';
     active.handle.style.cursor = 'move';
+    // If the user actually dragged (any movement), block the synthetic
+    // click that follows mouseup — otherwise Gmail's title-bar click
+    // handler toggles the compose to minimized.
+    if ((moveCount || 0) > 0) {
+      clickGuardUntil = Date.now() + 200;
+    }
     console.log('[Gmail Compose Drag] end. reason=' + reason,
       'moveCount=' + (moveCount || 0),
       'lastTranslate=', { tx: lastTx, ty: lastTy },
