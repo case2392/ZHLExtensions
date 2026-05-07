@@ -177,9 +177,15 @@
 
   function alignAssignedWrapper(wrappers) {
     const assigned = wrappers.find(isAssignedWrapper);
-    if (!assigned) return;
+    if (!assigned) {
+      console.log('[Scenario Sort align] no assigned wrapper detected');
+      return;
+    }
     const reference = wrappers.find((w) => w !== assigned && !isAssignedWrapper(w));
-    if (!reference) return;
+    if (!reference) {
+      console.log('[Scenario Sort align] no reference (non-assigned) wrapper');
+      return;
+    }
     const refRect = reference.getBoundingClientRect();
     const refCs = getComputedStyle(reference);
     if (!assigned.hasAttribute(ASSIGNED_OVERRIDE_ATTR)) {
@@ -189,40 +195,52 @@
     }
     if (refRect.width > 0) {
       const w = refRect.width + 'px';
-      assigned.style.width = w;
-      assigned.style.minWidth = w;
-      assigned.style.maxWidth = w;
-      assigned.style.flexBasis = w;
+      assigned.style.setProperty('width', w, 'important');
+      assigned.style.setProperty('min-width', w, 'important');
+      assigned.style.setProperty('max-width', w, 'important');
+      assigned.style.setProperty('flex-basis', w, 'important');
     }
-    assigned.style.flexGrow = '0';
-    assigned.style.flexShrink = '0';
-    assigned.style.marginLeft = refCs.marginLeft;
-    assigned.style.marginRight = refCs.marginRight;
-    assigned.style.marginBottom = refCs.marginBottom;
-    assigned.style.boxSizing = refCs.boxSizing;
+    assigned.style.setProperty('flex-grow', '0', 'important');
+    assigned.style.setProperty('flex-shrink', '0', 'important');
+    assigned.style.setProperty('margin-left', refCs.marginLeft, 'important');
+    assigned.style.setProperty('margin-right', refCs.marginRight, 'important');
+    assigned.style.setProperty('margin-bottom', refCs.marginBottom, 'important');
+    assigned.style.setProperty('box-sizing', refCs.boxSizing, 'important');
     if (refCs.display && refCs.display !== 'block') {
-      assigned.style.display = refCs.display;
+      assigned.style.setProperty('display', refCs.display, 'important');
     }
 
     // The assigned wrapper has the green ASSIGNED TO LOAN banner above
-    // its card body; neighbor wrappers don't. In the new grid, both line
-    // up at the row top — pushing the assigned card body below the
-    // neighbor bodies by the banner's height. Measure the gap between
+    // its card body; neighbor wrappers don't. Measure the gap between
     // the assigned wrapper's top and its inner StyledCard's top, then
-    // apply a negative margin-top so the card body aligns with neighbor
-    // bodies and the banner protrudes above the row, matching the
-    // original section look.
+    // apply a negative margin-top + transform so the card body aligns
+    // with neighbor bodies and the banner protrudes above the row.
     const card = assigned.querySelector(STYLED_CARD_SELECTOR);
     let offsetAbove = 0;
+    let cardRect = null;
+    let wrapperRect = null;
     if (card) {
-      const cardRect = card.getBoundingClientRect();
-      const wrapperRect = assigned.getBoundingClientRect();
+      cardRect = card.getBoundingClientRect();
+      wrapperRect = assigned.getBoundingClientRect();
       offsetAbove = cardRect.top - wrapperRect.top;
     }
+    const parent = assigned.parentElement;
+    const parentCs = parent ? getComputedStyle(parent) : null;
+    console.log('[Scenario Sort align]',
+      'wrapper=', shortDescribe(assigned),
+      'card=', shortDescribe(card),
+      'offsetAbove=', offsetAbove,
+      'wrapperRect=', wrapperRect && { top: wrapperRect.top, height: wrapperRect.height },
+      'cardRect=', cardRect && { top: cardRect.top, height: cardRect.height },
+      'parent.display=', parentCs && parentCs.display,
+      'parent.alignItems=', parentCs && parentCs.alignItems);
     if (offsetAbove > 1) {
-      assigned.style.marginTop = '-' + Math.round(offsetAbove) + 'px';
+      const mt = '-' + Math.round(offsetAbove) + 'px';
+      assigned.style.setProperty('margin-top', mt, 'important');
+      console.log('[Scenario Sort align] applied margin-top=', mt, 'computed=', getComputedStyle(assigned).marginTop);
     } else {
-      assigned.style.marginTop = refCs.marginTop;
+      assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
+      console.log('[Scenario Sort align] no offset to apply (offsetAbove<=1) — using ref marginTop=', refCs.marginTop);
     }
   }
 
@@ -476,15 +494,85 @@
       const crossParent = sourceParent !== parent;
       const r = wrapper.getBoundingClientRect();
       const before = e.clientX < r.left + r.width / 2;
+      const movedNode = draggingWrapper;
       try {
-        if (before) parent.insertBefore(draggingWrapper, wrapper);
-        else parent.insertBefore(draggingWrapper, wrapper.nextSibling);
-        dndLog('drop OK — moved into', shortDescribe(parent), before ? 'before' : 'after', shortDescribe(wrapper), 'crossParent=' + crossParent);
+        if (before) parent.insertBefore(movedNode, wrapper);
+        else parent.insertBefore(movedNode, wrapper.nextSibling);
+        const idxAfterDrop = Array.from(parent.children).indexOf(movedNode);
+        dndLog('drop OK — moved into', shortDescribe(parent),
+          before ? 'before' : 'after', shortDescribe(wrapper),
+          'crossParent=' + crossParent, 'idx=' + idxAfterDrop);
         flashStatus('Reordered manually');
+        // Re-align the assigned wrapper after a manual reorder — if it
+        // was the dragged element OR its position changed in the row,
+        // its banner-above margin-top may need re-application.
+        const cards = getScenarioCardElements();
+        const wrappers = cards.map((c) => findUniqueWrapper(c, cards));
+        alignAssignedWrapper(wrappers);
+        // Verify the move persists. The page is React-driven; if React
+        // reconciles the DOM back to its model, our change is undone.
+        // Re-check at 50ms / 250ms / 1000ms and log if the index changes.
+        verifyMovePersists(movedNode, parent, idxAfterDrop);
       } catch (err) {
         dndLog('drop insertBefore error:', err);
       }
     });
+  }
+
+  function verifyMovePersists(node, originalParent, expectedIdx) {
+    const checkpoints = [50, 250, 1000];
+    checkpoints.forEach((ms) => {
+      setTimeout(() => {
+        if (!node.isConnected) {
+          dndLog('verify@' + ms + 'ms: node was REMOVED from DOM (React likely re-rendered).');
+          return;
+        }
+        const nowParent = node.parentElement;
+        if (nowParent !== originalParent) {
+          dndLog('verify@' + ms + 'ms: node MOVED to different parent', shortDescribe(nowParent),
+            '(was in', shortDescribe(originalParent) + ').');
+          return;
+        }
+        const nowIdx = Array.from(nowParent.children).indexOf(node);
+        if (nowIdx !== expectedIdx) {
+          dndLog('verify@' + ms + 'ms: node REORDERED idx', expectedIdx, '→', nowIdx, '(React reconciled).');
+        } else {
+          dndLog('verify@' + ms + 'ms: node still at idx', nowIdx, '— move persisted.');
+        }
+      }, ms);
+    });
+  }
+
+  // Parent-level drop: lets the user drop onto empty space at the end
+  // of the row (past the last card) — the per-wrapper handlers don't
+  // fire there because the drop target isn't a wrapper. Append to the
+  // end of the common parent.
+  function attachParentDropHandler(parent) {
+    if (!parent || parent.hasAttribute('data-zhl-dnd-parent')) return;
+    parent.setAttribute('data-zhl-dnd-parent', '1');
+    parent.addEventListener('dragover', (e) => {
+      if (!draggingWrapper) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+    });
+    parent.addEventListener('drop', (e) => {
+      if (!draggingWrapper) return;
+      // If the drop bubbled up from a wrapper that already handled it,
+      // the wrapper called stopPropagation — we won't see it here.
+      e.preventDefault();
+      dndLog('parent-level drop. dragging=', shortDescribe(draggingWrapper), 'parent=', shortDescribe(parent));
+      try {
+        parent.appendChild(draggingWrapper);
+        dndLog('parent-level drop OK — appended to end of', shortDescribe(parent));
+        flashStatus('Reordered manually');
+        const cards = getScenarioCardElements();
+        const wrappers = cards.map((c) => findUniqueWrapper(c, cards));
+        alignAssignedWrapper(wrappers);
+      } catch (err) {
+        dndLog('parent-level drop error:', err);
+      }
+    });
+    dndLog('attached parent-level drop handler to', shortDescribe(parent));
   }
 
   // The page may steal drag events at the document level (preventing the
@@ -532,7 +620,11 @@
   }
 
   function ensureDnd() {
-    getCardWrappers().forEach(enableDragAndDrop);
+    const wrappers = getCardWrappers();
+    wrappers.forEach(enableDragAndDrop);
+    const parents = new Set();
+    for (const w of wrappers) if (w.parentElement) parents.add(w.parentElement);
+    parents.forEach(attachParentDropHandler);
   }
 
   function tearDown() {
