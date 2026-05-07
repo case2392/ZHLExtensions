@@ -247,11 +247,17 @@
     if (bar) bar.remove();
   }
 
-  let diagDone = false;
+  let lastDiag = '';
   function diag(msg) {
-    if (diagDone) return;
-    diagDone = true;
+    if (msg === lastDiag) return;
+    lastDiag = msg;
     console.log('[Scenario Sort DIAG]', msg);
+  }
+
+  function describe(el) {
+    if (!el) return 'null';
+    const cls = (el.getAttribute && el.getAttribute('class')) || '';
+    return '<' + el.tagName.toLowerCase() + (cls ? ' class="' + cls.slice(0, 80) + '"' : '') + '>';
   }
 
   function tick() {
@@ -259,17 +265,21 @@
       tearDown();
       return;
     }
+    // Raw element counts before isScenarioCard filtering — tells us
+    // whether the StyledCard selector is finding anything.
+    const allCards = document.querySelectorAll(STYLED_CARD_SELECTOR);
     const wrappers = getCardWrappers();
     if (wrappers.length === 0) {
-      diag('on scenarios page but no scenario cards visible yet (waiting for render)');
+      diag('no scenario cards yet. raw StyledCard hits=' + allCards.length);
       return;
     }
     const parent = commonParent(wrappers);
     if (!parent) {
-      diag('found ' + wrappers.length + ' cards but they do not share a common parent — DOM layout unexpected');
+      diag('found ' + wrappers.length + ' cards but they do not share a common parent. parents seen: ' +
+        wrappers.slice(0, 4).map((w) => describe(w.parentElement)).join(' | '));
       return;
     }
-    diag('found ' + wrappers.length + ' cards. Common parent: <' + parent.tagName.toLowerCase() + '>, grandparent: <' + (parent.parentElement ? parent.parentElement.tagName.toLowerCase() : 'null') + '>');
+    diag('found ' + wrappers.length + ' cards. parent=' + describe(parent) + ', grandparent=' + describe(parent.parentElement));
     ensureToolbar();
     ensureDnd();
   }
@@ -288,6 +298,10 @@
   const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   schedule();
+
+  // Heartbeat in case the React render that adds the cards happens in a
+  // way the MutationObserver / rAF debouncer doesn't catch in time.
+  setInterval(schedule, 1500);
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
