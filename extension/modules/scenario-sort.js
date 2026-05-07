@@ -111,17 +111,22 @@
     return parent;
   }
 
-  // Remember the initial DOM position of each card wrapper so the user
-  // can revert to the original layout. Captured lazily on first sort or
-  // first drag — we don't want to snapshot before the page is fully
-  // settled.
-  const originalState = new Map();
+  // Snapshot the ORIGINAL parent → ordered children list once, the very
+  // first time the user takes any reordering action. Reset replays that
+  // list on every parent — so even after multiple sorts / drags, Reset
+  // returns to the layout that existed when the page first loaded.
+  // Keyed by parent so the assigned card's sub-container and the
+  // unassigned-cards sub-container both restore independently.
+  const originalState = new Map(); // parent -> [wrapper, wrapper, ...]
   function captureOriginalIfNeeded() {
     if (originalState.size > 0) return;
     const cards = getScenarioCardElements();
     const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
     for (const w of wrappers) {
-      originalState.set(w, { parent: w.parentElement, nextSibling: w.nextSibling });
+      const p = w.parentElement;
+      if (!p) continue;
+      if (!originalState.has(p)) originalState.set(p, []);
+      originalState.get(p).push(w);
     }
   }
 
@@ -130,12 +135,13 @@
       flashStatus('Nothing to revert');
       return;
     }
-    for (const [wrapper, state] of originalState) {
-      if (!state.parent || !state.parent.isConnected) continue;
-      const ns = state.nextSibling;
-      if (ns && ns.parentElement === state.parent) state.parent.insertBefore(wrapper, ns);
-      else state.parent.appendChild(wrapper);
+    for (const [parent, kids] of originalState) {
+      if (!parent || !parent.isConnected) continue;
+      for (const kid of kids) {
+        if (kid && kid.isConnected) parent.appendChild(kid);
+      }
     }
+    refreshSelectionsToMatchDom();
     flashStatus('Reverted to original order');
   }
 
@@ -178,7 +184,27 @@
     });
     for (const item of items) target.appendChild(item.wrapper);
     console.log('[Scenario Sort] sorted ' + items.length + ' cards (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
+    refreshSelectionsToMatchDom();
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
+  }
+
+  // After we move cards around, the page's React selection state can
+  // still hold the OLD click-order — Generate PDF uses that order, not
+  // the current DOM. Force a refresh by un-checking every checked
+  // checkbox and re-clicking them in the new DOM order, so the
+  // selection list ends up matching what the user sees.
+  function refreshSelectionsToMatchDom() {
+    const boxes = findScenarioCheckboxes();
+    const wereChecked = new Set();
+    for (const cb of boxes) if (cb.checked) wereChecked.add(cb);
+    if (wereChecked.size === 0) return;
+    for (const cb of wereChecked) cb.click();
+    setTimeout(() => {
+      const reordered = findScenarioCheckboxes();
+      for (const cb of reordered) {
+        if (wereChecked.has(cb)) cb.click();
+      }
+    }, 100);
   }
 
   // ---- Select all checkboxes -----------------------------------------
@@ -225,9 +251,9 @@
     label.setAttribute('style', 'font-weight: 600; margin-right: 2px;');
     bar.appendChild(label);
 
-    bar.appendChild(makeButton('Rate ↑', () => sortByRate('asc')));
-    bar.appendChild(makeButton('Rate ↓', () => sortByRate('desc')));
-    bar.appendChild(makeButton('Reset', () => revertToOriginal(), { secondary: true }));
+    bar.appendChild(makeButton('Rate ↑', () => sortByRate('asc'), { primary: true }));
+    bar.appendChild(makeButton('Rate ↓', () => sortByRate('desc'), { primary: true }));
+    bar.appendChild(makeButton('Reset', () => revertToOriginal(), { primary: true }));
 
     const sep = document.createElement('span');
     sep.setAttribute('style', 'width: 1px; height: 18px; background: #d1d5db; margin: 0 4px;');
