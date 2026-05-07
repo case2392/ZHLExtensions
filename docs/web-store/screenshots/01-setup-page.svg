@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+  <rect width="1280" height="800" fill="#0f1115"/>
+
+  <!-- Header band -->
+  <rect x="0" y="0" width="1280" height="78" fill="#171a21" stroke="#2a2f3a"/>
+  <text x="48" y="48" font-size="22" font-weight="700" fill="#e6e8ee">ZHL Productivity Pack — Setup</text>
+  <text x="48" y="68" font-size="13" fill="#8a93a6">11 modules. Toggle anything on or off. Reload affected tabs to apply.</text>
+
+  <!-- Module cards grid -->
+  <g transform="translate(48, 110)">
+    <!-- Card 1: VA Calc -->
+    <rect x="0" y="0" width="370" height="190" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+    <text x="20" y="32" font-size="15" font-weight="700" fill="#e6e8ee">VA Residual + Deductions Calc</text>
+    <text x="20" y="52" font-size="11" fill="#8a93a6">Runs on: operator.zillowhomeloans.com</text>
+    <rect x="305" y="20" width="48" height="22" rx="11" fill="#3b82f6"/>
+    <circle cx="343" cy="31" r="8" fill="#fff"/>
+    <text x="20" y="92" font-size="12" fill="#cdd3df">• Pre-fills VA residual income and total deductions</text>
+    <text x="20" y="111" font-size="12" fill="#cdd3df">  from the Salesforce loan record</text>
+    <text x="20" y="138" font-size="12" fill="#cdd3df">• Writes results back and saves automatically</text>
+    <text x="20" y="165" font-size="12" fill="#cdd3df">• One click — no math required</text>
+
+    <!-- Card 2: Buydown Calc -->
+    <rect x="395" y="0" width="370" height="190" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+    <text x="415" y="32" font-size="15" font-weight="700" fill="#e6e8ee">2-1 Buydown Calculator</text>
+    <text x="415" y="52" font-size="11" fill="#8a93a6">Runs on: Pricing &amp; Scenarios pages</text>
+    <rect x="700" y="20" width="48" height="22" rx="11" fill="#3b82f6"/>
+    <circle cx="738" cy="31" r="8" fill="#fff"/>
+    <text x="415" y="92" font-size="12" fill="#cdd3df">• Year 1, Year 2, Year 3+ payment breakdown</text>
+    <text x="415" y="111" font-size="12" fill="#cdd3df">• Factors in seller credit automatically</text>
+    <text x="415" y="138" font-size="12" fill="#cdd3df">• Skips FHA / VA programs (not eligible)</text>
+    <text x="415" y="165" font-size="12" fill="#cdd3df">• Button under every scenario card</text>
+
+    <!-- Card 3: Caller ID -->
+    <rect x="790" y="0" width="370" height="190" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+    <text x="810" y="32" font-size="15" font-weight="700" fill="#e6e8ee">Caller ID</text>
+    <text x="810" y="52" font-size="11" fill="#8a93a6">Runs on: Salesforce + Genesys</text>
+    <rect x="1095" y="20" width="48" height="22" rx="11" fill="#3b82f6"/>
+    <circle cx="1133" cy="31" r="8" fill="#fff"/>
+    <text x="810" y="92" font-size="12" fill="#cdd3df">• Looks up incoming numbers in Salesforce</text>
+    <text x="810" y="111" font-size="12" fill="#cdd3df">• Shows blue badge with Lead/Contact/Loan name</text>
+    <text x="810" y="138" font-size="12" fill="#cdd3df">• Active call card, voicemail rows, history</text>
+    <text x="810" y="165" font-size="12" fill="#cdd3df">• Uses your existing Salesforce session</text>
+
+    <!-- Card 4: SMS Quick-Add -->
+    <rect x="0" y="210" width="370" height="190" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+    <text x="20" y="242" font-size="15" font-weight="700" fill="#e6e8ee">SMS Quick-Add Participants</text>
+    <text x="20" y="262" font-size="11" fill="#8a93a6">Runs on: Salesforce SMS threads</text>
+    <rect x="305" y="230" width="48" height="22" rx="11" fill="#3b82f6"/>
+    <circle cx="343" cy="241" r="8" fill="#fff"/>
+    <text x="20" y="302" font-size="12" fill="#cdd3df">• "Add Buyer's Agent" — pulls mobile from SF</text>
+    <text x="20" y="321" font-size="12" fill="#cdd3df">• "Add Co-Borrower" — pulls Contact phone</text>
+    <text x="20" y="348" font-size="12" fill="#cdd3df">• One click — no copy/paste, no typing</text>
+
+    <!-- Card 5: Scenario Sort -->
+    <rect x="395" y="210" width="370" height="190" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+    <text x="415" y="242" font-size="15" font-weight="700" fill="#e6e8ee">Scenario Sort &amp; Drag</text>
+    <text x="415" y="262" font-size="11" fill="#8a93a6">Runs on: Pricing &amp; Scenarios</text>
+    <rect x="700" y="230" width="48" height="22" rx="11" fill="#3b82f6"/>
+    <circle cx="738" cy="241" r="8" fill="#fff"/>
+    <text x="415" y="302" font-size="12" fill="#cdd3df">• Sort by rate ascending or descending</text>
+    <text x="415" y="321" font-size="12" fill="#cdd3df">• Drag-and-drop to reorder manually</text>
+    <text x="415" y="348" font-size="12" fill="#cdd3df">• Reset, Select all checkboxes</text>
+
+    <!-- Card 6: Auto-switch tabs -->
+    <rect x="790" y="210" width="370" height="190" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+    <text x="810" y="242" font-size="15" font-weight="700" fill="#e6e8ee">Auto-switch Lead / Contact tabs</text>
+    <text x="810" y="262" font-size="11" fill="#8a93a6">Runs on: Salesforce Lightning</text>
+    <rect x="1095" y="230" width="48" height="22" rx="11" fill="#3b82f6"/>
+    <circle cx="1133" cy="241" r="8" fill="#fff"/>
+    <text x="810" y="302" font-size="12" fill="#cdd3df">• Lead pages land on Call Details (not Active</text>
+    <text x="810" y="321" font-size="12" fill="#cdd3df">  Listening) automatically</text>
+    <text x="810" y="348" font-size="12" fill="#cdd3df">• Contact pages land on Messaging (not Activity)</text>
+  </g>
+
+  <!-- Plus 5 more pill -->
+  <g transform="translate(48, 540)">
+    <rect x="0" y="0" width="1184" height="160" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+    <text x="20" y="32" font-size="14" font-weight="700" fill="#e6e8ee">+ five more — Open SMS button, Loan Amount editor, Gmail Reply All / Delete / Compose drag, telemetry opt-out…</text>
+    <text x="20" y="56" font-size="12" fill="#8a93a6">Toggle each one on or off independently. Reload affected tabs to apply.</text>
+
+    <!-- Footer credit -->
+    <g transform="translate(0, 90)">
+      <circle cx="36" cy="36" r="22" fill="#1f2937" stroke="#2a2f3a"/>
+      <text x="36" y="42" text-anchor="middle" font-size="14" font-weight="700" fill="#3b82f6">JC</text>
+      <text x="74" y="34" font-size="14" font-weight="700" fill="#e6e8ee">ZHL Productivity Pack</text>
+      <text x="74" y="52" font-size="12" fill="#8a93a6">Built by Justin Case</text>
+    </g>
+  </g>
+</svg>

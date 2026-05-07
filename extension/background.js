@@ -336,10 +336,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return false;
   }
   if (msg && msg.type === "TRACK") {
+    // Sanitize the source URL to hostname only — the full URL would leak
+    // Salesforce record ids and other PII into the telemetry sheet.
+    let url = null;
+    if (sender && sender.url) {
+      try { url = new URL(sender.url).hostname; } catch (_) { url = null; }
+    }
     const event = {
       name: String(msg.event || "unknown"),
       props: msg.props && typeof msg.props === "object" ? msg.props : {},
-      url: (sender && sender.url) || null,
+      url: url,
       ts: Date.now()
     };
     enqueueEvent(event);

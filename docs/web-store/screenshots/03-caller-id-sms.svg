@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+  <rect width="1280" height="800" fill="#f4f6f9"/>
+
+  <!-- Left half: Caller ID in Genesys -->
+  <g transform="translate(40, 40)">
+    <text x="0" y="20" font-size="18" font-weight="700" fill="#1f2937">Caller ID</text>
+    <text x="0" y="40" font-size="12" fill="#6b7280">Active call card in Genesys gets a name badge.</text>
+
+    <!-- Genesys widget mock -->
+    <g transform="translate(0, 60)">
+      <rect width="380" height="220" rx="10" fill="#ffffff" stroke="#d1d5db" stroke-width="2"/>
+      <rect width="380" height="42" rx="10" fill="#1d4ed8"/>
+      <text x="20" y="27" font-size="14" font-weight="700" fill="#fff">⏵  Available</text>
+      <text x="350" y="27" text-anchor="end" font-size="14" font-weight="700" fill="#fff">— ⛶</text>
+
+      <!-- Active call card -->
+      <rect x="14" y="60" width="352" height="100" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+      <text x="32" y="86" font-size="14" font-weight="700" fill="#14532d">Charlotte NC</text>
+      <text x="32" y="106" font-size="12" fill="#166534">CONNECTED</text>
+      <text x="32" y="124" font-size="12" font-weight="600" fill="#1f2937">+1 980-297-4786</text>
+      <text x="32" y="142" font-size="11" fill="#166534">0:22</text>
+
+      <!-- The badge our extension adds -->
+      <rect x="220" y="86" width="130" height="26" rx="13" fill="#3b82f6"/>
+      <text x="285" y="103" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">⚑ Christina Telisma</text>
+      <text x="285" y="138" text-anchor="middle" font-size="9" fill="#3b82f6">Lead • added by ZHL Pack</text>
+
+      <!-- Genesys controls -->
+      <g transform="translate(120, 175)" font-size="20" fill="#374151">
+        <circle cx="0" cy="0" r="14" fill="#fee2e2"/>
+        <text y="6" text-anchor="middle">📞</text>
+        <circle cx="40" cy="0" r="14" fill="#dbeafe"/>
+        <text x="40" y="6" text-anchor="middle">⏸</text>
+        <circle cx="80" cy="0" r="14" fill="#dbeafe"/>
+        <text x="80" y="6" text-anchor="middle">🎤</text>
+        <circle cx="120" cy="0" r="14" fill="#dbeafe"/>
+        <text x="120" y="6" text-anchor="middle">⤴</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Arrow / explanation -->
+  <g transform="translate(440, 200)">
+    <path d="M 0 60 Q 80 60 160 60" stroke="#3b82f6" stroke-width="2" fill="none" stroke-dasharray="6 4"/>
+    <polygon points="155,55 165,60 155,65" fill="#3b82f6"/>
+    <text x="80" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#3b82f6">Caller ID match</text>
+    <text x="80" y="85" text-anchor="middle" font-size="11" fill="#6b7280">looks up phone in Salesforce,</text>
+    <text x="80" y="100" text-anchor="middle" font-size="11" fill="#6b7280">shows blue badge with name</text>
+  </g>
+
+  <!-- Right half: SMS Quick-Add Participants in Salesforce -->
+  <g transform="translate(680, 40)">
+    <text x="0" y="20" font-size="18" font-weight="700" fill="#1f2937">SMS Quick-Add Participants</text>
+    <text x="0" y="40" font-size="12" fill="#6b7280">In a Salesforce SMS thread, one click adds the right person.</text>
+
+    <!-- SMS panel mock -->
+    <g transform="translate(0, 60)">
+      <rect width="540" height="380" rx="10" fill="#ffffff" stroke="#d1d5db"/>
+      <rect width="540" height="48" rx="10" fill="#0070d2"/>
+      <text x="20" y="32" font-size="15" font-weight="700" fill="#fff">⌘  New SMS Conversation</text>
+      <text x="510" y="32" text-anchor="end" font-size="20" font-weight="700" fill="#fff">×</text>
+
+      <!-- Threads section -->
+      <text x="20" y="80" font-size="12" font-weight="700" fill="#374151">PARTICIPANTS</text>
+      <rect x="20" y="92" width="500" height="44" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <circle cx="42" cy="114" r="14" fill="#dbeafe"/>
+      <text x="42" y="119" text-anchor="middle" font-size="12" font-weight="700" fill="#1d4ed8">CT</text>
+      <text x="68" y="110" font-size="13" font-weight="600" fill="#111827">Christina Telisma</text>
+      <text x="68" y="126" font-size="11" fill="#6b7280">+1 980-297-4786 (Mobile)</text>
+
+      <!-- Our extension's buttons -->
+      <text x="20" y="170" font-size="11" font-weight="700" fill="#2563eb" letter-spacing="0.5">⚡ ZHL PACK QUICK-ADD</text>
+      <rect x="20" y="180" width="240" height="36" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+      <text x="140" y="202" text-anchor="middle" font-size="13" font-weight="700" fill="#2563eb">+ Add Buyer's Agent (Mobile)</text>
+      <rect x="270" y="180" width="240" height="36" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+      <text x="390" y="202" text-anchor="middle" font-size="13" font-weight="700" fill="#2563eb">+ Add Co-Borrower (Phone)</text>
+
+      <!-- Message body -->
+      <text x="20" y="248" font-size="12" font-weight="700" fill="#374151">MESSAGE</text>
+      <rect x="20" y="260" width="500" height="80" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <text x="32" y="282" font-size="12" fill="#9ca3af">Type a message…</text>
+
+      <!-- Send button -->
+      <rect x="450" y="350" width="70" height="22" rx="11" fill="#0070d2"/>
+      <text x="485" y="365" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">Send</text>
+    </g>
+  </g>
+
+  <!-- Caption strip -->
+  <g transform="translate(40, 700)">
+    <rect width="1200" height="60" rx="8" fill="#1f2937"/>
+    <text x="24" y="28" font-size="14" font-weight="700" fill="#fff">Caller ID identifies incoming numbers • SMS Quick-Add pulls phones from Salesforce — no copy/paste.</text>
+    <text x="24" y="48" font-size="12" fill="#cbd5e1">Both work with your existing Salesforce session — no extra logins, no API keys to set up.</text>
+  </g>
+</svg>
