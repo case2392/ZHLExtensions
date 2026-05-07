@@ -111,22 +111,63 @@
     return parent;
   }
 
+  // Remember the initial DOM position of each card wrapper so the user
+  // can revert to the original layout. Captured lazily on first sort or
+  // first drag — we don't want to snapshot before the page is fully
+  // settled.
+  const originalState = new Map();
+  function captureOriginalIfNeeded() {
+    if (originalState.size > 0) return;
+    const cards = getScenarioCardElements();
+    const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
+    for (const w of wrappers) {
+      originalState.set(w, { parent: w.parentElement, nextSibling: w.nextSibling });
+    }
+  }
+
+  function revertToOriginal() {
+    if (originalState.size === 0) {
+      flashStatus('Nothing to revert');
+      return;
+    }
+    for (const [wrapper, state] of originalState) {
+      if (!state.parent || !state.parent.isConnected) continue;
+      const ns = state.nextSibling;
+      if (ns && ns.parentElement === state.parent) state.parent.insertBefore(wrapper, ns);
+      else state.parent.appendChild(wrapper);
+    }
+    flashStatus('Reverted to original order');
+  }
+
+  // Pick the parent that already holds the most cards. Moving everyone
+  // into THAT element preserves the gap / padding / styling that container
+  // applies to its children — far less visually jarring than dumping
+  // cards into deepestCommonAncestor (which may strip the layout).
+  function pickSortTarget(wrappers) {
+    const counts = new Map();
+    for (const w of wrappers) {
+      const p = w.parentElement;
+      if (!p) continue;
+      counts.set(p, (counts.get(p) || 0) + 1);
+    }
+    let best = null, max = 0;
+    for (const [p, c] of counts) {
+      if (c > max) { max = c; best = p; }
+    }
+    return best;
+  }
+
   function sortByRate(direction) {
     const cards = getScenarioCardElements();
     if (cards.length < 2) return;
+    captureOriginalIfNeeded();
     const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
-    // Pick the deepest ancestor common to ALL wrappers. After we move
-    // the wrappers there, they're all siblings — sub-containers (like
-    // a separate "ASSIGNED" column or an unassigned-cards group) get
-    // flattened and every card is independently positioned.
-    const target = deepestCommonAncestor(wrappers);
+    const target = pickSortTarget(wrappers) || deepestCommonAncestor(wrappers);
     if (!target) {
-      console.warn('[Scenario Sort] no common ancestor for the unique wrappers — aborting');
+      console.warn('[Scenario Sort] no sort target — aborting');
       return;
     }
-    const items = wrappers.map((wrapper, i) => ({
-      wrapper, rate: parseRate(cards[i])
-    }));
+    const items = wrappers.map((wrapper, i) => ({ wrapper, rate: parseRate(cards[i]) }));
     items.sort((a, b) => {
       const aBad = !isFinite(a.rate);
       const bBad = !isFinite(b.rate);
@@ -140,53 +181,85 @@
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
   }
 
+  // ---- Select all checkboxes -----------------------------------------
+
+  function findScenarioCheckboxes() {
+    return Array.from(document.querySelectorAll('input[name="selectScenario"]'));
+  }
+
+  function toggleSelectAll() {
+    const boxes = findScenarioCheckboxes();
+    if (boxes.length === 0) {
+      flashStatus('No scenario checkboxes found');
+      return;
+    }
+    const anyUnchecked = boxes.some((cb) => !cb.checked);
+    let changed = 0;
+    for (const cb of boxes) {
+      if (anyUnchecked && !cb.checked) { cb.click(); changed++; }
+      else if (!anyUnchecked && cb.checked) { cb.click(); changed++; }
+    }
+    flashStatus(anyUnchecked ? ('Selected all (' + changed + ')') : ('Deselected all (' + changed + ')'));
+  }
+
   // ---- Toolbar UI -----------------------------------------------------
 
   function makeToolbar() {
+    // Outer wrapper so the actual bar can use width: fit-content without
+    // collapsing inside parents that ignore inline-flex.
+    const wrap = document.createElement('div');
+    wrap.id = TOOLBAR_ID;
+    wrap.setAttribute('style', 'display: block; padding: 0; margin: 0 0 12px 0; font-family: inherit;');
+
     const bar = document.createElement('div');
-    bar.id = TOOLBAR_ID;
     bar.setAttribute('style',
-      'display: flex; align-items: center; gap: 8px;' +
-      'padding: 10px 12px; margin: 0 0 12px;' +
+      'display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;' +
+      'padding: 8px 10px; ' +
       'background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px;' +
-      'font-family: inherit; font-size: 13px; color: #374151;'
+      'font-family: inherit; font-size: 13px; color: #374151; max-width: 100%;'
     );
+    wrap.appendChild(bar);
+
     const label = document.createElement('span');
-    label.textContent = 'Sort scenarios:';
-    label.setAttribute('style', 'font-weight: 600;');
+    label.textContent = 'Sort:';
+    label.setAttribute('style', 'font-weight: 600; margin-right: 2px;');
     bar.appendChild(label);
 
-    const ascBtn = makeButton('Rate ↑ (low → high)', () => sortByRate('asc'));
-    const descBtn = makeButton('Rate ↓ (high → low)', () => sortByRate('desc'));
-    bar.appendChild(ascBtn);
-    bar.appendChild(descBtn);
+    bar.appendChild(makeButton('Rate ↑', () => sortByRate('asc')));
+    bar.appendChild(makeButton('Rate ↓', () => sortByRate('desc')));
+    bar.appendChild(makeButton('Reset', () => revertToOriginal(), { secondary: true }));
 
-    const hint = document.createElement('span');
-    hint.setAttribute('style', 'margin-left: auto; color: #6b7280; font-size: 12px;');
-    hint.textContent = 'or drag a card to reorder manually';
-    bar.appendChild(hint);
+    const sep = document.createElement('span');
+    sep.setAttribute('style', 'width: 1px; height: 18px; background: #d1d5db; margin: 0 4px;');
+    bar.appendChild(sep);
+
+    bar.appendChild(makeButton('Select all', () => toggleSelectAll(), { primary: true }));
 
     const status = document.createElement('span');
     status.id = TOOLBAR_ID + '-status';
-    status.setAttribute('style', 'color: #047857; font-size: 12px; opacity: 0; transition: opacity 0.2s ease; margin-left: 8px;');
+    status.setAttribute('style', 'color: #047857; font-size: 12px; opacity: 0; transition: opacity 0.2s ease; margin-left: 6px;');
     bar.appendChild(status);
 
-    return bar;
+    return wrap;
   }
 
-  function makeButton(label, onClick) {
+  function makeButton(label, onClick, opts) {
+    opts = opts || {};
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = label;
+    let bg = '#ffffff', fg = '#006aff', border = '#006aff', hoverBg = '#eef4ff';
+    if (opts.primary) { bg = '#006aff'; fg = '#ffffff'; border = '#006aff'; hoverBg = '#0056d2'; }
+    if (opts.secondary) { bg = '#ffffff'; fg = '#374151'; border = '#d1d5db'; hoverBg = '#f3f4f6'; }
     btn.setAttribute('style',
       'display: inline-flex; align-items: center;' +
-      'padding: 6px 12px; background: #ffffff; color: #006aff;' +
-      'border: 1px solid #006aff; border-radius: 4px;' +
+      'padding: 5px 10px; background: ' + bg + '; color: ' + fg + ';' +
+      'border: 1px solid ' + border + '; border-radius: 4px;' +
       'font-family: inherit; font-size: 12.5px; font-weight: 500;' +
-      'cursor: pointer; white-space: nowrap;'
+      'cursor: pointer; white-space: nowrap; line-height: 1.2;'
     );
-    btn.addEventListener('mouseenter', () => { btn.style.background = '#eef4ff'; });
-    btn.addEventListener('mouseleave', () => { btn.style.background = '#ffffff'; });
+    btn.addEventListener('mouseenter', () => { btn.style.background = hoverBg; if (opts.primary) btn.style.color = '#ffffff'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = bg; btn.style.color = fg; });
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -215,6 +288,7 @@
     wrapper.style.cursor = 'grab';
 
     wrapper.addEventListener('dragstart', (e) => {
+      captureOriginalIfNeeded();
       draggingWrapper = wrapper;
       wrapper.classList.add(DRAGGING_CLASS);
       wrapper.style.opacity = '0.55';
@@ -252,8 +326,10 @@
       wrapper.style.outlineOffset = '';
       if (!draggingWrapper || draggingWrapper === wrapper) return;
       const parent = wrapper.parentElement;
-      if (!parent || draggingWrapper.parentElement !== parent) return;
-      // Decide drop side based on cursor x relative to target center.
+      if (!parent) return;
+      // Allow cross-parent drops — the assigned card lives in a different
+      // sub-container than the unassigned cards; without this gate the
+      // dragged card would silently fail to move into the target's row.
       const r = wrapper.getBoundingClientRect();
       const before = e.clientX < r.left + r.width / 2;
       if (before) parent.insertBefore(draggingWrapper, wrapper);
