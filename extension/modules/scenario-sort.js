@@ -153,12 +153,13 @@
     flashStatus('Reverted to original order');
   }
 
-  // Pick the parent that already directly contains the most StyledCards.
-  // That's the grid layout we want all cards to share when sorting.
-  function pickCardTarget(cards) {
+  // Pick the parent that already contains the most card wrappers — that's
+  // the unassigned-cards grid. Moving all wrappers there sorts the
+  // assigned card alongside the others while keeping each wrapper intact.
+  function pickWrapperTarget(wrappers) {
     const counts = new Map();
-    for (const c of cards) {
-      const p = c.parentElement;
+    for (const w of wrappers) {
+      const p = w.parentElement;
       if (!p) continue;
       counts.set(p, (counts.get(p) || 0) + 1);
     }
@@ -169,21 +170,23 @@
     return best;
   }
 
-  // Sort by moving the StyledCard elements themselves into the most
-  // populated parent (the unassigned-cards grid). Moving the assigned
-  // card's outer sub-container into that grid was visually broken — its
-  // own styling didn't slot into a grid cell. Moving just the card joins
-  // the grid as a peer and preserves the layout for every card.
+  // Sort by moving each card's WRAPPER (card + its 2-1 Buydown button +
+  // any per-card layout chrome) into one common parent, in rate order.
+  // We can't move just the StyledCard — the buydown button is injected
+  // as a sibling of the card inside the card's wrapper, so moving the
+  // card alone orphans the button. Moving the whole wrapper keeps each
+  // card-and-button pair together.
   function sortByRate(direction) {
     const cards = getScenarioCardElements();
     if (cards.length < 2) return;
     captureOriginalIfNeeded();
-    const target = pickCardTarget(cards);
+    const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
+    const target = pickWrapperTarget(wrappers);
     if (!target) {
       console.warn('[Scenario Sort] no sort target — aborting');
       return;
     }
-    const items = cards.map((card) => ({ card, rate: parseRate(card) }));
+    const items = wrappers.map((wrapper, i) => ({ wrapper, rate: parseRate(cards[i]) }));
     items.sort((a, b) => {
       const aBad = !isFinite(a.rate);
       const bBad = !isFinite(b.rate);
@@ -192,8 +195,8 @@
       if (bBad) return -1;
       return direction === 'desc' ? b.rate - a.rate : a.rate - b.rate;
     });
-    for (const item of items) target.appendChild(item.card);
-    console.log('[Scenario Sort] sorted ' + items.length + ' cards (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
+    for (const item of items) target.appendChild(item.wrapper);
+    console.log('[Scenario Sort] sorted ' + items.length + ' wrappers (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
     refreshSelectionsToMatchDom();
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
   }
