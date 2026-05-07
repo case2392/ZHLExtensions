@@ -509,9 +509,15 @@
     if (e.button !== 0) return;
     if (isInteractiveTarget(e.target)) return;
     e.preventDefault();
+    e.stopPropagation();
     const rect = dlg.getBoundingClientRect();
-    // Pin the dialog to the viewport at its current position so subsequent
-    // left/top updates work regardless of Gmail's anchoring.
+    // Lock the dialog's width and height BEFORE switching positioning
+    // modes. Gmail's compose derives its size from right/bottom anchors
+    // plus the surrounding layout — once we remove right/bottom and
+    // switch to position:fixed, the dialog would collapse to its min
+    // content size (just the title bar).
+    dlg.style.width = rect.width + 'px';
+    dlg.style.height = rect.height + 'px';
     dlg.style.position = 'fixed';
     dlg.style.left = rect.left + 'px';
     dlg.style.top = rect.top + 'px';
@@ -577,7 +583,10 @@
     if (!handle) return;
     dlg.setAttribute(DRAG_ATTR, '1');
     handle.style.cursor = 'move';
-    handle.addEventListener('mousedown', (e) => startDrag(dlg, handle, e));
+    // Capture phase so we run BEFORE Gmail's own title-bar mousedown
+    // listeners (which on some builds toggle minimize / resize). We
+    // also stopPropagation inside startDrag.
+    handle.addEventListener('mousedown', (e) => startDrag(dlg, handle, e), true);
     console.log('[Gmail Compose Drag] attached to compose dialog');
   }
 
