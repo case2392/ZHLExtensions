@@ -396,11 +396,30 @@
   }
 
   function setReactInputValue(input, value) {
-    const proto = Object.getPrototypeOf(input);
-    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
-    if (desc && desc.set) desc.set.call(input, value);
-    else input.value = value;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    // The Constellation form library only marks the form dirty (and
+    // enables Save) on *trusted* user-input events. Programmatic events
+    // dispatched by us are isTrusted=false and get ignored, even though
+    // the value visibly changes. document.execCommand('insertText', …)
+    // routes through the browser's input pipeline, which produces
+    // trusted events — same as if the user typed.
+    let viaExec = false;
+    try {
+      input.focus();
+      // Select existing content so insertText replaces it.
+      try { input.setSelectionRange(0, (input.value || '').length); }
+      catch (_) { try { input.select(); } catch (__) {} }
+      viaExec = document.execCommand && document.execCommand('insertText', false, String(value));
+    } catch (_) { viaExec = false; }
+
+    if (!viaExec || String(input.value) !== String(value)) {
+      // Fallback: native setter + synthetic events.
+      const proto = Object.getPrototypeOf(input);
+      const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+      if (desc && desc.set) desc.set.call(input, value);
+      else input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    // change + blur commits the field in most form libraries.
     input.dispatchEvent(new Event('change', { bubbles: true }));
     input.dispatchEvent(new Event('blur', { bubbles: true }));
   }
