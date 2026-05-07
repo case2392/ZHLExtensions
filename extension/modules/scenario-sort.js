@@ -149,8 +149,70 @@
         if (kid && kid.isConnected) parent.appendChild(kid);
       }
     }
+    clearAssignedWrapperOverrides();
     refreshSelectionsToMatchDom();
     flashStatus('Reverted to original order');
+  }
+
+  // The assigned-card wrapper has its own outer styling (green border,
+  // ASSIGNED TO LOAN banner) and is normally laid out by a different
+  // parent than the unassigned-cards grid. When we move it into the grid
+  // for sorting, the original container's layout rules (width, margins,
+  // flex sizing) no longer apply, so it can render at the wrong size and
+  // break the gap between cards. Copy a non-assigned wrapper's computed
+  // box metrics onto the assigned wrapper after sort to keep the row
+  // visually uniform. On Reset we clear these inline overrides.
+  const ASSIGNED_OVERRIDE_KEYS = [
+    'width', 'minWidth', 'maxWidth',
+    'flex', 'flexBasis', 'flexGrow', 'flexShrink',
+    'marginLeft', 'marginRight', 'marginTop', 'marginBottom',
+    'boxSizing', 'display'
+  ];
+  const ASSIGNED_OVERRIDE_ATTR = 'data-zhl-assigned-styled';
+
+  function isAssignedWrapper(wrapper) {
+    if (!wrapper) return false;
+    return /ASSIGNED\s*TO\s*LOAN/i.test(wrapper.textContent || '');
+  }
+
+  function alignAssignedWrapper(wrappers) {
+    const assigned = wrappers.find(isAssignedWrapper);
+    if (!assigned) return;
+    const reference = wrappers.find((w) => w !== assigned && !isAssignedWrapper(w));
+    if (!reference) return;
+    const refRect = reference.getBoundingClientRect();
+    const refCs = getComputedStyle(reference);
+    if (!assigned.hasAttribute(ASSIGNED_OVERRIDE_ATTR)) {
+      const original = {};
+      for (const k of ASSIGNED_OVERRIDE_KEYS) original[k] = assigned.style[k] || '';
+      try { assigned.setAttribute(ASSIGNED_OVERRIDE_ATTR, JSON.stringify(original)); } catch (_) {}
+    }
+    if (refRect.width > 0) {
+      const w = refRect.width + 'px';
+      assigned.style.width = w;
+      assigned.style.minWidth = w;
+      assigned.style.maxWidth = w;
+      assigned.style.flexBasis = w;
+    }
+    assigned.style.flexGrow = '0';
+    assigned.style.flexShrink = '0';
+    assigned.style.marginLeft = refCs.marginLeft;
+    assigned.style.marginRight = refCs.marginRight;
+    assigned.style.marginTop = refCs.marginTop;
+    assigned.style.marginBottom = refCs.marginBottom;
+    assigned.style.boxSizing = refCs.boxSizing;
+    if (refCs.display && refCs.display !== 'block') {
+      assigned.style.display = refCs.display;
+    }
+  }
+
+  function clearAssignedWrapperOverrides() {
+    document.querySelectorAll('[' + ASSIGNED_OVERRIDE_ATTR + ']').forEach((el) => {
+      let original = {};
+      try { original = JSON.parse(el.getAttribute(ASSIGNED_OVERRIDE_ATTR)) || {}; } catch (_) {}
+      for (const k of ASSIGNED_OVERRIDE_KEYS) el.style[k] = original[k] || '';
+      el.removeAttribute(ASSIGNED_OVERRIDE_ATTR);
+    });
   }
 
   // Pick the parent that already contains the most card wrappers — that's
@@ -196,6 +258,7 @@
       return direction === 'desc' ? b.rate - a.rate : a.rate - b.rate;
     });
     for (const item of items) target.appendChild(item.wrapper);
+    alignAssignedWrapper(items.map((it) => it.wrapper));
     console.log('[Scenario Sort] sorted ' + items.length + ' wrappers (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
     refreshSelectionsToMatchDom();
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
