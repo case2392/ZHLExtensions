@@ -272,18 +272,16 @@
     return dir === 'row' || dir === 'row-reverse';
   }
 
-  function ensureToolbar() {
+  function ensureToolbar(ancestor) {
     if (document.getElementById(TOOLBAR_ID)) return;
-    const wrappers = getCardWrappers();
-    if (wrappers.length === 0) return;
-    const cardsRow = commonParent(wrappers);
-    if (!cardsRow) return;
+    if (!ancestor) return;
 
-    // Walk up past every flex-row ancestor — inserting a sibling there
-    // would push the cards sideways. Stop at the first ancestor that is
-    // block / flex-column / grid — that's safe to take a full-width
-    // sibling without disrupting the horizontal card layout.
-    let pathChild = cardsRow;
+    // Walk up past every flex-row ancestor of the cards' container —
+    // inserting a full-width sibling inside a flex-row would push the
+    // cards horizontally off-screen. Stop at the first ancestor that's
+    // block / flex-column / grid — safe to insert a row-level sibling
+    // there.
+    let pathChild = ancestor;
     while (pathChild.parentElement && isFlexRow(pathChild.parentElement)) {
       pathChild = pathChild.parentElement;
     }
@@ -292,7 +290,7 @@
 
     const bar = makeToolbar();
     container.insertBefore(bar, pathChild);
-    console.log('[Scenario Sort] toolbar inserted in <' + container.tagName.toLowerCase() + '> before <' + pathChild.tagName.toLowerCase() + '> (' + wrappers.length + ' cards)');
+    console.log('[Scenario Sort] toolbar inserted in <' + container.tagName.toLowerCase() + '> before <' + pathChild.tagName.toLowerCase() + '>');
   }
 
   function ensureDnd() {
@@ -322,22 +320,24 @@
       tearDown();
       return;
     }
-    // Raw element counts before isScenarioCard filtering — tells us
-    // whether the StyledCard selector is finding anything.
     const allCards = document.querySelectorAll(STYLED_CARD_SELECTOR);
-    const wrappers = getCardWrappers();
-    if (wrappers.length === 0) {
+    const cards = getScenarioCardElements();
+    if (cards.length === 0) {
       diag('no scenario cards yet. raw StyledCard hits=' + allCards.length);
       return;
     }
-    const parent = commonParent(wrappers);
-    if (!parent) {
-      diag('found ' + wrappers.length + ' cards but they do not share a common parent. parents seen: ' +
-        wrappers.slice(0, 4).map((w) => describe(w.parentElement)).join(' | '));
+    const ancestor = deepestCommonAncestor(cards);
+    if (!ancestor) {
+      diag('found ' + cards.length + ' cards but no common ancestor');
       return;
     }
-    diag('found ' + wrappers.length + ' cards. parent=' + describe(parent) + ', grandparent=' + describe(parent.parentElement));
-    ensureToolbar();
+    // Note: per-card unique wrappers may have *different* immediate
+    // parents (e.g. the assigned card sits in a different sub-container
+    // than the unassigned cards). That's fine — the toolbar just needs
+    // to live above them, and the sort button flattens the wrappers
+    // into one common ancestor at click time.
+    diag('found ' + cards.length + ' cards. common ancestor=' + describe(ancestor));
+    ensureToolbar(ancestor);
     ensureDnd();
   }
 
