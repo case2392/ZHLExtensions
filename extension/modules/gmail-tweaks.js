@@ -556,25 +556,45 @@
     // it back, but allow them to push it well off the edges otherwise.
     nx = Math.max(-(dlg.offsetWidth - 80), Math.min(nx, window.innerWidth - 80));
     ny = Math.max(0, Math.min(ny, window.innerHeight - 40));
-    // Reset inset before individual top/left/right/bottom so the
-    // shorthand doesn't undo our values (CSS cascade: last !important
-    // wins, and inset:auto would expand to top:auto;left:auto;... which
-    // would clobber the explicit positions we want).
     setImportant(dlg, 'inset', 'auto');
     setImportant(dlg, 'right', 'auto');
     setImportant(dlg, 'bottom', 'auto');
     setImportant(dlg, 'left', nx + 'px');
     setImportant(dlg, 'top', ny + 'px');
+    active.moveCount = (active.moveCount || 0) + 1;
+    const now = Date.now();
+    if (!active.lastLogAt || now - active.lastLogAt > 200) {
+      active.lastLogAt = now;
+      const cs = getComputedStyle(dlg);
+      console.log('[Gmail Compose Drag] move #' + active.moveCount,
+        'cursor=', e.clientX, e.clientY,
+        'set top/left=', ny + '/' + nx,
+        'computed top/left=', cs.top + '/' + cs.left,
+        'computed inset=', cs.inset);
+    }
   }, true);
 
-  function endDrag() {
+  function endDrag(reason, e) {
     if (!active) return;
+    const { dlg, moveCount } = active;
+    const finalTop = getComputedStyle(dlg).top;
+    const finalLeft = getComputedStyle(dlg).left;
     document.body.style.userSelect = '';
     active.handle.style.cursor = 'move';
+    console.log('[Gmail Compose Drag] end. reason=' + reason,
+      'moveCount=' + (moveCount || 0),
+      'finalTop/Left=', finalTop + '/' + finalLeft,
+      'event target=', e && e.target && e.target.tagName);
     active = null;
   }
-  document.addEventListener('mouseup', endDrag, true);
-  document.addEventListener('mouseleave', endDrag, true);
+  // Only end on a real mouseup. Don't end on mouseleave: when the
+  // cursor briefly crosses out of the document (toward the browser
+  // chrome, or over a subframe), mouseleave fires and the drag would
+  // appear to "get stuck" — even though the user is still pressing
+  // the button. mouseup will fire when they actually release.
+  document.addEventListener('mouseup', (e) => endDrag('mouseup', e), true);
+  // Also end if the user releases outside the window (window blur).
+  window.addEventListener('blur', () => endDrag('blur'), true);
 
   function isComposeDialog(dlg) {
     // Matches the floating "New Message" / reply compose popups: they're
