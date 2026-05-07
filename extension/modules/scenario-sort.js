@@ -169,6 +169,7 @@
     'boxSizing', 'display', 'overflow', 'transform'
   ];
   const ASSIGNED_OVERRIDE_ATTR = 'data-zhl-assigned-styled';
+  const PARENT_ALIGN_ATTR = 'data-zhl-parent-align-saved';
 
   function isAssignedWrapper(wrapper) {
     if (!wrapper) return false;
@@ -248,24 +249,21 @@
       'parent.alignItems=', parentCs && parentCs.alignItems,
       'parent.gap=', parentCs && parentCs.gap);
     if (bannerHeight > 1) {
-      // Use translateY ONLY — combining negative margin-top + translateY
-      // doubled the shift (40px when banner is 19.5) and over-corrected.
-      // translateY keeps the wrapper's layout box in place; visually it
-      // pulls the assigned card up by exactly the banner height so the
-      // body aligns with neighbor bodies, with the banner protruding
-      // above the row.
+      // Bottom-align the row instead of guessing a shift amount. With
+      // align-items: flex-end on the parent, every wrapper sits flush
+      // with the row's bottom edge: neighbor wrappers (shorter, no
+      // banner) get pushed down to match the assigned wrapper's bottom,
+      // and the assigned wrapper's banner naturally lives at the top of
+      // its own wrapper. Body bottoms align without any manual offset.
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
-      assigned.style.setProperty('transform', 'translateY(-' + Math.round(bannerHeight) + 'px)', 'important');
-      // Also lift the parent's overflow so the protruding banner isn't
-      // clipped by an inherited overflow:hidden somewhere above.
-      if (parent) parent.style.setProperty('overflow', 'visible', 'important');
-      // Pad the row's parent (or the row itself) so the banner has room
-      // to render above without overlapping the toolbar.
-      const grandparent = parent && parent.parentElement;
-      if (grandparent) {
-        grandparent.style.setProperty('overflow', 'visible', 'important');
+      assigned.style.removeProperty('transform');
+      if (parent) {
+        if (!parent.hasAttribute(PARENT_ALIGN_ATTR)) {
+          parent.setAttribute(PARENT_ALIGN_ATTR, parent.style.alignItems || '');
+        }
+        parent.style.setProperty('align-items', 'flex-end', 'important');
       }
-      console.log('[Scenario Sort align] applied translateY only. transform=', getComputedStyle(assigned).transform);
+      console.log('[Scenario Sort align] applied parent align-items=flex-end. parent now has alignItems=', parent && getComputedStyle(parent).alignItems);
     } else {
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
       assigned.style.removeProperty('transform');
@@ -279,6 +277,11 @@
       try { original = JSON.parse(el.getAttribute(ASSIGNED_OVERRIDE_ATTR)) || {}; } catch (_) {}
       for (const k of ASSIGNED_OVERRIDE_KEYS) el.style[k] = original[k] || '';
       el.removeAttribute(ASSIGNED_OVERRIDE_ATTR);
+    });
+    document.querySelectorAll('[' + PARENT_ALIGN_ATTR + ']').forEach((el) => {
+      const original = el.getAttribute(PARENT_ALIGN_ATTR);
+      el.style.alignItems = original || '';
+      el.removeAttribute(PARENT_ALIGN_ATTR);
     });
   }
 
