@@ -524,36 +524,38 @@
       if (!parent) { dndLog('drop aborted — target has no parentElement'); return; }
       const sourceParent = draggingWrapper.parentElement;
       const crossParent = sourceParent !== parent;
-      const r = wrapper.getBoundingClientRect();
-      let before = e.clientX < r.left + r.width / 2;
       const movedNode = draggingWrapper;
       const sourceIdx = sourceParent ? Array.from(sourceParent.children).indexOf(movedNode) : -1;
       const targetIdx = Array.from(parent.children).indexOf(wrapper);
-      // Auto-flip the drop side when it would be a no-op for an
-      // adjacent drop. Dragging from idx N onto idx N+1 with side
-      // "before" leaves the dragged element at idx N (unchanged).
-      // Treat that as the user wanting to move PAST the target.
-      const requestedSide = before ? 'before' : 'after';
-      let flipped = false;
-      if (!crossParent) {
-        if (before && sourceIdx < targetIdx && targetIdx === sourceIdx + 1) {
-          before = false; flipped = true;
-        } else if (!before && sourceIdx > targetIdx && targetIdx === sourceIdx - 1) {
-          before = true; flipped = true;
-        }
-      }
       try {
-        if (before) parent.insertBefore(movedNode, wrapper);
-        else parent.insertBefore(movedNode, wrapper.nextSibling);
+        let mode;
+        if (!crossParent && sourceIdx !== -1 && targetIdx !== -1 && sourceIdx !== targetIdx) {
+          // Same-parent drop on another card → SWAP the two cards'
+          // positions. Dropping 6.49 (idx 5) onto 6.75 (idx 7) puts
+          // 6.49 at 6.75's slot and 6.75 at 6.49's old slot, which is
+          // what users expect for "move this card to that card's
+          // position". Plain insert-before/insert-after caused 6.49 and
+          // its right neighbor to look like they swapped instead.
+          mode = 'swap';
+          const targetNextSibling = wrapper.nextSibling === movedNode ? movedNode.nextSibling : wrapper.nextSibling;
+          const sourceNextSibling = movedNode.nextSibling === wrapper ? wrapper.nextSibling : movedNode.nextSibling;
+          parent.insertBefore(wrapper, sourceNextSibling);
+          parent.insertBefore(movedNode, targetNextSibling);
+        } else {
+          // Cross-parent drop (or unknown source idx): fall back to
+          // insert-before / insert-after based on cursor position.
+          mode = 'insert';
+          const r = wrapper.getBoundingClientRect();
+          const before = e.clientX < r.left + r.width / 2;
+          if (before) parent.insertBefore(movedNode, wrapper);
+          else parent.insertBefore(movedNode, wrapper.nextSibling);
+        }
         const idxAfterDrop = Array.from(parent.children).indexOf(movedNode);
-        const noOp = !crossParent && idxAfterDrop === sourceIdx;
-        dndLog('drop OK — moved into', shortDescribe(parent),
-          before ? 'before' : 'after', shortDescribe(wrapper),
-          'requestedSide=' + requestedSide,
-          flipped ? '(auto-flipped to avoid no-op)' : '',
-          'sourceIdx=' + sourceIdx, 'targetIdx=' + targetIdx,
-          'finalIdx=' + idxAfterDrop, 'crossParent=' + crossParent,
-          noOp ? '(STILL NO-OP)' : '');
+        const targetIdxAfter = Array.from(parent.children).indexOf(wrapper);
+        dndLog('drop OK — mode=' + mode,
+          'sourceIdx=' + sourceIdx, '→ finalIdx=' + idxAfterDrop,
+          'targetIdx=' + targetIdx, '→ targetFinalIdx=' + targetIdxAfter,
+          'crossParent=' + crossParent);
         flashStatus('Reordered manually');
         // Re-align the assigned wrapper after a manual reorder — if it
         // was the dragged element OR its position changed in the row,

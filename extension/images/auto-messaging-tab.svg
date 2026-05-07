@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f3f3f3"/>
+
+  <!-- Faux Contact page card with a tab strip -->
+  <rect x="16" y="14" width="328" height="192" rx="6" fill="#ffffff" stroke="#dddbda"/>
+
+  <!-- Tab strip -->
+  <line x1="32" y1="50" x2="328" y2="50" stroke="#dddbda"/>
+
+  <!-- Log Details tab -->
+  <text x="40" y="42" font-size="11" fill="#a8b3c0">Log Details</text>
+
+  <!-- Activity tab (greyed out — no longer the default) -->
+  <text x="115" y="42" font-size="11" fill="#a8b3c0">Activity</text>
+
+  <!-- Messaging tab (selected by extension) -->
+  <text x="170" y="42" font-size="11" font-weight="700" fill="#0070d2">Messaging</text>
+  <line x1="165" y1="50" x2="240" y2="50" stroke="#0070d2" stroke-width="3"/>
+
+  <text x="252" y="42" font-size="11" fill="#a8b3c0">Message History</text>
+
+  <!-- Arrow indicating auto-switch -->
+  <path d="M138 36 Q 160 18 200 36" stroke="#10b981" stroke-width="2" fill="none" stroke-dasharray="3 3"/>
+  <polygon points="196,32 205,36 197,42" fill="#10b981"/>
+  <text x="170" y="22" text-anchor="middle" font-size="9" fill="#10b981" font-weight="700">auto-switch</text>
+
+  <!-- Messaging fake content (SMS thread) -->
+  <g font-size="10" fill="#374151">
+    <text x="32" y="80" font-weight="700" fill="#1f2937">My Threads</text>
+
+    <rect x="32" y="92" width="296" height="36" rx="4" fill="#f9fafb" stroke="#e5e7eb"/>
+    <circle cx="46" cy="110" r="8" fill="#dbeafe"/>
+    <text x="46" y="113" text-anchor="middle" font-size="8" font-weight="700" fill="#1d4ed8">AG</text>
+    <text x="62" y="106" font-size="10" font-weight="700" fill="#111827">Atinatiwos Gebre</text>
+    <text x="62" y="120" font-size="9" fill="#6b7280">Give me a call when you can</text>
+    <text x="320" y="106" text-anchor="end" font-size="8" fill="#9ca3af">SMS</text>
+
+    <rect x="32" y="134" width="296" height="36" rx="4" fill="#f9fafb" stroke="#e5e7eb"/>
+    <circle cx="46" cy="152" r="8" fill="#dcfce7"/>
+    <text x="46" y="155" text-anchor="middle" font-size="8" font-weight="700" fill="#166534">KJ</text>
+    <text x="62" y="148" font-size="10" font-weight="700" fill="#111827">Kelly Jackson</text>
+    <text x="62" y="162" font-size="9" fill="#6b7280">Hey! Happy Friday! Hope you have a&hellip;</text>
+    <text x="320" y="148" text-anchor="end" font-size="8" fill="#9ca3af">SMS</text>
+  </g>
+
+  <text x="180" y="194" text-anchor="middle" font-size="9" fill="#6b7280">runs once per Contact — switch back manually any time</text>
+</svg>
