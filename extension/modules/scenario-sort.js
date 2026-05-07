@@ -50,15 +50,45 @@
     return m ? parseFloat(m[1]) : NaN;
   }
 
-  // Each scenario card lives inside a Spacer-c11n wrapper; all wrappers
-  // for the cards row are siblings of one common parent (a flex row).
-  function getCardWrappers() {
+  // The wrapper depth between StyledCard and the row container varies
+  // (e.g. the assigned card sits in fYkQGX, the rest in fYkQGX ehvoJi).
+  // So instead of assuming a fixed parent, find the deepest ancestor
+  // that ALL scenario cards share — that's the row container — then for
+  // each card walk up until its parent is that row.
+  function getScenarioCardElements() {
     const cards = Array.from(document.querySelectorAll(STYLED_CARD_SELECTOR));
+    return cards.filter(isScenarioCard);
+  }
+
+  function deepestCommonAncestor(elements) {
+    if (elements.length === 0) return null;
+    if (elements.length === 1) return elements[0].parentElement || null;
+    const chains = elements.map((el) => {
+      const chain = [];
+      let cur = el;
+      while (cur && cur !== document.body) {
+        chain.push(cur);
+        cur = cur.parentElement;
+      }
+      return chain;
+    });
+    const sets = chains.slice(1).map((c) => new Set(c));
+    for (const ancestor of chains[0]) {
+      if (sets.every((s) => s.has(ancestor))) return ancestor;
+    }
+    return null;
+  }
+
+  function getCardWrappers() {
+    const cards = getScenarioCardElements();
+    if (cards.length === 0) return [];
+    const row = deepestCommonAncestor(cards);
+    if (!row) return [];
     const wrappers = [];
     for (const card of cards) {
-      if (!isScenarioCard(card)) continue;
-      const w = card.parentElement;
-      if (w) wrappers.push(w);
+      let cur = card;
+      while (cur && cur.parentElement !== row) cur = cur.parentElement;
+      if (cur) wrappers.push(cur);
     }
     return wrappers;
   }
