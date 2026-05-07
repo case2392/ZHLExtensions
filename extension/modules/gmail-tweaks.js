@@ -774,6 +774,12 @@
   const observer = new MutationObserver(() => scan());
   observer.observe(document.documentElement, { childList: true, subtree: true });
   scan();
+  // Heartbeat: catch inline-style flips on .aDj that the childList
+  // observer doesn't see (Gmail's minimize/restore animation flips
+  // position:fixed back without adding/removing nodes). 100ms is a
+  // good balance — fast enough that the user doesn't see the
+  // misplacement flash, cheap enough to run continuously.
+  setInterval(scan, 100);
 })();
 
   }

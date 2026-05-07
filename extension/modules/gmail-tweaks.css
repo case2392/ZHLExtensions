@@ -76,3 +76,20 @@ html[dir] body[class*="dark"] .gm-reply-all-btn {
 .aDg {
   position: relative !important;
 }
+
+/* Compose drag (gmail-tweaks.js): pin the bottom send/formatting toolbar
+   wrapper to the dialog's bottom edge. Our drag uses transform on the
+   role=dialog so it establishes a containing block for fixed children;
+   Gmail otherwise writes a viewport-y `top` on .aDj that briefly leaves
+   the toolbar at viewport bottom-left during minimize → restore. CSS
+   !important applied here wins over Gmail's inline non-!important
+   styles, eliminating the half-second flash before our JS re-syncs. */
+[data-zhl-compose-drag] .aDj,
+[data-zhl-compose-drag] .ahe {
+  position: fixed !important;
+  top: auto !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: auto !important;
+}
