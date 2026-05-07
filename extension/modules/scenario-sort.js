@@ -79,18 +79,26 @@
     return null;
   }
 
+  // For each scenario card, find the LARGEST ancestor that contains
+  // ONLY that card (no other scenario cards). That ancestor is the
+  // per-card "wrapper" — what we move when sorting / dragging. By
+  // construction the wrappers are pairwise disjoint, so they can be
+  // freely reordered as siblings.
+  function findUniqueWrapper(card, allCards) {
+    let cur = card;
+    while (cur.parentElement && cur.parentElement !== document.body) {
+      const parent = cur.parentElement;
+      const containsOther = allCards.some((c) => c !== card && parent.contains(c));
+      if (containsOther) return cur;
+      cur = parent;
+    }
+    return cur;
+  }
+
   function getCardWrappers() {
     const cards = getScenarioCardElements();
     if (cards.length === 0) return [];
-    const row = deepestCommonAncestor(cards);
-    if (!row) return [];
-    const wrappers = [];
-    for (const card of cards) {
-      let cur = card;
-      while (cur && cur.parentElement !== row) cur = cur.parentElement;
-      if (cur) wrappers.push(cur);
-    }
-    return wrappers;
+    return cards.map((card) => findUniqueWrapper(card, cards));
   }
 
   function commonParent(wrappers) {
@@ -104,17 +112,21 @@
   }
 
   function sortByRate(direction) {
-    const wrappers = getCardWrappers();
-    if (wrappers.length < 2) return;
-    const parent = commonParent(wrappers);
-    if (!parent) {
-      console.warn('[Scenario Sort] cards do not share a common parent — aborting');
+    const cards = getScenarioCardElements();
+    if (cards.length < 2) return;
+    const wrappers = cards.map((card) => findUniqueWrapper(card, cards));
+    // Pick the deepest ancestor common to ALL wrappers. After we move
+    // the wrappers there, they're all siblings — sub-containers (like
+    // a separate "ASSIGNED" column or an unassigned-cards group) get
+    // flattened and every card is independently positioned.
+    const target = deepestCommonAncestor(wrappers);
+    if (!target) {
+      console.warn('[Scenario Sort] no common ancestor for the unique wrappers — aborting');
       return;
     }
-    const items = wrappers.map((wrapper) => {
-      const card = wrapper.querySelector(STYLED_CARD_SELECTOR);
-      return { wrapper, rate: parseRate(card) };
-    });
+    const items = wrappers.map((wrapper, i) => ({
+      wrapper, rate: parseRate(cards[i])
+    }));
     items.sort((a, b) => {
       const aBad = !isFinite(a.rate);
       const bBad = !isFinite(b.rate);
@@ -123,7 +135,8 @@
       if (bBad) return -1;
       return direction === 'desc' ? b.rate - a.rate : a.rate - b.rate;
     });
-    for (const item of items) parent.appendChild(item.wrapper);
+    for (const item of items) target.appendChild(item.wrapper);
+    console.log('[Scenario Sort] sorted ' + items.length + ' cards (' + direction + ') into <' + target.tagName.toLowerCase() + '>');
     flashStatus('Sorted by rate (' + (direction === 'desc' ? 'high → low' : 'low → high') + ')');
   }
 
