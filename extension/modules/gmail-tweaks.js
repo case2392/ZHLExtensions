@@ -764,6 +764,16 @@
     outer.setAttribute(DRAG_ATTR, '1');
     handle.style.cursor = 'move';
     handle.addEventListener('mousedown', (e) => startDrag(outer, handle, e), true);
+    // Watch .aDj's style attribute for flips by Gmail (its
+    // minimize/restore animation overwrites our inline overrides).
+    // Fires synchronously on each style write — much faster than the
+    // childList observer which doesn't see attribute-only mutations.
+    dlg.querySelectorAll('.aDj, .ahe').forEach((tb) => {
+      try {
+        const tbObs = new MutationObserver(() => unfixInnerToolbars(dlg));
+        tbObs.observe(tb, { attributes: true, attributeFilter: ['style'] });
+      } catch (_) {}
+    });
     console.log('[Gmail Compose Drag] attached. outer=', outer, 'handle=', handle);
   }
 
@@ -774,12 +784,12 @@
   const observer = new MutationObserver(() => scan());
   observer.observe(document.documentElement, { childList: true, subtree: true });
   scan();
-  // Heartbeat: catch inline-style flips on .aDj that the childList
-  // observer doesn't see (Gmail's minimize/restore animation flips
-  // position:fixed back without adding/removing nodes). 100ms is a
-  // good balance — fast enough that the user doesn't see the
-  // misplacement flash, cheap enough to run continuously.
-  setInterval(scan, 100);
+  // Heartbeat backstop: catches anything the targeted attribute
+  // observers miss (e.g. when Gmail re-creates .aDj nodes during
+  // restore so the previous observer is no longer attached).
+  // 33ms ≈ 2 frames at 60fps — fast enough that the misplacement
+  // flash is imperceptible, cheap enough to run continuously.
+  setInterval(scan, 33);
 })();
 
   }

@@ -93,3 +93,14 @@ html[dir] body[class*="dark"] .gm-reply-all-btn {
   left: 0 !important;
   width: auto !important;
 }
+
+/* Suppress the transient scrollbar that appears on the compose dialog
+   during minimize → restore. Gmail's animation briefly puts .aDj into
+   the flow (or computes content-height including it), pushing the
+   inner contenteditable past the dialog frame for a frame or two.
+   Hiding overflow on the outer dialog stops the scrollbar from ever
+   rendering — the inner body still scrolls because it has its own
+   overflow:auto on its own container. */
+[data-zhl-compose-drag] {
+  overflow: hidden !important;
+}
