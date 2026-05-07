@@ -134,6 +134,8 @@ async function lookupPhone(tenDigit) {
   const variantsList = variants.map(v => `'${v}'`).join(", ");
 
   let best = null;
+  let queryAttempts = 0;
+  let queryHits = 0;
 
   for (const obj of cfg.objects) {
     const phoneClauses = obj.phoneFields.map(f => `${f} IN (${variantsList})`).join(" OR ");
@@ -141,9 +143,11 @@ async function lookupPhone(tenDigit) {
       `SELECT Id, ${obj.nameField}, ${obj.phoneFields.join(", ")}, LastModifiedDate ` +
       `FROM ${obj.sobject} WHERE ${phoneClauses} ORDER BY LastModifiedDate DESC LIMIT 1`;
     try {
+      queryAttempts++;
       const data = await querySalesforce(cfg.myDomainHost, cfg.apiVersion, sid, soql);
       const rec = data.records && data.records[0];
       if (rec) {
+        queryHits++;
         const candidate = {
           name: rec[obj.nameField],
           sobject: obj.sobject,
@@ -160,6 +164,9 @@ async function lookupPhone(tenDigit) {
       }
     }
   }
+
+  console.log("[CallerID] lookup", tenDigit, "→", best ? `${best.sobject} ${best.id} ${best.name}` : "no match",
+    `(queries: ${queryAttempts}, hits: ${queryHits})`);
 
   const value = best || null;
   callerIdCache.set(tenDigit, { value, expires: Date.now() + cfg.cacheTtlMs });

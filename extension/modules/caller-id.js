@@ -85,6 +85,7 @@
     }
     const p = new Promise((resolve) => {
       try {
+        console.log("[CallerID] lookup →", phone);
         chrome.runtime.sendMessage({ type: "LOOKUP_PHONE", phone }, (resp) => {
           const lastErr = chrome.runtime && chrome.runtime.lastError;
           if (lastErr) {
@@ -95,8 +96,14 @@
           }
           if (!resp || !resp.ok) {
             if (resp && resp.error) console.warn("[CallerID] lookup error:", resp.error);
+            else console.warn("[CallerID] lookup got no ok response for", phone, resp);
             resolve(null);
             return;
+          }
+          if (resp.match) {
+            console.log("[CallerID] match for", phone, "→", resp.match.sobject, resp.match.id, resp.match.name);
+          } else {
+            console.log("[CallerID] no match for", phone);
           }
           resolve(resp.match || null);
         });
