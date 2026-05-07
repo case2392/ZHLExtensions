@@ -198,11 +198,31 @@
     assigned.style.flexShrink = '0';
     assigned.style.marginLeft = refCs.marginLeft;
     assigned.style.marginRight = refCs.marginRight;
-    assigned.style.marginTop = refCs.marginTop;
     assigned.style.marginBottom = refCs.marginBottom;
     assigned.style.boxSizing = refCs.boxSizing;
     if (refCs.display && refCs.display !== 'block') {
       assigned.style.display = refCs.display;
+    }
+
+    // The assigned wrapper has the green ASSIGNED TO LOAN banner above
+    // its card body; neighbor wrappers don't. In the new grid, both line
+    // up at the row top — pushing the assigned card body below the
+    // neighbor bodies by the banner's height. Measure the gap between
+    // the assigned wrapper's top and its inner StyledCard's top, then
+    // apply a negative margin-top so the card body aligns with neighbor
+    // bodies and the banner protrudes above the row, matching the
+    // original section look.
+    const card = assigned.querySelector(STYLED_CARD_SELECTOR);
+    let offsetAbove = 0;
+    if (card) {
+      const cardRect = card.getBoundingClientRect();
+      const wrapperRect = assigned.getBoundingClientRect();
+      offsetAbove = cardRect.top - wrapperRect.top;
+    }
+    if (offsetAbove > 1) {
+      assigned.style.marginTop = '-' + Math.round(offsetAbove) + 'px';
+    } else {
+      assigned.style.marginTop = refCs.marginTop;
     }
   }
 
@@ -383,21 +403,41 @@
 
   let draggingWrapper = null;
 
+  function dndLog() {
+    const args = Array.prototype.slice.call(arguments);
+    console.log.apply(console, ['[Scenario Sort DnD]'].concat(args));
+  }
+
+  function shortDescribe(el) {
+    if (!el) return 'null';
+    const tag = el.tagName ? el.tagName.toLowerCase() : '?';
+    const cls = el.getAttribute && el.getAttribute('class');
+    const txt = (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    return '<' + tag + (cls ? ' class="' + String(cls).slice(0, 50) + '"' : '') + '> "' + txt + '"';
+  }
+
   function enableDragAndDrop(wrapper) {
     if (wrapper.hasAttribute('data-zhl-dnd')) return;
     wrapper.setAttribute('data-zhl-dnd', '1');
     wrapper.setAttribute('draggable', 'true');
     wrapper.style.cursor = 'grab';
+    dndLog('attached handlers to', shortDescribe(wrapper), '(draggable=true)');
 
     wrapper.addEventListener('dragstart', (e) => {
       captureOriginalIfNeeded();
       draggingWrapper = wrapper;
       wrapper.classList.add(DRAGGING_CLASS);
       wrapper.style.opacity = '0.55';
-      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'zhl'); }
-      catch (_) {}
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'zhl');
+        dndLog('dragstart OK on', shortDescribe(wrapper));
+      } catch (err) {
+        dndLog('dragstart dataTransfer error:', err);
+      }
     });
-    wrapper.addEventListener('dragend', () => {
+    wrapper.addEventListener('dragend', (e) => {
+      dndLog('dragend on', shortDescribe(wrapper), 'dropEffect=', e && e.dataTransfer && e.dataTransfer.dropEffect);
       draggingWrapper = null;
       wrapper.classList.remove(DRAGGING_CLASS);
       wrapper.style.opacity = '';
@@ -408,7 +448,8 @@
       });
     });
     wrapper.addEventListener('dragover', (e) => {
-      if (!draggingWrapper || draggingWrapper === wrapper) return;
+      if (!draggingWrapper) { dndLog('dragover ignored — no draggingWrapper'); return; }
+      if (draggingWrapper === wrapper) return;
       e.preventDefault();
       try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
       wrapper.classList.add(DROP_TARGET_CLASS);
@@ -426,19 +467,38 @@
       wrapper.classList.remove(DROP_TARGET_CLASS);
       wrapper.style.outline = '';
       wrapper.style.outlineOffset = '';
-      if (!draggingWrapper || draggingWrapper === wrapper) return;
+      dndLog('drop fired. dragging=', shortDescribe(draggingWrapper), 'target=', shortDescribe(wrapper));
+      if (!draggingWrapper) { dndLog('drop aborted — no draggingWrapper'); return; }
+      if (draggingWrapper === wrapper) { dndLog('drop aborted — dropped on self'); return; }
       const parent = wrapper.parentElement;
-      if (!parent) return;
-      // Allow cross-parent drops — the assigned card lives in a different
-      // sub-container than the unassigned cards; without this gate the
-      // dragged card would silently fail to move into the target's row.
+      if (!parent) { dndLog('drop aborted — target has no parentElement'); return; }
+      const sourceParent = draggingWrapper.parentElement;
+      const crossParent = sourceParent !== parent;
       const r = wrapper.getBoundingClientRect();
       const before = e.clientX < r.left + r.width / 2;
-      if (before) parent.insertBefore(draggingWrapper, wrapper);
-      else parent.insertBefore(draggingWrapper, wrapper.nextSibling);
-      flashStatus('Reordered manually');
+      try {
+        if (before) parent.insertBefore(draggingWrapper, wrapper);
+        else parent.insertBefore(draggingWrapper, wrapper.nextSibling);
+        dndLog('drop OK — moved into', shortDescribe(parent), before ? 'before' : 'after', shortDescribe(wrapper), 'crossParent=' + crossParent);
+        flashStatus('Reordered manually');
+      } catch (err) {
+        dndLog('drop insertBefore error:', err);
+      }
     });
   }
+
+  // The page may steal drag events at the document level (preventing the
+  // browser from firing dragstart/drop on our wrappers). Listen at the
+  // document level too so we can see whether events ARE happening, even
+  // if our per-wrapper handlers don't fire. Only logs when over a card.
+  document.addEventListener('dragstart', (e) => {
+    const w = e.target && e.target.closest && e.target.closest('[data-zhl-dnd]');
+    if (w) dndLog('document-level dragstart, default prevented?', e.defaultPrevented, 'on', shortDescribe(w));
+  }, true);
+  document.addEventListener('drop', (e) => {
+    const w = e.target && e.target.closest && e.target.closest('[data-zhl-dnd]');
+    if (w) dndLog('document-level drop, default prevented?', e.defaultPrevented, 'on', shortDescribe(w));
+  }, true);
 
   // ---- Lifecycle ------------------------------------------------------
 
