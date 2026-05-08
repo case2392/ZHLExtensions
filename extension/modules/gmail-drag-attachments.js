@@ -21,7 +21,26 @@
   // URL-keyed cache survives Gmail's chip re-renders. The same
   // attachment URL gives us the same File object regardless of which
   // DOM element is hosting the chip at the moment.
-  const fileCache = new Map(); // url -> { state, file, info, promise }
+  const fileCache = new Map(); // url -> { state, file, info, promise, b64 }
+
+  // Cross-tab cap. base64 inflates by ~33% and chrome.runtime.sendMessage
+  // is JSON-serialized in MV3, so very large attachments would blow past
+  // Chrome's IPC message size limit. Phase 2 (drop on Gmail compose body)
+  // is in-process and works regardless of size.
+  const CROSS_TAB_MAX_BYTES = 25 * 1024 * 1024;
+
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      const r = new FileReader();
+      r.onload = function () {
+        const s = String(r.result || '');
+        const i = s.indexOf(',');
+        resolve(i >= 0 ? s.slice(i + 1) : s);
+      };
+      r.onerror = function () { reject(r.error || new Error('read error')); };
+      r.readAsDataURL(blob);
+    });
+  }
 
   // Module-scope drag state. Chrome strips JavaScript-constructed Files
   // from dataTransfer.files at drop time (a security restriction —
@@ -83,6 +102,19 @@
         entry.state = 'ready';
         repaintAllBadgesForUrl(info.url);
         console.log('[Gmail Drag Attach] cached', filename, '(' + blob.size + ' bytes)');
+        // Eagerly base64-encode for cross-tab drops. Skipped for files
+        // bigger than the cap — those still work in-Gmail (Phase 2) but
+        // cross-tab drag will fall back to native (which Chrome strips,
+        // i.e. no-op) and print a warning at dragstart.
+        if (blob.size <= CROSS_TAB_MAX_BYTES) {
+          blobToBase64(blob).then(function (b64) {
+            entry.b64 = b64;
+          }).catch(function (err) {
+            console.warn('[Gmail Drag Attach] base64 encode failed:', err);
+          });
+        } else {
+          entry.tooBigForCrossTab = true;
+        }
       })
       .catch(function (err) {
         entry.state = 'error';
@@ -166,6 +198,42 @@
       try { e.dataTransfer.effectAllowed = 'copy'; } catch (_) {}
       console.log('[Gmail Drag Attach] dragstart: tracking ' + entry.file.name +
         ' (' + entry.file.size + ' bytes)');
+      // Cross-tab handoff: stash the bytes in the service worker so a
+      // listener on LOP (or any other host with a receiver content
+      // script) can reconstruct the File and inject on drop. b64 is
+      // only populated for files within the cross-tab size cap.
+      if (entry.b64) {
+        try {
+          chrome.runtime.sendMessage({
+            type: 'GMAIL_DRAG_START',
+            name: entry.file.name,
+            mime: entry.file.type,
+            size: entry.file.size,
+            b64: entry.b64
+          });
+        } catch (_) {}
+      } else if (entry.tooBigForCrossTab) {
+        console.warn('[Gmail Drag Attach] file > ' +
+          (CROSS_TAB_MAX_BYTES / 1024 / 1024) +
+          'MB — cross-tab drag disabled, in-Gmail drop still works');
+      }
+      // If b64 isn't ready yet (still encoding), kick it off so the
+      // user gets cross-tab support on a slight delay.
+      if (!entry.b64 && !entry.tooBigForCrossTab) {
+        const blob = entry.file;
+        blobToBase64(blob).then(function (b64) {
+          entry.b64 = b64;
+          try {
+            chrome.runtime.sendMessage({
+              type: 'GMAIL_DRAG_START',
+              name: entry.file.name,
+              mime: entry.file.type,
+              size: entry.file.size,
+              b64: b64
+            });
+          } catch (_) {}
+        }).catch(function () {});
+      }
       e.stopPropagation();
       e.stopImmediatePropagation();
     } catch (err) {
@@ -253,6 +321,7 @@
   // chance to read activeDragFile first.
   window.addEventListener('dragend', function (e) {
     setTimeout(function () { activeDragFile = null; activeDragInfo = null; }, 100);
+    try { chrome.runtime.sendMessage({ type: 'GMAIL_DRAG_END' }); } catch (_) {}
     try {
       const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
       const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;

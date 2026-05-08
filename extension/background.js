@@ -376,6 +376,55 @@ setInterval(flushTelemetry, TELEMETRY_FLUSH_MS);
 // don't sit around for 30 seconds before being sent.
 setTimeout(flushTelemetry, 5 * 1000);
 
+// -------------------------------------------------------------------------
+// Cross-tab Gmail attachment drag (feature_gmailDragAttachments — Phase 1)
+// -------------------------------------------------------------------------
+//
+// Dragging from a Gmail tab to a different tab (e.g. LOP) loses the JS-
+// constructed File: Chrome strips it from dataTransfer.files at drop, and
+// the destination tab's drag events have no shared dataTransfer with the
+// source. Workaround: cache the file's bytes here in the SW for the brief
+// window between dragstart and dragend, and let the destination tab pull
+// them on drop.
+//
+// Encoded as base64 because chrome.runtime.sendMessage JSON-serializes
+// — Blob/ArrayBuffer don't survive structured clone over the message
+// channel in MV3. Capped at 25MB on the source side; base64 inflates to
+// ~33MB which fits comfortably within Chrome's IPC message size limit.
+let activeGmailDrag = null;
+const GMAIL_DRAG_TTL_MS = 60 * 1000;
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === "GMAIL_DRAG_START") {
+    activeGmailDrag = {
+      name: String(msg.name || "attachment"),
+      mime: String(msg.mime || "application/octet-stream"),
+      size: Number(msg.size || 0),
+      b64: String(msg.b64 || ""),
+      expires: Date.now() + GMAIL_DRAG_TTL_MS
+    };
+    console.log("[ZHL Pack] cached cross-tab drag:", activeGmailDrag.name, activeGmailDrag.size, "bytes");
+    sendResponse({ ok: true });
+    return false;
+  }
+  if (msg && msg.type === "GMAIL_DRAG_END") {
+    // Small grace period so a drop that fires fractionally after dragend
+    // still finds the file. The TTL also serves as a backstop.
+    setTimeout(() => { activeGmailDrag = null; }, 500);
+    sendResponse({ ok: true });
+    return false;
+  }
+  if (msg && msg.type === "GET_GMAIL_DRAG_FILE") {
+    if (!activeGmailDrag || activeGmailDrag.expires < Date.now()) {
+      sendResponse({ ok: true, file: null });
+      return false;
+    }
+    sendResponse({ ok: true, file: activeGmailDrag });
+    return false;
+  }
+  return undefined;
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "LOOKUP_PHONE") {
     const ten = normalizePhone(msg.phone);
