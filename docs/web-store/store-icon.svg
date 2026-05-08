@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background gradient (deeper blue, more dimensional than the flat toolbar icon) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d6fff"/>
+      <stop offset="1" stop-color="#0046d4"/>
+    </linearGradient>
+    <linearGradient id="topcap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4d94ff"/>
+      <stop offset="1" stop-color="#2a7eff"/>
+    </linearGradient>
+    <linearGradient id="zfill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e6f0ff"/>
+    </linearGradient>
+    <radialGradient id="hl" cx="0.3" cy="0.2" r="0.7">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="zshadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.5"/>
+      <feOffset dx="0" dy="2" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Safe zone is 96x96 centered (16px padding all around). All visual
+       elements stay inside that box so the icon doesn't get cropped at
+       small sizes in the Web Store. -->
+
+  <!-- Rounded square base -->
+  <rect x="8" y="8" width="112" height="112" rx="22" fill="url(#bg)"/>
+
+  <!-- Top cap (lighter strip across the top, matches the existing icon) -->
+  <path d="M 8 30 Q 8 8 30 8 L 98 8 Q 120 8 120 30 L 120 38 L 8 38 Z" fill="url(#topcap)" opacity="0.95"/>
+
+  <!-- Subtle inner highlight in the upper-left -->
+  <rect x="8" y="8" width="112" height="112" rx="22" fill="url(#hl)"/>
+
+  <!-- Big bold Z (the wordmark) -->
+  <g filter="url(#zshadow)">
+    <path d="M 36 50
+             L 92 50
+             L 92 60
+             L 56 90
+             L 92 90
+             L 92 100
+             L 36 100
+             L 36 90
+             L 72 60
+             L 36 60
+             Z" fill="url(#zfill)"/>
+  </g>
+
+  <!-- Spark accent in the corner — signals 'productivity pack' / boost. -->
+  <g transform="translate(96, 26)">
+    <circle r="13" fill="#ffd84d" stroke="#ffb800" stroke-width="1"/>
+    <!-- Lightning bolt -->
+    <path d="M -2 -7 L 3 -1 L -1 -1 L 2 7 L -3 1 L 1 1 Z" fill="#7a4f00" stroke="#7a4f00" stroke-width="0.5" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Subtle bottom shadow (gives the rounded square a hint of lift) -->
+  <rect x="8" y="115" width="112" height="5" rx="3" fill="#000000" opacity="0.12"/>
+</svg>
