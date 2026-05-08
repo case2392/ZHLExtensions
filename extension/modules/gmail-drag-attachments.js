@@ -241,6 +241,19 @@
     }
   }, true);
 
+  // dragend fires after drop. Logging here tells us whether the
+  // dataTransfer contents we set in dragstart actually persist for
+  // the entire drag, or whether something is stripping them between
+  // dragstart and drop.
+  window.addEventListener('dragend', function (e) {
+    try {
+      const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
+      const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
+      console.log('[Gmail Drag Attach] dragend — types=', types, 'files.length=', filesLen,
+        'dropEffect=', e.dataTransfer && e.dataTransfer.dropEffect);
+    } catch (_) {}
+  }, true);
+
   // ---- Eager-prefetch + paint, deduped per chip wrapper -------------
   // Gmail re-uses the same download_url across multiple inner
   // elements (visible chip + invisible siblings for accessibility/
@@ -268,8 +281,18 @@
       if (entry) paintBadge(draggable, entry.state);
     });
   }
-  setInterval(scanAndPrefetch, 3000);
-  scanAndPrefetch();
+  function startScanLoop() {
+    setInterval(scanAndPrefetch, 3000);
+    scanAndPrefetch();
+  }
+  // We run at document_start so the window event listeners register
+  // before Gmail's app code does. DOM scanning has to wait for the
+  // page to be ready though.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startScanLoop, { once: true });
+  } else {
+    startScanLoop();
+  }
 
 })();
   }
