@@ -14,7 +14,6 @@ const FEATURE_KEYS = [
   "feature_autoCallDetailsTab",
   "feature_autoMessagingTab",
   "feature_scenarioSort",
-  "feature_sfGmail",
   "feature_telemetry"
 ];
 

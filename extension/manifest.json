@@ -2,25 +2,14 @@
   "manifest_version": 3,
   "name": "ZHL Productivity Pack",
   "short_name": "ZHL Pack",
-  "version": "1.9.0",
-  "description": "Productivity helpers for Zillow Home Loans staff: VA Calc, 2-1 Buydown, Caller ID, SMS shortcuts, VPA email, and Gmail tweaks.",
+  "version": "1.8.2",
+  "description": "Productivity helpers for Zillow Home Loans staff: VA Calc, 2-1 Buydown, Caller ID, SMS shortcuts, and Gmail tweaks.",
   "author": "Justin Case",
   "homepage_url": "https://github.com/case2392/zhlextensions",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1fmSctRYfMrCkAq59A2zE8417/8R57bIyYX7hIt+m0jx9PhGBVicLyr98V57JmkmZjbHyeHHcnfsEL0y1UIXsYlxMu9NIfnN3rGqsvyYrV7T8Bol18E73Bdywbwg8xr/QmRa9U2o2bDmcwWgkfXhIJQxHTuHedxQpZyV6/iLSc5s2w4TMjfZO+T1nnTZXprErFIX2U8BP0aUioSK18A1McFrZ92QF9qlwnY//MHY486ePZDsxGGTg5pli+hEKkIuGTAP3pYka+ndVpM+zE6F2FZFaocjqPXtv/KBsdMYiuF8s7L064L4Rc/KFjcnzxJxqz//9FT7u3qbylLYeewyFwIDAQAB",
-  "oauth2": {
-    "client_id": "1011825810028-avqrc6uicjtsm313eqad5ip58r7a31fq.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/gmail.compose",
-      "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/drive.readonly"
-    ]
-  },
   "permissions": [
     "storage",
     "cookies",
-    "scripting",
-    "identity",
-    "activeTab"
+    "scripting"
   ],
   "host_permissions": [
     "https://mail.google.com/*",
@@ -43,8 +32,7 @@
     "https://*.mypurecloud.jp/*",
     "https://*.pure.cloud/*",
     "https://script.google.com/*",
-    "https://script.googleusercontent.com/*",
-    "https://www.googleapis.com/*"
+    "https://script.googleusercontent.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -162,15 +150,6 @@
       "js": ["modules/caller-id.js"],
       "run_at": "document_idle",
       "all_frames": true
-    },
-    {
-      "matches": [
-        "https://*.salesforce.com/*",
-        "https://*.lightning.force.com/*"
-      ],
-      "js": ["modules/sfgmail.js"],
-      "css": ["modules/sfgmail.css"],
-      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
