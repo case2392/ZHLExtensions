@@ -103,18 +103,22 @@ html[dir] body[class*="dark"] .gm-reply-all-btn {
    Letting the scrollbar flicker during the animation is a much
    smaller UX hit than permanently hiding attachments. */
 
-/* Reserve space at the dialog's bottom for our position:fixed
-   toolbar. Without our drag mode, Gmail's own layout reserves this
-   space — but our `position: fixed` override pulls the toolbar out
-   of flow, so the compose body (and the .GM attachment row at the
-   bottom of it) extends down behind the toolbar. The toolbar's
-   computed height is ~60px; padding-bottom on the dialog shrinks
-   the content area by exactly that amount, which pushes the
-   attachment row above the toolbar. The toolbar itself remains
-   pinned to the dialog's border-edge bottom (position:fixed +
-   bottom:0 against the dialog's containing block, unaffected by
-   padding) so visually nothing else moves. */
-[data-zhl-compose-drag] [role="dialog"] {
-  padding-bottom: 60px !important;
-  box-sizing: border-box !important;
+/* Push the absolutely-positioned attachment container (.bv8) up by
+   the toolbar's height so its chips no longer sit behind the
+   toolbar.
+
+   Background: stock Gmail's layout puts .bv8 anchored to .GP's
+   bottom edge with an offset that clears the toolbar — but in our
+   drag mode .GP's bottom edge effectively coincides with the
+   toolbar's top, so .bv8 (h=99–185 depending on chip count) ends up
+   straddling the toolbar. Padding-bottom on the dialog had no
+   effect because .bv8 is position:absolute and escapes the dialog's
+   flow.
+
+   translateY(-60px) shifts .bv8 visually upward by exactly the
+   toolbar height. The chip rect's bottom edge (y=1486 in the
+   diagnostic) becomes y=1426, ~24px above the toolbar's top
+   (y=1450) — same gap stock Gmail leaves above its toolbar. */
+[data-zhl-compose-drag] .bv8 {
+  transform: translateY(-60px) !important;
 }

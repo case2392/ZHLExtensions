@@ -795,6 +795,16 @@
       }
       chain.forEach((c, i) => console.log('  chain[' + i + ']', c.tag + '.' + c.cls,
         'h=' + c.height, 'pos=' + c.position, 'overflow=' + c.overflow));
+      // Extra: dump .bv8 (the absolute attachment container) computed offsets.
+      const bv8 = dlg.querySelector('.bv8');
+      if (bv8) {
+        const cs = getComputedStyle(bv8);
+        const r = bv8.getBoundingClientRect();
+        console.log('  .bv8 computed: top=' + cs.top + ' bottom=' + cs.bottom
+          + ' left=' + cs.left + ' right=' + cs.right
+          + ' transform=' + cs.transform
+          + ' rect=' + JSON.stringify({ t: Math.round(r.top), b: Math.round(r.bottom), h: Math.round(r.height) }));
+      }
     }
     console.groupEnd();
   }
