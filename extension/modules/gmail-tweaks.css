@@ -94,31 +94,11 @@ html[dir] body[class*="dark"] .gm-reply-all-btn {
   width: auto !important;
 }
 
-/* Suppress the transient scrollbar that appears on the compose dialog
-   during minimize → restore. Gmail's animation briefly puts .aDj into
-   the flow (or computes content-height including it), pushing the
-   inner contenteditable past the dialog frame for a frame or two.
-   Hiding overflow on the outer dialog stops the scrollbar from ever
-   rendering — the inner body still scrolls because it has its own
-   overflow:auto on its own container. */
-[data-zhl-compose-drag] {
-  overflow: hidden !important;
-}
-
-/* The transient scrollbar isn't on the role=dialog itself but on one
-   of Gmail's nested body wrappers (.aoI / .GP / .qz / .aoP / .I5).
-   Hide overflow on those during compose so a brief mismatch between
-   inner content height and wrapper height during restore can't show
-   a scrollbar. We deliberately do NOT target .Am / [contenteditable]
-   so the editable body still scrolls normally when the user types
-   more than fits. */
-[data-zhl-compose-drag] .aoI,
-[data-zhl-compose-drag] .aoP,
-[data-zhl-compose-drag] .GP,
-[data-zhl-compose-drag] .qz,
-[data-zhl-compose-drag] .I5,
-[data-zhl-compose-drag] .HE,
-[data-zhl-compose-drag] .nH.Hd,
-[data-zhl-compose-drag] .M9 {
-  overflow: hidden !important;
-}
+/* (Removed.) An earlier version of this stylesheet hid overflow on
+   the outer dialog and a handful of inner wrappers (.GP, .qz, etc.)
+   to suppress a brief scrollbar that appeared during the minimize →
+   restore animation. That had a worse side effect: the attachment
+   row that Gmail inserts between the body and the toolbar was being
+   clipped, so attachments looked invisible under the toolbar.
+   Letting the scrollbar flicker during the animation is a much
+   smaller UX hit than permanently hiding attachments. */
