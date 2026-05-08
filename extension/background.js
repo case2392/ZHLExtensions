@@ -242,31 +242,67 @@ setInterval(tryCaptureSalesforceIdentity, 30 * 60 * 1000);
 
 // Used by the SMS Quick-Add Participants module: given a Salesforce
 // Contact id, return that contact's Phone / MobilePhone via the same
-// REST plumbing the Caller ID lookup uses.
+// REST plumbing the Caller ID lookup uses. Falls back to Lead because
+// in ZHL's schema the Lead's Co-Borrower lookup field can point to
+// either a Contact or a Lead — the link in the UI looks the same and
+// our regex on /lightning/r/Contact/<id>/ already filters to Contact-
+// shaped URLs, but if the SOQL Contact query comes back empty (which
+// happens when the id is actually a Lead id with the same prefix
+// pattern, or when a Contact exists but its Phone+Mobile are both
+// empty) we try Lead before giving up.
 async function lookupContactPhone(contactId) {
   const safeId = String(contactId || "").replace(/[^a-zA-Z0-9]/g, "");
   if (safeId.length !== 15 && safeId.length !== 18) {
-    return { error: "Invalid Salesforce Contact id" };
+    return { error: "Invalid Salesforce id (expected 15 or 18 chars)" };
   }
   const cfg = await getCallerIdConfig();
   const sid = await getSessionId(cfg.myDomainHost);
   if (!sid) {
     return { error: "No Salesforce session. Log into Salesforce in this browser." };
   }
-  const soql = `SELECT Id, Name, Phone, MobilePhone FROM Contact WHERE Id = '${safeId}' LIMIT 1`;
-  try {
-    const data = await querySalesforce(cfg.myDomainHost, cfg.apiVersion, sid, soql);
-    const rec = data.records && data.records[0];
-    if (!rec) return { error: "Contact not found" };
-    return {
-      id: rec.Id,
-      name: rec.Name,
-      phone: rec.Phone || null,
-      mobilePhone: rec.MobilePhone || null
-    };
-  } catch (e) {
-    return { error: String(e.message || e) };
+
+  async function tryObject(sobject) {
+    const soql = `SELECT Id, Name, Phone, MobilePhone FROM ${sobject} WHERE Id = '${safeId}' LIMIT 1`;
+    try {
+      const data = await querySalesforce(cfg.myDomainHost, cfg.apiVersion, sid, soql);
+      const rec = data.records && data.records[0];
+      if (!rec) return null;
+      return {
+        sobject,
+        id: rec.Id,
+        name: rec.Name,
+        phone: rec.Phone || null,
+        mobilePhone: rec.MobilePhone || null
+      };
+    } catch (e) {
+      return { __error: String(e.message || e) };
+    }
   }
+
+  // Try Contact first (most common), then Lead.
+  let result = await tryObject("Contact");
+  if (result && result.__error && !/INVALID_TYPE|MALFORMED_ID|NOT_FOUND/i.test(result.__error)) {
+    return { error: result.__error };
+  }
+  if (!result || result.__error) {
+    result = await tryObject("Lead");
+  }
+  if (!result || result.__error) {
+    return { error: "Record not found in Contact or Lead" };
+  }
+  if (!result.phone && !result.mobilePhone) {
+    return {
+      error: `Found ${result.sobject} "${result.name}" but it has no Phone or MobilePhone`,
+      id: result.id, name: result.name, phone: null, mobilePhone: null, sobject: result.sobject
+    };
+  }
+  return {
+    id: result.id,
+    name: result.name,
+    phone: result.phone,
+    mobilePhone: result.mobilePhone,
+    sobject: result.sobject
+  };
 }
 
 // -------------------------------------------------------------------------

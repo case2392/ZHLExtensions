@@ -328,22 +328,31 @@
 
   // ---- Co-Borrower phone lookup via background worker -------------------
 
+  // Returns either a digits-only phone string, or an object
+  // { error: "..." } so the caller can show a specific reason.
   function fetchContactPhone(contactId) {
     return new Promise((resolve) => {
       try {
         if (!chrome || !chrome.runtime || !chrome.runtime.id) {
-          resolve(null);
+          resolve({ error: 'Extension context not available — reload the page.' });
           return;
         }
         chrome.runtime.sendMessage({ type: 'GET_CONTACT_PHONE', contactId }, (resp) => {
-          if (chrome.runtime.lastError) { resolve(null); return; }
-          if (!resp || !resp.ok) { resolve(null); return; }
+          if (chrome.runtime.lastError) {
+            resolve({ error: chrome.runtime.lastError.message || 'Background worker unreachable' });
+            return;
+          }
+          if (!resp) { resolve({ error: 'No response from background worker' }); return; }
+          if (resp.error) { resolve({ error: resp.error }); return; }
           const phone = resp.mobilePhone || resp.phone;
-          if (!phone) { resolve(null); return; }
+          if (!phone) {
+            resolve({ error: `Found ${resp.sobject || 'record'} "${resp.name || contactId}" but Phone and Mobile are both empty in Salesforce.` });
+            return;
+          }
           resolve(String(phone).replace(/\D/g, ''));
         });
-      } catch (_) {
-        resolve(null);
+      } catch (e) {
+        resolve({ error: String(e && e.message || e) });
       }
     });
   }
@@ -415,15 +424,18 @@
         // background Salesforce API). Fall back to the Lead's
         // "Buyer's Agent Phone" field if the API doesn't return one.
         let phoneToUse = null;
+        let lookupError = null;
         if (contactId) {
           b.textContent = 'Looking up mobile…';
-          phoneToUse = await fetchContactPhone(contactId);
+          const lookup = await fetchContactPhone(contactId);
+          if (typeof lookup === 'string') phoneToUse = lookup;
+          else if (lookup && lookup.error) lookupError = lookup.error;
         }
         if (!phoneToUse) phoneToUse = fallbackPhone;
         if (!phoneToUse) {
           b.textContent = orig;
           b.disabled = false;
-          alert('Could not find a phone number for the Buyer’s Agent.');
+          alert('Could not find a phone number for the Buyer’s Agent.' + (lookupError ? '\n\n' + lookupError : ''));
           return;
         }
         b.textContent = 'Adding…';
@@ -443,11 +455,13 @@
         const orig = b.textContent;
         b.disabled = true;
         b.textContent = 'Looking up phone…';
-        const phone = await fetchContactPhone(id);
+        const lookup = await fetchContactPhone(id);
+        const phone = typeof lookup === 'string' ? lookup : null;
         if (!phone) {
           b.textContent = orig;
           b.disabled = false;
-          alert('Could not find a phone number for the Co-Borrower in Salesforce.');
+          const reason = lookup && lookup.error ? lookup.error : 'No phone returned.';
+          alert('Could not find a phone number for the Co-Borrower in Salesforce.\n\n' + reason);
           return;
         }
         b.textContent = 'Adding…';
