@@ -122,8 +122,12 @@ async function querySalesforce(host, apiVersion, sid, soql) {
   return res.json();
 }
 
-async function lookupPhone(tenDigit) {
+async function lookupPhone(tenDigit, senderInfo) {
   const cached = callerIdCache.get(tenDigit);
+  // Cache hit: return immediately AND don't fire telemetry. The
+  // telemetry only fires when we actually query Salesforce, which
+  // gives us 5-minute deduplication (the cache TTL) per phone number
+  // — way better than the per-60s content-script dedup we had before.
   if (cached && cached.expires > Date.now()) return cached.value;
   const cfg = await getCallerIdConfig();
   const sid = await getSessionId(cfg.myDomainHost);
@@ -169,10 +173,71 @@ async function lookupPhone(tenDigit) {
   console.log("[CallerID] lookup", tenDigit, "→", best ? `${best.sobject} ${best.id} ${best.name}` : "no match",
     `(queries: ${queryAttempts}, hits: ${queryHits})`);
 
+  // Telemetry: only fires on a real Salesforce query, not on cache
+  // hits. Includes the page hostname so we can see WHERE misses are
+  // coming from (e.g. is it always voicemail rows? call history? a
+  // particular Salesforce page?).
+  const hostname = (senderInfo && senderInfo.hostname) || null;
+  enqueueEvent({
+    name: best ? "caller_id_match" : "caller_id_no_match",
+    props: best
+      ? { sobject: best.sobject, hostname: hostname }
+      : { hostname: hostname },
+    url: hostname,
+    ts: Date.now()
+  });
+
   const value = best || null;
   callerIdCache.set(tenDigit, { value, expires: Date.now() + cfg.cacheTtlMs });
   return value;
 }
+
+// -------------------------------------------------------------------------
+// Identity capture from Salesforce (no Gmail tab required)
+//
+// Calls /services/data/vXX.0/chatter/users/me with the user's existing
+// Salesforce session cookie. That endpoint returns the current user's
+// email and display name — same data we'd otherwise scrape from
+// Gmail's account button. Lets us identify users who don't have Gmail
+// open in this browser at all.
+// -------------------------------------------------------------------------
+
+let sfIdentityLastChecked = 0;
+const SF_IDENTITY_TTL_MS = 60 * 60 * 1000; // re-check once an hour
+
+async function tryCaptureSalesforceIdentity() {
+  const now = Date.now();
+  if (now - sfIdentityLastChecked < SF_IDENTITY_TTL_MS) return;
+  sfIdentityLastChecked = now;
+  try {
+    const cfg = await getCallerIdConfig();
+    const sid = await getSessionId(cfg.myDomainHost);
+    if (!sid) return;
+    const url = `https://${cfg.myDomainHost}/services/data/${cfg.apiVersion}/chatter/users/me`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${sid}`, Accept: "application/json" }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const email = data && data.email ? String(data.email).trim() : null;
+    if (!email) return;
+    const name = data.displayName || data.name || null;
+    await setTelemetryUser({ email, name });
+    enqueueEvent({
+      name: "identity_captured",
+      props: { source: "salesforce_chatter_me" },
+      url: cfg.myDomainHost,
+      ts: Date.now()
+    });
+    console.log("[ZHL Pack] identity captured from Salesforce:", email);
+  } catch (e) {
+    // best effort — Gmail capture will still try too
+  }
+}
+// First check after startup, then once an hour. The TTL guard inside
+// the function prevents redundant calls even if these schedules drift.
+setTimeout(tryCaptureSalesforceIdentity, 10 * 1000);
+setInterval(tryCaptureSalesforceIdentity, 30 * 60 * 1000);
 
 // Used by the SMS Quick-Add Participants module: given a Salesforce
 // Contact id, return that contact's Phone / MobilePhone via the same
@@ -317,7 +382,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true, match: null });
       return false;
     }
-    lookupPhone(ten).then(
+    let hostname = null;
+    if (sender && sender.url) {
+      try { hostname = new URL(sender.url).hostname; } catch (_) {}
+    }
+    // Opportunistic: as soon as we see traffic from a Salesforce tab,
+    // try to identify the user via Salesforce's chatter/users/me API.
+    // The TTL inside the function makes this cheap.
+    if (hostname && /salesforce|force\.com/.test(hostname)) {
+      tryCaptureSalesforceIdentity();
+    }
+    lookupPhone(ten, { hostname }).then(
       (match) => sendResponse({ ok: true, match }),
       (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
     );

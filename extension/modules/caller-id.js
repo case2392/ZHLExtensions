@@ -100,12 +100,15 @@
             resolve(null);
             return;
           }
+          // Telemetry is now fired from the background's lookupPhone ONLY
+          // when a real Salesforce query happens (cache misses), with the
+          // page hostname attached. Cache hits no longer fire telemetry,
+          // so the no_match volume drops by ~5x compared to the old
+          // per-content-script-call tracking.
           if (resp.match) {
             console.log("[CallerID] match for", phone, "→", resp.match.sobject, resp.match.id, resp.match.name);
-            try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'caller_id_match', props: { sobject: resp.match.sobject } }); } catch (_) {}
           } else {
             console.log("[CallerID] no match for", phone);
-            try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'caller_id_no_match' }); } catch (_) {}
           }
           resolve(resp.match || null);
         });
