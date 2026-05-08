@@ -727,6 +727,11 @@
     let count = 0;
     candidates.forEach((el) => {
       if (getComputedStyle(el).position !== 'fixed') return;
+      // Idempotency: skip when our overrides are already in place. The
+      // 33ms heartbeat was firing this function for every wrapper every
+      // tick (because our own CSS keeps them position:fixed), spamming
+      // the console with thousands of "re-anchored" lines per minute.
+      if (el.style.top === 'auto' && el.style.bottom === '0px') return;
       el.style.setProperty('top', 'auto', 'important');
       el.style.setProperty('right', '0', 'important');
       el.style.setProperty('bottom', '0', 'important');
@@ -735,6 +740,62 @@
       count++;
     });
     if (count > 0) console.log('[Gmail Compose Drag] re-anchored', count, 'inner toolbar wrapper(s) to dialog bottom');
+  }
+
+  // Auto-diagnostic: when an attachment row appears in a compose dialog,
+  // log its layout against the toolbar exactly once per (dialog, chip-set).
+  // The user can't call window.zhlInspectCompose from the page console
+  // (content script lives in an isolated world), so we log on detection.
+  const inspectedKeys = new WeakSet();
+  function inspectIfAttachment(outer) {
+    const dlg = outer.querySelector('[role="dialog"]') || outer;
+    // Gmail attachment chips: .dL is the row container, .GM is the
+    // chip wrapper, .aZo is each chip.
+    const chips = dlg.querySelectorAll('.GM, .dL .aZo, .dL > div');
+    if (!chips.length) return;
+    // Key on the dialog + chip count so a second attachment retriggers.
+    const key = chips.length + ':' + (dlg.id || '');
+    if (outer.__zhlLastInspectKey === key) return;
+    outer.__zhlLastInspectKey = key;
+
+    const dlgRect = dlg.getBoundingClientRect();
+    const tb = dlg.querySelector('.aDj, .ahe');
+    const tbRect = tb && tb.getBoundingClientRect();
+    console.group('[Gmail Compose Inspect] attachments detected');
+    console.log('dialog rect:', { l: Math.round(dlgRect.left), t: Math.round(dlgRect.top), w: Math.round(dlgRect.width), h: Math.round(dlgRect.height) });
+    if (tb) {
+      const cs = getComputedStyle(tb);
+      console.log('toolbar rect:', { l: Math.round(tbRect.left), t: Math.round(tbRect.top), w: Math.round(tbRect.width), h: Math.round(tbRect.height) },
+        'position=' + cs.position, 'top=' + cs.top, 'bottom=' + cs.bottom);
+    }
+    chips.forEach((c, i) => {
+      const r = c.getBoundingClientRect();
+      const cs = getComputedStyle(c);
+      if (r.height < 4) return;
+      const overlap = tbRect ? (r.bottom - tbRect.top) : null;
+      console.log('chip[' + i + '] cls=' + (c.className || '').toString().slice(0, 50)
+        + ' rect=' + JSON.stringify({ t: Math.round(r.top), b: Math.round(r.bottom), h: Math.round(r.height) })
+        + ' visibility=' + cs.visibility + ' display=' + cs.display
+        + (overlap !== null ? (overlap > 0 ? ' OVERLAPS toolbar by ' + Math.round(overlap) + 'px' : ' clears toolbar by ' + Math.round(-overlap) + 'px') : ''));
+    });
+    // Walk up from a chip and report each ancestor's overflow until the dialog.
+    if (chips.length) {
+      let cur = chips[0];
+      const chain = [];
+      while (cur && cur !== dlg && cur !== document.body) {
+        const cs = getComputedStyle(cur);
+        chain.push({
+          tag: cur.tagName,
+          cls: (cur.className || '').toString().slice(0, 40),
+          overflow: cs.overflow + '/' + cs.overflowY,
+          position: cs.position,
+          height: Math.round(cur.getBoundingClientRect().height)
+        });
+        cur = cur.parentElement;
+      }
+      console.log('chip ancestor chain (chip → dialog):', chain);
+    }
+    console.groupEnd();
   }
 
   function attachToDialog(dlg) {
@@ -779,6 +840,7 @@
 
   function scan() {
     document.querySelectorAll('div[role="dialog"]').forEach(attachToDialog);
+    document.querySelectorAll('[' + DRAG_ATTR + ']').forEach(inspectIfAttachment);
   }
 
   const observer = new MutationObserver(() => scan());
@@ -791,12 +853,12 @@
   // flash is imperceptible, cheap enough to run continuously.
   setInterval(scan, 33);
 
-  // Debug helper — call window.zhlInspectCompose() in the console to
-  // dump the compose dialog layout: dialog rect, toolbar rect, attachment
-  // row(s), inner wrapper computed styles, and any vertical overlap
-  // between attachment row and toolbar. Used to diagnose the attachment
-  // chip being hidden behind the formatting toolbar.
-  window.zhlInspectCompose = function () {
+  // Debug helper — content scripts run in an isolated world, so a
+  // function set on `window` is invisible from the page console. Trigger
+  // a manual dump by dispatching a custom event from the page world:
+  //   document.dispatchEvent(new Event('zhl-inspect-compose'))
+  document.addEventListener('zhl-inspect-compose', () => zhlInspectCompose());
+  function zhlInspectCompose() {
     const dlgs = document.querySelectorAll('[' + DRAG_ATTR + ']');
     if (!dlgs.length) {
       console.log('[zhlInspectCompose] no compose dialog with ' + DRAG_ATTR + ' found');
@@ -868,8 +930,8 @@
       }
       console.groupEnd();
     });
-  };
-  console.log('[Gmail Compose Drag] debug helper ready: call window.zhlInspectCompose() to dump layout');
+  }
+  console.log('[Gmail Compose Drag] debug helper ready — dispatch zhl-inspect-compose event to dump layout, or attach an attachment to auto-log');
 })();
 
   }
