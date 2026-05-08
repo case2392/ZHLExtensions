@@ -115,61 +115,45 @@ function doPost(e) {
   }
 }
 
-// Upsert a row in the Users sheet, keyed by email when known and by
-// anonId otherwise. When a batch arrives with both an email AND an
-// anonId, AND we already have an anon-only row for that anonId from
-// earlier batches, we MERGE the anon row's eventCount into the email
-// row and delete the anon row. This stops the dashboard from showing
-// the same person twice (one anon, one identified) once Gmail
-// identity capture catches up.
+// Upsert a row in the Users sheet, keyed by anonId. Each anon UUID is
+// a distinct logical install/session — one row per anonId, kept
+// forever. When a batch arrives with an email/name, we ENRICH the
+// existing anon row with that data instead of folding it into a
+// separate email row. So a person who used the extension before
+// opening Gmail has a row with their event count; once Gmail identity
+// fires, that same row gets their email attached. A person who
+// reinstalled gets a separate row, also enriched once identity fires
+// — useful: you can see "this person had 224 events on install A,
+// then 85 events on install B".
 function upsertUser_(ss, info) {
   const u = ss.getSheetByName(SHEET_USERS);
   if (!u) return;
-  if (!info.email && !info.anonId) return;
+  if (!info.anonId) return; // every batch carries an anonId
 
   const data = u.getDataRange().getValues();
-  let emailRow = -1;
-  let anonRow = -1;
-
+  let row = -1;
   for (var i = 1; i < data.length; i++) {
-    const rowEmail = (data[i][0] || '').toString();
-    const rowAnon = (data[i][2] || '').toString();
-    if (info.email && rowEmail === info.email) emailRow = i + 1;
-    // Only consider anon rows (rowEmail empty) for anonId match — an
-    // anonId attached to an email row is just metadata.
-    if (info.anonId && rowAnon === info.anonId && !rowEmail) anonRow = i + 1;
+    if ((data[i][2] || '').toString() === info.anonId) { row = i + 1; break; }
   }
 
   const now = new Date();
-
-  if (info.email) {
-    // Identified batch — upsert the email row, then fold any matching
-    // anon row into it.
-    if (emailRow === -1) {
-      u.appendRow([info.email, info.name, info.anonId, now, now, info.version, info.eventDelta]);
-      emailRow = u.getLastRow();
-    } else {
-      if (info.name) u.getRange(emailRow, 2).setValue(info.name);
-      if (info.anonId && !data[emailRow - 1][2]) u.getRange(emailRow, 3).setValue(info.anonId);
-      u.getRange(emailRow, 5).setValue(now);
-      if (info.version) u.getRange(emailRow, 6).setValue(info.version);
-      u.getRange(emailRow, 7).setValue((Number(data[emailRow - 1][6]) || 0) + info.eventDelta);
-    }
-    if (anonRow !== -1) {
-      const orphanCount = Number(data[anonRow - 1][6]) || 0;
-      const currentEmailCount = Number(u.getRange(emailRow, 7).getValue()) || 0;
-      u.getRange(emailRow, 7).setValue(currentEmailCount + orphanCount);
-      u.deleteRow(anonRow);
-    }
+  if (row === -1) {
+    u.appendRow([
+      info.email || '',
+      info.name || '',
+      info.anonId,
+      now, now,
+      info.version,
+      info.eventDelta
+    ]);
   } else {
-    // Anonymous batch — upsert the anon row.
-    if (anonRow === -1) {
-      u.appendRow(['', info.name, info.anonId, now, now, info.version, info.eventDelta]);
-    } else {
-      u.getRange(anonRow, 5).setValue(now);
-      if (info.version) u.getRange(anonRow, 6).setValue(info.version);
-      u.getRange(anonRow, 7).setValue((Number(data[anonRow - 1][6]) || 0) + info.eventDelta);
-    }
+    // Enrich: only fill empty email/name fields (don't overwrite if
+    // we somehow get conflicting data later).
+    if (info.email && !data[row - 1][0]) u.getRange(row, 1).setValue(info.email);
+    if (info.name && !data[row - 1][1]) u.getRange(row, 2).setValue(info.name);
+    u.getRange(row, 5).setValue(now);
+    if (info.version) u.getRange(row, 6).setValue(info.version);
+    u.getRange(row, 7).setValue((Number(data[row - 1][6]) || 0) + info.eventDelta);
   }
 }
 
@@ -208,53 +192,42 @@ function rollupDaily_(ss, email, events) {
 }
 
 // One-time admin utility. Run from the Apps Script editor (function
-// dropdown → cleanupAnonRows → Run) to retroactively merge any anon
-// Users rows whose anonId has since been seen with an email in the
-// Events sheet. Cleans up the historical (anon) rows you can see on
-// the dashboard right now.
+// dropdown → cleanupAnonRows → Run) to retroactively ENRICH any anon
+// Users rows whose anonId has since been seen with an email/name in
+// the Events sheet. Each anon row stays — it just gets the email and
+// name attached so you can see who that install belongs to. No rows
+// are merged or deleted.
 function cleanupAnonRows() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const evSheet = ss.getSheetByName(SHEET_EVENTS);
   const usSheet = ss.getSheetByName(SHEET_USERS);
   if (!evSheet || !usSheet) throw new Error('Run setup() first.');
 
-  // Build anonId → email map from Events. Only rows where BOTH email
-  // and anonId are non-empty contribute — that's the link.
+  // Build anonId → {email, name} map from Events. Only rows where BOTH
+  // email and anonId are non-empty contribute — that's the link.
   const evRows = evSheet.getDataRange().getValues();
-  const anonToEmail = {};
+  const anonToInfo = {};
   for (var i = 1; i < evRows.length; i++) {
     const email = (evRows[i][1] || '').toString();
+    const name = (evRows[i][2] || '').toString();
     const anonId = (evRows[i][3] || '').toString();
-    if (email && anonId && !anonToEmail[anonId]) anonToEmail[anonId] = email;
+    if (email && anonId && !anonToInfo[anonId]) anonToInfo[anonId] = { email: email, name: name };
   }
 
-  // Walk Users from the bottom up so deletions don't shift indices.
   const usRows = usSheet.getDataRange().getValues();
-  let merged = 0;
-  for (var r = usRows.length - 1; r >= 1; r--) {
+  let enriched = 0;
+  for (var r = 1; r < usRows.length; r++) {
     const rowEmail = (usRows[r][0] || '').toString();
     const rowAnon = (usRows[r][2] || '').toString();
-    const rowCount = Number(usRows[r][6]) || 0;
-    if (rowEmail) continue; // already identified
-    if (!rowAnon || !anonToEmail[rowAnon]) continue;
-    const targetEmail = anonToEmail[rowAnon];
-    // Find the email row to merge into.
-    let targetRow = -1;
-    for (var t = 1; t < usRows.length; t++) {
-      if ((usRows[t][0] || '').toString() === targetEmail) { targetRow = t + 1; break; }
-    }
-    if (targetRow === -1) {
-      // Promote the anon row to an email row in place.
-      usSheet.getRange(r + 1, 1).setValue(targetEmail);
-    } else {
-      const targetCount = Number(usSheet.getRange(targetRow, 7).getValue()) || 0;
-      usSheet.getRange(targetRow, 7).setValue(targetCount + rowCount);
-      usSheet.deleteRow(r + 1);
-    }
-    merged++;
+    if (rowEmail) continue; // already enriched
+    const info = anonToInfo[rowAnon];
+    if (!info) continue;
+    if (info.email) usSheet.getRange(r + 1, 1).setValue(info.email);
+    if (info.name && !(usRows[r][1] || '')) usSheet.getRange(r + 1, 2).setValue(info.name);
+    enriched++;
   }
 
-  SpreadsheetApp.getUi().alert('Done. Merged ' + merged + ' anon row(s) into their identified counterparts.');
+  SpreadsheetApp.getUi().alert('Done. Enriched ' + enriched + ' anon row(s) with their email/name. No rows were merged or deleted.');
 }
 
 function doGet() {
