@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VPA Email Extension — Setup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: #f4f6f9;
+      color: #333;
+      min-height: 100vh;
+      padding: 32px;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .header-icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #0070d2, #0d47a1);
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 16px rgba(0, 112, 210, 0.3);
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #0070d2;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 0;
+    }
+
+    /* Welcome banner (first-time setup) */
+    .welcome-banner {
+      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+      border-left: 4px solid #0070d2;
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .welcome-banner-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .welcome-banner-text {
+      font-size: 14px;
+      color: #0d47a1;
+      line-height: 1.5;
+    }
+
+    .welcome-banner-text strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    /* Progress checklist */
+    .progress-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+    }
+
+    .progress-card h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      margin-bottom: 14px;
+      font-weight: 600;
+    }
+
+    .progress-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .progress-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 0;
+      font-size: 14px;
+      color: #555;
+      transition: color 0.2s;
+    }
+
+    .progress-item.done {
+      color: #04844b;
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+
+    .progress-check {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid #d8dde6;
+      color: transparent;
+      font-size: 13px;
+      font-weight: bold;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .progress-item.done .progress-check {
+      border-color: #04844b;
+      background: #04844b;
+      color: #fff;
+    }
+
+    /* Step cards */
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      padding: 28px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #0070d2;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .card.complete .step-number {
+      background: #04844b;
+    }
+
+    .card-title-area {
+      flex: 1;
+    }
+
+    .card h2 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 4px;
+    }
+
+    .card .card-desc {
+      font-size: 13px;
+      color: #888;
+      line-height: 1.5;
+    }
+
+    .step-status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-left: 8px;
+    }
+
+    .step-status-badge.required {
+      background: #fde8e8;
+      color: #c23934;
+    }
+
+    .step-status-badge.optional {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .step-status-badge.complete {
+      background: #e6f9ee;
+      color: #04844b;
+    }
+
+    /* Form fields */
+    .field {
+      margin-bottom: 18px;
+    }
+
+    .field:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 4px;
+    }
+
+    .helper-text {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+
+    .helper-text code {
+      background: #f4f6f9;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #0070d2;
+    }
+
+    input[type="text"],
+    input[type="email"] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #d8dde6;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #333;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input[type="text"]:focus,
+    input[type="email"]:focus {
+      outline: none;
+      border-color: #0070d2;
+      box-shadow: 0 0 0 2px rgba(0, 112, 210, 0.15);
+    }
+
+    input[type="text"]::placeholder,
+    input[type="email"]::placeholder {
+      color: #bbb;
+    }
+
+    /* Status / OAuth */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .status-badge::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-badge--connected {
+      background: #e6f9ee;
+      color: #04844b;
+    }
+
+    .status-badge--disconnected {
+      background: #fde8e8;
+      color: #c23934;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 9px 22px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: #0070d2;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #005fb2;
+    }
+
+    .btn-success {
+      background: #04844b;
+      color: #fff;
+    }
+
+    .btn-success:hover {
+      background: #036b3e;
+    }
+
+    .btn-outline {
+      background: #fff;
+      color: #0070d2;
+      border: 1px solid #0070d2;
+    }
+
+    .btn-outline:hover {
+      background: #f0f7ff;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    /* Sticky save bar */
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+      padding: 16px 24px;
+      margin-top: 32px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .save-bar-text {
+      font-size: 13px;
+      color: #666;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #fff;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .toast--visible {
+      opacity: 1;
+    }
+
+    .toast--success {
+      background: #04844b;
+    }
+
+    .toast--error {
+      background: #c23934;
+    }
+
+    .toast--info {
+      background: #0070d2;
+    }
+
+    /* Tip box */
+    .tip {
+      background: #f0f7ff;
+      border-left: 3px solid #0070d2;
+      padding: 10px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #0d47a1;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .tip-icon {
+      margin-right: 4px;
+    }
+
+    /* Hide-on-complete welcome */
+    .hidden { display: none !important; }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid #e8edf3;
+      color: #999;
+      font-size: 12px;
+    }
+
+    .footer a {
+      color: #0070d2;
+      text-decoration: none;
+    }
+
+    /* Rich text editor */
+    .rich-editor {
+      border: 1px solid #d8dde6;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      padding: 16px;
+      min-height: 400px;
+      max-height: 600px;
+      overflow-y: auto;
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: #333;
+      outline: none;
+    }
+
+    .rich-editor:focus {
+      border-color: #0070d2;
+      box-shadow: 0 0 0 2px rgba(0, 112, 210, 0.15);
+    }
+
+    .editor-toolbar {
+      display: flex;
+      gap: 2px;
+      padding: 6px 8px;
+      background: #f8f9fa;
+      border: 1px solid #d8dde6;
+      border-radius: 4px 4px 0 0;
+      flex-wrap: wrap;
+    }
+
+    .editor-toolbar button {
+      padding: 4px 10px;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      color: #444;
+      font-family: inherit;
+    }
+
+    .editor-toolbar button:hover {
+      background: #e8edf3;
+      border-color: #d8dde6;
+    }
+
+    .toolbar-sep {
+      display: inline-block;
+      width: 1px;
+      height: 20px;
+      background: #d8dde6;
+      margin: 0 4px;
+      align-self: center;
+    }
+
+    /* Placeholder tags */
+    .placeholder-tag {
+      display: inline-block;
+      padding: 3px 10px;
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: #0070d2;
+      cursor: pointer;
+      transition: background 0.15s;
+      user-select: none;
+    }
+
+    .placeholder-tag:hover {
+      background: #bbdefb;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-icon">Z</div>
+      <h1>VPA Email Sender</h1>
+      <p class="subtitle">Setup &amp; Settings</p>
+    </div>
+
+    <!-- Welcome banner (first-time only) -->
+    <div id="welcomeBanner" class="welcome-banner hidden">
+      <div class="welcome-banner-icon">👋</div>
+      <div class="welcome-banner-text">
+        <strong>Welcome! Let's get you set up.</strong>
+        Complete the steps below — most fields have sensible defaults, so you only need to fill in your name and email, then connect your Google Account. Setup takes about 2 minutes.
+      </div>
+    </div>
+
+    <!-- Progress checklist -->
+    <div class="progress-card">
+      <h3>Setup Progress</h3>
+      <ul class="progress-list">
+        <li id="progress-google" class="progress-item">
+          <span class="progress-check">✓</span>
+          <span>Connect Google Account</span>
+        </li>
+        <li id="progress-lo" class="progress-item">
+          <span class="progress-check">✓</span>
+          <span>Enter your Loan Officer name and email</span>
+        </li>
+        <li id="progress-drive" class="progress-item">
+          <span class="progress-check">✓</span>
+          <span>Set up email attachments (Google Drive)</span>
+        </li>
+        <li id="progress-saved" class="progress-item">
+          <span class="progress-check">✓</span>
+          <span>Save settings</span>
+        </li>
+        <li id="progress-test" class="progress-item">
+          <span class="progress-check">✓</span>
+          <span>Send a test email (recommended)</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Step 1: Google Account -->
+    <div class="card" id="card-google">
+      <div class="card-header">
+        <div class="step-number">1</div>
+        <div class="card-title-area">
+          <h2>Connect Google Account
+            <span class="step-status-badge required" id="googleBadge">Required</span>
+          </h2>
+          <p class="card-desc">Authorize the extension to create Gmail drafts and read PDF attachments from Google Drive.</p>
+        </div>
+      </div>
+      <div class="status-row">
+        <span id="authStatus" class="status-badge status-badge--disconnected">Checking...</span>
+        <button id="authBtn" class="btn btn-primary">Connect Google Account</button>
+      </div>
+      <div class="tip">
+        <span class="tip-icon">💡</span> If you see "Access blocked" — your work email needs to be added as a test user. Reach out to Justin with your work Google email.
+      </div>
+    </div>
+
+    <!-- Step 2: Loan Officer Info -->
+    <div class="card" id="card-lo">
+      <div class="card-header">
+        <div class="step-number">2</div>
+        <div class="card-title-area">
+          <h2>Your Information
+            <span class="step-status-badge required" id="loBadge">Required</span>
+          </h2>
+          <p class="card-desc">This appears in the email subject, body, and "From" address. Fill in your full name and Zillow Home Loans email.</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="loName">Your Full Name</label>
+        <p class="helper-text">Example: <code>Justin Case</code> — appears in the email subject as "...from Justin Case at Zillow Home Loans"</p>
+        <input type="text" id="loName" placeholder="e.g. Justin Case">
+      </div>
+
+      <div class="field">
+        <label for="loEmail">Your Email Address</label>
+        <p class="helper-text">Your Zillow Home Loans email — used as the "From" address and in the email body.</p>
+        <input type="email" id="loEmail" placeholder="e.g. justinca@zillowhomeloans.com">
+      </div>
+
+      <div class="field">
+        <label for="zillowWebpageUrl">Your Zillow Webpage URL</label>
+        <p class="helper-text">Your personal Zillow Home Loans profile page. This link is included in the email so borrowers can view your profile. <strong>Change the default to your own URL.</strong></p>
+        <input type="text" id="zillowWebpageUrl" placeholder="https://www.zillow.com/home-loans/loan-officer/yourname">
+      </div>
+
+      <div class="tip">
+        <span class="tip-icon">💡</span> <strong>Find your Zillow URL:</strong> Go to <code>zillow.com/home-loans</code>, search for your name, and copy the URL from your profile page.
+      </div>
+    </div>
+
+    <!-- Step 3: Email Attachments (Drive file IDs) -->
+    <div class="card" id="card-advanced">
+      <div class="card-header">
+        <div class="step-number">3</div>
+        <div class="card-title-area">
+          <h2>Email Attachments
+            <span class="step-status-badge required" id="driveBadge">Action Needed</span>
+          </h2>
+          <p class="card-desc">Two PDFs are automatically attached to every VPA email. The fields below are pre-filled with <strong>Justin's documents</strong> — you need to <strong>replace them with your own</strong> or the attachments will not work for your account.</p>
+        </div>
+      </div>
+
+      <div class="warning-tip" style="background: #fff8e1; border-left: 3px solid #f9a825; padding: 10px 14px; border-radius: 4px; font-size: 12px; color: #8d6e00; margin-bottom: 16px; line-height: 1.5;">
+        <strong>&#9888; Important:</strong> The default file IDs belong to Justin's Google Drive. You must upload your own versions of these PDFs to <strong>your</strong> Google Drive and replace the IDs below, otherwise the attachments will fail.
+      </div>
+
+      <div class="tip" style="margin-bottom: 16px;">
+        <span class="tip-icon">💡</span> <strong>How to find a Google Drive File ID:</strong>
+        <ol style="margin: 8px 0 0 16px; padding: 0; font-size: 12px; line-height: 1.8;">
+          <li>Open <strong>Google Drive</strong> in your browser</li>
+          <li>Find the PDF file you want to attach</li>
+          <li><strong>Right-click</strong> the file, then select <strong>Open with → Open in new tab</strong> (double-click won't show the URL)</li>
+          <li>Look at the <strong>URL in your browser's address bar</strong>. It will look like this:<br>
+            <code style="display: block; margin: 6px 0; padding: 6px 10px; font-size: 11px; word-break: break-all;">https://drive.google.com/file/d/<strong style="color: #c23934; background: #fde8e8; padding: 1px 4px; border-radius: 2px;">1AbCdEfGhIjKlMnOpQrStUvWxYz</strong>/view</code>
+          </li>
+          <li><strong>Copy the part between <code>/d/</code> and <code>/view</code></strong> — that's the File ID</li>
+          <li>Paste it into the field below</li>
+        </ol>
+      </div>
+
+      <div class="field">
+        <label for="driveFileId1">Appraisal Certificate PDF — File ID</label>
+        <p class="helper-text">The "Handout No-Cost Appraisal Certificate" PDF. Pre-filled with Justin's version.</p>
+        <input type="text" id="driveFileId1" placeholder="Paste the File ID from the Google Drive URL">
+      </div>
+
+      <div class="field">
+        <label for="driveFileId2">Profile One-Pager PDF — File ID</label>
+        <p class="helper-text">Your "One Page" profile PDF. Pre-filled with Justin's version.</p>
+        <input type="text" id="driveFileId2" placeholder="Paste the File ID from the Google Drive URL">
+      </div>
+
+      <div class="tip">
+        <span class="tip-icon">&#9888;</span> Make sure the file is accessible — if it's in your Google Drive and you're signed in with the same account, it should work automatically.
+      </div>
+    </div>
+
+    <!-- Step 4: Email Template -->
+    <div class="card" id="card-template">
+      <div class="card-header">
+        <div class="step-number">4</div>
+        <div class="card-title-area">
+          <h2>Email Template
+            <span class="step-status-badge optional">Customizable</span>
+          </h2>
+          <p class="card-desc">Edit the email below to make it your own. It works like a Word document — just click and type. Use the placeholder codes to auto-fill lead data.</p>
+        </div>
+      </div>
+
+      <div class="tip" style="margin-bottom: 16px;">
+        <span class="tip-icon">💡</span> <strong>Auto-fill codes</strong> — type these anywhere and they'll be replaced with real data when the email is sent:
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+          <span class="placeholder-tag" onclick="insertPlaceholder('{Borrower}')" title="Borrower's first name">{Borrower}</span>
+          <span class="placeholder-tag" onclick="insertPlaceholder('{Greeting}')" title="Borrower + Co-Borrower names">{Greeting}</span>
+          <span class="placeholder-tag" onclick="insertPlaceholder('{Amount}')" title="Pre-approval amount">{Amount}</span>
+          <span class="placeholder-tag" onclick="insertPlaceholder('{Agent}')" title="Buyer's Agent name">{Agent}</span>
+          <span class="placeholder-tag" onclick="insertPlaceholder('{LO Name}')" title="Your name">{LO Name}</span>
+          <span class="placeholder-tag" onclick="insertPlaceholder('{LO Email}')" title="Your email">{LO Email}</span>
+          <span class="placeholder-tag" onclick="insertPlaceholder('{Zillow URL}')" title="Your Zillow webpage">{Zillow URL}</span>
+        </div>
+        <p style="margin-top: 6px; font-size: 11px; color: #888;">Click any code above to insert it at your cursor position in the editor.</p>
+      </div>
+
+      <div class="field">
+        <label for="emailSubject">Email Subject Line</label>
+        <p class="helper-text">Use the codes above for auto-fill. Example: <code>Verified Pre-Approval for {Greeting} - Up to {Amount}!</code></p>
+        <input type="text" id="emailSubject" placeholder="Verified Pre-Approval for {Greeting} - Up to {Amount}!">
+      </div>
+
+      <div class="field">
+        <label>Email Body</label>
+        <p class="helper-text">Edit the email below just like a Word document. Click the codes above to insert them.</p>
+        <div class="editor-toolbar">
+          <button type="button" onclick="execCmd('bold')" title="Bold"><b>B</b></button>
+          <button type="button" onclick="execCmd('italic')" title="Italic"><i>I</i></button>
+          <button type="button" onclick="execCmd('underline')" title="Underline"><u>U</u></button>
+          <span class="toolbar-sep"></span>
+          <button type="button" onclick="execCmd('insertUnorderedList')" title="Bullet list">&#8226; List</button>
+          <button type="button" onclick="execCmd('insertOrderedList')" title="Numbered list">1. List</button>
+          <span class="toolbar-sep"></span>
+          <button type="button" onclick="execLink()" title="Insert link">&#128279; Link</button>
+          <button type="button" onclick="execCmd('removeFormat')" title="Clear formatting">&#10005; Clear</button>
+        </div>
+        <div id="emailEditor" class="rich-editor" contenteditable="true"></div>
+        <textarea id="emailTemplate" style="display:none;"></textarea>
+      </div>
+
+      <div class="btn-row" style="margin-top: 8px;">
+        <button id="resetTemplateBtn" class="btn btn-outline" style="font-size: 12px;">Reset to Default Template</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Test & Help -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-number">5</div>
+        <div class="card-title-area">
+          <h2>You're Ready!
+            <span class="step-status-badge optional">Test it out</span>
+          </h2>
+          <p class="card-desc">Save your settings, then send a test email to yourself to verify everything works. After that, head to any Salesforce Lead in <strong>Pre-Approval</strong> status and look for the blue <strong>"📧 Send VPA Email"</strong> button.</p>
+        </div>
+      </div>
+      <div class="tip">
+        <span class="tip-icon">💡</span> The button will be <strong>grey</strong> on leads that aren't in Pre-Approval status. This is intentional — VPA emails should only go out after pre-approval is complete.
+      </div>
+    </div>
+
+    <!-- Sticky save bar -->
+    <div class="save-bar">
+      <span class="save-bar-text">Don't forget to save your changes!</span>
+      <div class="btn-row">
+        <button id="testBtn" class="btn btn-outline">Send Test Email</button>
+        <button id="saveBtn" class="btn btn-primary">Save Settings</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>VPA Email Sender · v1.0 · Need help? Contact Justin Case</p>
+    </div>
+
+  </div>
+
+  <!-- Hidden fields for optional settings (use defaults) -->
+  <input type="hidden" id="defaultAgentName" value="">
+  <input type="hidden" id="nameFieldLabel" value="Name">
+  <input type="hidden" id="coBorrowerFieldLabel" value="Co-Borrower">
+  <input type="hidden" id="amountFieldLabel" value="Max Affordability">
+  <input type="hidden" id="agentFieldLabel" value="Buyer's Agent">
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // Rich editor helpers (inline so they're available to onclick handlers)
+    function execCmd(cmd) {
+      document.execCommand(cmd, false, null);
+      document.getElementById('emailEditor').focus();
+    }
+    function execLink() {
+      const url = prompt('Enter URL:');
+      if (url) document.execCommand('createLink', false, url);
+    }
+    function insertPlaceholder(code) {
+      const editor = document.getElementById('emailEditor');
+      editor.focus();
+      document.execCommand('insertText', false, code);
+    }
+  </script>
+  <script src="options.js"></script>
+</body>
+</html>

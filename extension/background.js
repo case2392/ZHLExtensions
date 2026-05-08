@@ -5,6 +5,14 @@
 //      knows where to go to enable / disable the modules.
 //   2. Handle Salesforce REST lookups for the Caller ID module (kept here
 //      because content scripts can't make cross-origin requests with cookies).
+//
+// SFGmail (VPA email sender) ships its own background script. ES-module
+// service workers support `import` of sibling files; importing here causes
+// SFGmail's listeners (chrome.runtime.onMessage / chrome.identity / Gmail +
+// Drive API helpers) to register alongside ours. The listeners coexist
+// because each one inspects msg.type and returns early for unrelated
+// messages.
+import './sfgmail-background.js';
 
 const VERSION = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || "?";
 console.log(`[ZHL Pack v${VERSION}] service worker started`);
@@ -22,6 +30,7 @@ const FEATURE_KEYS = [
   "feature_autoCallDetailsTab",
   "feature_autoMessagingTab",
   "feature_scenarioSort",
+  "feature_sfGmail",
   "feature_telemetry"
 ];
 

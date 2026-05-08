@@ -287,6 +287,33 @@
       </div>
     </section>
 
+    <!-- ============== Module: SFGmail / VPA Email Sender ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>VPA Email Sender (Salesforce → Gmail)</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> — Lead &amp; Contact pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_sfGmail" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a <strong>📧 Send VPA Email</strong> button to Salesforce Lead and Contact record pages.</li>
+          <li>One click scrapes name, email, purchase price, agent, and co-borrower from the page, then creates a Gmail draft via the Gmail API with the pre-approval template pre-filled.</li>
+          <li>Auto-attaches the appraisal certificate, profile one-pager, and a user-selected pre-approval letter from your Google Drive.</li>
+          <li>Co-borrower goes to <em>To:</em>, agent goes to <em>Cc:</em> automatically.</li>
+          <li>Uses Google OAuth — first send opens a one-time Google permission prompt for Gmail + Drive read access. Tokens are stored by Chrome.</li>
+          <li><strong>First-time setup required:</strong> open the config page and set your Google Drive file IDs and Loan Officer name/email.</li>
+          <li><a href="sfgmail-options.html" target="_blank" rel="noopener">→ Open VPA Email config page</a></li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Anonymous Telemetry ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
