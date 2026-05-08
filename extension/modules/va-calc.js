@@ -22,12 +22,35 @@
     { id: 'VA',  label: 'VA',               desc: '5% of balance ÷ 12', rate: 0.05 / 12 }
   ];
 
+  // Substring matches against the upper-cased payee name. The matcher
+  // (isStudentLoanByName below) walks this list and triggers if any
+  // entry is a substring of the payee. Each entry should be specific
+  // enough to avoid false positives — e.g. "STUDENT" alone is too
+  // greedy, but "STUDENT LOAN" is fine. State higher-ed agencies
+  // (Missouri Higher Education, Texas Higher Education, Kentucky
+  // Higher Education, etc.) often appear under their full state name
+  // — "HIGHER EDUC" is the catch-all that gets all of them.
   const STUDENT_LOAN_KEYWORDS = [
+    // Department of Education (multiple format variants)
     'DEPT OF ED', 'DEPT ED', 'DEPARTMENT OF ED', 'USDOE', 'US DEPT',
+    // Major federal servicers
     'AIDVANTAGE', 'NELNET', 'MOHELA', 'FEDLOAN', 'EDFINANCIAL',
-    'GREAT LAKES', 'SALLIE MAE', 'NAVIENT', 'MAXIMUS',
-    'ECSI', 'DEFAULT RESOLUTION', 'STUDENT LOAN', 'STUDENT AID',
-    'GRANITE STATE', 'OSLA'
+    'ED FINANCIAL', 'GREAT LAKES', 'SALLIE MAE', 'NAVIENT', 'MAXIMUS',
+    'ECSI', 'HEARTLAND', 'DEFAULT RESOLUTION', 'CORNERSTONE',
+    // Catch-all phrases — covers most state higher-ed agencies and
+    // generic student-loan accounts that include the descriptor.
+    'HIGHER EDUC', 'STATE EDUCATION', 'EDUCATION LOAN',
+    'EDUCATIONAL FINANCING', 'EDUCATIONAL FUNDING',
+    'STUDENT LOAN', 'STUDENT AID', 'STUDENT FINANCIAL',
+    // State / regional agencies that don't always say "higher educ"
+    'GRANITE STATE', 'OSLA',
+    'IOWA STUDENT', 'OKLAHOMA STUDENT', 'MASSACHUSETTS EDUC',
+    'NEW YORK STATE HIGHER', 'NEW YORK HESC', 'HESC',
+    'PHEAA', 'KHEAA', 'NCSEAA', 'CFNC', 'TGSLC', 'VSAC',
+    // Private student-loan lenders
+    'DISCOVER STUDENT', 'WELLS FARGO STUDENT', 'CITIZENS STUDENT',
+    'SOFI STUDENT', 'EARNEST', 'COMMONBOND', 'COLLEGE AVE',
+    'FIRSTMARK', 'CONDUENT', 'ACS EDUCATION', 'ASCENT'
   ];
 
   const FED_TAX_RATE = 0.15;
