@@ -102,3 +102,19 @@ html[dir] body[class*="dark"] .gm-reply-all-btn {
    clipped, so attachments looked invisible under the toolbar.
    Letting the scrollbar flicker during the animation is a much
    smaller UX hit than permanently hiding attachments. */
+
+/* Reserve space at the dialog's bottom for our position:fixed
+   toolbar. Without our drag mode, Gmail's own layout reserves this
+   space — but our `position: fixed` override pulls the toolbar out
+   of flow, so the compose body (and the .GM attachment row at the
+   bottom of it) extends down behind the toolbar. The toolbar's
+   computed height is ~60px; padding-bottom on the dialog shrinks
+   the content area by exactly that amount, which pushes the
+   attachment row above the toolbar. The toolbar itself remains
+   pinned to the dialog's border-edge bottom (position:fixed +
+   bottom:0 against the dialog's containing block, unaffected by
+   padding) so visually nothing else moves. */
+[data-zhl-compose-drag] [role="dialog"] {
+  padding-bottom: 60px !important;
+  box-sizing: border-box !important;
+}

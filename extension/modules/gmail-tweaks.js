@@ -793,7 +793,8 @@
         });
         cur = cur.parentElement;
       }
-      console.log('chip ancestor chain (chip → dialog):', chain);
+      chain.forEach((c, i) => console.log('  chain[' + i + ']', c.tag + '.' + c.cls,
+        'h=' + c.height, 'pos=' + c.position, 'overflow=' + c.overflow));
     }
     console.groupEnd();
   }
