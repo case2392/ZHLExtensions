@@ -23,6 +23,16 @@
   // DOM element is hosting the chip at the moment.
   const fileCache = new Map(); // url -> { state, file, info, promise }
 
+  // Module-scope drag state. Chrome strips JavaScript-constructed Files
+  // from dataTransfer.files at drop time (a security restriction —
+  // verified at runtime: dragend shows types=['Files'] but files.length=0).
+  // So instead of relying on dataTransfer to carry the File across the
+  // drag, we track which file is active in a module variable. Drop
+  // handlers look here for the File. Works inside Gmail since both
+  // dragstart and drop happen in the same content script context.
+  let activeDragFile = null;
+  let activeDragInfo = null;
+
   function parseDownloadUrl(dlAttr) {
     if (!dlAttr) return null;
     const idx1 = dlAttr.indexOf(':');
@@ -145,27 +155,21 @@
       return;
     }
     try {
-      // Wipe Gmail's pre-populated payload first. The previous version
-      // also called setData('DownloadURL', ...) but that left a string
-      // payload that some drop handlers (Gmail's compose body, etc.)
-      // read FIRST and treat as text, ignoring our actual File. Now
-      // we leave only the File on the dataTransfer.
+      // Track in module scope — this is the source of truth our drop
+      // handler reads. dataTransfer.files won't carry our JS File.
+      activeDragFile = entry.file;
+      activeDragInfo = info;
+      // Still try to populate dataTransfer for any drop targets that
+      // can read it natively (cross-window OS drops sometimes can).
       try { e.dataTransfer.clearData(); } catch (_) {}
       e.dataTransfer.items.add(entry.file);
       try { e.dataTransfer.effectAllowed = 'copy'; } catch (_) {}
-      console.log('[Gmail Drag Attach] dragstart: added File ' + entry.file.name +
-        ' (' + entry.file.size + ' bytes) to dataTransfer');
-      try {
-        const t = e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
-        const fc = e.dataTransfer.files ? e.dataTransfer.files.length : 0;
-        console.log('[Gmail Drag Attach] post-add types=', t, 'files.length=', fc);
-      } catch (_) {}
-      // Stop propagation so Gmail's own dragstart listener doesn't
-      // reset the dataTransfer or re-add its HTML payload.
+      console.log('[Gmail Drag Attach] dragstart: tracking ' + entry.file.name +
+        ' (' + entry.file.size + ' bytes)');
       e.stopPropagation();
       e.stopImmediatePropagation();
     } catch (err) {
-      console.warn('[Gmail Drag Attach] items.add failed:', err);
+      console.warn('[Gmail Drag Attach] dragstart prep failed:', err);
     }
   }, true);
 
@@ -210,42 +214,45 @@
 
   window.addEventListener('drop', function (e) {
     const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
-    const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
-    console.log('[Gmail Drag Attach] drop fired — target=', e.target,
-      'files.length=', filesLen, 'types=', types);
-    if (!filesLen) {
-      // No File on the dataTransfer — log what's there so we can
-      // figure out what the drop target would have read instead.
-      try {
-        types.forEach(function (t) {
-          try { console.log('[Gmail Drag Attach]   type ' + t + ' →', e.dataTransfer.getData(t)); } catch (_) {}
-        });
-      } catch (_) {}
-      return;
-    }
     const dialog = isComposeBody(e.target);
-    if (!dialog) {
-      console.log('[Gmail Drag Attach] drop is not on compose body — leaving for browser default');
+    console.log('[Gmail Drag Attach] drop fired — composeBody=' + !!dialog,
+      'activeDragFile=' + (activeDragFile ? activeDragFile.name : 'null'),
+      'types=', types);
+    if (!dialog) return;
+    // Use the module-scope active file, NOT e.dataTransfer.files —
+    // Chrome strips JS-constructed Files from dataTransfer.files at
+    // drop time. Our active file IS the right binary; just route it
+    // straight to the compose attachment input.
+    if (!activeDragFile) {
+      // Fallback: if dataTransfer.files DID survive (e.g., user
+      // dragged a real OS file from outside Gmail), use that.
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        if (injectFilesIntoCompose(dialog, e.dataTransfer.files)) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          console.log('[Gmail Drag Attach] used native dataTransfer.files (' +
+            e.dataTransfer.files.length + ')');
+        }
+      }
       return;
     }
-    // Stop the event NOW so Gmail's own compose-body drop handler
-    // (which inserts as inline HTML) never gets to run.
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
-    if (injectFilesIntoCompose(dialog, e.dataTransfer.files)) {
-      console.log('[Gmail Drag Attach] redirected drop to attachment input (' +
-        filesLen + ' file(s))');
+    if (injectFilesIntoCompose(dialog, [activeDragFile])) {
+      console.log('[Gmail Drag Attach] attached ' + activeDragFile.name + ' to compose');
     } else {
       console.warn('[Gmail Drag Attach] inject failed — could not find file input on compose');
     }
   }, true);
 
-  // dragend fires after drop. Logging here tells us whether the
-  // dataTransfer contents we set in dragstart actually persist for
-  // the entire drag, or whether something is stripping them between
-  // dragstart and drop.
+  // dragend fires after drop. Clear the active drag tracker so a
+  // stale file isn't accidentally injected on a subsequent unrelated
+  // drag. Small delay ensures any in-flight drop handlers had a
+  // chance to read activeDragFile first.
   window.addEventListener('dragend', function (e) {
+    setTimeout(function () { activeDragFile = null; activeDragInfo = null; }, 100);
     try {
       const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
       const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
