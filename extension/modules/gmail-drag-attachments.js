@@ -121,22 +121,14 @@
     });
   }
 
-  // ---- Hover prefetch (event delegation, no per-chip listeners) -------
+  // ---- Hover prefetch is now redundant because scanAndPrefetch()
+  // below eagerly fetches every chip we find, but the mouseover
+  // listener still serves as a quick repaint trigger if a chip slipped
+  // through the heartbeat.
   document.addEventListener('mouseover', function (e) {
     const info = findInfoFor(e.target);
     if (!info) return;
-    const entry = prefetch(info);
-    // Paint a badge on the visible chip.
-    let chip = e.target;
-    while (chip && chip !== document.body) {
-      if (chip.hasAttribute && chip.hasAttribute('download_url')) break;
-      if (chip.querySelector && chip.querySelector('[download_url]')) break;
-      chip = chip.parentElement;
-    }
-    if (chip && chip !== document.body && entry) {
-      const draggable = chip.closest('[draggable="true"]') || chip;
-      paintBadge(draggable, entry.state);
-    }
+    prefetch(info);
   }, true);
 
   // ---- Dragstart hijack at document capture phase --------------------
@@ -153,33 +145,23 @@
       return;
     }
     try {
-      // Wipe Gmail's pre-populated payload first so we're not racing
-      // with whatever it set. Our File becomes the primary item.
+      // Wipe Gmail's pre-populated payload first. The previous version
+      // also called setData('DownloadURL', ...) but that left a string
+      // payload that some drop handlers (Gmail's compose body, etc.)
+      // read FIRST and treat as text, ignoring our actual File. Now
+      // we leave only the File on the dataTransfer.
       try { e.dataTransfer.clearData(); } catch (_) {}
-      // Add a real File so external drop targets (LOP, Slack, file
-      // inputs) see e.dataTransfer.files / e.dataTransfer.items as a
-      // normal file drop.
       e.dataTransfer.items.add(entry.file);
-      // Belt-and-suspenders: also set DownloadURL — Chrome uses this
-      // for desktop / cross-window file drops as a fallback.
-      try {
-        e.dataTransfer.setData('DownloadURL',
-          (entry.file.type || 'application/octet-stream') +
-          ':' + entry.file.name + ':' + info.url);
-      } catch (_) {}
       try { e.dataTransfer.effectAllowed = 'copy'; } catch (_) {}
       console.log('[Gmail Drag Attach] dragstart: added File ' + entry.file.name +
         ' (' + entry.file.size + ' bytes) to dataTransfer');
-      // Post-add verification — what does the browser actually see?
       try {
         const t = e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
         const fc = e.dataTransfer.files ? e.dataTransfer.files.length : 0;
         console.log('[Gmail Drag Attach] post-add types=', t, 'files.length=', fc);
       } catch (_) {}
       // Stop propagation so Gmail's own dragstart listener doesn't
-      // reset the dataTransfer or replace our File with its HTML
-      // payload. Phase 2 still handles drops on Gmail compose body
-      // since that's a drop event, not dragstart.
+      // reset the dataTransfer or re-add its HTML payload.
       e.stopPropagation();
       e.stopImmediatePropagation();
     } catch (err) {
@@ -212,10 +194,11 @@
     }
   }
 
-  // dragover preventDefault is required for drop to fire on the same
-  // target. Only do it when there's a File AND the target is compose
-  // body — so other drop UX in Gmail isn't disturbed.
-  document.addEventListener('dragover', function (e) {
+  // dragover preventDefault is required for drop to fire. Listen on
+  // window with capture phase — earlier than Gmail's listeners,
+  // which sit on document or body. Without preventDefault the
+  // browser cancels the drop entirely and we never see it.
+  window.addEventListener('dragover', function (e) {
     if (!e.dataTransfer) return;
     const types = e.dataTransfer.types;
     let hasFile = false;
@@ -225,33 +208,68 @@
     e.preventDefault();
   }, true);
 
-  document.addEventListener('drop', function (e) {
-    if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+  window.addEventListener('drop', function (e) {
+    const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
+    const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
+    console.log('[Gmail Drag Attach] drop fired — target=', e.target,
+      'files.length=', filesLen, 'types=', types);
+    if (!filesLen) {
+      // No File on the dataTransfer — log what's there so we can
+      // figure out what the drop target would have read instead.
+      try {
+        types.forEach(function (t) {
+          try { console.log('[Gmail Drag Attach]   type ' + t + ' →', e.dataTransfer.getData(t)); } catch (_) {}
+        });
+      } catch (_) {}
+      return;
+    }
     const dialog = isComposeBody(e.target);
-    if (!dialog) return;
+    if (!dialog) {
+      console.log('[Gmail Drag Attach] drop is not on compose body — leaving for browser default');
+      return;
+    }
+    // Stop the event NOW so Gmail's own compose-body drop handler
+    // (which inserts as inline HTML) never gets to run.
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
     if (injectFilesIntoCompose(dialog, e.dataTransfer.files)) {
-      e.preventDefault();
-      e.stopPropagation();
       console.log('[Gmail Drag Attach] redirected drop to attachment input (' +
-        e.dataTransfer.files.length + ' file(s))');
+        filesLen + ' file(s))');
+    } else {
+      console.warn('[Gmail Drag Attach] inject failed — could not find file input on compose');
     }
   }, true);
 
-  // ---- Idle scan: paint badges on chips whose URL we've already
-  // fetched. Don't pre-paint anything for chips the user hasn't
-  // hovered — leaves them in Gmail's natural look until prefetch.
-  function paintBadgesForCached() {
+  // ---- Eager-prefetch + paint, deduped per chip wrapper -------------
+  // Gmail re-uses the same download_url across multiple inner
+  // elements (visible chip + invisible siblings for accessibility/
+  // print/etc.). Without dedup, we'd paint a badge on each one and
+  // get dots scattered around the email. Resolve every download_url
+  // to its closest [draggable=true] ancestor and paint exactly one
+  // badge per (URL, draggable-element) pair, only on visible chips.
+  function isVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+  function scanAndPrefetch() {
+    const seen = new Set(); // dedup by draggable-element identity
     document.querySelectorAll('[download_url]').forEach(function (el) {
       const info = parseDownloadUrl(el.getAttribute('download_url'));
       if (!info) return;
-      const entry = fileCache.get(info.url);
-      if (!entry) return;
+      // Eager prefetch — every chip we find, regardless of hover.
+      prefetch(info);
       const draggable = el.closest('[draggable="true"]') || el;
-      paintBadge(draggable, entry.state);
+      if (seen.has(draggable)) return;
+      if (!isVisible(draggable)) return;
+      seen.add(draggable);
+      const entry = fileCache.get(info.url);
+      if (entry) paintBadge(draggable, entry.state);
     });
   }
-  setInterval(paintBadgesForCached, 3000);
-  paintBadgesForCached();
+  setInterval(scanAndPrefetch, 3000);
+  scanAndPrefetch();
 
 })();
   }
