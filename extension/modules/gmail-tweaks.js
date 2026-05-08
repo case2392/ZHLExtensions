@@ -790,6 +790,86 @@
   // 33ms ≈ 2 frames at 60fps — fast enough that the misplacement
   // flash is imperceptible, cheap enough to run continuously.
   setInterval(scan, 33);
+
+  // Debug helper — call window.zhlInspectCompose() in the console to
+  // dump the compose dialog layout: dialog rect, toolbar rect, attachment
+  // row(s), inner wrapper computed styles, and any vertical overlap
+  // between attachment row and toolbar. Used to diagnose the attachment
+  // chip being hidden behind the formatting toolbar.
+  window.zhlInspectCompose = function () {
+    const dlgs = document.querySelectorAll('[' + DRAG_ATTR + ']');
+    if (!dlgs.length) {
+      console.log('[zhlInspectCompose] no compose dialog with ' + DRAG_ATTR + ' found');
+      return;
+    }
+    dlgs.forEach((outer, i) => {
+      const dlg = outer.querySelector('[role="dialog"]') || outer;
+      const dlgRect = dlg.getBoundingClientRect();
+      const outerRect = outer.getBoundingClientRect();
+      const ocs = getComputedStyle(outer);
+      console.group('[zhlInspectCompose] dialog #' + i);
+      console.log('outer rect:', { l: Math.round(outerRect.left), t: Math.round(outerRect.top), w: Math.round(outerRect.width), h: Math.round(outerRect.height) });
+      console.log('outer transform:', ocs.transform, 'position:', ocs.position, 'overflow:', ocs.overflow);
+      console.log('dialog rect:', { l: Math.round(dlgRect.left), t: Math.round(dlgRect.top), w: Math.round(dlgRect.width), h: Math.round(dlgRect.height) });
+
+      // Toolbar wrappers (.aDj, .ahe).
+      const toolbars = dlg.querySelectorAll('.aDj, .ahe');
+      toolbars.forEach((tb, j) => {
+        const r = tb.getBoundingClientRect();
+        const cs = getComputedStyle(tb);
+        console.log('toolbar[' + j + '] cls=' + (tb.className || '').toString().slice(0, 60)
+          + ' rect=' + JSON.stringify({ l: Math.round(r.left), t: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) })
+          + ' position=' + cs.position
+          + ' top=' + cs.top + ' bottom=' + cs.bottom);
+      });
+
+      // Attachment chip area. Gmail uses .GM (chip wrapper), .aZo (chip),
+      // .dL (attachment list container), .GE.HI / .GP for body/wrappers.
+      const attachContainers = dlg.querySelectorAll('.GM, .dL, .aZo');
+      console.log('attachment-related nodes found:', attachContainers.length);
+      attachContainers.forEach((ac, j) => {
+        const r = ac.getBoundingClientRect();
+        const cs = getComputedStyle(ac);
+        console.log('attach[' + j + '] cls=' + (ac.className || '').toString().slice(0, 80)
+          + ' rect=' + JSON.stringify({ l: Math.round(r.left), t: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) })
+          + ' position=' + cs.position
+          + ' visibility=' + cs.visibility + ' display=' + cs.display
+          + ' overflow=' + cs.overflow);
+      });
+
+      // Compose body inner wrappers — the ones the old overflow:hidden
+      // rules targeted. Shows their current overflow and whether they
+      // clip children.
+      const wrappers = dlg.querySelectorAll('.GP, .qz, .Hd, .Hp, .nH');
+      wrappers.forEach((w, j) => {
+        const r = w.getBoundingClientRect();
+        const cs = getComputedStyle(w);
+        if (r.height < 20) return;
+        console.log('wrapper[' + j + '] cls=' + (w.className || '').toString().slice(0, 60)
+          + ' rect=' + JSON.stringify({ t: Math.round(r.top), b: Math.round(r.bottom), h: Math.round(r.height) })
+          + ' overflow=' + cs.overflow + '/' + cs.overflowY
+          + ' position=' + cs.position);
+      });
+
+      // Overlap check: is an attachment row's bottom below a toolbar's top?
+      if (toolbars.length && attachContainers.length) {
+        const tb = toolbars[0];
+        const tbRect = tb.getBoundingClientRect();
+        attachContainers.forEach((ac, j) => {
+          const r = ac.getBoundingClientRect();
+          if (r.height < 4) return;
+          const overlap = r.bottom - tbRect.top;
+          if (overlap > 0) {
+            console.warn('attach[' + j + '] OVERLAPS toolbar by ' + Math.round(overlap) + 'px (attachBottom=' + Math.round(r.bottom) + ' toolbarTop=' + Math.round(tbRect.top) + ')');
+          } else {
+            console.log('attach[' + j + '] clears toolbar by ' + Math.round(-overlap) + 'px');
+          }
+        });
+      }
+      console.groupEnd();
+    });
+  };
+  console.log('[Gmail Compose Drag] debug helper ready: call window.zhlInspectCompose() to dump layout');
 })();
 
   }
