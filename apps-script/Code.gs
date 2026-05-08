@@ -115,6 +115,147 @@ function doPost(e) {
   }
 }
 
+// Upsert a row in the Users sheet, keyed by email when known and by
+// anonId otherwise. When a batch arrives with both an email AND an
+// anonId, AND we already have an anon-only row for that anonId from
+// earlier batches, we MERGE the anon row's eventCount into the email
+// row and delete the anon row. This stops the dashboard from showing
+// the same person twice (one anon, one identified) once Gmail
+// identity capture catches up.
+function upsertUser_(ss, info) {
+  const u = ss.getSheetByName(SHEET_USERS);
+  if (!u) return;
+  if (!info.email && !info.anonId) return;
+
+  const data = u.getDataRange().getValues();
+  let emailRow = -1;
+  let anonRow = -1;
+
+  for (var i = 1; i < data.length; i++) {
+    const rowEmail = (data[i][0] || '').toString();
+    const rowAnon = (data[i][2] || '').toString();
+    if (info.email && rowEmail === info.email) emailRow = i + 1;
+    // Only consider anon rows (rowEmail empty) for anonId match — an
+    // anonId attached to an email row is just metadata.
+    if (info.anonId && rowAnon === info.anonId && !rowEmail) anonRow = i + 1;
+  }
+
+  const now = new Date();
+
+  if (info.email) {
+    // Identified batch — upsert the email row, then fold any matching
+    // anon row into it.
+    if (emailRow === -1) {
+      u.appendRow([info.email, info.name, info.anonId, now, now, info.version, info.eventDelta]);
+      emailRow = u.getLastRow();
+    } else {
+      if (info.name) u.getRange(emailRow, 2).setValue(info.name);
+      if (info.anonId && !data[emailRow - 1][2]) u.getRange(emailRow, 3).setValue(info.anonId);
+      u.getRange(emailRow, 5).setValue(now);
+      if (info.version) u.getRange(emailRow, 6).setValue(info.version);
+      u.getRange(emailRow, 7).setValue((Number(data[emailRow - 1][6]) || 0) + info.eventDelta);
+    }
+    if (anonRow !== -1) {
+      const orphanCount = Number(data[anonRow - 1][6]) || 0;
+      const currentEmailCount = Number(u.getRange(emailRow, 7).getValue()) || 0;
+      u.getRange(emailRow, 7).setValue(currentEmailCount + orphanCount);
+      u.deleteRow(anonRow);
+    }
+  } else {
+    // Anonymous batch — upsert the anon row.
+    if (anonRow === -1) {
+      u.appendRow(['', info.name, info.anonId, now, now, info.version, info.eventDelta]);
+    } else {
+      u.getRange(anonRow, 5).setValue(now);
+      if (info.version) u.getRange(anonRow, 6).setValue(info.version);
+      u.getRange(anonRow, 7).setValue((Number(data[anonRow - 1][6]) || 0) + info.eventDelta);
+    }
+  }
+}
+
+// Daily rollup: per-day per-user per-event counts. Cheap denormalized
+// table the dashboard reads instead of scanning Events on every refresh.
+function rollupDaily_(ss, email, events) {
+  const d = ss.getSheetByName(SHEET_DAILY);
+  if (!d) return;
+  const tz = Session.getScriptTimeZone();
+  const counts = {};
+  events.forEach(function (evt) {
+    const day = Utilities.formatDate(new Date(evt.ts || Date.now()), tz, 'yyyy-MM-dd');
+    const key = day + '' + email + '' + (evt.name || '');
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const data = d.getDataRange().getValues();
+  const index = {};
+  for (var i = 1; i < data.length; i++) {
+    const k = data[i][0] + '' + (data[i][1] || '') + '' + (data[i][2] || '');
+    index[k] = i + 1;
+  }
+  const newRows = [];
+  Object.keys(counts).forEach(function (k) {
+    if (index[k]) {
+      const rownum = index[k];
+      const current = Number(d.getRange(rownum, 4).getValue()) || 0;
+      d.getRange(rownum, 4).setValue(current + counts[k]);
+    } else {
+      const parts = k.split('');
+      newRows.push([parts[0], parts[1], parts[2], counts[k]]);
+    }
+  });
+  if (newRows.length > 0) {
+    d.getRange(d.getLastRow() + 1, 1, newRows.length, 4).setValues(newRows);
+  }
+}
+
+// One-time admin utility. Run from the Apps Script editor (function
+// dropdown → cleanupAnonRows → Run) to retroactively merge any anon
+// Users rows whose anonId has since been seen with an email in the
+// Events sheet. Cleans up the historical (anon) rows you can see on
+// the dashboard right now.
+function cleanupAnonRows() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const evSheet = ss.getSheetByName(SHEET_EVENTS);
+  const usSheet = ss.getSheetByName(SHEET_USERS);
+  if (!evSheet || !usSheet) throw new Error('Run setup() first.');
+
+  // Build anonId → email map from Events. Only rows where BOTH email
+  // and anonId are non-empty contribute — that's the link.
+  const evRows = evSheet.getDataRange().getValues();
+  const anonToEmail = {};
+  for (var i = 1; i < evRows.length; i++) {
+    const email = (evRows[i][1] || '').toString();
+    const anonId = (evRows[i][3] || '').toString();
+    if (email && anonId && !anonToEmail[anonId]) anonToEmail[anonId] = email;
+  }
+
+  // Walk Users from the bottom up so deletions don't shift indices.
+  const usRows = usSheet.getDataRange().getValues();
+  let merged = 0;
+  for (var r = usRows.length - 1; r >= 1; r--) {
+    const rowEmail = (usRows[r][0] || '').toString();
+    const rowAnon = (usRows[r][2] || '').toString();
+    const rowCount = Number(usRows[r][6]) || 0;
+    if (rowEmail) continue; // already identified
+    if (!rowAnon || !anonToEmail[rowAnon]) continue;
+    const targetEmail = anonToEmail[rowAnon];
+    // Find the email row to merge into.
+    let targetRow = -1;
+    for (var t = 1; t < usRows.length; t++) {
+      if ((usRows[t][0] || '').toString() === targetEmail) { targetRow = t + 1; break; }
+    }
+    if (targetRow === -1) {
+      // Promote the anon row to an email row in place.
+      usSheet.getRange(r + 1, 1).setValue(targetEmail);
+    } else {
+      const targetCount = Number(usSheet.getRange(targetRow, 7).getValue()) || 0;
+      usSheet.getRange(targetRow, 7).setValue(targetCount + rowCount);
+      usSheet.deleteRow(r + 1);
+    }
+    merged++;
+  }
+
+  SpreadsheetApp.getUi().alert('Done. Merged ' + merged + ' anon row(s) into their identified counterparts.');
+}
 
 function doGet() {
   // Serve the admin dashboard at the same /exec URL the extension POSTs

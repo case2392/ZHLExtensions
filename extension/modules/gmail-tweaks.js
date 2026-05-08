@@ -815,8 +815,8 @@
     if (data.feature_telemetry === false) return;
 
     function tryCapture() {
-      // The account button's aria-label is e.g.:
-      //   "Google Account: Justin Case (justinca@zillowhomeloans.com)"
+      // Method 1: aria-label on the Google Account button.
+      // e.g. "Google Account: Justin Case (justinca@zillowhomeloans.com)"
       const candidates = document.querySelectorAll(
         'a[aria-label*="Google Account"], a[href*="SignOutOptions"]'
       );
@@ -829,7 +829,7 @@
           const email = both[2].trim();
           try {
             chrome.runtime.sendMessage({ type: 'IDENTIFY', email, name });
-            chrome.runtime.sendMessage({ type: 'TRACK', event: 'identity_captured', props: { source: 'gmail' } });
+            chrome.runtime.sendMessage({ type: 'TRACK', event: 'identity_captured', props: { source: 'gmail_aria' } });
           } catch (_) {}
           return true;
         }
@@ -837,9 +837,21 @@
         if (onlyEmail) {
           try {
             chrome.runtime.sendMessage({ type: 'IDENTIFY', email: onlyEmail[1].trim() });
+            chrome.runtime.sendMessage({ type: 'TRACK', event: 'identity_captured', props: { source: 'gmail_aria_partial' } });
           } catch (_) {}
           return true;
         }
+      }
+      // Method 2: document.title fallback. Gmail's title is reliably
+      // "Inbox - <email> - Gmail" (or similar) regardless of UI variant
+      // — works across light/dark, multi-account, and reduced-data modes.
+      const titleMatch = /\s-\s([^\s@]+@[^\s@]+)\s-\sGmail/i.exec(document.title || '');
+      if (titleMatch) {
+        try {
+          chrome.runtime.sendMessage({ type: 'IDENTIFY', email: titleMatch[1].trim() });
+          chrome.runtime.sendMessage({ type: 'TRACK', event: 'identity_captured', props: { source: 'gmail_title' } });
+        } catch (_) {}
+        return true;
       }
       return false;
     }
