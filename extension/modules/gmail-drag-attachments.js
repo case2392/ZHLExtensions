@@ -191,8 +191,12 @@
       // handler reads. dataTransfer.files won't carry our JS File.
       activeDragFile = entry.file;
       activeDragInfo = info;
-      // Still try to populate dataTransfer for any drop targets that
-      // can read it natively (cross-window OS drops sometimes can).
+      // items.add is still needed: it sets dataTransfer.types to
+      // include 'Files', which is what the LOP receiver tests for
+      // when deciding whether to preventDefault dragover. Chrome may
+      // strip our file at drop time and substitute Gmail's chip
+      // preview thumbnail (a webp) — the LOP receiver knows to ignore
+      // dataTransfer.files in favor of the SW-cached real file.
       try { e.dataTransfer.clearData(); } catch (_) {}
       e.dataTransfer.items.add(entry.file);
       try { e.dataTransfer.effectAllowed = 'copy'; } catch (_) {}

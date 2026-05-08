@@ -118,13 +118,17 @@
     });
   }, true);
 
-  // dragover.preventDefault() is what allows drop to fire. We only
-  // call it when we have a confirmed Gmail drag — leaves native OS
-  // file drops untouched (they'd handle preventDefault themselves on
-  // their target dropzones).
+  // dragover.preventDefault() is what allows drop to fire. We always
+  // call it when a Files-type drag is in progress, regardless of
+  // whether cachedDrag is set yet — the SW lookup on dragenter is
+  // async, so cachedDrag may not be populated by the time dragover
+  // fires. preventDefault() on dragover doesn't break native OS file
+  // drops (LOP's own dropzone handlers also call preventDefault on
+  // dragover); it just guarantees that drop events fire so our drop
+  // handler can decide whether to inject from the SW cache or let the
+  // native file through.
   window.addEventListener('dragover', function (e) {
     if (!hasFilesType(e.dataTransfer)) return;
-    if (!cachedDrag) return;
     e.preventDefault();
     if (e.dataTransfer) {
       try { e.dataTransfer.dropEffect = 'copy'; } catch (_) {}
@@ -134,13 +138,19 @@
   window.addEventListener('drop', function (e) {
     const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
     const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
-    console.log('[LOP Drop Receiver] drop fired: types=', types, 'files.length=', filesLen, 'target=', e.target && e.target.tagName, 'cachedDrag=', cachedDrag ? cachedDrag.name : 'null');
+    let firstFileName = '';
+    if (filesLen > 0) firstFileName = e.dataTransfer.files[0].name + ' (' + e.dataTransfer.files[0].type + ')';
+    console.log('[LOP Drop Receiver] drop fired: types=', types, 'files.length=', filesLen, 'firstFile=', firstFileName, 'target=', e.target && e.target.tagName, 'cachedDrag=', cachedDrag ? cachedDrag.name : 'null');
     if (!hasFilesType(e.dataTransfer)) return;
-    // If a real OS file is being dropped, dataTransfer.files will be
-    // populated — let LOP's own handler take it. We only step in when
-    // dataTransfer.files is empty (the Gmail-stripped case).
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) return;
-    // Last-chance refresh in case dragenter never fired (rare).
+    // Important: when dragging across tabs, Chrome populates
+    // dataTransfer.files with the drag IMAGE (a webp screenshot of the
+    // source element — e.g. "0.webp") rather than our intended File.
+    // So we can't use files.length > 0 as the "this is a real OS drop,
+    // skip" signal. Instead: if the SW has an active Gmail drag, we
+    // ALWAYS intercept and replace whatever Chrome put in
+    // dataTransfer.files with our reconstructed PDF. If no active
+    // Gmail drag, we let the native drop proceed untouched (real OS
+    // file drops still work).
     const handle = function (drag) {
       if (!drag) return;
       e.preventDefault();
@@ -154,19 +164,32 @@
         return;
       }
       if (injectFile(input, file)) {
-        console.log('[LOP Drop Receiver] injected', file.name, '(' + file.size + ' bytes) into', input);
+        console.log('[LOP Drop Receiver] injected', file.name, '(' + file.size + ' bytes,', file.type + ') into', input);
       }
       cachedDrag = null;
       try { chrome.runtime.sendMessage({ type: 'GMAIL_DRAG_END' }); } catch (_) {}
     };
     if (cachedDrag) {
       handle(cachedDrag);
-    } else {
-      // Synchronous SW message can't be done here — drop handler must
-      // call preventDefault before returning to count. Best effort:
-      // refresh and handle async; if no drag, nothing happens.
-      refreshActiveDrag().then(handle);
+      return;
     }
+    // No cachedDrag — most likely a real OS file drop. Don't
+    // intercept; let LOP's own drop handler run on the native files.
+    // If the SW *did* have a stale Gmail drag we missed (dragenter
+    // race), best-effort late inject after the fact; LOP may already
+    // have begun processing the webp, but the PDF will appear in the
+    // upload list alongside, which the user can keep.
+    const savedTarget = e.target;
+    refreshActiveDrag().then(function (drag) {
+      if (!drag) return;
+      const blob = b64ToBlob(drag.b64, drag.mime);
+      const file = new File([blob], drag.name, { type: drag.mime });
+      const input = findFileInput(savedTarget);
+      if (!input || !injectFile(input, file)) return;
+      console.log('[LOP Drop Receiver] late-inject', file.name, '(' + file.size + ' bytes) — LOP may also have processed the OS payload');
+      cachedDrag = null;
+      try { chrome.runtime.sendMessage({ type: 'GMAIL_DRAG_END' }); } catch (_) {}
+    });
   }, true);
 })();
   }
