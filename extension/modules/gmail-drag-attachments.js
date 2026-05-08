@@ -28,9 +28,14 @@
     const idx1 = dlAttr.indexOf(':');
     const idx2 = dlAttr.indexOf(':', idx1 + 1);
     if (idx1 < 1 || idx2 < idx1 + 1) return null;
+    let filename = dlAttr.slice(idx1 + 1, idx2);
+    // Gmail URL-encodes spaces and special chars in the filename
+    // portion ("W2 25.pdf" → "W2%2025.pdf"). Decode so the dropped
+    // file has a sensible name.
+    try { filename = decodeURIComponent(filename); } catch (_) {}
     return {
       mime: dlAttr.slice(0, idx1),
-      filename: dlAttr.slice(idx1 + 1, idx2),
+      filename: filename,
       url: dlAttr.slice(idx2 + 1)
     };
   }
@@ -148,6 +153,9 @@
       return;
     }
     try {
+      // Wipe Gmail's pre-populated payload first so we're not racing
+      // with whatever it set. Our File becomes the primary item.
+      try { e.dataTransfer.clearData(); } catch (_) {}
       // Add a real File so external drop targets (LOP, Slack, file
       // inputs) see e.dataTransfer.files / e.dataTransfer.items as a
       // normal file drop.
@@ -159,10 +167,21 @@
           (entry.file.type || 'application/octet-stream') +
           ':' + entry.file.name + ':' + info.url);
       } catch (_) {}
-      // Make sure copy is allowed.
       try { e.dataTransfer.effectAllowed = 'copy'; } catch (_) {}
       console.log('[Gmail Drag Attach] dragstart: added File ' + entry.file.name +
         ' (' + entry.file.size + ' bytes) to dataTransfer');
+      // Post-add verification — what does the browser actually see?
+      try {
+        const t = e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
+        const fc = e.dataTransfer.files ? e.dataTransfer.files.length : 0;
+        console.log('[Gmail Drag Attach] post-add types=', t, 'files.length=', fc);
+      } catch (_) {}
+      // Stop propagation so Gmail's own dragstart listener doesn't
+      // reset the dataTransfer or replace our File with its HTML
+      // payload. Phase 2 still handles drops on Gmail compose body
+      // since that's a drop event, not dragstart.
+      e.stopPropagation();
+      e.stopImmediatePropagation();
     } catch (err) {
       console.warn('[Gmail Drag Attach] items.add failed:', err);
     }
