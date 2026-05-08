@@ -94,41 +94,34 @@
     return false;
   }
 
-  // Refresh the cached drag metadata on dragenter so dragover knows
-  // whether to preventDefault. Throttled to once per ~250ms so a
-  // burst of dragenter events from nested elements doesn't spam the SW.
+  // Refresh the cached drag metadata on every dragenter, throttled.
+  // We can't gate on dataTransfer.types containing 'Files' — Chrome
+  // strips JS-constructed File objects from cross-tab dataTransfer
+  // entirely, so a Gmail drag arriving on LOP shows up as
+  // types=['text/plain'] (or just empty). The only reliable signal
+  // that a Gmail drag is active is the SW cache. Throttling to 250ms
+  // means a burst of nested-element dragenters costs at most one
+  // sendMessage round-trip per drag.
   window.addEventListener('dragenter', function (e) {
     const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
     const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
-    if (!hasFilesType(e.dataTransfer)) {
-      // Helpful diagnostic: even non-Files drags reach us. If you see
-      // *no* dragenter log on LOP at all, the cursor never made it
-      // into the LOP window during the drag.
-      if (types.length) console.log('[LOP Drop Receiver] dragenter (non-File): types=', types);
-      return;
-    }
-    console.log('[LOP Drop Receiver] dragenter w/ Files: types=', types, 'files.length=', filesLen, 'target=', e.target && e.target.tagName);
     const now = Date.now();
     if (now - lastRefreshAt < 250) return;
     lastRefreshAt = now;
     refreshActiveDrag().then(function (drag) {
       cachedDrag = drag;
-      if (drag) console.log('[LOP Drop Receiver] active Gmail drag detected:', drag.name, drag.size, 'bytes');
-      else console.log('[LOP Drop Receiver] SW reports no active Gmail drag (this drop is probably a native OS file)');
+      if (drag) console.log('[LOP Drop Receiver] active Gmail drag detected:', drag.name, drag.size, 'bytes (drag types=', types, ')');
+      else if (types.length || filesLen) console.log('[LOP Drop Receiver] dragenter, SW reports no Gmail drag (types=', types, 'files.length=', filesLen, ') — letting native through');
     });
   }, true);
 
-  // dragover.preventDefault() is what allows drop to fire. We always
-  // call it when a Files-type drag is in progress, regardless of
-  // whether cachedDrag is set yet — the SW lookup on dragenter is
-  // async, so cachedDrag may not be populated by the time dragover
-  // fires. preventDefault() on dragover doesn't break native OS file
-  // drops (LOP's own dropzone handlers also call preventDefault on
-  // dragover); it just guarantees that drop events fire so our drop
-  // handler can decide whether to inject from the SW cache or let the
-  // native file through.
+  // dragover.preventDefault() is what allows drop to fire on this
+  // target. We preventDefault whenever the SW knows about an active
+  // Gmail drag (cachedDrag set) — works regardless of what
+  // dataTransfer.types looks like, including the cross-tab case where
+  // Chrome strips 'Files' from the type list.
   window.addEventListener('dragover', function (e) {
-    if (!hasFilesType(e.dataTransfer)) return;
+    if (!cachedDrag) return;
     e.preventDefault();
     if (e.dataTransfer) {
       try { e.dataTransfer.dropEffect = 'copy'; } catch (_) {}
@@ -141,16 +134,11 @@
     let firstFileName = '';
     if (filesLen > 0) firstFileName = e.dataTransfer.files[0].name + ' (' + e.dataTransfer.files[0].type + ')';
     console.log('[LOP Drop Receiver] drop fired: types=', types, 'files.length=', filesLen, 'firstFile=', firstFileName, 'target=', e.target && e.target.tagName, 'cachedDrag=', cachedDrag ? cachedDrag.name : 'null');
-    if (!hasFilesType(e.dataTransfer)) return;
-    // Important: when dragging across tabs, Chrome populates
-    // dataTransfer.files with the drag IMAGE (a webp screenshot of the
-    // source element — e.g. "0.webp") rather than our intended File.
-    // So we can't use files.length > 0 as the "this is a real OS drop,
-    // skip" signal. Instead: if the SW has an active Gmail drag, we
-    // ALWAYS intercept and replace whatever Chrome put in
-    // dataTransfer.files with our reconstructed PDF. If no active
-    // Gmail drag, we let the native drop proceed untouched (real OS
-    // file drops still work).
+    // No hasFilesType gate here: cross-tab Gmail drags arrive on LOP
+    // with types=['text/plain'] (Chrome strips the JS-File entirely).
+    // The only reliable signal is the SW cache. If cachedDrag is set
+    // OR the SW reports an active drag on a fresh lookup, intercept.
+    // Otherwise this is something else and we let it through untouched.
     const handle = function (drag) {
       if (!drag) return;
       e.preventDefault();
