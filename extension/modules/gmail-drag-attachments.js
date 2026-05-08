@@ -210,8 +210,12 @@
             mime: entry.file.type,
             size: entry.file.size,
             b64: entry.b64
+          }, function (resp) {
+            const lastErr = chrome.runtime && chrome.runtime.lastError;
+            if (lastErr) console.warn('[Gmail Drag Attach] SW dragstart msg err:', lastErr.message);
+            else console.log('[Gmail Drag Attach] SW cached file for cross-tab; b64.len=' + entry.b64.length, resp);
           });
-        } catch (_) {}
+        } catch (e) { console.warn('[Gmail Drag Attach] SW dragstart send threw:', e); }
       } else if (entry.tooBigForCrossTab) {
         console.warn('[Gmail Drag Attach] file > ' +
           (CROSS_TAB_MAX_BYTES / 1024 / 1024) +

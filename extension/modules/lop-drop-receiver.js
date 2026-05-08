@@ -98,13 +98,23 @@
   // whether to preventDefault. Throttled to once per ~250ms so a
   // burst of dragenter events from nested elements doesn't spam the SW.
   window.addEventListener('dragenter', function (e) {
-    if (!hasFilesType(e.dataTransfer)) return;
+    const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
+    const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
+    if (!hasFilesType(e.dataTransfer)) {
+      // Helpful diagnostic: even non-Files drags reach us. If you see
+      // *no* dragenter log on LOP at all, the cursor never made it
+      // into the LOP window during the drag.
+      if (types.length) console.log('[LOP Drop Receiver] dragenter (non-File): types=', types);
+      return;
+    }
+    console.log('[LOP Drop Receiver] dragenter w/ Files: types=', types, 'files.length=', filesLen, 'target=', e.target && e.target.tagName);
     const now = Date.now();
     if (now - lastRefreshAt < 250) return;
     lastRefreshAt = now;
     refreshActiveDrag().then(function (drag) {
       cachedDrag = drag;
       if (drag) console.log('[LOP Drop Receiver] active Gmail drag detected:', drag.name, drag.size, 'bytes');
+      else console.log('[LOP Drop Receiver] SW reports no active Gmail drag (this drop is probably a native OS file)');
     });
   }, true);
 
@@ -122,6 +132,9 @@
   }, true);
 
   window.addEventListener('drop', function (e) {
+    const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
+    const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
+    console.log('[LOP Drop Receiver] drop fired: types=', types, 'files.length=', filesLen, 'target=', e.target && e.target.tagName, 'cachedDrag=', cachedDrag ? cachedDrag.name : 'null');
     if (!hasFilesType(e.dataTransfer)) return;
     // If a real OS file is being dropped, dataTransfer.files will be
     // populated — let LOP's own handler take it. We only step in when
