@@ -115,6 +115,7 @@ function doPost(e) {
   }
 }
 
+
 function doGet() {
   // Serve the admin dashboard at the same /exec URL the extension POSTs
   // to. Domain-restricted deployments (URL contains /a/macros/<domain>/)
@@ -125,85 +126,108 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+// Lightweight aggregator. Reads the pre-summarized Daily and Users
+// sheets (small, already keyed) and only the LAST chunk of Events for
+// the recent-events table. Avoids scanning the full Events sheet on
+// every dashboard refresh — that was the resource hog before.
 function getDashboardData(opts) {
   opts = opts || {};
   const daysBack = Math.max(1, Math.min(365, Number(opts.daysBack) || 30));
   const filterUser = (opts.filterUser || '').toString().toLowerCase().trim();
   const filterEvent = (opts.filterEvent || '').toString().trim();
-  const cutoff = Date.now() - daysBack * 86400 * 1000;
+  const tz = Session.getScriptTimeZone();
+  const cutoffMs = Date.now() - daysBack * 86400 * 1000;
+  const cutoffDay = Utilities.formatDate(new Date(cutoffMs), tz, 'yyyy-MM-dd');
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const evSheet = ss.getSheetByName(SHEET_EVENTS);
-  const usSheet = ss.getSheetByName(SHEET_USERS);
-  if (!evSheet) throw new Error('Run setup() first.');
+  const dailySheet = ss.getSheetByName(SHEET_DAILY);
+  const usersSheet = ss.getSheetByName(SHEET_USERS);
+  const eventsSheet = ss.getSheetByName(SHEET_EVENTS);
+  if (!dailySheet || !usersSheet || !eventsSheet) {
+    throw new Error('Run setup() first to create the Events / Users / Daily sheets.');
+  }
 
-  const evRows = evSheet.getDataRange().getValues();
-  const usRows = usSheet ? usSheet.getDataRange().getValues() : [];
-
-  // Header is row 0. Columns: Timestamp, Email, Name, AnonId, Version,
-  // Event, Props, URL, BatchSentAt.
-  const byEventCount = {};
+  // ---- Aggregations from the small Daily sheet ----------------------
   const byDayCount = {};
+  const byEventCount = {};
   const byUserCount = {};
-  const versionCount = {};
   let totalEvents = 0;
-  let eventsLast24h = 0;
-  const recent = [];
-  const tz = Session.getScriptTimeZone();
 
-  for (var i = 1; i < evRows.length; i++) {
-    const r = evRows[i];
-    const ts = r[0] instanceof Date ? r[0].getTime() : new Date(r[0]).getTime();
-    if (!ts || ts < cutoff) continue;
+  const dailyValues = dailySheet.getDataRange().getValues();
+  for (var i = 1; i < dailyValues.length; i++) {
+    const r = dailyValues[i];
+    const date = (r[0] || '').toString();
     const email = (r[1] || '').toString();
-    const event = (r[5] || '').toString();
-    const version = (r[4] || '').toString();
+    const event = (r[2] || '').toString();
+    const count = Number(r[3]) || 0;
+    if (!date || count === 0) continue;
+    if (date < cutoffDay) continue;
     if (filterUser && email.toLowerCase() !== filterUser) continue;
     if (filterEvent && event !== filterEvent) continue;
-    totalEvents++;
-    if (Date.now() - ts < 24 * 3600 * 1000) eventsLast24h++;
-    byEventCount[event] = (byEventCount[event] || 0) + 1;
-    const day = Utilities.formatDate(new Date(ts), tz, 'yyyy-MM-dd');
-    byDayCount[day] = (byDayCount[day] || 0) + 1;
+    byDayCount[date] = (byDayCount[date] || 0) + count;
+    byEventCount[event] = (byEventCount[event] || 0) + count;
     const userKey = email || '(anonymous)';
-    byUserCount[userKey] = (byUserCount[userKey] || 0) + 1;
-    if (version) versionCount[version] = (versionCount[version] || 0) + 1;
-    if (recent.length < 100) {
+    byUserCount[userKey] = (byUserCount[userKey] || 0) + count;
+    totalEvents += count;
+  }
+
+  // ---- Recent events: read the last 200 rows of Events directly,
+  // not the whole sheet. Ranged read is much cheaper than a full scan.
+  const lastRow = eventsSheet.getLastRow();
+  const recent = [];
+  if (lastRow > 1) {
+    const want = 200;
+    const start = Math.max(2, lastRow - want + 1);
+    const numRows = lastRow - start + 1;
+    const recentValues = eventsSheet.getRange(start, 1, numRows, 9).getValues();
+    for (var j = recentValues.length - 1; j >= 0 && recent.length < 50; j--) {
+      const r = recentValues[j];
+      const ts = r[0] instanceof Date ? r[0].getTime() : new Date(r[0]).getTime();
+      if (!ts || ts < cutoffMs) continue;
+      const email = (r[1] || '').toString();
+      const event = (r[5] || '').toString();
+      if (filterUser && email.toLowerCase() !== filterUser) continue;
+      if (filterEvent && event !== filterEvent) continue;
       recent.push({
         ts: ts,
         email: email,
         name: (r[2] || '').toString(),
-        version: version,
+        version: (r[4] || '').toString(),
         event: event,
         props: (r[6] || '').toString()
       });
     }
   }
-  recent.sort(function (a, b) { return b.ts - a.ts; });
 
+  // ---- 24h count: count Events rows with ts >= 24h ago ---------------
+  // Cheap because we're already iterating the recent slice.
+  let eventsLast24h = 0;
+  const oneDayAgo = Date.now() - 24 * 3600 * 1000;
+  for (var k = 0; k < recent.length; k++) {
+    if (recent[k].ts >= oneDayAgo) eventsLast24h++;
+  }
+
+  // ---- Users: read the (small) Users sheet directly ------------------
   const users = [];
-  for (var j = 1; j < usRows.length; j++) {
-    const u = usRows[j];
-    const email = (u[0] || '').toString();
+  const usersValues = usersSheet.getDataRange().getValues();
+  for (var u = 1; u < usersValues.length; u++) {
+    const row = usersValues[u];
+    const email = (row[0] || '').toString();
     if (filterUser && email.toLowerCase() !== filterUser) continue;
     users.push({
       email: email,
-      name: (u[1] || '').toString(),
-      anonId: (u[2] || '').toString(),
-      firstSeen: u[3] instanceof Date ? u[3].getTime() : null,
-      lastSeen: u[4] instanceof Date ? u[4].getTime() : null,
-      latestVersion: (u[5] || '').toString(),
-      eventCount: Number(u[6]) || 0
+      name: (row[1] || '').toString(),
+      anonId: (row[2] || '').toString(),
+      firstSeen: row[3] instanceof Date ? row[3].getTime() : null,
+      lastSeen: row[4] instanceof Date ? row[4].getTime() : null,
+      latestVersion: (row[5] || '').toString(),
+      eventCount: Number(row[6]) || 0
     });
   }
   users.sort(function (a, b) { return (b.eventCount || 0) - (a.eventCount || 0); });
 
-  // Latest version = most-frequent in window
-  let latestVersion = '';
-  let latestCount = -1;
-  Object.keys(versionCount).forEach(function (v) {
-    if (versionCount[v] > latestCount) { latestVersion = v; latestCount = versionCount[v]; }
-  });
+  // ---- Latest version = top-eventCount user's version ----------------
+  const latestVersion = users.length > 0 ? users[0].latestVersion : '';
 
   return {
     summary: {
@@ -211,167 +235,104 @@ function getDashboardData(opts) {
       totalEvents: totalEvents,
       eventsLast24h: eventsLast24h,
       latestVersion: latestVersion,
-      windowDays: daysBack,
-      generatedAt: new Date().toISOString()
+      windowDays: daysBack
     },
     byEvent: Object.keys(byEventCount).map(function (k) { return { event: k, count: byEventCount[k] }; })
-      .sort(function (a, b) { return b.count - a.count; }),
+      .sort(function (a, b) { return b.count - a.count; }).slice(0, 20),
     byDay: Object.keys(byDayCount).map(function (k) { return { date: k, count: byDayCount[k] }; })
       .sort(function (a, b) { return a.date < b.date ? -1 : 1; }),
-    byUser: Object.keys(byUserCount).map(function (k) { return { user: k, count: byUserCount[k] }; })
-      .sort(function (a, b) { return b.count - a.count; }),
-    users: users,
-    recent: recent,
-    eventNames: Object.keys(byEventCount).sort()
+    users: users.slice(0, 100),
+    recent: recent
   };
 }
 
+// Lightweight dashboard — pure CSS, no Chart.js, no auto-refresh.
+// Rebuilt to be GPU-friendly: the previous version used Chart.js
+// inside the Apps Script iframe sandbox and triggered constant
+// redraws that black-screened low-end machines.
 const DASHBOARD_HTML_ =
 '<!doctype html><html><head><meta charset="utf-8">' +
 '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-'<title>ZHL Productivity Pack — Telemetry</title>' +
-'<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>' +
+'<title>ZHL Pack — Telemetry</title>' +
 '<style>' +
-':root{--bg:#0f1115;--card:#171a21;--card2:#1f232c;--bd:#2a2f3a;--fg:#e6e8ee;--mut:#8a93a6;--accent:#3b82f6;--good:#10b981;--warn:#f59e0b}' +
-'*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}' +
-'header{padding:18px 24px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:18px;flex-wrap:wrap}' +
-'header h1{margin:0;font-size:18px;font-weight:600}' +
+':root{--bg:#0f1115;--card:#171a21;--card2:#1f232c;--bd:#2a2f3a;--fg:#e6e8ee;--mut:#8a93a6;--accent:#3b82f6}' +
+'*{box-sizing:border-box}body{margin:0;font:14px -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}' +
+'header{padding:16px 22px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:14px;flex-wrap:wrap}' +
+'header h1{margin:0;font-size:17px;font-weight:600}' +
 'header .controls{margin-left:auto;display:flex;gap:8px;align-items:center}' +
-'select,button,input{background:var(--card2);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;font-size:13px;font-family:inherit}' +
+'select,button{background:var(--card2);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;font:inherit}' +
 'button{cursor:pointer}button:hover{background:var(--bd)}' +
-'main{padding:18px 24px;display:grid;grid-template-columns:repeat(12,1fr);gap:14px}' +
-'.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px}' +
-'.card h2{margin:0 0 8px 0;font-size:13px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}' +
-'.kpi{font-size:28px;font-weight:700}.kpi small{font-size:12px;color:var(--mut);font-weight:400;margin-left:6px}' +
-'.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-8{grid-column:span 8}.span-12{grid-column:span 12}' +
-'@media(max-width:1100px){.span-3,.span-4{grid-column:span 6}.span-6,.span-8{grid-column:span 12}}' +
-'@media(max-width:640px){.span-3,.span-4,.span-6,.span-8{grid-column:span 12}}' +
+'main{padding:16px 22px;display:grid;grid-template-columns:repeat(12,1fr);gap:12px}' +
+'.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px}' +
+'.card h2{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}' +
+'.kpi{font-size:26px;font-weight:700}' +
+'.s3{grid-column:span 3}.s6{grid-column:span 6}.s8{grid-column:span 8}.s12{grid-column:span 12}' +
+'@media(max-width:1100px){.s3{grid-column:span 6}.s6,.s8{grid-column:span 12}}' +
+'@media(max-width:640px){.s3,.s6,.s8{grid-column:span 12}}' +
 'table{width:100%;border-collapse:collapse;font-size:13px}' +
-'th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-'th{color:var(--mut);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.5px}' +
+'th,td{padding:6px 9px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}' +
+'th{color:var(--mut);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px}' +
 'tbody tr{cursor:pointer}tbody tr:hover{background:var(--card2)}' +
-'.bar{height:6px;background:var(--bd);border-radius:3px;overflow:hidden}.bar>span{display:block;height:100%;background:var(--accent)}' +
-'.muted{color:var(--mut)}.right{text-align:right}.tag{display:inline-block;padding:2px 8px;border-radius:99px;background:var(--card2);border:1px solid var(--bd);font-size:11px}' +
-'.empty{padding:30px;text-align:center;color:var(--mut)}' +
-'.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}' +
-'#status{font-size:12px;color:var(--mut)}' +
-'.chip{padding:3px 9px;border-radius:99px;font-size:12px;background:var(--card2);border:1px solid var(--bd);cursor:pointer;display:inline-flex;align-items:center;gap:6px}' +
-'.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}' +
-'.chip .x{opacity:.7}' +
-'.scroll-y{max-height:520px;overflow:auto}' +
+'.bar{height:5px;background:var(--bd);border-radius:3px;overflow:hidden;margin-top:3px}.bar>span{display:block;height:100%;background:var(--accent)}' +
+'.muted{color:var(--mut)}.right{text-align:right}' +
+'.chip{padding:2px 8px;border-radius:99px;font-size:12px;background:var(--accent);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:5px;border:none}' +
+'.chip .x{opacity:.85}' +
+'.scroll{max-height:520px;overflow:auto}' +
+'.daybars{display:flex;align-items:flex-end;gap:2px;height:120px;padding:6px 0}' +
+'.daybars>div{flex:1;background:var(--accent);min-height:2px;border-radius:2px 2px 0 0;position:relative}' +
+'.daybars>div:hover::after{content:attr(data-tip);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--bd);padding:3px 7px;border-radius:4px;font-size:11px;white-space:nowrap;z-index:10}' +
+'.daylabels{display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:6px}' +
+'#status{font-size:12px;color:var(--mut);min-width:90px;text-align:right}' +
+'.empty{padding:24px;text-align:center;color:var(--mut)}' +
 '</style></head><body>' +
 '<header>' +
-'<h1>ZHL Productivity Pack — Telemetry</h1>' +
-'<div id="filters" class="row" style="gap:6px"></div>' +
+'<h1>ZHL Pack — Telemetry</h1>' +
+'<div id="filters" style="display:flex;gap:5px"></div>' +
 '<div class="controls">' +
-'<label class="muted">Window</label>' +
-'<select id="days"><option value="1">1 day</option><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option></select>' +
-'<button id="refresh">↻ Refresh</button>' +
-'<span id="status"></span>' +
+'<label class="muted" style="font-size:12px">Window</label>' +
+'<select id="days"><option value="7">7d</option><option value="30" selected>30d</option><option value="90">90d</option><option value="365">1yr</option></select>' +
+'<button id="refresh">Refresh</button>' +
+'<span id="status">—</span>' +
 '</div>' +
 '</header>' +
 '<main id="grid">' +
-'<div class="card span-3"><h2>Total users</h2><div class="kpi" id="kpi-users">—</div></div>' +
-'<div class="card span-3"><h2>Total events</h2><div class="kpi" id="kpi-events">—</div></div>' +
-'<div class="card span-3"><h2>Events last 24h</h2><div class="kpi" id="kpi-24h">—</div></div>' +
-'<div class="card span-3"><h2>Latest version</h2><div class="kpi" id="kpi-version">—</div></div>' +
-'<div class="card span-8"><h2>Events per day</h2><canvas id="chart-day" height="120"></canvas></div>' +
-'<div class="card span-4"><h2>Top tools</h2><div id="top-tools"></div></div>' +
-'<div class="card span-6"><h2>Users (click to filter)</h2><div class="scroll-y"><table id="users-table"><thead><tr><th>Email</th><th>Name</th><th class="right">Events</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></div>' +
-'<div class="card span-6"><h2>Recent events (newest first)</h2><div class="scroll-y"><table id="events-table"><thead><tr><th>When</th><th>User</th><th>Event</th><th>Props</th></tr></thead><tbody></tbody></table></div></div>' +
+'<div class="card s3"><h2>Users</h2><div class="kpi" id="kpi-users">—</div></div>' +
+'<div class="card s3"><h2>Events</h2><div class="kpi" id="kpi-events">—</div></div>' +
+'<div class="card s3"><h2>Last 24h</h2><div class="kpi" id="kpi-24h">—</div></div>' +
+'<div class="card s3"><h2>Version</h2><div class="kpi" id="kpi-version">—</div></div>' +
+'<div class="card s8"><h2>Events per day</h2><div class="daybars" id="daybars"></div><div class="daylabels"><span id="lbl-from"></span><span id="lbl-to"></span></div></div>' +
+'<div class="card s6"><h2>Top tools (click to filter)</h2><div id="top-tools"></div></div>' +
+'<div class="card s6"><h2>Users (click to filter)</h2><div class="scroll"><table id="users-table"><thead><tr><th>Email</th><th class="right">Events</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></div>' +
+'<div class="card s12"><h2>Recent events</h2><div class="scroll"><table id="events-table"><thead><tr><th>When</th><th>User</th><th>Event</th><th>Props</th></tr></thead><tbody></tbody></table></div></div>' +
 '</main>' +
 '<script>' +
 'var state={daysBack:30,filterUser:"",filterEvent:""};' +
-'var chartDay=null;' +
-'function fmtRel(ts){if(!ts)return"—";var d=Date.now()-ts;if(d<60000)return"just now";if(d<3600000)return Math.floor(d/60000)+"m ago";if(d<86400000)return Math.floor(d/3600000)+"h ago";if(d<7*86400000)return Math.floor(d/86400000)+"d ago";return new Date(ts).toLocaleDateString()}' +
-'function fmtTime(ts){if(!ts)return"";return new Date(ts).toLocaleString()}' +
-'function setStatus(s){document.getElementById("status").textContent=s||""}' +
-'function refresh(){setStatus("Loading…");google.script.run.withSuccessHandler(render).withFailureHandler(function(err){setStatus("Error: "+err)}).getDashboardData(state)}' +
-'function render(d){setStatus("Updated "+new Date().toLocaleTimeString());' +
-'document.getElementById("kpi-users").textContent=d.summary.totalUsers;' +
-'document.getElementById("kpi-events").textContent=d.summary.totalEvents;' +
-'document.getElementById("kpi-24h").textContent=d.summary.eventsLast24h;' +
-'document.getElementById("kpi-version").textContent=d.summary.latestVersion||"—";' +
+'function fmtRel(ts){if(!ts)return"—";var d=Date.now()-ts;if(d<60000)return"now";if(d<3600000)return Math.floor(d/60000)+"m";if(d<86400000)return Math.floor(d/3600000)+"h";if(d<7*86400000)return Math.floor(d/86400000)+"d";return new Date(ts).toLocaleDateString()}' +
+'function setText(id,t){document.getElementById(id).textContent=t}' +
+'function refresh(){setText("status","Loading…");google.script.run.withSuccessHandler(render).withFailureHandler(function(err){setText("status","Error")}).getDashboardData(state)}' +
+'function render(d){setText("status",new Date().toLocaleTimeString().slice(0,5));' +
+'setText("kpi-users",d.summary.totalUsers);setText("kpi-events",d.summary.totalEvents);setText("kpi-24h",d.summary.eventsLast24h);setText("kpi-version",d.summary.latestVersion||"—");' +
 'var f=document.getElementById("filters");f.innerHTML="";' +
-'if(state.filterUser){var c=document.createElement("span");c.className="chip active";c.innerHTML="user: "+state.filterUser+\' <span class="x">×</span>\';c.onclick=function(){state.filterUser="";refresh()};f.appendChild(c)}' +
-'if(state.filterEvent){var c=document.createElement("span");c.className="chip active";c.innerHTML="event: "+state.filterEvent+\' <span class="x">×</span>\';c.onclick=function(){state.filterEvent="";refresh()};f.appendChild(c)}' +
+'function chip(label,clear){var c=document.createElement("button");c.className="chip";c.innerHTML=label+\' <span class="x">×</span>\';c.onclick=clear;return c}' +
+'if(state.filterUser)f.appendChild(chip("user: "+state.filterUser,function(){state.filterUser="";refresh()}));' +
+'if(state.filterEvent)f.appendChild(chip("event: "+state.filterEvent,function(){state.filterEvent="";refresh()}));' +
 'var tt=document.getElementById("top-tools");tt.innerHTML="";var max=(d.byEvent[0]||{}).count||1;' +
-'d.byEvent.slice(0,12).forEach(function(e){var row=document.createElement("div");row.style.margin="6px 0";row.style.cursor="pointer";' +
-'row.innerHTML=\'<div class="row" style="justify-content:space-between"><span>\'+e.event+\'</span><span class="muted">\'+e.count+\'</span></div><div class="bar"><span style="width:\'+(100*e.count/max)+\'%"></span></div>\';' +
+'d.byEvent.forEach(function(e){var row=document.createElement("div");row.style.cssText="margin:5px 0;cursor:pointer";' +
+'row.innerHTML=\'<div style="display:flex;justify-content:space-between"><span>\'+e.event+\'</span><span class="muted">\'+e.count+\'</span></div><div class="bar"><span style="width:\'+(100*e.count/max)+\'%"></span></div>\';' +
 'row.onclick=function(){state.filterEvent=e.event;refresh()};tt.appendChild(row)});' +
-'if(d.byEvent.length===0){tt.innerHTML=\'<div class="empty">No events in this window.</div>\'}' +
-'var labels=d.byDay.map(function(x){return x.date});var counts=d.byDay.map(function(x){return x.count});' +
-'if(chartDay)chartDay.destroy();var ctx=document.getElementById("chart-day").getContext("2d");' +
-'chartDay=new Chart(ctx,{type:"line",data:{labels:labels,datasets:[{label:"Events",data:counts,borderColor:"#3b82f6",backgroundColor:"rgba(59,130,246,.15)",fill:true,tension:.3,pointRadius:3}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:"#8a93a6"},grid:{color:"#2a2f3a"}},y:{ticks:{color:"#8a93a6"},grid:{color:"#2a2f3a"},beginAtZero:true}}}});' +
+'if(!d.byEvent.length)tt.innerHTML=\'<div class="empty">No events.</div>\';' +
+'var db=document.getElementById("daybars");db.innerHTML="";var dmax=1;d.byDay.forEach(function(x){if(x.count>dmax)dmax=x.count});' +
+'d.byDay.forEach(function(x){var bar=document.createElement("div");bar.style.height=Math.max(2,Math.round(118*x.count/dmax))+"px";bar.setAttribute("data-tip",x.date+": "+x.count);db.appendChild(bar)});' +
+'setText("lbl-from",(d.byDay[0]||{}).date||"");setText("lbl-to",(d.byDay[d.byDay.length-1]||{}).date||"");' +
 'var ub=document.querySelector("#users-table tbody");ub.innerHTML="";' +
-'if(d.users.length===0){ub.innerHTML=\'<tr><td colspan="4" class="empty">No users yet.</td></tr>\'}' +
-'d.users.forEach(function(u){var tr=document.createElement("tr");tr.innerHTML="<td>"+(u.email||\'<span class="muted">(anon) \'+u.anonId.slice(0,8)+"</span>")+"</td><td>"+(u.name||\'<span class="muted">—</span>\')+\'</td><td class="right">\'+u.eventCount+"</td><td>"+fmtRel(u.lastSeen)+"</td>";' +
+'d.users.forEach(function(u){var tr=document.createElement("tr");tr.innerHTML="<td>"+(u.email||\'<span class="muted">(anon)</span>\')+\'</td><td class="right">\'+u.eventCount+"</td><td>"+fmtRel(u.lastSeen)+"</td>";' +
 'tr.onclick=function(){state.filterUser=u.email||"";refresh()};ub.appendChild(tr)});' +
+'if(!d.users.length)ub.innerHTML=\'<tr><td colspan="3" class="empty">No users.</td></tr>\';' +
 'var eb=document.querySelector("#events-table tbody");eb.innerHTML="";' +
-'if(d.recent.length===0){eb.innerHTML=\'<tr><td colspan="4" class="empty">No events.</td></tr>\'}' +
-'d.recent.forEach(function(e){var tr=document.createElement("tr");tr.innerHTML="<td>"+fmtRel(e.ts)+\'</td><td>\'+(e.email||\'<span class="muted">(anon)</span>\')+"</td><td>"+e.event+\'</td><td class="muted">\'+(e.props==="{}"?"":e.props)+"</td>";eb.appendChild(tr)})' +
+'d.recent.forEach(function(e){var tr=document.createElement("tr");tr.innerHTML="<td>"+fmtRel(e.ts)+\'</td><td>\'+(e.email||\'<span class="muted">(anon)</span>\')+"</td><td>"+e.event+\'</td><td class="muted">\'+(e.props==="{}"?"":e.props)+"</td>";eb.appendChild(tr)});' +
+'if(!d.recent.length)eb.innerHTML=\'<tr><td colspan="4" class="empty">No recent events.</td></tr>\'' +
 '}' +
 'document.getElementById("refresh").onclick=refresh;' +
 'document.getElementById("days").onchange=function(){state.daysBack=Number(this.value);refresh()};' +
-'refresh();setInterval(refresh,60000);' +
+'refresh();' +
 '</script></body></html>';
-
-function upsertUser_(ss, info) {
-  const u = ss.getSheetByName(SHEET_USERS);
-  if (!u) return;
-  if (!info.email && !info.anonId) return;
-  const data = u.getDataRange().getValues();
-  let row = -1;
-  for (var i = 1; i < data.length; i++) {
-    var rowEmail = (data[i][0] || '').toString();
-    var rowAnon = (data[i][2] || '').toString();
-    // Match preferred order: email > anonId. An identified user with the
-    // same email always wins so we don't keep two rows for one person.
-    if (info.email && rowEmail === info.email) { row = i + 1; break; }
-    if (!info.email && info.anonId && rowAnon === info.anonId) { row = i + 1; break; }
-  }
-  const now = new Date();
-  if (row === -1) {
-    u.appendRow([info.email, info.name, info.anonId, now, now, info.version, info.eventDelta]);
-  } else {
-    if (info.name) u.getRange(row, 2).setValue(info.name);
-    if (info.anonId && !data[row - 1][2]) u.getRange(row, 3).setValue(info.anonId);
-    u.getRange(row, 5).setValue(now);
-    if (info.version) u.getRange(row, 6).setValue(info.version);
-    u.getRange(row, 7).setValue((Number(data[row - 1][6]) || 0) + info.eventDelta);
-  }
-}
-
-function rollupDaily_(ss, email, events) {
-  // Maintain a per-day per-user per-event counter so the Sheet has a
-  // small denormalized table for charts without scanning Events.
-  const d = ss.getSheetByName(SHEET_DAILY);
-  if (!d) return;
-  const tz = Session.getScriptTimeZone();
-  const counts = {};
-  events.forEach(function (evt) {
-    const day = Utilities.formatDate(new Date(evt.ts || Date.now()), tz, 'yyyy-MM-dd');
-    const key = day + ' ' + email + ' ' + (evt.name || '');
-    counts[key] = (counts[key] || 0) + 1;
-  });
-  const data = d.getDataRange().getValues();
-  const index = {};
-  for (var i = 1; i < data.length; i++) {
-    var k = data[i][0] + ' ' + (data[i][1] || '') + ' ' + (data[i][2] || '');
-    index[k] = i + 1;
-  }
-  const newRows = [];
-  Object.keys(counts).forEach(function (k) {
-    if (index[k]) {
-      var rownum = index[k];
-      var current = Number(d.getRange(rownum, 4).getValue()) || 0;
-      d.getRange(rownum, 4).setValue(current + counts[k]);
-    } else {
-      var parts = k.split(' ');
-      newRows.push([parts[0], parts[1], parts[2], counts[k]]);
-    }
-  });
-  if (newRows.length > 0) {
-    d.getRange(d.getLastRow() + 1, 1, newRows.length, 4).setValues(newRows);
-  }
-}
