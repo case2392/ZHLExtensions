@@ -860,11 +860,28 @@
       e.stopPropagation();
       excludeTelecomSelfReportedAll(btn);
     });
-    // Insert AFTER the Calc Student Loans button so the order reads
-    // "Calc Student Loans | Exclude SelfReport | + Add liability".
-    if (sloanBtn && sloanBtn.nextSibling) header.insertBefore(btn, sloanBtn.nextSibling);
-    else if (addBtn) header.insertBefore(btn, addBtn);
-    else header.appendChild(btn);
+    // Wrap Calc Student Loans + Exclude SelfReport in a single flex
+    // group. The Liabilities header is itself a flex container with
+    // justify-content set such that direct children get spaced apart;
+    // without a wrapper, our two buttons end up at opposite ends of
+    // the row. The group becomes one flex child, so the buttons stay
+    // adjacent with a small gap between them.
+    if (sloanBtn) {
+      let group = sloanBtn.parentElement;
+      const isOurGroup = group && group.classList && group.classList.contains('rric-button-group');
+      if (!isOurGroup) {
+        group = document.createElement('div');
+        group.className = 'rric-button-group';
+        group.style.cssText = 'display:inline-flex;gap:8px;align-items:center;';
+        sloanBtn.parentNode.insertBefore(group, sloanBtn);
+        group.appendChild(sloanBtn);
+      }
+      group.appendChild(btn);
+    } else if (addBtn) {
+      header.insertBefore(btn, addBtn);
+    } else {
+      header.appendChild(btn);
+    }
     console.log('[Exclude SelfReport] button injected');
   }
 
