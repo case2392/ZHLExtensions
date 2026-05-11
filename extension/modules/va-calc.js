@@ -827,30 +827,45 @@
       if (!label) return;
       if (normalizeText(label.textContent) !== 'military service completed') return;
       if (input.offsetParent === null) return;
-      // Walk up to the closest ancestor that also contains a
-      // veteranType select — that's the boundary of the Military
-      // Information section for this borrower.
-      let scope = input.parentElement;
-      while (scope && scope !== document.body) {
-        const vt = scope.querySelector('select[name="veteranType"]');
-        if (vt) {
-          if (seen.has(scope)) return;
-          seen.add(scope);
-          // Anchor for button placement: the row container holding the
-          // "Military service completed" checkbox + label. Walk up
-          // from the input until we find a parent wider than the
-          // checkbox alone, matching the original findMilitaryCompleted
-          // Row behavior.
-          let anchor = input.parentElement;
-          for (let i = 0; i < 4 && anchor; i++) {
-            if (anchor.children.length > 1 || anchor.offsetWidth > 200) break;
-            anchor = anchor.parentElement;
-          }
-          out.push({ scope: scope, anchor: anchor || input.parentElement, vtSelect: vt });
-          return;
-        }
-        scope = scope.parentElement;
+      // Step 1: find the Military Information section by walking up
+      // until we hit an ancestor containing a select[name="veteranType"].
+      // That section is where the trigger-type check reads from.
+      let milSection = input.parentElement;
+      let vtSelect = null;
+      while (milSection && milSection !== document.body) {
+        vtSelect = milSection.querySelector('select[name="veteranType"]');
+        if (vtSelect) break;
+        milSection = milSection.parentElement;
       }
+      if (!vtSelect) return;
+      // Step 2: walk further to find the BORROWER tab's form root —
+      // an ancestor that contains both veteranType AND an Employment
+      // table. Military Entitlements lives in the Employment Edit
+      // panel, NOT inside the Military Information section, so the
+      // narrow Military section is too small to scope the calc to.
+      // The wider form root contains both, and gives us a clean
+      // boundary between borrower-pair tabs.
+      let formScope = milSection;
+      let walker = milSection;
+      while (walker && walker !== document.body) {
+        if (walker.querySelector('table[aria-label="Table for employments"]')) {
+          formScope = walker;
+          break;
+        }
+        walker = walker.parentElement;
+      }
+      if (seen.has(formScope)) return;
+      seen.add(formScope);
+      // Anchor for button placement: the row container holding the
+      // "Military service completed" checkbox + label, inside the
+      // Military Information section (where we want the button to
+      // appear visually, not at the wider form root).
+      let anchor = input.parentElement;
+      for (let i = 0; i < 4 && anchor; i++) {
+        if (anchor.children.length > 1 || anchor.offsetWidth > 200) break;
+        anchor = anchor.parentElement;
+      }
+      out.push({ scope: formScope, anchor: anchor || input.parentElement, vtSelect: vtSelect });
     });
     return out;
   }
