@@ -13,6 +13,9 @@
   const STUDENT_LOAN_BUTTON_ID = 'rric-sloan-button';
   const STUDENT_LOAN_PICKER_ID = 'rric-sloan-picker';
   const STUDENT_LOAN_PANEL_ID = 'rric-sloan-summary';
+  const EXCLUDE_TELECOM_BUTTON_ID = 'rric-exclude-telecom-button';
+  const EXCLUDE_TELECOM_PAYEE_MATCH = 'TELECOM SELFREPORTED';
+  const EXCLUDE_TELECOM_REASON_VALUE = 'LessThan10Payments';
   const TRIGGER_VETERAN_TYPES = ['Regular military', 'National Guard or reserves'];
 
   const STUDENT_LOAN_CALCS = [
@@ -827,6 +830,224 @@
     else header.appendChild(btn);
   }
 
+  // "Exclude SelfReport" — finds every liability whose Company/Payee is
+  // "TELECOM SELFREPORTED", expands the row, ticks Exclude, sets the
+  // Reason dropdown to "Installment debt less than 10 payments", saves,
+  // and moves to the next match. Logs every step to the console.
+  function ensureExcludeTelecomButton() {
+    if (!document.querySelector('table[aria-label="Table for liabilities"]')) return;
+    if (document.getElementById(EXCLUDE_TELECOM_BUTTON_ID)) return;
+    // Same header that hosts the Calc Student Loans button.
+    let header = null;
+    const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    for (const h of headings) {
+      if (normalizeText(h.textContent) === 'liabilities') {
+        header = h.parentElement;
+        break;
+      }
+    }
+    if (!header) return;
+    const sloanBtn = header.querySelector('#' + STUDENT_LOAN_BUTTON_ID);
+    const addBtn = header.querySelector('button[data-cy="add-entity-button"]');
+    const btn = document.createElement('button');
+    btn.id = EXCLUDE_TELECOM_BUTTON_ID;
+    btn.type = 'button';
+    btn.className = 'rric-button rric-secondary-button';
+    btn.textContent = 'Exclude SelfReport';
+    btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".';
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      excludeTelecomSelfReportedAll(btn);
+    });
+    // Insert AFTER the Calc Student Loans button so the order reads
+    // "Calc Student Loans | Exclude SelfReport | + Add liability".
+    if (sloanBtn && sloanBtn.nextSibling) header.insertBefore(btn, sloanBtn.nextSibling);
+    else if (addBtn) header.insertBefore(btn, addBtn);
+    else header.appendChild(btn);
+    console.log('[Exclude SelfReport] button injected');
+  }
+
+  // React/styled-components controlled checkbox: setting .checked +
+  // dispatching change doesn't always commit because the React state is
+  // the source of truth. The reliable path is to fire a real click on
+  // the linked <label> (the browser handles the toggle natively, which
+  // React picks up through its onChange synthetic). Falls back to the
+  // input itself.
+  function setReactCheckbox(input, wantChecked) {
+    if (!input) return false;
+    if (!!input.checked === !!wantChecked) return true;
+    const label = input.id ? document.querySelector('label[for="' + CSS.escape(input.id) + '"]') : null;
+    const target = label || input;
+    console.log('[Exclude SelfReport]   clicking checkbox via', label ? '<label>' : '<input>', target);
+    try { target.click(); }
+    catch (_) { simulateClick(target); }
+    return !!input.checked === !!wantChecked;
+  }
+
+  // React-controlled <select>. Mirrors setReactInputValue: use the
+  // native value setter on the prototype, then fire input + change so
+  // React's onChange runs.
+  function setReactSelectValue(select, value) {
+    if (!select) return false;
+    if (String(select.value) === String(value)) {
+      console.log('[Exclude SelfReport]   reason already set to', value);
+      return true;
+    }
+    const proto = Object.getPrototypeOf(select);
+    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    try {
+      if (desc && desc.set) desc.set.call(select, value);
+      else select.value = value;
+    } catch (e) {
+      console.warn('[Exclude SelfReport]   native select setter failed:', e);
+      select.value = value;
+    }
+    select.dispatchEvent(new Event('input', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    select.dispatchEvent(new Event('blur', { bubbles: true }));
+    const ok = String(select.value) === String(value);
+    console.log('[Exclude SelfReport]   set reason →', value, ok ? '(ok)' : '(value did not stick: got "' + select.value + '")');
+    return ok;
+  }
+
+  // Find the "Edit liability" panel that opened beneath the expanded
+  // row. The row's nextElementSibling is the expansion <tr> with a
+  // single td[colspan] containing the form.
+  function findEditPanelFor(summaryRow) {
+    const next = summaryRow && summaryRow.nextElementSibling;
+    if (!next) return null;
+    const panel = next.querySelector('td[colspan]');
+    return panel || next;
+  }
+
+  async function waitForElement(root, selector, maxMs) {
+    const step = 50;
+    const max = maxMs || 1500;
+    for (let elapsed = 0; elapsed < max; elapsed += step) {
+      const el = root.querySelector(selector);
+      if (el) return el;
+      await waitMs(step);
+    }
+    return null;
+  }
+
+  async function excludeOneRow(row, index, total) {
+    const tag = '[Exclude SelfReport][' + (index + 1) + '/' + total + ']';
+    console.group(tag + ' processing row: payee="' + row.payee + '" balance=' + row.balance + ' payment=' + row.payment);
+    const startedExpanded = isLiabilityRowExpanded(row.tr);
+    console.log(tag, 'row started expanded?', startedExpanded);
+    if (!startedExpanded) {
+      const ok = await toggleLiabilityRow(row.tr, true);
+      console.log(tag, 'expand attempt:', ok ? 'ok' : 'failed');
+      if (!ok) { console.groupEnd(); return { ok: false, reason: 'failed to expand' }; }
+    }
+    const panel = findEditPanelFor(row.tr);
+    if (!panel) { console.warn(tag, 'edit panel not found'); console.groupEnd(); return { ok: false, reason: 'panel not found' }; }
+    console.log(tag, 'panel located');
+
+    const checkbox = await waitForElement(panel, 'input[name="exclude"][type="checkbox"]');
+    if (!checkbox) { console.warn(tag, 'Exclude checkbox not found'); console.groupEnd(); return { ok: false, reason: 'no checkbox' }; }
+    console.log(tag, 'checkbox found, currently checked?', checkbox.checked);
+    if (!checkbox.checked) {
+      const checkedOk = setReactCheckbox(checkbox, true);
+      console.log(tag, 'checked Exclude →', checkedOk);
+      // Give React a tick to re-render so the Reason field appears.
+      await waitMs(150);
+    } else {
+      console.log(tag, 'Exclude already on — leaving as-is');
+    }
+
+    const select = await waitForElement(panel, 'select[name="reason"]');
+    if (!select) { console.warn(tag, 'Reason select not found after enabling Exclude'); console.groupEnd(); return { ok: false, reason: 'no select' }; }
+    const optionMatch = Array.from(select.options).some(function (o) { return o.value === EXCLUDE_TELECOM_REASON_VALUE; });
+    if (!optionMatch) {
+      console.warn(tag, 'expected reason option "' + EXCLUDE_TELECOM_REASON_VALUE + '" not in <select>. Options:',
+        Array.from(select.options).map(function (o) { return o.value + ':' + o.textContent; }));
+      console.groupEnd();
+      return { ok: false, reason: 'reason option missing' };
+    }
+    const setOk = setReactSelectValue(select, EXCLUDE_TELECOM_REASON_VALUE);
+    if (!setOk) { console.groupEnd(); return { ok: false, reason: 'select value did not stick' }; }
+
+    // Save. Prefer a Save button INSIDE this panel (avoids accidentally
+    // hitting the top-level "Save loan file" button if one is present).
+    const saveInPanel = panel.querySelector('button[type="submit"], button[data-cy*="save" i], button');
+    let saveCandidates = Array.from(panel.querySelectorAll('button'));
+    saveCandidates = saveCandidates.filter(function (b) {
+      const t = (b.textContent || '').trim();
+      return /^save$/i.test(t) && !b.disabled && b.getAttribute('aria-disabled') !== 'true';
+    });
+    const saveBtn = saveCandidates[0] || null;
+    if (!saveBtn) {
+      console.warn(tag, 'Save button not found inside panel. Candidates examined:', panel.querySelectorAll('button').length);
+      console.groupEnd();
+      return { ok: false, reason: 'no save button' };
+    }
+    console.log(tag, 'clicking panel Save', saveBtn);
+    try { saveBtn.click(); } catch (_) { simulateClick(saveBtn); }
+    // Wait until the row collapses (which Gmail's LOP does after save).
+    const collapsed = await clickAndWaitFor(saveBtn, function () { return !isLiabilityRowExpanded(row.tr); }, 3000);
+    console.log(tag, collapsed ? 'row collapsed after save — done' : 'row did not collapse within 3s (may still have saved)');
+    console.groupEnd();
+    return { ok: true };
+  }
+
+  async function excludeTelecomSelfReportedAll(button) {
+    const origText = button ? button.textContent : '';
+    if (button) { button.disabled = true; button.textContent = 'Working…'; }
+    console.group('[Exclude SelfReport] run started');
+    try {
+      const allRows = findLiabilityRows();
+      console.log('[Exclude SelfReport] total liability rows on page:', allRows.length);
+      const matches = allRows.filter(function (r) {
+        return (r.payee || '').toUpperCase().indexOf(EXCLUDE_TELECOM_PAYEE_MATCH) !== -1;
+      });
+      console.log('[Exclude SelfReport] matching "' + EXCLUDE_TELECOM_PAYEE_MATCH + '" payee:', matches.length,
+        matches.map(function (m) { return m.payee + ' / ' + m.accountNo; }));
+      if (!matches.length) {
+        alert('No "TELECOM SELFREPORTED" liabilities found on this page.');
+        return;
+      }
+      let okCount = 0;
+      let failCount = 0;
+      // Re-query between iterations because the DOM rerenders after save.
+      for (let i = 0; i < matches.length; i++) {
+        // Resolve the current row by accountNo first (stable identifier),
+        // then by payee+balance as a fallback for rows without an
+        // account number.
+        const target = matches[i];
+        const fresh = findLiabilityRows();
+        const m = fresh.find(function (r) {
+          if (target.accountNo && r.accountNo === target.accountNo) return true;
+          return r.payee === target.payee && r.balance === target.balance && r.paymentText === target.paymentText;
+        });
+        if (!m) {
+          console.warn('[Exclude SelfReport][' + (i + 1) + '/' + matches.length + '] row vanished from DOM; skipping');
+          failCount++;
+          continue;
+        }
+        const result = await excludeOneRow(m, i, matches.length);
+        if (result.ok) okCount++; else failCount++;
+        // Settle between rows so React finishes the rerender.
+        await waitMs(250);
+      }
+      console.log('[Exclude SelfReport] done. ok=' + okCount + ' failed=' + failCount);
+      track('exclude_telecom_selfreport', { matched: matches.length, ok: okCount, failed: failCount });
+      if (failCount === 0) {
+        alert('Excluded ' + okCount + ' TELECOM SELFREPORTED liabilit' + (okCount === 1 ? 'y' : 'ies') + '.');
+      } else {
+        alert('Excluded ' + okCount + ' of ' + matches.length + '. ' + failCount + ' failed — see console for details.');
+      }
+    } catch (e) {
+      console.error('[Exclude SelfReport] run failed:', e);
+      alert('Exclude SelfReport hit an error: ' + (e && e.message || e));
+    } finally {
+      console.groupEnd();
+      if (button) { button.disabled = false; button.textContent = origText; }
+    }
+  }
+
   function textOf(el) { return el ? (el.textContent || '').trim() : ''; }
 
   function findLiabilityRows() {
@@ -1199,6 +1420,7 @@
       scheduled = false;
       try { ensureButtonState(); } catch (e) { console.error('[Residual Income Calc] observer error', e); }
       try { ensureStudentLoanButton(); } catch (e) { console.error('[Residual Income Calc] sloan observer error', e); }
+      try { ensureExcludeTelecomButton(); } catch (e) { console.error('[Exclude SelfReport] observer error', e); }
     });
   }
 
