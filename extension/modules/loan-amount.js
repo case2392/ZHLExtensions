@@ -78,21 +78,54 @@
     const dAmt = $downAmt();
     const dPct = $downPct();
 
+    console.group('[Loan Amount] applyLoanEdit');
+    console.log('purchase:', p, 'user-entered loan:', l, '→ computed newDown:', newDown, 'newPct:', newPct);
+    console.log('downAmt input name:', dAmt && dAmt.name, 'current value:', dAmt && dAmt.value);
+    console.log('downPct input name:', dPct && dPct.name, 'current value:', dPct && dPct.value);
+
+    // Find any other inputs on the page that look like they hold a
+    // loan-related amount — LOP may keep a separate "loanAmount" /
+    // "baseLoanAmount" / "ltv" field that the scenario engine reads
+    // instead of (or in addition to) downPayments.0.downPayment.
+    const candidates = document.querySelectorAll(
+      'input[name*="loan" i], input[name*="ltv" i], input[name*="baseLoan" i]'
+    );
+    if (candidates.length) {
+      console.log('other loan-related inputs found on page:');
+      candidates.forEach(function (c) {
+        console.log('  name=' + c.name + ' value=' + c.value + ' tag=' + c.tagName + ' type=' + c.type);
+      });
+    } else {
+      console.log('no other loan-related inputs found.');
+    }
+
     suppressEcho = true;
     try {
       if (dAmt) {
         setReactValue(dAmt, newDown.toFixed(2));
         fireCommit(dAmt);
+        console.log('after write — downAmt value:', dAmt.value);
       }
       if (dPct) {
         setReactValue(dPct, newPct.toFixed(2));
         fireCommit(dPct);
+        console.log('after write — downPct value:', dPct.value);
       }
     } finally {
       Promise.resolve().then(() => {
         suppressEcho = false;
       });
     }
+    // Poll for 4 seconds so we can see whether LOP's React state
+    // reverts our writes (which would explain why the scenario reads
+    // the wrong values).
+    const startedAt = Date.now();
+    const tick = setInterval(function () {
+      const elapsed = Date.now() - startedAt;
+      console.log('[Loan Amount] +' + elapsed + 'ms downAmt=' + (dAmt && dAmt.value) + ' downPct=' + (dPct && dPct.value));
+      if (elapsed > 4000) clearInterval(tick);
+    }, 500);
+    console.groupEnd();
   };
 
   const wirePartner = (el) => {
