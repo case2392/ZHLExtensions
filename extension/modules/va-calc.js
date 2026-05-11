@@ -805,58 +805,56 @@
     anchor.appendChild(btn);
   }
 
-  // Returns every visible Liabilities section header on the page.
-  // The Full Application can render multiple borrower-pair tabs at
-  // once (each with its own Liabilities section); we want a button
-  // pair in each. Hidden / unmounted tabs return offsetParent=null
-  // and are skipped — the observer will re-trigger when their tab is
-  // switched in.
+  // Returns every visible Liabilities section's header bar. We anchor
+  // on the "+ Add liability" button rather than the "Liabilities"
+  // heading text because the heading element can differ between
+  // borrower-pair tabs (count chips, whitespace, or different wrapper
+  // elements), and the addBtn is the single, distinctive landmark
+  // every section has. Each match returns the immediate parent of the
+  // addBtn — the same flex row that holds the heading on the left and
+  // the addBtn on the right.
   function findLiabilitiesHeaders() {
     const out = [];
-    document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(function (h) {
-      if (normalizeText(h.textContent) !== 'liabilities') return;
-      const header = h.parentElement;
-      if (!header) return;
-      if (header.offsetParent === null) return;
-      out.push(header);
+    const seenContainers = new WeakSet();
+    document.querySelectorAll('button[data-cy="add-entity-button"]').forEach(function (addBtn) {
+      // Confirm this addBtn is the Liabilities one (and not some other
+      // "add entity" button on the page, like Assets or Real estate)
+      // by walking up to find the nearest table[aria-label="Table for
+      // liabilities"] sibling/descendant. If none, skip.
+      let probe = addBtn.parentElement;
+      let liabTable = null;
+      while (probe && probe !== document.body) {
+        liabTable = probe.querySelector('table[aria-label="Table for liabilities"]');
+        if (liabTable) break;
+        probe = probe.parentElement;
+      }
+      if (!liabTable) return;
+      const container = addBtn.parentElement;
+      if (!container || container.offsetParent === null) return;
+      if (seenContainers.has(container)) return;
+      seenContainers.add(container);
+      out.push({ container: container, addBtn: addBtn, table: liabTable });
     });
     return out;
   }
 
-  // Locate the actual liabilities table that belongs to a given
-  // header — needed when there are multiple tabs in the DOM and
-  // findLiabilityRows() would otherwise mix them together. Walks up
-  // until it finds an ancestor containing a table[aria-label="Table
-  // for liabilities"], then returns that table.
-  function findScopedLiabilityTable(header) {
-    let cur = header && header.parentElement;
-    while (cur && cur !== document.body) {
-      const t = cur.querySelector('table[aria-label="Table for liabilities"]');
-      if (t) return t;
-      cur = cur.parentElement;
-    }
-    return document.querySelector('table[aria-label="Table for liabilities"]');
-  }
-
   function ensureStudentLoanButton() {
-    if (!document.querySelector('table[aria-label="Table for liabilities"]')) return;
-    for (const header of findLiabilitiesHeaders()) {
-      if (header.querySelector('.' + STUDENT_LOAN_BUTTON_CLASS)) continue;
-      const addBtn = header.querySelector('button[data-cy="add-entity-button"]');
+    const sections = findLiabilitiesHeaders();
+    if (!sections.length) return;
+    for (const sec of sections) {
+      if (sec.container.querySelector('.' + STUDENT_LOAN_BUTTON_CLASS)) continue;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'rric-button ' + STUDENT_LOAN_BUTTON_CLASS;
       btn.textContent = 'Calc Student Loans';
+      const scopedTable = sec.table;
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        // Scope the picker / row scan to this borrower-pair's table
-        // so we don't accidentally apply student-loan payments to
-        // another tab's rows when both panels are mounted.
-        showStudentLoanPicker(findScopedLiabilityTable(header));
+        showStudentLoanPicker(scopedTable);
       });
-      if (addBtn) header.insertBefore(btn, addBtn);
-      else header.appendChild(btn);
+      sec.container.insertBefore(btn, sec.addBtn);
+      console.log('[Calc Student Loans] button injected into section', sec.container);
     }
   }
 
@@ -865,27 +863,24 @@
   // Reason dropdown to "Installment debt less than 10 payments", saves,
   // and moves to the next match. Logs every step to the console.
   function ensureExcludeTelecomButton() {
-    if (!document.querySelector('table[aria-label="Table for liabilities"]')) return;
-    for (const header of findLiabilitiesHeaders()) {
-      if (header.querySelector('.' + EXCLUDE_TELECOM_BUTTON_CLASS)) continue;
-      const sloanBtn = header.querySelector('.' + STUDENT_LOAN_BUTTON_CLASS);
-      const addBtn = header.querySelector('button[data-cy="add-entity-button"]');
+    const sections = findLiabilitiesHeaders();
+    if (!sections.length) return;
+    for (const sec of sections) {
+      if (sec.container.querySelector('.' + EXCLUDE_TELECOM_BUTTON_CLASS)) continue;
+      const sloanBtn = sec.container.querySelector('.' + STUDENT_LOAN_BUTTON_CLASS);
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'rric-button ' + EXCLUDE_TELECOM_BUTTON_CLASS;
       btn.textContent = 'Exclude SelfReport';
       btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".';
+      const scopedTable = sec.table;
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        excludeTelecomSelfReportedAll(btn, findScopedLiabilityTable(header));
+        excludeTelecomSelfReportedAll(btn, scopedTable);
       });
       // Wrap Calc Student Loans + Exclude SelfReport in a single flex
-      // group. The Liabilities header is itself a flex container with
-      // justify-content set such that direct children get spaced apart;
-      // without a wrapper, our two buttons end up at opposite ends of
-      // the row. The group becomes one flex child, so the buttons stay
-      // adjacent with a small gap between them.
+      // group so the parent's flex spacing doesn't push them apart.
       if (sloanBtn) {
         let group = sloanBtn.parentElement;
         const isOurGroup = group && group.classList && group.classList.contains('rric-button-group');
@@ -897,12 +892,10 @@
           group.appendChild(sloanBtn);
         }
         group.appendChild(btn);
-      } else if (addBtn) {
-        header.insertBefore(btn, addBtn);
       } else {
-        header.appendChild(btn);
+        sec.container.insertBefore(btn, sec.addBtn);
       }
-      console.log('[Exclude SelfReport] button injected');
+      console.log('[Exclude SelfReport] button injected into section', sec.container);
     }
   }
 
