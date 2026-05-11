@@ -11,9 +11,11 @@
   const BUTTON_ID = 'rric-run-button';
   const PANEL_ID = 'rric-panel';
   const STUDENT_LOAN_BUTTON_ID = 'rric-sloan-button';
+  const STUDENT_LOAN_BUTTON_CLASS = 'rric-sloan-button-cls';
   const STUDENT_LOAN_PICKER_ID = 'rric-sloan-picker';
   const STUDENT_LOAN_PANEL_ID = 'rric-sloan-summary';
   const EXCLUDE_TELECOM_BUTTON_ID = 'rric-exclude-telecom-button';
+  const EXCLUDE_TELECOM_BUTTON_CLASS = 'rric-exclude-telecom-button-cls';
   const EXCLUDE_TELECOM_PAYEE_MATCH = 'TELECOM SELFREPORTED';
   const EXCLUDE_TELECOM_REASON_VALUE = 'LessThan10Payments';
   const TRIGGER_VETERAN_TYPES = ['Regular military', 'National Guard or reserves'];
@@ -803,31 +805,59 @@
     anchor.appendChild(btn);
   }
 
+  // Returns every visible Liabilities section header on the page.
+  // The Full Application can render multiple borrower-pair tabs at
+  // once (each with its own Liabilities section); we want a button
+  // pair in each. Hidden / unmounted tabs return offsetParent=null
+  // and are skipped — the observer will re-trigger when their tab is
+  // switched in.
+  function findLiabilitiesHeaders() {
+    const out = [];
+    document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(function (h) {
+      if (normalizeText(h.textContent) !== 'liabilities') return;
+      const header = h.parentElement;
+      if (!header) return;
+      if (header.offsetParent === null) return;
+      out.push(header);
+    });
+    return out;
+  }
+
+  // Locate the actual liabilities table that belongs to a given
+  // header — needed when there are multiple tabs in the DOM and
+  // findLiabilityRows() would otherwise mix them together. Walks up
+  // until it finds an ancestor containing a table[aria-label="Table
+  // for liabilities"], then returns that table.
+  function findScopedLiabilityTable(header) {
+    let cur = header && header.parentElement;
+    while (cur && cur !== document.body) {
+      const t = cur.querySelector('table[aria-label="Table for liabilities"]');
+      if (t) return t;
+      cur = cur.parentElement;
+    }
+    return document.querySelector('table[aria-label="Table for liabilities"]');
+  }
+
   function ensureStudentLoanButton() {
     if (!document.querySelector('table[aria-label="Table for liabilities"]')) return;
-    if (document.getElementById(STUDENT_LOAN_BUTTON_ID)) return;
-    let header = null;
-    const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    for (const h of headings) {
-      if (normalizeText(h.textContent) === 'liabilities') {
-        header = h.parentElement;
-        break;
-      }
+    for (const header of findLiabilitiesHeaders()) {
+      if (header.querySelector('.' + STUDENT_LOAN_BUTTON_CLASS)) continue;
+      const addBtn = header.querySelector('button[data-cy="add-entity-button"]');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'rric-button ' + STUDENT_LOAN_BUTTON_CLASS;
+      btn.textContent = 'Calc Student Loans';
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Scope the picker / row scan to this borrower-pair's table
+        // so we don't accidentally apply student-loan payments to
+        // another tab's rows when both panels are mounted.
+        showStudentLoanPicker(findScopedLiabilityTable(header));
+      });
+      if (addBtn) header.insertBefore(btn, addBtn);
+      else header.appendChild(btn);
     }
-    if (!header) return;
-    const addBtn = header.querySelector('button[data-cy="add-entity-button"]');
-    const btn = document.createElement('button');
-    btn.id = STUDENT_LOAN_BUTTON_ID;
-    btn.type = 'button';
-    btn.className = 'rric-button';
-    btn.textContent = 'Calc Student Loans';
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      showStudentLoanPicker();
-    });
-    if (addBtn) header.insertBefore(btn, addBtn);
-    else header.appendChild(btn);
   }
 
   // "Exclude SelfReport" — finds every liability whose Company/Payee is
@@ -836,53 +866,44 @@
   // and moves to the next match. Logs every step to the console.
   function ensureExcludeTelecomButton() {
     if (!document.querySelector('table[aria-label="Table for liabilities"]')) return;
-    if (document.getElementById(EXCLUDE_TELECOM_BUTTON_ID)) return;
-    // Same header that hosts the Calc Student Loans button.
-    let header = null;
-    const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    for (const h of headings) {
-      if (normalizeText(h.textContent) === 'liabilities') {
-        header = h.parentElement;
-        break;
+    for (const header of findLiabilitiesHeaders()) {
+      if (header.querySelector('.' + EXCLUDE_TELECOM_BUTTON_CLASS)) continue;
+      const sloanBtn = header.querySelector('.' + STUDENT_LOAN_BUTTON_CLASS);
+      const addBtn = header.querySelector('button[data-cy="add-entity-button"]');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'rric-button ' + EXCLUDE_TELECOM_BUTTON_CLASS;
+      btn.textContent = 'Exclude SelfReport';
+      btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".';
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        excludeTelecomSelfReportedAll(btn, findScopedLiabilityTable(header));
+      });
+      // Wrap Calc Student Loans + Exclude SelfReport in a single flex
+      // group. The Liabilities header is itself a flex container with
+      // justify-content set such that direct children get spaced apart;
+      // without a wrapper, our two buttons end up at opposite ends of
+      // the row. The group becomes one flex child, so the buttons stay
+      // adjacent with a small gap between them.
+      if (sloanBtn) {
+        let group = sloanBtn.parentElement;
+        const isOurGroup = group && group.classList && group.classList.contains('rric-button-group');
+        if (!isOurGroup) {
+          group = document.createElement('div');
+          group.className = 'rric-button-group';
+          group.style.cssText = 'display:inline-flex;gap:8px;align-items:center;';
+          sloanBtn.parentNode.insertBefore(group, sloanBtn);
+          group.appendChild(sloanBtn);
+        }
+        group.appendChild(btn);
+      } else if (addBtn) {
+        header.insertBefore(btn, addBtn);
+      } else {
+        header.appendChild(btn);
       }
+      console.log('[Exclude SelfReport] button injected');
     }
-    if (!header) return;
-    const sloanBtn = header.querySelector('#' + STUDENT_LOAN_BUTTON_ID);
-    const addBtn = header.querySelector('button[data-cy="add-entity-button"]');
-    const btn = document.createElement('button');
-    btn.id = EXCLUDE_TELECOM_BUTTON_ID;
-    btn.type = 'button';
-    btn.className = 'rric-button';
-    btn.textContent = 'Exclude SelfReport';
-    btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".';
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      excludeTelecomSelfReportedAll(btn);
-    });
-    // Wrap Calc Student Loans + Exclude SelfReport in a single flex
-    // group. The Liabilities header is itself a flex container with
-    // justify-content set such that direct children get spaced apart;
-    // without a wrapper, our two buttons end up at opposite ends of
-    // the row. The group becomes one flex child, so the buttons stay
-    // adjacent with a small gap between them.
-    if (sloanBtn) {
-      let group = sloanBtn.parentElement;
-      const isOurGroup = group && group.classList && group.classList.contains('rric-button-group');
-      if (!isOurGroup) {
-        group = document.createElement('div');
-        group.className = 'rric-button-group';
-        group.style.cssText = 'display:inline-flex;gap:8px;align-items:center;';
-        sloanBtn.parentNode.insertBefore(group, sloanBtn);
-        group.appendChild(sloanBtn);
-      }
-      group.appendChild(btn);
-    } else if (addBtn) {
-      header.insertBefore(btn, addBtn);
-    } else {
-      header.appendChild(btn);
-    }
-    console.log('[Exclude SelfReport] button injected');
   }
 
   // React/styled-components controlled checkbox: setting .checked +
@@ -1010,12 +1031,12 @@
     return { ok: true };
   }
 
-  async function excludeTelecomSelfReportedAll(button) {
+  async function excludeTelecomSelfReportedAll(button, scopeTable) {
     const origText = button ? button.textContent : '';
     if (button) { button.disabled = true; button.textContent = 'Working…'; }
     console.group('[Exclude SelfReport] run started');
     try {
-      const allRows = findLiabilityRows();
+      const allRows = findLiabilityRows(scopeTable);
       console.log('[Exclude SelfReport] total liability rows on page:', allRows.length);
       const matches = allRows.filter(function (r) {
         return (r.payee || '').toUpperCase().indexOf(EXCLUDE_TELECOM_PAYEE_MATCH) !== -1;
@@ -1034,7 +1055,7 @@
         // then by payee+balance as a fallback for rows without an
         // account number.
         const target = matches[i];
-        const fresh = findLiabilityRows();
+        const fresh = findLiabilityRows(scopeTable);
         const m = fresh.find(function (r) {
           if (target.accountNo && r.accountNo === target.accountNo) return true;
           return r.payee === target.payee && r.balance === target.balance && r.paymentText === target.paymentText;
@@ -1067,9 +1088,11 @@
 
   function textOf(el) { return el ? (el.textContent || '').trim() : ''; }
 
-  function findLiabilityRows() {
+  function findLiabilityRows(scopeTable) {
     const rows = [];
-    const tables = document.querySelectorAll('table[aria-label="Table for liabilities"]');
+    const tables = scopeTable
+      ? [scopeTable]
+      : document.querySelectorAll('table[aria-label="Table for liabilities"]');
     for (const table of tables) {
       const headers = table.querySelectorAll('thead th');
       const cols = {};
@@ -1171,7 +1194,7 @@
     return false;
   }
 
-  function showStudentLoanPicker() {
+  function showStudentLoanPicker(scopeTable) {
     const existing = document.getElementById(STUDENT_LOAN_PICKER_ID);
     if (existing) existing.remove();
 
@@ -1222,7 +1245,7 @@
       choice.appendChild(desc);
       choice.addEventListener('click', function () {
         overlay.remove();
-        processStudentLoans(calc).catch(function (e) {
+        processStudentLoans(calc, scopeTable).catch(function (e) {
           console.error('[Residual Income Calc] student loan error', e);
           alert('Student loan calc error: ' + e.message);
         });
@@ -1235,8 +1258,8 @@
     document.body.appendChild(overlay);
   }
 
-  async function processStudentLoans(calc) {
-    const liabilityRows = findLiabilityRows();
+  async function processStudentLoans(calc, scopeTable) {
+    const liabilityRows = findLiabilityRows(scopeTable);
     const loanId = getLoanId();
     const ourPayments = await getOurPayments(loanId);
     const updated = [];
