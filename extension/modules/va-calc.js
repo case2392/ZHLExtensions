@@ -549,31 +549,15 @@
 
   function applyResults(state, result) {
     const residualField = findFieldByLabel('VA residual income');
-    const deductionsField = findFieldByLabel('VA total deductions');
-    console.group('[Residual Income Calc] applyResults');
-    console.log('residualField name=', residualField && residualField.name, 'before write value=', residualField && residualField.value);
-    console.log('deductionsField name=', deductionsField && deductionsField.name, 'before write value=', deductionsField && deductionsField.value);
-    if (residualField) {
-      setReactInputValue(residualField, result.residualIncome.toFixed(2));
-      console.log('residual immediately after setReactInputValue:', residualField.value);
-    }
-    if (deductionsField && result.totalDeductions != null) {
-      setReactInputValue(deductionsField, result.totalDeductions.toFixed(2));
-      console.log('deductions immediately after setReactInputValue:', deductionsField.value, 'expected', result.totalDeductions.toFixed(2));
-    }
-    // Poll the values over the next few seconds so we can see if React
-    // reverts our write, when the save click fires, and what the field
-    // shows after LOP's network round-trip. Helpful for diagnosing
-    // "value reverts to 0 after save" — tells us whether it's a React
-    // state desync (reverts before save) or a LOP backend override
-    // (reverts after save completes).
-    const startedAt = Date.now();
-    const tickInterval = setInterval(function () {
-      const elapsed = Date.now() - startedAt;
-      console.log('[Residual Income Calc] +' + elapsed + 'ms residual=' + (residualField && residualField.value) + ' deductions=' + (deductionsField && deductionsField.value));
-      if (elapsed > 8000) clearInterval(tickInterval);
-    }, 500);
-    console.groupEnd();
+    if (residualField) setReactInputValue(residualField, result.residualIncome.toFixed(2));
+    // Note: we intentionally do NOT write the "VA total deductions"
+    // field (input name="vaFederalTaxAmount"). Diagnostic trace v1.10.10
+    // confirmed that LOP's backend zeroes this field on every save
+    // round-trip, regardless of source — even values typed manually
+    // by the user revert to 0 after save. Despite the label saying
+    // "VA total deductions", the field is a backend-derived value;
+    // any client-side write is discarded. Writing it would give the
+    // user a misleading "number flashes then disappears" UX.
     track('va_calc_apply');
     // Fire and forget — don't block panel rendering on the save round-trip.
     autoClickSave();
