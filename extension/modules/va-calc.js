@@ -819,7 +819,7 @@
     const btn = document.createElement('button');
     btn.id = STUDENT_LOAN_BUTTON_ID;
     btn.type = 'button';
-    btn.className = 'rric-button rric-secondary-button';
+    btn.className = 'rric-button';
     btn.textContent = 'Calc Student Loans';
     btn.addEventListener('click', function (e) {
       e.preventDefault();
@@ -852,7 +852,7 @@
     const btn = document.createElement('button');
     btn.id = EXCLUDE_TELECOM_BUTTON_ID;
     btn.type = 'button';
-    btn.className = 'rric-button rric-secondary-button';
+    btn.className = 'rric-button';
     btn.textContent = 'Exclude SelfReport';
     btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".';
     btn.addEventListener('click', function (e) {
