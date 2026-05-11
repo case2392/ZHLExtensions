@@ -304,15 +304,55 @@
 
   function detectMilitaryEntitlements() {
     let total = 0;
-    const inputs = document.querySelectorAll('input[name="militaryEntitlements.amount"]');
-    for (const inp of inputs) {
+    const scope = activeFormScope || document;
+    // Try the historical name-based selector first (works on older LOP
+    // DOMs that named the input militaryEntitlements.amount).
+    const namedInputs = scope.querySelectorAll(
+      'input[name="militaryEntitlements.amount"], ' +
+      'input[name="militaryEntitlements"], ' +
+      'input[name*="militaryEntitlement" i], ' +
+      'input[name*="MilitaryEntitlement" i]'
+    );
+    for (const inp of namedInputs) {
       const amount = parseMoney(inp.value);
       if (!amount) continue;
-      const row = inp.closest('tr');
+      const row = inp.closest('tr') || inp.closest('[role="row"]') || inp.parentElement;
       let freq = 'Monthly';
       if (row) {
-        const sel = row.querySelector('select[name="militaryEntitlements.frequency"]');
+        const sel = row.querySelector('select[name*="frequency" i]');
         if (sel && sel.value) freq = sel.value;
+      }
+      total += /annual/i.test(freq) ? amount / 12 : amount;
+    }
+    if (total > 0) return total / BLEND_VA_GROSSUP_FACTOR;
+
+    // Fallback: label-text driven detection. The current LOP Employment
+    // Edit panel lists income types ("Base", "Overtime", "Bonus",
+    // "Commission", "Military Entitlements", "Other") as left-cell
+    // labels with adjacent input + frequency select cells. Find any cell
+    // whose text is exactly "Military Entitlements" and read the
+    // amount/frequency from its row.
+    const cells = scope.querySelectorAll('td, div, span, label');
+    const seenRows = new WeakSet();
+    for (const el of cells) {
+      if (normalizeText(el.textContent) !== 'military entitlements') continue;
+      // Walk up to a row container that also contains an input.
+      let row = el.parentElement;
+      let inp = null;
+      for (let i = 0; i < 6 && row; i++) {
+        inp = row.querySelector('input[type="text"], input:not([type])');
+        if (inp) break;
+        row = row.parentElement;
+      }
+      if (!inp || !row || seenRows.has(row)) continue;
+      seenRows.add(row);
+      const amount = parseMoney(inp.value);
+      if (!amount) continue;
+      const sel = row.querySelector('select');
+      let freq = 'Monthly';
+      if (sel) {
+        const opt = sel.options[sel.selectedIndex];
+        freq = (opt && (opt.text || opt.value)) || sel.value || 'Monthly';
       }
       total += /annual/i.test(freq) ? amount / 12 : amount;
     }
@@ -411,12 +451,12 @@
     const fedTax = taxableIncome * FED_TAX_RATE;
     const fica = taxableIncome * FICA_RATE;
     const stateTax = taxableIncome * STATE_TAX_RATE;
-    const residual = gross
-      - fedTax - fica - stateTax
-      - (state.monthlyDebts || 0)
-      - (state.piti || 0)
-      - (state.maintenance || 0)
-      - (state.childcare || 0);
+    const monthlyDebts = state.monthlyDebts || 0;
+    const piti = state.piti || 0;
+    const maintenance = state.maintenance || 0;
+    const childcare = state.childcare || 0;
+    const totalDeductions = fedTax + fica + stateTax + monthlyDebts + piti + maintenance + childcare;
+    const residual = gross - totalDeductions;
     const requirement = vaTableRequirement(state.familySize, state.region, state.loanAmount);
     const dtiOver41 = state.dti != null && state.dti > 41;
     const requirement120 = requirement != null ? Math.round(requirement * 1.2 * 100) / 100 : null;
@@ -425,6 +465,7 @@
       federalTax: fedTax,
       fica,
       stateTax,
+      totalDeductions: Math.round(totalDeductions * 100) / 100,
       residualIncome: Math.round(residual * 100) / 100,
       requirement,
       requirement120,
@@ -510,8 +551,8 @@
     const residualField = findFieldByLabel('VA residual income');
     if (residualField) setReactInputValue(residualField, result.residualIncome.toFixed(2));
     const deductionsField = findFieldByLabel('VA total deductions');
-    if (deductionsField && result.requirement != null) {
-      setReactInputValue(deductionsField, result.requirement.toFixed(2));
+    if (deductionsField && result.totalDeductions != null) {
+      setReactInputValue(deductionsField, result.totalDeductions.toFixed(2));
     }
     track('va_calc_apply');
     // Fire and forget — don't block panel rendering on the save round-trip.
