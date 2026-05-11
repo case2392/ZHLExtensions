@@ -29,6 +29,42 @@
   // is in-process and works regardless of size.
   const CROSS_TAB_MAX_BYTES = 25 * 1024 * 1024;
 
+  // After the extension is reloaded/updated, this content script keeps
+  // running but its chrome.runtime port is dead — sendMessage throws
+  // "Extension context invalidated". Without a banner the cross-tab
+  // drag silently breaks (Gmail looks fine, LOP just never sees a
+  // Gmail drag). Detect once and post a fixed banner telling the user
+  // to reload the tab.
+  let contextDead = false;
+  function isContextInvalidatedError(err) {
+    return /Extension context invalidated|message port closed|receiving end does not exist/i.test(String(err && (err.message || err)));
+  }
+  function showContextDeadBanner() {
+    if (document.getElementById('zhl-gda-context-dead')) return;
+    const bar = document.createElement('div');
+    bar.id = 'zhl-gda-context-dead';
+    bar.setAttribute('style',
+      'position:fixed;left:0;right:0;top:0;z-index:2147483647;' +
+      'background:#b91c1c;color:#fff;padding:10px 16px;' +
+      'font:600 13px/1.4 Arial,sans-serif;text-align:center;' +
+      'box-shadow:0 2px 6px rgba(0,0,0,.25);');
+    bar.textContent = 'ZHL Pack updated — reload this Gmail tab to re-enable cross-tab attachment drag (in-Gmail compose drag still works).';
+    const close = document.createElement('button');
+    close.textContent = '×';
+    close.setAttribute('style',
+      'background:transparent;border:none;color:#fff;font:700 18px/1 sans-serif;' +
+      'margin-left:16px;cursor:pointer;');
+    close.addEventListener('click', function () { bar.remove(); });
+    bar.appendChild(close);
+    (document.body || document.documentElement).appendChild(bar);
+  }
+  function markContextDead(reason) {
+    if (contextDead) return;
+    contextDead = true;
+    console.warn('[Gmail Drag Attach] extension context invalidated — cross-tab drag disabled until tab reload.', reason || '');
+    try { showContextDeadBanner(); } catch (_) {}
+  }
+
   function blobToBase64(blob) {
     return new Promise(function (resolve, reject) {
       const r = new FileReader();
@@ -206,7 +242,7 @@
       // listener on LOP (or any other host with a receiver content
       // script) can reconstruct the File and inject on drop. b64 is
       // only populated for files within the cross-tab size cap.
-      if (entry.b64) {
+      if (entry.b64 && !contextDead) {
         try {
           chrome.runtime.sendMessage({
             type: 'GMAIL_DRAG_START',
@@ -216,10 +252,17 @@
             b64: entry.b64
           }, function (resp) {
             const lastErr = chrome.runtime && chrome.runtime.lastError;
-            if (lastErr) console.warn('[Gmail Drag Attach] SW dragstart msg err:', lastErr.message);
-            else console.log('[Gmail Drag Attach] SW cached file for cross-tab; b64.len=' + entry.b64.length, resp);
+            if (lastErr) {
+              if (isContextInvalidatedError(lastErr.message)) markContextDead(lastErr.message);
+              else console.warn('[Gmail Drag Attach] SW dragstart msg err:', lastErr.message);
+            } else {
+              console.log('[Gmail Drag Attach] SW cached file for cross-tab; b64.len=' + entry.b64.length, resp);
+            }
           });
-        } catch (e) { console.warn('[Gmail Drag Attach] SW dragstart send threw:', e); }
+        } catch (e) {
+          if (isContextInvalidatedError(e)) markContextDead(e && e.message);
+          else console.warn('[Gmail Drag Attach] SW dragstart send threw:', e);
+        }
       } else if (entry.tooBigForCrossTab) {
         console.warn('[Gmail Drag Attach] file > ' +
           (CROSS_TAB_MAX_BYTES / 1024 / 1024) +
@@ -231,6 +274,7 @@
         const blob = entry.file;
         blobToBase64(blob).then(function (b64) {
           entry.b64 = b64;
+          if (contextDead) return;
           try {
             chrome.runtime.sendMessage({
               type: 'GMAIL_DRAG_START',
@@ -238,8 +282,13 @@
               mime: entry.file.type,
               size: entry.file.size,
               b64: b64
+            }, function () {
+              const lastErr = chrome.runtime && chrome.runtime.lastError;
+              if (lastErr && isContextInvalidatedError(lastErr.message)) markContextDead(lastErr.message);
             });
-          } catch (_) {}
+          } catch (e) {
+            if (isContextInvalidatedError(e)) markContextDead(e && e.message);
+          }
         }).catch(function () {});
       }
       e.stopPropagation();
@@ -329,7 +378,16 @@
   // chance to read activeDragFile first.
   window.addEventListener('dragend', function (e) {
     setTimeout(function () { activeDragFile = null; activeDragInfo = null; }, 100);
-    try { chrome.runtime.sendMessage({ type: 'GMAIL_DRAG_END' }); } catch (_) {}
+    if (!contextDead) {
+      try {
+        chrome.runtime.sendMessage({ type: 'GMAIL_DRAG_END' }, function () {
+          const lastErr = chrome.runtime && chrome.runtime.lastError;
+          if (lastErr && isContextInvalidatedError(lastErr.message)) markContextDead(lastErr.message);
+        });
+      } catch (e) {
+        if (isContextInvalidatedError(e)) markContextDead(e && e.message);
+      }
+    }
     try {
       const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
       const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;

@@ -28,15 +28,54 @@
   let cachedDrag = null;
   let lastRefreshAt = 0;
 
+  // Mirror Gmail-side context-dead handling: after an extension
+  // reload, sendMessage from this surviving content script throws.
+  // Show a one-time banner so the user knows to reload the LOP tab.
+  let contextDead = false;
+  function isContextInvalidatedError(err) {
+    return /Extension context invalidated|message port closed|receiving end does not exist/i.test(String(err && (err.message || err)));
+  }
+  function showContextDeadBanner() {
+    if (document.getElementById('zhl-lop-context-dead')) return;
+    const bar = document.createElement('div');
+    bar.id = 'zhl-lop-context-dead';
+    bar.setAttribute('style',
+      'position:fixed;left:0;right:0;top:0;z-index:2147483647;' +
+      'background:#b91c1c;color:#fff;padding:10px 16px;' +
+      'font:600 13px/1.4 Arial,sans-serif;text-align:center;' +
+      'box-shadow:0 2px 6px rgba(0,0,0,.25);');
+    bar.textContent = 'ZHL Pack updated — reload this LOP tab to re-enable Gmail attachment drops.';
+    const close = document.createElement('button');
+    close.textContent = '×';
+    close.setAttribute('style', 'background:transparent;border:none;color:#fff;font:700 18px/1 sans-serif;margin-left:16px;cursor:pointer;');
+    close.addEventListener('click', function () { bar.remove(); });
+    bar.appendChild(close);
+    (document.body || document.documentElement).appendChild(bar);
+  }
+  function markContextDead(reason) {
+    if (contextDead) return;
+    contextDead = true;
+    console.warn('[LOP Drop Receiver] extension context invalidated — drops disabled until tab reload.', reason || '');
+    try { showContextDeadBanner(); } catch (_) {}
+  }
+
   function refreshActiveDrag() {
     return new Promise(function (resolve) {
+      if (contextDead) { resolve(null); return; }
       try {
         chrome.runtime.sendMessage({ type: 'GET_GMAIL_DRAG_FILE' }, function (resp) {
-          if (chrome.runtime.lastError) { resolve(null); return; }
+          const lastErr = chrome.runtime && chrome.runtime.lastError;
+          if (lastErr) {
+            if (isContextInvalidatedError(lastErr.message)) markContextDead(lastErr.message);
+            resolve(null); return;
+          }
           if (!resp || !resp.ok || !resp.file) { resolve(null); return; }
           resolve(resp.file);
         });
-      } catch (_) { resolve(null); }
+      } catch (e) {
+        if (isContextInvalidatedError(e)) markContextDead(e && e.message);
+        resolve(null);
+      }
     });
   }
 
