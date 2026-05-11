@@ -805,35 +805,34 @@
     anchor.appendChild(btn);
   }
 
-  // Returns every visible Liabilities section's header bar. We anchor
-  // on the "+ Add liability" button rather than the "Liabilities"
-  // heading text because the heading element can differ between
-  // borrower-pair tabs (count chips, whitespace, or different wrapper
-  // elements), and the addBtn is the single, distinctive landmark
-  // every section has. Each match returns the immediate parent of the
-  // addBtn — the same flex row that holds the heading on the left and
-  // the addBtn on the right.
+  // Returns every visible Liabilities section. Anchored on the table
+  // itself (table[aria-label="Table for liabilities"]) — every
+  // borrower-pair tab has exactly one, and walking from the table to
+  // its parent.parentElement finds the section wrapper that also
+  // contains the header row with the "+ Add liability" button.
+  // Anchoring on the addBtn directly is unsafe because Assets, Gifts,
+  // and Real estate sections each have their own add-entity-button,
+  // and walking up from those would falsely pick up the nearby
+  // Liabilities table.
   function findLiabilitiesHeaders() {
     const out = [];
-    const seenContainers = new WeakSet();
-    document.querySelectorAll('button[data-cy="add-entity-button"]').forEach(function (addBtn) {
-      // Confirm this addBtn is the Liabilities one (and not some other
-      // "add entity" button on the page, like Assets or Real estate)
-      // by walking up to find the nearest table[aria-label="Table for
-      // liabilities"] sibling/descendant. If none, skip.
-      let probe = addBtn.parentElement;
-      let liabTable = null;
-      while (probe && probe !== document.body) {
-        liabTable = probe.querySelector('table[aria-label="Table for liabilities"]');
-        if (liabTable) break;
-        probe = probe.parentElement;
-      }
-      if (!liabTable) return;
+    document.querySelectorAll('table[aria-label="Table for liabilities"]').forEach(function (table) {
+      if (table.offsetParent === null) return;
+      // The DOM observed:
+      //   [data-cy="liabilities-section"]
+      //     Flex (header)        ← contains <h5> and the addBtn
+      //       <h5>Liabilities</h5>
+      //       button[data-cy="add-entity-button"]
+      //     table[aria-label="Table for liabilities"]
+      // The table's parent is the section; the addBtn is in a sibling
+      // (the Flex header row).
+      const section = table.parentElement;
+      if (!section) return;
+      const addBtn = section.querySelector('button[data-cy="add-entity-button"]');
+      if (!addBtn) return;
       const container = addBtn.parentElement;
       if (!container || container.offsetParent === null) return;
-      if (seenContainers.has(container)) return;
-      seenContainers.add(container);
-      out.push({ container: container, addBtn: addBtn, table: liabTable });
+      out.push({ container: container, addBtn: addBtn, table: table });
     });
     return out;
   }
