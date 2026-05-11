@@ -9,6 +9,7 @@
   'use strict';
 
   const BUTTON_ID = 'rric-run-button';
+  const BUTTON_CLASS = 'rric-run-button-cls';
   const PANEL_ID = 'rric-panel';
   const STUDENT_LOAN_BUTTON_ID = 'rric-sloan-button';
   const STUDENT_LOAN_BUTTON_CLASS = 'rric-sloan-button-cls';
@@ -16,6 +17,14 @@
   const STUDENT_LOAN_PANEL_ID = 'rric-sloan-summary';
   const EXCLUDE_TELECOM_BUTTON_ID = 'rric-exclude-telecom-button';
   const EXCLUDE_TELECOM_BUTTON_CLASS = 'rric-exclude-telecom-button-cls';
+
+  // When a borrower-pair tab's Run Residual Income Calc button is
+  // clicked, we set this to that borrower's section root. findLabel /
+  // findFieldByLabel use it as the default scope, so getVeteranType /
+  // getMaritalStatus / etc. read from the right form. Stays set until
+  // a different section's button overrides it. findEmploymentSummaryRows
+  // also uses it directly.
+  let activeFormScope = null;
   const EXCLUDE_TELECOM_PAYEE_MATCH = 'TELECOM SELFREPORTED';
   const EXCLUDE_TELECOM_REASON_VALUE = 'LessThan10Payments';
   const TRIGGER_VETERAN_TYPES = ['Regular military', 'National Guard or reserves'];
@@ -116,7 +125,7 @@
 
   function findLabel(text, scope) {
     const target = normalizeText(text);
-    const root = scope || document;
+    const root = scope || activeFormScope || document;
     const labels = root.querySelectorAll('label');
     for (const lbl of labels) {
       const t = normalizeText(lbl.textContent);
@@ -656,7 +665,8 @@
 
   function findEmploymentSummaryRows() {
     const rows = [];
-    const tables = document.querySelectorAll('table[aria-label="Table for employments"]');
+    const root = activeFormScope || document;
+    const tables = root.querySelectorAll('table[aria-label="Table for employments"]');
     for (const table of tables) {
       for (const tr of table.querySelectorAll('tbody > tr')) {
         if (tr.children.length < 8) continue;
@@ -764,45 +774,80 @@
     showPanel(initialState);
   }
 
-  function findMilitaryCompletedRow() {
-    const labels = document.querySelectorAll('label, span');
-    for (const el of labels) {
-      if (normalizeText(el.textContent) === 'military service completed') {
-        let row = el.parentElement;
-        for (let i = 0; i < 4 && row; i++) {
-          if (row.children.length > 1 || (row.offsetWidth > 200)) return row;
-          row = row.parentElement;
+  // Find every visible "Military service completed" anchor on the
+  // page. Each borrower-pair tab has its own — we treat each as a
+  // separate section so the button injection and the calc both scope
+  // to the right borrower's form when multiple tabs are mounted.
+  function findMilitarySections() {
+    const out = [];
+    const seen = new WeakSet();
+    document.querySelectorAll('input[type="checkbox"][name="completed"]').forEach(function (input) {
+      const label = input.id ? document.querySelector('label[for="' + CSS.escape(input.id) + '"]') : null;
+      if (!label) return;
+      if (normalizeText(label.textContent) !== 'military service completed') return;
+      if (input.offsetParent === null) return;
+      // Walk up to the closest ancestor that also contains a
+      // veteranType select — that's the boundary of the Military
+      // Information section for this borrower.
+      let scope = input.parentElement;
+      while (scope && scope !== document.body) {
+        const vt = scope.querySelector('select[name="veteranType"]');
+        if (vt) {
+          if (seen.has(scope)) return;
+          seen.add(scope);
+          // Anchor for button placement: the row container holding the
+          // "Military service completed" checkbox + label. Walk up
+          // from the input until we find a parent wider than the
+          // checkbox alone, matching the original findMilitaryCompleted
+          // Row behavior.
+          let anchor = input.parentElement;
+          for (let i = 0; i < 4 && anchor; i++) {
+            if (anchor.children.length > 1 || anchor.offsetWidth > 200) break;
+            anchor = anchor.parentElement;
+          }
+          out.push({ scope: scope, anchor: anchor || input.parentElement, vtSelect: vt });
+          return;
         }
-        return el.parentElement;
+        scope = scope.parentElement;
       }
-    }
-    return null;
+    });
+    return out;
+  }
+
+  function findMilitaryCompletedRow() {
+    // Legacy single-anchor finder — still referenced elsewhere if any.
+    const sections = findMilitarySections();
+    return sections[0] && sections[0].anchor;
   }
 
   function ensureButtonState() {
-    const veteranType = getVeteranType();
-    const shouldShow = TRIGGER_VETERAN_TYPES.some(function (t) {
-      return normalizeText(veteranType) === normalizeText(t);
-    });
-    const existing = document.getElementById(BUTTON_ID);
-    if (!shouldShow) {
-      if (existing) existing.remove();
-      return;
+    const sections = findMilitarySections();
+    for (const sec of sections) {
+      const vt = sec.vtSelect;
+      const veteranTypeText = (vt.options[vt.selectedIndex] && vt.options[vt.selectedIndex].text) || '';
+      const shouldShow = TRIGGER_VETERAN_TYPES.some(function (t) {
+        return normalizeText(veteranTypeText) === normalizeText(t);
+      });
+      const existing = sec.scope.querySelector('.' + BUTTON_CLASS);
+      if (!shouldShow) {
+        if (existing) existing.remove();
+        continue;
+      }
+      if (existing) continue;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'rric-button ' + BUTTON_CLASS;
+      btn.textContent = 'Run Residual Income Calc';
+      const scope = sec.scope;
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        activeFormScope = scope;
+        runCalculator();
+      });
+      sec.anchor.appendChild(btn);
+      console.log('[Residual Income Calc] button injected into scope', scope);
     }
-    if (existing && existing.isConnected) return;
-    const anchor = findMilitaryCompletedRow();
-    if (!anchor) return;
-    const btn = document.createElement('button');
-    btn.id = BUTTON_ID;
-    btn.type = 'button';
-    btn.className = 'rric-button';
-    btn.textContent = 'Run Residual Income Calc';
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      runCalculator();
-    });
-    anchor.appendChild(btn);
   }
 
   // Returns every visible Liabilities section. Anchored on the table
