@@ -209,6 +209,71 @@
     prefetch(info);
   }, true);
 
+  function showFetchingToast(filename) {
+    let toast = document.getElementById('zhl-gda-fetching-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'zhl-gda-fetching-toast';
+      toast.setAttribute('style',
+        'position:fixed;top:20px;right:20px;z-index:2147483647;' +
+        'background:#f59e0b;color:#fff;padding:12px 18px;' +
+        'border-radius:8px;font:600 13px/1.4 Arial,sans-serif;' +
+        'box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:360px;');
+      (document.body || document.documentElement).appendChild(toast);
+    }
+    toast.textContent = 'Still preparing "' + filename + '". Wait for the green ↓ badge then drag again.';
+    if (toast._t) clearTimeout(toast._t);
+    toast._t = setTimeout(function () { try { toast.remove(); } catch (_) {} }, 4500);
+  }
+
+  // Wait for entry.b64 to be populated (the prefetch + base64 encode
+  // path is async and runs separately from the fetch promise). Polls
+  // every 100ms up to maxMs (default 30s).
+  function waitForB64(entry, maxMs) {
+    return new Promise(function (resolve) {
+      if (entry.b64 || entry.tooBigForCrossTab) { resolve(); return; }
+      const start = Date.now();
+      const timer = setInterval(function () {
+        if (entry.b64 || entry.tooBigForCrossTab || Date.now() - start > (maxMs || 30000)) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+
+  // Send GMAIL_DRAG_START to the SW once entry is fully ready. Safe to
+  // call when the current drag is already over — the SW caches the
+  // file with a 60s TTL, so the user's NEXT drag attempt picks it up
+  // without waiting again.
+  function deferredPushToSW(entry) {
+    if (!entry || !entry.promise) return;
+    entry.promise.then(function () {
+      if (!entry.file) return;
+      return waitForB64(entry).then(function () {
+        if (!entry.b64 || contextDead) return;
+        try {
+          chrome.runtime.sendMessage({
+            type: 'GMAIL_DRAG_START',
+            name: entry.file.name,
+            mime: entry.file.type,
+            size: entry.file.size,
+            b64: entry.b64
+          }, function () {
+            const lastErr = chrome.runtime && chrome.runtime.lastError;
+            if (lastErr) {
+              if (isContextInvalidatedError(lastErr.message)) markContextDead(lastErr.message);
+            } else {
+              console.log('[Gmail Drag Attach] deferred SW push complete for', entry.file.name);
+            }
+          });
+        } catch (e) {
+          if (isContextInvalidatedError(e)) markContextDead(e && e.message);
+        }
+      });
+    });
+  }
+
   // ---- Dragstart hijack at document capture phase --------------------
   // Capture phase on the document fires BEFORE any element-level
   // capture or bubble listeners deeper in the tree, so we modify
@@ -219,7 +284,12 @@
     if (!info) return;
     const entry = prefetch(info);
     if (!entry || entry.state !== 'ready' || !entry.file) {
-      console.log('[Gmail Drag Attach] dragstart but file not ready (' + (entry ? entry.state : 'no entry') + ')');
+      console.log('[Gmail Drag Attach] dragstart but file not ready (' + (entry ? entry.state : 'no entry') + ') — scheduling deferred SW push so next drag works');
+      showFetchingToast(info.filename);
+      // Even though THIS drag is wasted (we can't intercept dataTransfer
+      // synchronously without the file), kick off a deferred push so
+      // the SW has the file by the time the user retries.
+      deferredPushToSW(entry);
       return;
     }
     try {
