@@ -107,7 +107,15 @@
         badge.addEventListener('click', function (e) {
           e.preventDefault();
           e.stopPropagation();
-          runDeepScan(sec, badge);
+          if (e.shiftKey) {
+            // Shift-click: probe the React fiber tree above the
+            // liabilities table and dump the discovered data to the
+            // console. Used to figure out the field shape so we can
+            // read liability details without expanding rows.
+            probeReactFiber(sec.table);
+          } else {
+            runDeepScan(sec, badge);
+          }
         });
         const heading = sec.container.querySelector('h5');
         if (heading && heading.nextSibling) sec.container.insertBefore(badge, heading.nextSibling);
@@ -115,6 +123,127 @@
       }
       updateCollectionsBadge(sec, badge);
     }
+  }
+
+  // ---- React-fiber probe -------------------------------------------------
+  //
+  // Next.js/React stores component state on the DOM node via an
+  // internal "__reactFiber$<hash>" property. Walking up the fiber's
+  // .return chain reaches the parent components, where memoizedProps
+  // / memoizedState typically hold the full data object that backs
+  // the rendered list (liabilities, etc.). If we can identify the
+  // node whose props/state holds the liability array with all the
+  // fields the form shows, we can read every row's
+  // highestAdverseRating / remarks / late counts / lastDelinquencyDate
+  // WITHOUT expanding any rows.
+  //
+  // The probe just logs whatever it finds at each ancestor level so
+  // we can see field names and decide which path to read from.
+  function findReactFiber(node) {
+    if (!node) return null;
+    for (const key of Object.keys(node)) {
+      if (key.indexOf('__reactFiber$') === 0 || key.indexOf('__reactInternalInstance$') === 0) {
+        return node[key];
+      }
+    }
+    return null;
+  }
+
+  function fiberDisplayName(fiber) {
+    if (!fiber) return '?';
+    const t = fiber.type;
+    if (typeof t === 'string') return t;
+    if (t && t.displayName) return t.displayName;
+    if (t && t.name) return t.name;
+    return '?';
+  }
+
+  function isLiabilityLikeArray(arr) {
+    if (!Array.isArray(arr) || !arr.length) return false;
+    // Heuristic: items look like liabilities if they have payee /
+    // company / unpaid balance fields.
+    const sample = arr[0];
+    if (!sample || typeof sample !== 'object') return false;
+    const keys = Object.keys(sample).map(function (k) { return k.toLowerCase(); });
+    let hits = 0;
+    for (const needle of ['payee', 'company', 'companyname', 'unpaidbalance', 'balance', 'accounttype', 'highestadverse', 'remarks', 'monthlypayment']) {
+      if (keys.some(function (k) { return k.indexOf(needle) !== -1; })) hits++;
+    }
+    return hits >= 2;
+  }
+
+  function deepFindLiabilityArrays(obj, path, depth, out, seen) {
+    if (depth > 6 || !obj || typeof obj !== 'object') return;
+    if (seen.has(obj)) return;
+    seen.add(obj);
+    if (isLiabilityLikeArray(obj)) {
+      out.push({ path: path, value: obj });
+      return;
+    }
+    for (const key of Object.keys(obj)) {
+      try {
+        const v = obj[key];
+        if (v && typeof v === 'object') {
+          deepFindLiabilityArrays(v, path + '.' + key, depth + 1, out, seen);
+        }
+      } catch (_) {}
+    }
+  }
+
+  function probeReactFiber(table) {
+    console.group('[Collections Probe] react fiber walk');
+    const fiber = findReactFiber(table);
+    if (!fiber) {
+      console.warn('No __reactFiber$ key on the liabilities table. React may use closed Shadow DOM or a non-standard mount.');
+      console.groupEnd();
+      return;
+    }
+    console.log('starting fiber:', fiberDisplayName(fiber));
+    let cur = fiber;
+    let depth = 0;
+    const allHits = [];
+    while (cur && depth < 30) {
+      const label = '[' + depth + '] ' + fiberDisplayName(cur);
+      const propsHits = [];
+      const stateHits = [];
+      try {
+        if (cur.memoizedProps && typeof cur.memoizedProps === 'object') {
+          deepFindLiabilityArrays(cur.memoizedProps, 'props', 0, propsHits, new WeakSet());
+        }
+      } catch (_) {}
+      try {
+        if (cur.memoizedState && typeof cur.memoizedState === 'object') {
+          deepFindLiabilityArrays(cur.memoizedState, 'state', 0, stateHits, new WeakSet());
+        }
+      } catch (_) {}
+      if (propsHits.length || stateHits.length) {
+        console.group(label + ' — found ' + (propsHits.length + stateHits.length) + ' candidate array(s)');
+        for (const h of propsHits) {
+          console.log('PROPS ' + h.path + ' (' + h.value.length + ' items)');
+          console.log('  sample[0]:', h.value[0]);
+          allHits.push(Object.assign({ fiberDepth: depth, fiberName: fiberDisplayName(cur) }, h));
+        }
+        for (const h of stateHits) {
+          console.log('STATE ' + h.path + ' (' + h.value.length + ' items)');
+          console.log('  sample[0]:', h.value[0]);
+          allHits.push(Object.assign({ fiberDepth: depth, fiberName: fiberDisplayName(cur) }, h));
+        }
+        console.groupEnd();
+      }
+      cur = cur.return;
+      depth++;
+    }
+    if (!allHits.length) {
+      console.warn('No liability-like arrays found in the fiber tree above the table.');
+    } else {
+      console.log('Summary — ' + allHits.length + ' hit(s):');
+      for (const h of allHits) {
+        console.log('  depth=' + h.fiberDepth + ' ' + h.fiberName + ' @ ' + h.path + ' (' + h.value.length + ' items)');
+      }
+      console.log('Top hit sample (paste this block back to me):');
+      console.log(JSON.stringify(allHits[0].value[0], null, 2));
+    }
+    console.groupEnd();
   }
 
   function updateCollectionsBadge(sec, badge) {
