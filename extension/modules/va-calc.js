@@ -240,28 +240,103 @@
 
   function probeReactFiber(table) {
     console.group('[Collections Probe] react fiber walk');
-    // Dump ALL non-standard keys on the table so we can see what
-    // properties exist regardless of our key-prefix heuristic.
-    const tableKeys = Object.keys(table).filter(function (k) { return k.startsWith('_') || k.startsWith('__'); });
-    console.log('table element underscore-keys:', tableKeys);
-    // Also dump keys on tbody and a couple of ancestors as fallbacks.
+
+    // Use getOwnPropertyNames so we catch non-enumerable React keys.
+    function nodeOwnKeys(n) {
+      try {
+        return Object.getOwnPropertyNames(n).filter(function (k) { return k.startsWith('_') || k.startsWith('__'); });
+      } catch (_) { return []; }
+    }
+    console.log('table own-keys (incl non-enum):', nodeOwnKeys(table));
     const tbody = table.querySelector('tbody');
-    if (tbody) console.log('tbody underscore-keys:', Object.keys(tbody).filter(function (k) { return k.startsWith('_') || k.startsWith('__'); }));
+    if (tbody) console.log('tbody own-keys:', nodeOwnKeys(tbody));
     let walk = table.parentElement;
-    for (let d = 0; d < 3 && walk; d++) {
-      console.log('ancestor[' + d + ']=' + walk.tagName + ' underscore-keys:', Object.keys(walk).filter(function (k) { return k.startsWith('_') || k.startsWith('__'); }));
+    for (let d = 0; d < 5 && walk; d++) {
+      console.log('ancestor[' + d + ']=' + walk.tagName + ' own-keys:', nodeOwnKeys(walk));
       walk = walk.parentElement;
     }
-    // Now try the wider fiber search.
+
+    // Page-level diagnostic: which JS frameworks / state stores are
+    // available on window? The Next.js __NEXT_DATA__ blob, an Apollo
+    // client, Redux store, or React DevTools hook would each open a
+    // different route to the liability data.
+    console.log('--- page globals ---');
+    console.log('typeof window.__NEXT_DATA__:', typeof window.__NEXT_DATA__);
+    if (typeof window.__NEXT_DATA__ === 'object') {
+      console.log('  __NEXT_DATA__ top-level keys:', Object.keys(window.__NEXT_DATA__ || {}));
+      try {
+        const pp = window.__NEXT_DATA__ && window.__NEXT_DATA__.props && window.__NEXT_DATA__.props.pageProps;
+        if (pp) console.log('  __NEXT_DATA__.props.pageProps keys:', Object.keys(pp));
+      } catch (_) {}
+    }
+    console.log('typeof window.__APOLLO_CLIENT__:', typeof window.__APOLLO_CLIENT__);
+    if (window.__APOLLO_CLIENT__) {
+      try {
+        const cache = window.__APOLLO_CLIENT__.cache && window.__APOLLO_CLIENT__.cache.extract && window.__APOLLO_CLIENT__.cache.extract();
+        if (cache) {
+          const keys = Object.keys(cache);
+          console.log('  Apollo cache size:', keys.length);
+          const liabilityKeys = keys.filter(function (k) { return /liabilit|borrower/i.test(k); });
+          console.log('  Apollo cache keys matching liability/borrower:', liabilityKeys.slice(0, 20));
+        }
+      } catch (e) { console.warn('  Apollo cache probe failed', e); }
+    }
+    console.log('typeof window.__REDUX_STORE__:', typeof window.__REDUX_STORE__);
+    console.log('typeof window.__INITIAL_STATE__:', typeof window.__INITIAL_STATE__);
+    console.log('typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__:', typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__);
+    if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+      try {
+        const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+        const renderers = hook.renderers;
+        if (renderers) {
+          const ids = typeof renderers.forEach === 'function' ? [] : Object.keys(renderers);
+          if (renderers.forEach) renderers.forEach(function (_, id) { ids.push(id); });
+          console.log('  React DevTools registered renderer ids:', ids);
+        }
+      } catch (e) {}
+    }
+
+    // Iframe check — if the application is mounted in an iframe, we
+    // need to inject into the iframe's frame instead of the top.
+    const iframes = document.querySelectorAll('iframe');
+    console.log('iframes on page:', iframes.length);
+
+    // Try the wider fiber search.
     const found = findReactFiberNearby(table);
+    if (found) {
+      console.log('fiber located via key "' + found.hitKey + '" on <' + found.node.tagName.toLowerCase() + '>',
+        found.node === table ? '(the table itself)' :
+        (found.node.contains(table) ? '(a descendant)' : '(an ancestor)'));
+    }
+
+    // Brute-force last resort: scan every element on the page for
+    // ANY property whose value is fiber-shaped. Reports the first 10
+    // hits with their location. If this turns up empty, React really
+    // isn't reachable from this isolated content-script world.
     if (!found) {
-      console.warn('No fiber-shaped object on the table, any ancestor (25 deep), tbody, first tr, or first td. React internals may be hidden — check the underscore-keys logs above and tell me what you see.');
+      console.log('--- brute-force scan of all elements for fiber-shaped props ---');
+      const all = document.querySelectorAll('*');
+      console.log('  scanning ' + all.length + ' elements...');
+      const hits = [];
+      for (const el of all) {
+        let names;
+        try { names = Object.getOwnPropertyNames(el); } catch (_) { continue; }
+        for (const n of names) {
+          if (!(n.startsWith('_') || n.startsWith('__'))) continue;
+          let v;
+          try { v = el[n]; } catch (_) { continue; }
+          if (v && typeof v === 'object' && ('return' in v || 'stateNode' in v || 'memoizedProps' in v)) {
+            hits.push({ tag: el.tagName, cls: (el.className || '').toString().slice(0, 60), key: n });
+            if (hits.length >= 10) break;
+          }
+        }
+        if (hits.length >= 10) break;
+      }
+      console.log('  brute-force hits:', hits);
+      console.warn('No fiber found in the ordinary search. Page globals + brute-force results are above. Paste the whole block back.');
       console.groupEnd();
       return;
     }
-    console.log('fiber located via key "' + found.hitKey + '" on <' + found.node.tagName.toLowerCase() + '>',
-      found.node === table ? '(the table itself)' :
-      (found.node.contains(table) ? '(an ancestor)' : '(a descendant)'));
     const fiber = found.fiber;
     console.log('starting fiber:', fiberDisplayName(fiber));
     let cur = fiber;
