@@ -77,6 +77,21 @@
     return { total: total, counted: counted, excludedMedical: excludedMedical };
   }
 
+  // Per-table cache of the most recent deep-scan result so the
+  // visible badge keeps showing the accurate number across observer
+  // ticks. Keyed by table DOM node; the WeakMap auto-clears when the
+  // table is removed (tab switch / page leave). Invalidated when the
+  // summary-row fingerprint (count + payees + balances) changes — if
+  // the user edits a row after scanning, the badge falls back to the
+  // fast heuristic and shows a "stale, re-scan" hint.
+  const deepScanCache = new WeakMap();
+  function tableFingerprint(scopeTable) {
+    const rows = findLiabilityRows(scopeTable);
+    return rows.map(function (r) {
+      return (r.payee || '') + '|' + (r.accountType || '') + '|' + (r.balance || 0);
+    }).join(';');
+  }
+
   function ensureCollectionsBadge() {
     const sections = findLiabilitiesHeaders();
     for (const sec of sections) {
@@ -87,10 +102,13 @@
         badge.style.cssText =
           'display:inline-flex;align-items:center;gap:6px;' +
           'padding:4px 10px;margin-left:12px;border-radius:14px;' +
-          'font:600 12px/1.3 Arial,sans-serif;cursor:default;' +
-          'border:1px solid transparent;';
-        // Insert right after the h5 heading so the badge sits next to
-        // "Liabilities" instead of getting flex-pushed to the far edge.
+          'font:600 12px/1.3 Arial,sans-serif;cursor:pointer;' +
+          'border:1px solid transparent;user-select:none;';
+        badge.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          runDeepScan(sec, badge);
+        });
         const heading = sec.container.querySelector('h5');
         if (heading && heading.nextSibling) sec.container.insertBefore(badge, heading.nextSibling);
         else sec.container.appendChild(badge);
@@ -100,7 +118,24 @@
   }
 
   function updateCollectionsBadge(sec, badge) {
+    // Prefer a recent deep-scan result if the table hasn't changed
+    // since the scan ran. Otherwise compute the fast (summary-only)
+    // heuristic and mark the badge as needing a scan.
+    const cached = deepScanCache.get(sec.table);
+    const currentFp = tableFingerprint(sec.table);
+    if (cached && cached.fingerprint === currentFp) {
+      paintBadge(badge, cached.result, 'deep');
+      return;
+    }
+    if (cached && cached.fingerprint !== currentFp) {
+      // Table changed since scan — discard the stale result.
+      deepScanCache.delete(sec.table);
+    }
     const result = computeCollectionsTotal(sec.table);
+    paintBadge(badge, result, 'fast');
+  }
+
+  function paintBadge(badge, result, mode) {
     const overCap = result.total >= FHA_COLLECTION_CAP;
     const icon = overCap ? '✕' : '✓';
     const color = overCap ? '#b91c1c' : '#16a34a';
@@ -109,30 +144,183 @@
     badge.style.color = color;
     badge.style.borderColor = color;
     const medicalNote = result.excludedMedical.length
-      ? ' (' + result.excludedMedical.length + ' medical excluded)'
+      ? ' · ' + result.excludedMedical.length + ' medical excluded'
       : '';
+    const modeNote = mode === 'deep'
+      ? ' · deep scan ✓'
+      : ' · click to deep scan';
     badge.textContent = icon + ' Total Collections: $' +
       result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
-      medicalNote;
-    // Tooltip lists which rows were counted and which medicals were
-    // skipped so the user can sanity-check the heuristic.
-    const lines = [];
-    lines.push('FHA cumulative-balance cap: $' + FHA_COLLECTION_CAP.toLocaleString());
+      medicalNote + modeNote;
+    const lines = ['FHA cumulative-balance cap: $' + FHA_COLLECTION_CAP.toLocaleString()];
+    if (mode === 'fast') {
+      lines.push('(Fast mode — only counts what\'s visible in the summary. Click the badge to deep-scan rows for charge-offs / late pays.)');
+    }
     if (result.counted.length) {
       lines.push('');
       lines.push('Counted (' + result.counted.length + '):');
-      for (const r of result.counted) {
-        lines.push('  • ' + r.payee + ' [' + r.accountType + '] — $' + (r.balance || 0).toLocaleString());
+      for (const c of result.counted) {
+        const r = c.row || c;
+        const why = c.reasons ? ' [' + c.reasons.join(', ') + ']' : '';
+        lines.push('  • ' + r.payee + ' [' + r.accountType + ']' + why + ' — $' + (r.balance || 0).toLocaleString());
       }
     }
     if (result.excludedMedical.length) {
       lines.push('');
       lines.push('Excluded as medical (' + result.excludedMedical.length + '):');
-      for (const r of result.excludedMedical) {
+      for (const c of result.excludedMedical) {
+        const r = c.row || c;
         lines.push('  • ' + r.payee + ' [' + r.accountType + '] — $' + (r.balance || 0).toLocaleString());
       }
     }
     badge.title = lines.join('\n');
+  }
+
+  async function runDeepScan(sec, badge) {
+    const origText = badge.textContent;
+    const origCursor = badge.style.cursor;
+    badge.style.cursor = 'progress';
+    badge.style.background = '#fef3c7';
+    badge.style.color = '#92400e';
+    badge.style.borderColor = '#f59e0b';
+    badge.textContent = '⟳ Scanning rows…';
+    console.group('[Collections Scan] deep scan started');
+    try {
+      const result = await deepScanCollections(sec.table, function (i, n, payee) {
+        badge.textContent = '⟳ Scanning ' + (i + 1) + '/' + n + ' — ' + payee;
+      });
+      deepScanCache.set(sec.table, { fingerprint: tableFingerprint(sec.table), result: result });
+      paintBadge(badge, result, 'deep');
+      console.log('[Collections Scan] result:', result);
+    } catch (e) {
+      console.error('[Collections Scan] failed:', e);
+      badge.textContent = origText;
+      alert('Deep scan failed: ' + (e && e.message || e));
+    } finally {
+      badge.style.cursor = origCursor || 'pointer';
+      console.groupEnd();
+    }
+  }
+
+  function readFieldByLabelInPanel(panel, labelText) {
+    const target = normalizeText(labelText);
+    const labels = panel.querySelectorAll('label');
+    for (const lbl of labels) {
+      const t = normalizeText(lbl.textContent);
+      if (t === target || t.startsWith(target)) {
+        if (lbl.htmlFor) {
+          const el = document.getElementById(lbl.htmlFor);
+          if (el) return el;
+        }
+        const sibling = lbl.parentElement && lbl.parentElement.querySelector('input, select, textarea');
+        if (sibling) return sibling;
+      }
+    }
+    return null;
+  }
+
+  function getSelectedText(sel) {
+    if (!sel) return '';
+    if (sel.options && sel.options.length) {
+      const opt = sel.options[sel.selectedIndex];
+      return (opt && (opt.text || opt.value)) || '';
+    }
+    return sel.value || '';
+  }
+
+  function parseLooseDate(s) {
+    if (!s) return null;
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+    // Try MM/DD/YYYY explicitly.
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s).trim());
+    if (m) {
+      const dd = new Date(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+      if (!isNaN(dd.getTime())) return dd;
+    }
+    return null;
+  }
+
+  async function deepScanCollections(scopeTable, onProgress) {
+    const summaryRows = findLiabilityRows(scopeTable);
+    const result = { total: 0, counted: [], excludedMedical: [] };
+    const now = Date.now();
+    const TWENTY_FOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 365.25 * 2;
+
+    for (let i = 0; i < summaryRows.length; i++) {
+      const row = summaryRows[i];
+      if (onProgress) onProgress(i, summaryRows.length, row.payee || '?');
+      // Re-resolve the row by accountNo / payee since the table can
+      // rerender between iterations.
+      const fresh = findLiabilityRows(scopeTable).find(function (r) {
+        if (row.accountNo && r.accountNo === row.accountNo) return true;
+        return r.payee === row.payee && r.balance === row.balance;
+      });
+      const target = fresh || row;
+      const wasExpanded = isLiabilityRowExpanded(target.tr);
+      if (!wasExpanded) {
+        const ok = await toggleLiabilityRow(target.tr, true);
+        if (!ok) {
+          console.warn('[Collections Scan] could not expand row', target.payee);
+          continue;
+        }
+      }
+      // Let React render the form.
+      await waitMs(200);
+      const panel = findEditPanelFor(target.tr);
+      let highestAdverse = '';
+      let remarks = '';
+      let lateCount = 0;
+      let lastDelinq = null;
+      if (panel) {
+        const adverseSel = readFieldByLabelInPanel(panel, 'Highest adverse rating');
+        highestAdverse = getSelectedText(adverseSel);
+        const remarksInp = readFieldByLabelInPanel(panel, 'Remarks');
+        remarks = (remarksInp && remarksInp.value) || '';
+        for (const lbl of ['30 days late count', '60 days late count', '90 days late count']) {
+          const inp = readFieldByLabelInPanel(panel, lbl);
+          if (inp && inp.value) lateCount += parseInt(inp.value, 10) || 0;
+        }
+        const delinqInp = readFieldByLabelInPanel(panel, 'Last delinquency date');
+        if (delinqInp && delinqInp.value) lastDelinq = parseLooseDate(delinqInp.value);
+      }
+
+      const reasons = [];
+      if (isCollectionAccount(target.accountType)) {
+        reasons.push(target.accountType.toUpperCase() === 'UNKNOWN' ? 'unknown→collection' : 'collection type');
+      }
+      const adverseU = highestAdverse.toUpperCase();
+      if (/CHARGE\s*OFF|REPOSSESSION|FORECLOSURE|JUDGMENT/.test(adverseU)) {
+        reasons.push('adverse:' + highestAdverse);
+      }
+      const remarksU = remarks.toUpperCase();
+      if (/CHARGE\s*OFF|CHARGED\s*OFF/.test(remarksU)) {
+        reasons.push('remarks:charge-off');
+      }
+      if (lateCount > 0 && lastDelinq) {
+        const ageMs = now - lastDelinq.getTime();
+        if (ageMs <= TWENTY_FOUR_MONTHS_MS) {
+          reasons.push('late ' + lateCount + 'x in 24mo');
+        }
+      }
+
+      if (reasons.length) {
+        const balance = target.balance || 0;
+        if (isMedicalPayee(target.payee)) {
+          result.excludedMedical.push({ row: target, reasons: reasons });
+        } else {
+          result.total += balance;
+          result.counted.push({ row: target, reasons: reasons, highestAdverse: highestAdverse, remarks: remarks, lateCount: lateCount });
+        }
+      }
+
+      if (!wasExpanded) {
+        await toggleLiabilityRow(target.tr, false);
+        await waitMs(120);
+      }
+    }
+
+    return result;
   }
 
   // When a borrower-pair tab's Run Residual Income Calc button is
