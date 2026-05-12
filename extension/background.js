@@ -25,6 +25,7 @@ const FEATURE_KEYS = [
   "feature_gmailDragAttachments",
   "feature_taskBulkDelete",
   "feature_fhaBadges",
+  "feature_fhaNprWarning",
   "feature_telemetry"
 ];
 

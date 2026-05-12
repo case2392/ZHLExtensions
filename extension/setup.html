@@ -343,6 +343,29 @@
       </div>
     </section>
 
+    <!-- ============== Module: FHA / Non-Permanent Resident Alien warning ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA + Non-Permanent Resident Alien warning</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaNprWarning" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Watches the <strong>Product name</strong> and every borrower&rsquo;s <strong>Citizenship</strong> field. If the loan is FHA and any borrower is marked <strong>Non-Permanent Resident Alien</strong>, a sticky red banner appears across the top of the page and the offending citizenship dropdown is outlined in red.</li>
+          <li>HUD removed NPRA borrowers from FHA eligibility on May 25, 2025. The warning is intentionally hard to miss so this combination doesn&rsquo;t slip into application.</li>
+          <li>Banner auto-clears the moment the product is changed off FHA or the citizenship is changed to US citizen / Permanent resident alien.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Bulk-delete unsent tasks ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
