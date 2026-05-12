@@ -149,6 +149,54 @@
     return null;
   }
 
+  // Walks the DOM up from `node` looking for ANY ancestor (or
+  // descendant of self) that has a React fiber property. Returns
+  // { node, fiber, keys } describing what we found, or null.
+  function findReactFiberNearby(node) {
+    const visited = new Set();
+    function tryNode(n) {
+      if (!n || visited.has(n)) return null;
+      visited.add(n);
+      const keys = [];
+      for (const k of Object.keys(n)) {
+        if (k.startsWith('__react') || k.startsWith('__P_') || k.startsWith('_owner')) keys.push(k);
+      }
+      if (keys.length) {
+        for (const k of keys) {
+          const v = n[k];
+          // Fiber-ish objects have .return / .stateNode / .memoizedProps.
+          if (v && typeof v === 'object' && ('return' in v || 'stateNode' in v || 'memoizedProps' in v)) {
+            return { node: n, fiber: v, keys: keys, hitKey: k };
+          }
+        }
+      }
+      return null;
+    }
+    // Try self.
+    let r = tryNode(node);
+    if (r) return r;
+    // Try ancestors.
+    let cur = node && node.parentElement;
+    let depth = 0;
+    while (cur && depth < 25) {
+      r = tryNode(cur);
+      if (r) return r;
+      cur = cur.parentElement;
+      depth++;
+    }
+    // Try a few descendants of the table (tbody, first tr, first td).
+    const descendants = [
+      node && node.querySelector ? node.querySelector('tbody') : null,
+      node && node.querySelector ? node.querySelector('tbody tr') : null,
+      node && node.querySelector ? node.querySelector('tbody td') : null
+    ].filter(Boolean);
+    for (const d of descendants) {
+      r = tryNode(d);
+      if (r) return r;
+    }
+    return null;
+  }
+
   function fiberDisplayName(fiber) {
     if (!fiber) return '?';
     const t = fiber.type;
@@ -192,12 +240,29 @@
 
   function probeReactFiber(table) {
     console.group('[Collections Probe] react fiber walk');
-    const fiber = findReactFiber(table);
-    if (!fiber) {
-      console.warn('No __reactFiber$ key on the liabilities table. React may use closed Shadow DOM or a non-standard mount.');
+    // Dump ALL non-standard keys on the table so we can see what
+    // properties exist regardless of our key-prefix heuristic.
+    const tableKeys = Object.keys(table).filter(function (k) { return k.startsWith('_') || k.startsWith('__'); });
+    console.log('table element underscore-keys:', tableKeys);
+    // Also dump keys on tbody and a couple of ancestors as fallbacks.
+    const tbody = table.querySelector('tbody');
+    if (tbody) console.log('tbody underscore-keys:', Object.keys(tbody).filter(function (k) { return k.startsWith('_') || k.startsWith('__'); }));
+    let walk = table.parentElement;
+    for (let d = 0; d < 3 && walk; d++) {
+      console.log('ancestor[' + d + ']=' + walk.tagName + ' underscore-keys:', Object.keys(walk).filter(function (k) { return k.startsWith('_') || k.startsWith('__'); }));
+      walk = walk.parentElement;
+    }
+    // Now try the wider fiber search.
+    const found = findReactFiberNearby(table);
+    if (!found) {
+      console.warn('No fiber-shaped object on the table, any ancestor (25 deep), tbody, first tr, or first td. React internals may be hidden — check the underscore-keys logs above and tell me what you see.');
       console.groupEnd();
       return;
     }
+    console.log('fiber located via key "' + found.hitKey + '" on <' + found.node.tagName.toLowerCase() + '>',
+      found.node === table ? '(the table itself)' :
+      (found.node.contains(table) ? '(an ancestor)' : '(a descendant)'));
+    const fiber = found.fiber;
     console.log('starting fiber:', fiberDisplayName(fiber));
     let cur = fiber;
     let depth = 0;
