@@ -27,16 +27,36 @@
     return document.querySelector('table[data-cy="unsent-tasks-table"]');
   }
 
-  // The Unsent table sits inside a wrapper whose first child Flex is
-  // the section header (with the "Unsent" heading and "Send unsent
-  // tasks" button). We add our button next to "Send unsent tasks".
-  function findUnsentHeaderBar() {
-    const sendAll = document.querySelector('button[data-cy="send-all-unsent-tasks-btn"]');
-    return sendAll ? sendAll.parentElement : null;
+  function hasAnyDeletableRows(table) {
+    return !!(table && table.querySelector('tbody button[data-cy="delete-task-btn"]'));
+  }
+
+  // Returns the Flex that contains the "Unsent" heading + gleam (left
+  // side of the section header bar). We anchor our Delete Selected
+  // button here so it sits next to the heading and aligns vertically
+  // with the leftmost (checkbox) column of the table — instead of all
+  // the way on the right next to "Send unsent tasks", which made the
+  // UI annoying to use.
+  function findUnsentTitleArea() {
+    const gleam = document.querySelector('[data-cy="unsent-gleam"]');
+    if (gleam && gleam.parentElement) return gleam.parentElement;
+    const h4s = document.querySelectorAll('h4');
+    for (const h of h4s) {
+      if ((h.textContent || '').trim() === 'Unsent') return h.parentElement;
+    }
+    return null;
   }
 
   function ensureCheckboxColumn(table) {
     const thead = table.querySelector('thead tr');
+    const hasTasks = hasAnyDeletableRows(table);
+    if (!hasTasks) {
+      // No deletable rows — tear down our header cell so the table
+      // looks like stock LOP when the section is empty.
+      const existingTh = thead && thead.querySelector('[' + HEADER_CELL_ATTR + ']');
+      if (existingTh) existingTh.remove();
+      return;
+    }
     if (thead && !thead.querySelector('[' + HEADER_CELL_ATTR + ']')) {
       const th = document.createElement('th');
       th.setAttribute(HEADER_CELL_ATTR, '1');
@@ -75,16 +95,22 @@
   }
 
   function ensureBulkButton(table) {
-    const header = findUnsentHeaderBar();
-    if (!header) return;
-    if (header.querySelector('[' + BULK_BUTTON_ATTR + ']')) return;
+    const titleArea = findUnsentTitleArea();
+    if (!titleArea) return;
+    const hasTasks = hasAnyDeletableRows(table);
+    const existing = titleArea.querySelector('[' + BULK_BUTTON_ATTR + ']');
+    if (!hasTasks) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
     const btn = document.createElement('button');
     btn.setAttribute(BULK_BUTTON_ATTR, '1');
     btn.type = 'button';
     btn.textContent = 'Delete Selected';
     btn.title = 'Delete every checked unsent task';
     btn.style.cssText =
-      'display:inline-flex;align-items:center;margin-right:12px;' +
+      'display:inline-flex;align-items:center;margin-left:16px;' +
       'padding:6px 12px;background:#b91c1c;color:#fff;border:none;' +
       'border-radius:4px;font:600 13px/1 Arial,sans-serif;cursor:pointer;';
     btn.addEventListener('mouseenter', function () { btn.style.background = '#991b1b'; });
@@ -94,9 +120,7 @@
       e.stopPropagation();
       bulkDelete(table, btn);
     });
-    const sendAll = header.querySelector('button[data-cy="send-all-unsent-tasks-btn"]');
-    if (sendAll) header.insertBefore(btn, sendAll);
-    else header.appendChild(btn);
+    titleArea.appendChild(btn);
     console.log('[Task Bulk Delete] button injected');
   }
 
