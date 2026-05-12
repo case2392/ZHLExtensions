@@ -396,17 +396,13 @@
 
   async function probeReactFiber(table) {
     console.group('[Collections Probe] MAIN-world react fiber walk');
-    // Inject the probe listener into the page world if not already.
-    try {
-      await injectMainWorldScript(MAIN_WORLD_PROBE_SRC);
-    } catch (e) {
-      console.error('failed to inject MAIN-world script (CSP block?):', e);
-      console.groupEnd();
-      return;
-    }
+    // The MAIN-world bridge is registered as a content script in the
+    // manifest (modules/lop-state-bridge.js with "world": "MAIN"), so
+    // it's already installed by the time we get here. No inline
+    // injection — that gets blocked by LOP's CSP.
     const result = await callMainWorldProbe({ scope: 'liabilities' }, 4000);
     if (!result) {
-      console.warn('No response from MAIN-world probe within 4s. CSP may have blocked the script injection — check Network tab for "Refused to execute inline script" errors.');
+      console.warn('No response from MAIN-world bridge within 4s. Check that you see the "[ZHL LOP bridge] installed in MAIN world" log on page load — if not, the manifest content script entry isn\'t running.');
       console.groupEnd();
       return;
     }
