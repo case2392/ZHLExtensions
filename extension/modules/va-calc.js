@@ -238,7 +238,208 @@
     }
   }
 
-  function probeReactFiber(table) {
+  // Inject a script into the page's MAIN world. Content scripts live
+  // in an isolated world that can't see __reactFiber$ properties or
+  // hydrated page globals, so any state probing has to happen in the
+  // page world and post results back.
+  function injectMainWorldScript(code) {
+    return new Promise(function (resolve) {
+      const s = document.createElement('script');
+      s.textContent = code;
+      (document.head || document.documentElement).appendChild(s);
+      // The script runs synchronously on insertion.
+      s.remove();
+      resolve();
+    });
+  }
+
+  // Request/response over window.postMessage between our isolated
+  // content script and the page-world probe.
+  function callMainWorldProbe(payload, timeoutMs) {
+    return new Promise(function (resolve) {
+      const requestId = 'zhl-probe-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      const responseType = 'ZHL_LOP_PROBE_RESPONSE';
+      const requestType = 'ZHL_LOP_PROBE_REQUEST';
+      const timer = setTimeout(function () {
+        window.removeEventListener('message', listener);
+        resolve(null);
+      }, timeoutMs || 3000);
+      function listener(e) {
+        if (e.source !== window) return;
+        const d = e.data;
+        if (!d || d.type !== responseType || d.requestId !== requestId) return;
+        clearTimeout(timer);
+        window.removeEventListener('message', listener);
+        resolve(d.result);
+      }
+      window.addEventListener('message', listener);
+      // The MAIN-world probe must already be installed. We post the
+      // request via window.postMessage (same origin → reaches both
+      // worlds).
+      window.postMessage({ type: requestType, requestId: requestId, payload: payload }, '*');
+    });
+  }
+
+  // Source for the page-world probe. Installs a listener on
+  // window.postMessage; when our content script asks for a fiber
+  // dump, walks the fiber tree of every liabilities table and posts
+  // the discovered data back. Embedded as a template string so it
+  // stays a self-contained snippet.
+  const MAIN_WORLD_PROBE_SRC = '(function () {\n' +
+    '  if (window.__zhlLopProbeInstalled) return;\n' +
+    '  window.__zhlLopProbeInstalled = true;\n' +
+    '  function findFiber(node) {\n' +
+    '    if (!node) return null;\n' +
+    '    var names = Object.getOwnPropertyNames(node);\n' +
+    '    for (var i = 0; i < names.length; i++) {\n' +
+    '      var k = names[i];\n' +
+    '      if (k.indexOf("__reactFiber$") === 0 || k.indexOf("__reactInternalInstance$") === 0) return node[k];\n' +
+    '    }\n' +
+    '    for (var j = 0; j < names.length; j++) {\n' +
+    '      var k2 = names[j];\n' +
+    '      if (k2.indexOf("_") !== 0 && k2.indexOf("__") !== 0) continue;\n' +
+    '      var v = node[k2];\n' +
+    '      if (v && typeof v === "object" && ("return" in v || "stateNode" in v || "memoizedProps" in v)) return v;\n' +
+    '    }\n' +
+    '    return null;\n' +
+    '  }\n' +
+    '  function dispName(f) {\n' +
+    '    if (!f) return "?";\n' +
+    '    var t = f.type;\n' +
+    '    if (typeof t === "string") return t;\n' +
+    '    if (t && t.displayName) return t.displayName;\n' +
+    '    if (t && t.name) return t.name;\n' +
+    '    return "?";\n' +
+    '  }\n' +
+    '  function looksLikeLiab(arr) {\n' +
+    '    if (!Array.isArray(arr) || !arr.length) return false;\n' +
+    '    var s = arr[0];\n' +
+    '    if (!s || typeof s !== "object") return false;\n' +
+    '    var keys = Object.keys(s).map(function (k) { return k.toLowerCase(); });\n' +
+    '    var hits = 0;\n' +
+    '    var needles = ["payee", "company", "companyname", "unpaidbalance", "balance", "accounttype", "highestadverse", "remarks", "monthlypayment", "thirtydayslate"];\n' +
+    '    for (var i = 0; i < needles.length; i++) {\n' +
+    '      for (var j = 0; j < keys.length; j++) if (keys[j].indexOf(needles[i]) !== -1) { hits++; break; }\n' +
+    '    }\n' +
+    '    return hits >= 2;\n' +
+    '  }\n' +
+    '  function deepFind(obj, path, depth, out, seen) {\n' +
+    '    if (depth > 8 || !obj || typeof obj !== "object") return;\n' +
+    '    if (seen.has(obj)) return;\n' +
+    '    seen.add(obj);\n' +
+    '    if (looksLikeLiab(obj)) { out.push({ path: path, sample: obj[0], count: obj.length, ref: obj }); return; }\n' +
+    '    if (Array.isArray(obj)) {\n' +
+    '      for (var i = 0; i < Math.min(obj.length, 50); i++) deepFind(obj[i], path + "[" + i + "]", depth + 1, out, seen);\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    var keys = Object.keys(obj);\n' +
+    '    for (var k = 0; k < keys.length; k++) {\n' +
+    '      try { deepFind(obj[keys[k]], path + "." + keys[k], depth + 1, out, seen); } catch (_) {}\n' +
+    '    }\n' +
+    '  }\n' +
+    '  function probe() {\n' +
+    '    var report = { tables: [], globals: {} };\n' +
+    '    // Globals snapshot (visible in MAIN world but not isolated)\n' +
+    '    try {\n' +
+    '      if (window.__NEXT_DATA__) {\n' +
+    '        report.globals.nextDataKeys = Object.keys(window.__NEXT_DATA__);\n' +
+    '        if (window.__NEXT_DATA__.props && window.__NEXT_DATA__.props.pageProps) {\n' +
+    '          report.globals.nextPagePropsKeys = Object.keys(window.__NEXT_DATA__.props.pageProps);\n' +
+    '        }\n' +
+    '      }\n' +
+    '    } catch (_) {}\n' +
+    '    report.globals.hasApollo = !!window.__APOLLO_CLIENT__;\n' +
+    '    report.globals.hasDevTools = !!window.__REACT_DEVTOOLS_GLOBAL_HOOK__;\n' +
+    '    var tables = document.querySelectorAll(\'table[aria-label="Table for liabilities"]\');\n' +
+    '    for (var t = 0; t < tables.length; t++) {\n' +
+    '      var table = tables[t];\n' +
+    '      var info = { tableIndex: t, rowCount: table.querySelectorAll("tbody tr").length, keysOnTable: Object.getOwnPropertyNames(table).filter(function (k) { return k.indexOf("_") === 0; }) };\n' +
+    '      var fiber = findFiber(table);\n' +
+    '      if (!fiber) {\n' +
+    '        // Try ancestors and tbody.\n' +
+    '        var probeNodes = [table.querySelector("tbody"), table.querySelector("tbody tr")];\n' +
+    '        var p = table.parentElement;\n' +
+    '        for (var d = 0; d < 10 && p; d++) { probeNodes.push(p); p = p.parentElement; }\n' +
+    '        for (var i = 0; i < probeNodes.length && !fiber; i++) { if (probeNodes[i]) fiber = findFiber(probeNodes[i]); }\n' +
+    '      }\n' +
+    '      info.fiberFound = !!fiber;\n' +
+    '      info.fiberChain = [];\n' +
+    '      info.hits = [];\n' +
+    '      var cur = fiber;\n' +
+    '      var depth = 0;\n' +
+    '      while (cur && depth < 30) {\n' +
+    '        info.fiberChain.push(dispName(cur));\n' +
+    '        try {\n' +
+    '          if (cur.memoizedProps) deepFind(cur.memoizedProps, "[" + depth + ":" + dispName(cur) + "].props", 0, info.hits, new WeakSet());\n' +
+    '          if (cur.memoizedState) deepFind(cur.memoizedState, "[" + depth + ":" + dispName(cur) + "].state", 0, info.hits, new WeakSet());\n' +
+    '        } catch (_) {}\n' +
+    '        cur = cur.return;\n' +
+    '        depth++;\n' +
+    '      }\n' +
+    '      // Trim refs before posting; only keep sample + path + count.\n' +
+    '      info.hits = info.hits.map(function (h) { return { path: h.path, count: h.count, sample: h.sample }; });\n' +
+    '      report.tables.push(info);\n' +
+    '    }\n' +
+    '    return report;\n' +
+    '  }\n' +
+    '  window.addEventListener("message", function (e) {\n' +
+    '    if (e.source !== window) return;\n' +
+    '    var d = e.data;\n' +
+    '    if (!d || d.type !== "ZHL_LOP_PROBE_REQUEST") return;\n' +
+    '    var result;\n' +
+    '    try { result = probe(); } catch (err) { result = { error: String(err && err.message || err) }; }\n' +
+    '    // Strip non-cloneable bits before postMessage (sample objects may have functions / DOM refs).\n' +
+    '    try { result = JSON.parse(JSON.stringify(result)); } catch (_) { result = { error: "result not serializable" }; }\n' +
+    '    window.postMessage({ type: "ZHL_LOP_PROBE_RESPONSE", requestId: d.requestId, result: result }, "*");\n' +
+    '  }, false);\n' +
+    '})();';
+
+  async function probeReactFiber(table) {
+    console.group('[Collections Probe] MAIN-world react fiber walk');
+    // Inject the probe listener into the page world if not already.
+    try {
+      await injectMainWorldScript(MAIN_WORLD_PROBE_SRC);
+    } catch (e) {
+      console.error('failed to inject MAIN-world script (CSP block?):', e);
+      console.groupEnd();
+      return;
+    }
+    const result = await callMainWorldProbe({ scope: 'liabilities' }, 4000);
+    if (!result) {
+      console.warn('No response from MAIN-world probe within 4s. CSP may have blocked the script injection — check Network tab for "Refused to execute inline script" errors.');
+      console.groupEnd();
+      return;
+    }
+    if (result.error) {
+      console.warn('MAIN-world probe error:', result.error);
+      console.groupEnd();
+      return;
+    }
+    console.log('globals snapshot (MAIN world):', result.globals);
+    console.log('found ' + result.tables.length + ' liabilities table(s):');
+    for (const info of result.tables) {
+      console.group('table[' + info.tableIndex + '] rows=' + info.rowCount + ' fiberFound=' + info.fiberFound);
+      console.log('table own-keys:', info.keysOnTable);
+      console.log('fiber chain (' + info.fiberChain.length + ' levels):', info.fiberChain.slice(0, 15).join(' → '));
+      if (info.hits.length) {
+        console.log('found ' + info.hits.length + ' liability-shaped array(s):');
+        for (const h of info.hits) {
+          console.log('  ' + h.path + ' (' + h.count + ' items)');
+          console.log('    sample[0]:', h.sample);
+        }
+        console.log('Top hit sample (paste this block back to me):');
+        console.log(JSON.stringify(info.hits[0].sample, null, 2));
+      } else {
+        console.warn('  no liability-shaped array found in this fiber tree');
+      }
+      console.groupEnd();
+    }
+    console.groupEnd();
+    return;
+
+    // (Old isolated-world walk left here as fallback if MAIN-world
+    // injection ever gets CSP-blocked.)
+    // eslint-disable-next-line no-unreachable
     console.group('[Collections Probe] react fiber walk');
 
     // Use getOwnPropertyNames so we catch non-enumerable React keys.
