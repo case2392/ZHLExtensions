@@ -80,21 +80,9 @@
     return { total: total, counted: counted, excludedMedical: excludedMedical };
   }
 
-  // Instant read of the liabilities array from React state via the
-  // MAIN-world bridge. Returns the same { total, counted,
-  // excludedMedical } shape as computeCollectionsTotal so callers
-  // can swap implementations transparently. Returns null if the
-  // bridge isn't responding or the fiber walk turns up empty (e.g.
-  // page just loaded, React hasn't hydrated yet).
-  async function computeCollectionsFromReact() {
-    const result = await callMainWorldProbe({ mode: 'readLiabilities' }, 2000);
-    if (!result || !result.tables || !result.tables.length) return null;
-    // The bridge returns one entry per liabilities table on the page.
-    // Multi-borrower pairs each have their own — we return the array
-    // per table here and let the caller pair them with section
-    // scopes.
-    return result.tables;
-  }
+  // (computeCollectionsFromReact removed in v1.14.1 — its single
+  // caller refreshReactCacheIfDue now calls callMainWorldProbe
+  // directly so we can log timing / failure mode per attempt.)
 
   // Per the FHA rule the badge enforces ($2,000 cumulative-balance
   // cap), only true COLLECTION accounts count. Charge-offs (whether
@@ -263,18 +251,57 @@
   // so the indexes line up.
   let lastReactReadAt = 0;
   let cachedReactTables = null;
+  let reactReadInFlight = null;
+  let reactReadDiagCount = 0;
   async function refreshReactCacheIfDue() {
     const now = Date.now();
-    // Throttle to once per second so the observer tick doesn't spam
-    // postMessage round-trips.
+    // Throttle to once per second AND prevent concurrent in-flight
+    // probes — otherwise a hanging postMessage piles up promises on
+    // every observer tick.
     if (cachedReactTables && now - lastReactReadAt < 1000) return cachedReactTables;
-    try {
-      const tables = await computeCollectionsFromReact();
-      if (tables) {
-        cachedReactTables = tables;
-        lastReactReadAt = now;
+    if (reactReadInFlight) return cachedReactTables;
+    reactReadInFlight = (async function () {
+      try {
+        const probeStart = Date.now();
+        const result = await callMainWorldProbe({ mode: 'readLiabilities' }, 5000);
+        const elapsed = Date.now() - probeStart;
+        if (!result) {
+          if (reactReadDiagCount++ < 3) {
+            console.warn('[Total Collections] React probe returned null after ' + elapsed +
+              'ms — bridge may not be installed or postMessage timed out. ' +
+              'Check that you see "[ZHL LOP bridge] installed in MAIN world" in the console on page load.');
+          }
+        } else if (!result.tables || !result.tables.length) {
+          if (reactReadDiagCount++ < 3) {
+            console.warn('[Total Collections] React probe returned empty tables array (elapsed=' + elapsed + 'ms). result:', result);
+          }
+        } else {
+          // Did each table actually find a liabilities array?
+          const failed = result.tables.filter(function (t) { return !t.read || !t.read.found; });
+          if (failed.length && reactReadDiagCount++ < 3) {
+            console.warn('[Total Collections] React probe returned ' + result.tables.length +
+              ' table(s) but ' + failed.length + ' had no entityNamePlural=liabilities fiber match. First failure reason:',
+              failed[0].read && failed[0].read.reason, 'full result:', result);
+          }
+          cachedReactTables = result.tables;
+          lastReactReadAt = Date.now();
+          if (reactReadDiagCount < 3) {
+            // One success log so we know live mode kicked in.
+            console.log('[Total Collections] React read OK in ' + elapsed +
+              'ms — ' + result.tables.length + ' table(s), ' +
+              result.tables.reduce(function (s, t) { return s + (t.read && t.read.items ? t.read.items.length : 0); }, 0) +
+              ' total liability item(s).');
+            reactReadDiagCount = 3; // suppress further per-call success logs
+          }
+        }
+      } catch (e) {
+        if (reactReadDiagCount++ < 3) {
+          console.warn('[Total Collections] React probe threw:', e);
+        }
+      } finally {
+        reactReadInFlight = null;
       }
-    } catch (_) {}
+    })();
     return cachedReactTables;
   }
 
