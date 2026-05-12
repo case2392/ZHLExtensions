@@ -427,18 +427,34 @@
         console.log('Top hit sample (paste this block back to me):');
         console.log(JSON.stringify(info.hits[0].sample, null, 2));
       } else {
-        console.warn('No liability-shaped array found by heuristic. Dumping each component fiber\'s prop/state shape so we can identify the data path manually:');
+        if (info.apolloProbe) {
+          console.log('Apollo / React Query client found:', info.apolloProbe);
+          if (info.apolloProbe.kind === 'apollo') {
+            if (info.apolloProbe.liabilityArrayMatches && info.apolloProbe.liabilityArrayMatches.length) {
+              console.log('Liability arrays in Apollo cache:');
+              for (const m of info.apolloProbe.liabilityArrayMatches) {
+                console.log('  cacheKey="' + m.cacheKey + '" field="' + m.fieldKey + '" (' + m.count + ' items)');
+                console.log('    sample[0]:', m.sample);
+              }
+              console.log('Top hit (paste this back):');
+              console.log(JSON.stringify(info.apolloProbe.liabilityArrayMatches[0].sample, null, 2));
+            } else {
+              console.warn('Apollo client reachable but no liability-shaped array in its cache.');
+              console.log('  Cache keys (' + info.apolloProbe.cacheKeys + ' total):', info.apolloProbe.sampleCacheKeys);
+              console.log('  Liability-ish keys:', info.apolloProbe.liabilityishKeys);
+            }
+          }
+        }
+        console.warn('No liability-shaped array found by heuristic in the fiber tree. Dumping each named fiber\'s shape inline (no need to expand anything):');
         if (info.fiberShapes && info.fiberShapes.length) {
           for (const s of info.fiberShapes) {
-            console.groupCollapsed('depth=' + s.depth + ' ' + s.name);
-            if (s.propsShape) console.log('props:', s.propsShape);
-            if (s.stateShape) console.log('state:', s.stateShape);
-            if (s.hooks) console.log('hooks (function component):', s.hooks);
-            console.groupEnd();
+            console.log('depth=' + s.depth + ' ' + s.name,
+              s.propsShape ? '\n  props: ' + JSON.stringify(s.propsShape) : '',
+              s.stateShape ? '\n  state: ' + JSON.stringify(s.stateShape) : '',
+              s.hooks ? '\n  hooks: ' + JSON.stringify(s.hooks) : ''
+            );
           }
-          console.log('Look through the shapes above for any field whose name suggests liabilities (liabilities, liabs, accounts, derogs, tradelines, etc.) or any array that has the right count (' + info.rowCount + ' items). Paste any candidate group back.');
-        } else {
-          console.warn('No named-component fibers in the chain — page may use only styled-components / DOM elements.');
+          console.log('Look for any field suggesting liabilities or any array with ' + info.rowCount + ' items.');
         }
       }
       console.groupEnd();

@@ -195,11 +195,128 @@
     return g;
   }
 
+  // Look for an Apollo Client or TanStack Query Client somewhere in
+  // the page. Apollo exposes its client via React Context, which we
+  // can reach by walking up the fiber tree from the liabilities
+  // table and inspecting each fiber's dependencies / memoizedProps
+  // for an object that looks Apollo-shaped (.cache.extract() method,
+  // or .readQuery, or a queryManager).
+  function findClientInFiberTree(fiber) {
+    let cur = fiber;
+    let depth = 0;
+    while (cur && depth < 60) {
+      // 1. memoizedProps.client (ApolloProvider sets this directly)
+      try {
+        const p = cur.memoizedProps;
+        if (p && typeof p === 'object' && p.client) {
+          const c = p.client;
+          if (c && (typeof c.readQuery === 'function' || (c.cache && typeof c.cache.extract === 'function'))) {
+            return { kind: 'apollo', client: c, foundAt: depth, fiberName: fiberDisplayName(cur) };
+          }
+          if (c && (typeof c.getQueryCache === 'function' || typeof c.getQueryData === 'function')) {
+            return { kind: 'reactQuery', client: c, foundAt: depth, fiberName: fiberDisplayName(cur) };
+          }
+        }
+      } catch (_) {}
+      // 2. Context values on this fiber (Provider components hold value in memoizedProps.value).
+      try {
+        const p = cur.memoizedProps;
+        if (p && typeof p === 'object' && p.value) {
+          const v = p.value;
+          if (v && (typeof v.readQuery === 'function' || (v.cache && typeof v.cache.extract === 'function'))) {
+            return { kind: 'apollo', client: v, foundAt: depth, fiberName: fiberDisplayName(cur), via: 'context value' };
+          }
+          if (v && (typeof v.getQueryCache === 'function' || typeof v.getQueryData === 'function')) {
+            return { kind: 'reactQuery', client: v, foundAt: depth, fiberName: fiberDisplayName(cur), via: 'context value' };
+          }
+        }
+      } catch (_) {}
+      // 3. stateNode (class components) might hold the client.
+      try {
+        const sn = cur.stateNode;
+        if (sn && typeof sn === 'object' && sn.client) {
+          const c = sn.client;
+          if (c && (typeof c.readQuery === 'function' || (c.cache && typeof c.cache.extract === 'function'))) {
+            return { kind: 'apollo', client: c, foundAt: depth, fiberName: fiberDisplayName(cur), via: 'stateNode.client' };
+          }
+        }
+      } catch (_) {}
+      cur = cur.return;
+      depth++;
+    }
+    return null;
+  }
+
+  function snapshotApolloIfReachable(table) {
+    let fiber = findFiber(table);
+    if (!fiber) {
+      const probes = [table.querySelector('tbody'), table.querySelector('tbody tr')];
+      let p = table.parentElement;
+      for (let d = 0; d < 10 && p; d++) { probes.push(p); p = p.parentElement; }
+      for (const n of probes) { if (n && !fiber) fiber = findFiber(n); }
+    }
+    if (!fiber) return null;
+    const found = findClientInFiberTree(fiber);
+    if (!found) return null;
+    if (found.kind === 'apollo') {
+      try {
+        const cache = found.client.cache && found.client.cache.extract && found.client.cache.extract();
+        if (cache && typeof cache === 'object') {
+          const keys = Object.keys(cache);
+          const liabKeys = keys.filter(function (k) { return /liabilit|borrower|account|derog|tradeline|credit/i.test(k); });
+          // Find any cache value that contains an array of liability-like objects.
+          const matches = [];
+          for (const k of keys) {
+            const v = cache[k];
+            if (!v || typeof v !== 'object') continue;
+            // Walk one level deep looking for liability-shaped arrays.
+            for (const sub of Object.keys(v)) {
+              const sv = v[sub];
+              if (Array.isArray(sv) && looksLikeLiabArray(sv)) {
+                matches.push({ cacheKey: k, fieldKey: sub, count: sv.length, sample: sv[0] });
+              }
+              if (sv && typeof sv === 'object' && !Array.isArray(sv)) {
+                // Apollo cache often stores arrays as { __ref: 'Type:id' } pointers in a parent
+                // and the real data under a normalized key. Capture keys that look interesting.
+              }
+            }
+          }
+          return {
+            kind: 'apollo',
+            foundAt: found.foundAt,
+            fiberName: found.fiberName,
+            via: found.via || 'props.client',
+            cacheKeys: keys.length,
+            sampleCacheKeys: keys.slice(0, 20),
+            liabilityishKeys: liabKeys,
+            liabilityArrayMatches: matches
+          };
+        }
+      } catch (e) {
+        return { kind: 'apollo', error: String(e && e.message || e) };
+      }
+    }
+    if (found.kind === 'reactQuery') {
+      try {
+        const queries = found.client.getQueryCache && found.client.getQueryCache().getAll();
+        if (queries) {
+          const keys = queries.map(function (q) { return q.queryKey; });
+          return { kind: 'reactQuery', foundAt: found.foundAt, queryCount: queries.length, queryKeys: keys.slice(0, 30) };
+        }
+      } catch (e) {
+        return { kind: 'reactQuery', error: String(e && e.message || e) };
+      }
+    }
+    return found;
+  }
+
   function probe(payload) {
     const out = { tables: [], globals: snapshotGlobals() };
     const tables = document.querySelectorAll('table[aria-label="Table for liabilities"]');
     for (let i = 0; i < tables.length; i++) {
-      out.tables.push(probeTable(tables[i], i));
+      const info = probeTable(tables[i], i);
+      info.apolloProbe = snapshotApolloIfReachable(tables[i]);
+      out.tables.push(info);
     }
     // For read requests, strip the live .array reference (not
     // serializable across postMessage) but keep the row data
