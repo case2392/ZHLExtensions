@@ -17,6 +17,123 @@
   const STUDENT_LOAN_PANEL_ID = 'rric-sloan-summary';
   const EXCLUDE_TELECOM_BUTTON_ID = 'rric-exclude-telecom-button';
   const EXCLUDE_TELECOM_BUTTON_CLASS = 'rric-exclude-telecom-button-cls';
+  const COLLECTIONS_BADGE_CLASS = 'rric-collections-badge-cls';
+  const FHA_COLLECTION_CAP = 2000;
+
+  // Identify medical collections by payee name keywords. Medical
+  // collections are excluded from the FHA cumulative-balance rule.
+  // List below is intentionally broad — false positives are better
+  // than false negatives here (under-counting a collection would be
+  // worse than over-excluding one in the user's display).
+  const MEDICAL_PAYEE_KEYWORDS = [
+    'MEDICAL', 'HOSPITAL', 'HOSP ', 'CLINIC', 'HEALTHCARE', 'HEALTH ',
+    'PHYSICIAN', 'PHARMACY', 'DENTAL', 'DENTIST', 'AMBULANCE',
+    'ANESTHES', 'RADIOLOGY', 'CARDIOLOGY', 'PEDIATRIC', 'ORTHODONTIC',
+    'CHIROPRACT', 'PHYSICAL THERAPY', 'PHYSIO', 'EMERGENCY',
+    'LABCORP', 'LAB CORP', 'QUEST DIAGN', 'BLUE CROSS', 'KAISER',
+    'AR RESOURCES', 'MEDICAL DATA', 'CONIFER HEALTH', 'CONIFER',
+    'AMERICAN MEDICAL', 'WAKEMED', 'BAYLOR', 'CLEVELAND CLINIC',
+    'MAYO CLINIC', 'BANNER HEALTH', 'INTERMOUNTAIN HEALTH',
+    'PROVIDENCE HEALTH', 'SUTTER HEALTH', 'HCA HEALTHCARE',
+    'TENET HEALTH', 'COMMUNITY HEALTH', 'OPTUM', 'CIGNA', 'AETNA',
+    'UNITED HEALTHCARE', 'CHILDRENS HOSPITAL', 'CHILDREN\'S HOSPITAL'
+  ];
+
+  // Heuristic for the FHA cumulative-balance rule. User chose "Both
+  // Unknown AND Collection" identification — so we count rows whose
+  // Account type column reads "Unknown", "Collection", "Collection
+  // Account", "ChargeOff", or "Charge Off". Excludes rows whose
+  // Company/Payee name matches the medical keyword list above.
+  function isCollectionAccount(accountType) {
+    const at = (accountType || '').toUpperCase().trim();
+    if (!at) return false;
+    if (at === 'UNKNOWN') return true;
+    if (/COLLECTION|CHARGE\s*OFF|CHARGEOFF/.test(at)) return true;
+    return false;
+  }
+
+  function isMedicalPayee(payee) {
+    const p = (payee || '').toUpperCase();
+    for (const kw of MEDICAL_PAYEE_KEYWORDS) {
+      if (p.indexOf(kw) !== -1) return true;
+    }
+    return false;
+  }
+
+  function computeCollectionsTotal(scopeTable) {
+    const rows = findLiabilityRows(scopeTable);
+    let total = 0;
+    const counted = [];
+    const excludedMedical = [];
+    for (const r of rows) {
+      if (!isCollectionAccount(r.accountType)) continue;
+      if (isMedicalPayee(r.payee)) {
+        excludedMedical.push(r);
+        continue;
+      }
+      total += (r.balance || 0);
+      counted.push(r);
+    }
+    return { total: total, counted: counted, excludedMedical: excludedMedical };
+  }
+
+  function ensureCollectionsBadge() {
+    const sections = findLiabilitiesHeaders();
+    for (const sec of sections) {
+      let badge = sec.container.querySelector('.' + COLLECTIONS_BADGE_CLASS);
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = COLLECTIONS_BADGE_CLASS;
+        badge.style.cssText =
+          'display:inline-flex;align-items:center;gap:6px;' +
+          'padding:4px 10px;margin-left:12px;border-radius:14px;' +
+          'font:600 12px/1.3 Arial,sans-serif;cursor:default;' +
+          'border:1px solid transparent;';
+        // Insert right after the h5 heading so the badge sits next to
+        // "Liabilities" instead of getting flex-pushed to the far edge.
+        const heading = sec.container.querySelector('h5');
+        if (heading && heading.nextSibling) sec.container.insertBefore(badge, heading.nextSibling);
+        else sec.container.appendChild(badge);
+      }
+      updateCollectionsBadge(sec, badge);
+    }
+  }
+
+  function updateCollectionsBadge(sec, badge) {
+    const result = computeCollectionsTotal(sec.table);
+    const overCap = result.total >= FHA_COLLECTION_CAP;
+    const icon = overCap ? '✕' : '✓';
+    const color = overCap ? '#b91c1c' : '#16a34a';
+    const bg = overCap ? '#fee2e2' : '#dcfce7';
+    badge.style.background = bg;
+    badge.style.color = color;
+    badge.style.borderColor = color;
+    const medicalNote = result.excludedMedical.length
+      ? ' (' + result.excludedMedical.length + ' medical excluded)'
+      : '';
+    badge.textContent = icon + ' Total Collections: $' +
+      result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+      medicalNote;
+    // Tooltip lists which rows were counted and which medicals were
+    // skipped so the user can sanity-check the heuristic.
+    const lines = [];
+    lines.push('FHA cumulative-balance cap: $' + FHA_COLLECTION_CAP.toLocaleString());
+    if (result.counted.length) {
+      lines.push('');
+      lines.push('Counted (' + result.counted.length + '):');
+      for (const r of result.counted) {
+        lines.push('  • ' + r.payee + ' [' + r.accountType + '] — $' + (r.balance || 0).toLocaleString());
+      }
+    }
+    if (result.excludedMedical.length) {
+      lines.push('');
+      lines.push('Excluded as medical (' + result.excludedMedical.length + '):');
+      for (const r of result.excludedMedical) {
+        lines.push('  • ' + r.payee + ' [' + r.accountType + '] — $' + (r.balance || 0).toLocaleString());
+      }
+    }
+    badge.title = lines.join('\n');
+  }
 
   // When a borrower-pair tab's Run Residual Income Calc button is
   // clicked, we set this to that borrower's section root. findLabel /
@@ -1569,6 +1686,7 @@
       try { ensureButtonState(); } catch (e) { console.error('[Residual Income Calc] observer error', e); }
       try { ensureStudentLoanButton(); } catch (e) { console.error('[Residual Income Calc] sloan observer error', e); }
       try { ensureExcludeTelecomButton(); } catch (e) { console.error('[Exclude SelfReport] observer error', e); }
+      try { ensureCollectionsBadge(); } catch (e) { console.error('[Collections Badge] observer error', e); }
     });
   }
 
