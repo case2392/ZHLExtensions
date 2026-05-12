@@ -24,6 +24,7 @@ const FEATURE_KEYS = [
   "feature_scenarioSort",
   "feature_gmailDragAttachments",
   "feature_taskBulkDelete",
+  "feature_fhaBadges",
   "feature_telemetry"
 ];
 

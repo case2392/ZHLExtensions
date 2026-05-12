@@ -22,6 +22,29 @@
   const DISPUTED_BADGE_CLASS = 'rric-disputed-badge-cls';
   const FHA_DISPUTED_CAP = 1000;
 
+  // Independent toggle for the FHA cumulative-balance badges. Lives
+  // under va-calc.js because it shares the section infrastructure,
+  // but operates as its own feature with its own setup-page switch.
+  // Hydrated from chrome.storage.local on load and kept fresh via
+  // onChanged so flipping the toggle takes effect on the next scan
+  // tick without a tab reload.
+  let fhaBadgesEnabled = true;
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      chrome.storage.local.get(['feature_fhaBadges'], function (data) {
+        if (data && data.feature_fhaBadges === false) fhaBadgesEnabled = false;
+      });
+      if (chrome.storage.onChanged && chrome.storage.onChanged.addListener) {
+        chrome.storage.onChanged.addListener(function (changes, area) {
+          if (area !== 'local') return;
+          if (changes.feature_fhaBadges) {
+            fhaBadgesEnabled = changes.feature_fhaBadges.newValue !== false;
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
   // Identify medical collections by payee name keywords. Medical
   // collections are excluded from the FHA cumulative-balance rule.
   // List below is intentionally broad — false positives are better
@@ -313,6 +336,10 @@
     const sections = findLiabilitiesHeaders();
     for (const sec of sections) {
       let badge = sec.container.querySelector('.' + DISPUTED_BADGE_CLASS);
+      if (!fhaBadgesEnabled) {
+        if (badge) badge.remove();
+        continue;
+      }
       if (!badge) {
         badge = document.createElement('div');
         badge.className = DISPUTED_BADGE_CLASS;
@@ -406,6 +433,10 @@
     const sections = findLiabilitiesHeaders();
     for (const sec of sections) {
       let badge = sec.container.querySelector('.' + COLLECTIONS_BADGE_CLASS);
+      if (!fhaBadgesEnabled) {
+        if (badge) badge.remove();
+        continue;
+      }
       if (!badge) {
         badge = document.createElement('div');
         badge.className = COLLECTIONS_BADGE_CLASS;
@@ -1911,7 +1942,6 @@
         runCalculator();
       });
       sec.anchor.appendChild(btn);
-      console.log('[Residual Income Calc] button injected into scope', scope);
     }
   }
 
@@ -1963,7 +1993,6 @@
         showStudentLoanPicker(scopedTable);
       });
       sec.container.insertBefore(btn, sec.addBtn);
-      console.log('[Calc Student Loans] button injected into section', sec.container);
     }
   }
 
@@ -2004,7 +2033,6 @@
       } else {
         sec.container.insertBefore(btn, sec.addBtn);
       }
-      console.log('[Exclude SelfReport] button injected into section', sec.container);
     }
   }
 

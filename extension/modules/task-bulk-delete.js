@@ -121,7 +121,6 @@
       bulkDelete(table, btn);
     });
     titleArea.appendChild(btn);
-    console.log('[Task Bulk Delete] button injected');
   }
 
   function waitMs(ms) {

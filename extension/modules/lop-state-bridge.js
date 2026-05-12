@@ -412,7 +412,7 @@
     window.postMessage({ type: 'ZHL_LOP_PROBE_RESPONSE', requestId: d.requestId, result: result }, '*');
   }, false);
 
-  // Tiny hello-world log so the user can confirm the bridge actually
-  // loaded into the MAIN world (visible to the page console).
-  try { console.log('[ZHL LOP bridge] installed in MAIN world'); } catch (_) {}
+  // (Hello-world install log removed in v1.14.3 to keep production
+  // consoles quiet. To verify the bridge is alive, dispatch a
+  // ZHL_LOP_PROBE_REQUEST and watch for ZHL_LOP_PROBE_RESPONSE.)
 })();

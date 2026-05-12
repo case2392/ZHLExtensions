@@ -314,6 +314,59 @@
       </div>
     </section>
 
+    <!-- ============== Module: FHA Collections / Disputed badges ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA Collections &amp; Disputed badges</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaBadges" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds two pill badges in the <strong>Liabilities</strong> section header that sum cumulative balances against the FHA caps:
+            <ul>
+              <li><strong>Total Collections</strong> &mdash; green ✓ under $2,000, red ✕ at $2,000+. Counts only collection accounts (account type = Unknown or Collection). Charge-offs, repossessions, and late-pay rows are excluded per the FHA rule.</li>
+              <li><strong>Total Disputed</strong> &mdash; green ✓ under $1,000, red ✕ at $1,000+. Counts disputed derogatory accounts (collections, charge-offs, or 30+ day late within last 24 months). Zero-balance disputed accounts and disputed medical accounts are excluded.</li>
+            </ul>
+          </li>
+          <li>Medical collections are excluded from both totals via a payee keyword filter (hospital, clinic, AR Resources, Optum, etc.). Hover the badge for a tooltip listing every row counted vs. excluded.</li>
+          <li>Reads live from LOP&rsquo;s React state &mdash; updates the instant a liability is added, edited, or excluded. No row expansion, no UI flicker.</li>
+          <li>Each borrower-pair tab on multi-borrower loans gets its own badge pair with its own scoped totals.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Bulk-delete unsent tasks ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Bulk-delete unsent tasks</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_taskBulkDelete" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a checkbox column to the <strong>Unsent tasks</strong> table in the LOP Tasks tab so you can pick multiple tasks at once.</li>
+          <li>A red <strong>Delete Selected</strong> button next to the &ldquo;Unsent&rdquo; heading deletes every checked task in one pass — LOP&rsquo;s per-task confirm dialog is dismissed automatically for each.</li>
+          <li>Header checkbox toggles all rows. Auto-hides itself and the button when the section is empty so the page looks like stock LOP.</li>
+          <li>Only touches the Unsent section &mdash; sent / completed tasks are untouched.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Anonymous Telemetry ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
