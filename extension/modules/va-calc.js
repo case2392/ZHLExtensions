@@ -271,6 +271,10 @@
               'ms — bridge may not be installed or postMessage timed out. ' +
               'Check that you see "[ZHL LOP bridge] installed in MAIN world" in the console on page load.');
           }
+        } else if (result.error) {
+          if (reactReadDiagCount++ < 3) {
+            console.warn('[Total Collections] React probe returned an error (elapsed=' + elapsed + 'ms): ' + result.error);
+          }
         } else if (!result.tables || !result.tables.length) {
           if (reactReadDiagCount++ < 3) {
             console.warn('[Total Collections] React probe returned empty tables array (elapsed=' + elapsed + 'ms). result:', result);

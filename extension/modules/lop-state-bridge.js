@@ -366,13 +366,19 @@
       info.read = readLiabilitiesArray(tables[i]);
       out.tables.push(info);
     }
-    // For read requests, strip the live .array reference (not
-    // serializable across postMessage) but keep the row data
-    // (sample[0] only on probe; full liabilities on read).
-    if (payload && payload.mode === 'read') {
+    // For "read" / default probe requests we trim the hits array
+    // for postMessage (strip live arrays, keep sample[0] or items
+    // depending on mode). The "readLiabilities" mode pushed
+    // { tableIndex, read } objects above — those have no .hits
+    // field, so the trim step would throw "Cannot read properties
+    // of undefined (reading 'map')". Skip the trim entirely when
+    // we're in readLiabilities mode.
+    if (payload && payload.mode === 'readLiabilities') {
+      // No-op — out.tables already has the right shape.
+    } else if (payload && payload.mode === 'read') {
       out.tables = out.tables.map(function (info) {
         const trimmed = Object.assign({}, info);
-        trimmed.hits = info.hits.map(function (h) {
+        trimmed.hits = (info.hits || []).map(function (h) {
           return { path: h.path, count: h.count, items: h.array };
         });
         return trimmed;
@@ -380,7 +386,7 @@
     } else {
       out.tables = out.tables.map(function (info) {
         const trimmed = Object.assign({}, info);
-        trimmed.hits = info.hits.map(function (h) {
+        trimmed.hits = (info.hits || []).map(function (h) {
           return { path: h.path, count: h.count, sample: h.sample };
         });
         return trimmed;
