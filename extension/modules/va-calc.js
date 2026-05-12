@@ -19,6 +19,8 @@
   const EXCLUDE_TELECOM_BUTTON_CLASS = 'rric-exclude-telecom-button-cls';
   const COLLECTIONS_BADGE_CLASS = 'rric-collections-badge-cls';
   const FHA_COLLECTION_CAP = 2000;
+  const DISPUTED_BADGE_CLASS = 'rric-disputed-badge-cls';
+  const FHA_DISPUTED_CAP = 1000;
 
   // Identify medical collections by payee name keywords. Medical
   // collections are excluded from the FHA cumulative-balance rule.
@@ -138,6 +140,123 @@
     return result;
   }
 
+  // FHA $1,000 disputed derogatory cap. Per the rule:
+  //   "If the borrower(s) has $1000 or more collectively in Disputed
+  //    Derogatory Credit Accounts [collections, charge offs or
+  //    accounts with late payments (30 days or more) in the last 24
+  //    months], the mortgage must be downgraded to a Refer and
+  //    manually underwritten."
+  //
+  // Exclusions:
+  //   - Disputed Medical Accounts
+  //   - Disputed derogatory credit from documented identity theft,
+  //     credit card theft, or unauthorized usage
+  //   - Disputed derogatory accounts of NB Spouse (not flagged in
+  //     LOP — we have no signal for this and skip the rule)
+  //   - Disputed accounts with zero balance
+  //   - Disputed accounts with late payments aged 24 months or
+  //     greater
+  //   - Disputed accounts that are current and paid as agreed
+  //
+  // LOP's exact field name for "disputed" isn't confirmed yet — we
+  // try a list of likely candidates and log the full attributes
+  // whenever we see one set so the user can confirm or paste back.
+  function isDisputed(attrs) {
+    if (!attrs) return false;
+    // Boolean-typed flags.
+    if (attrs.disputed === true) return 'disputed';
+    if (attrs.isDisputed === true) return 'isDisputed';
+    if (attrs.inDispute === true) return 'inDispute';
+    if (attrs.disputeFlag === true) return 'disputeFlag';
+    // String-typed flags.
+    const sFields = ['disputeStatus', 'disputeFlag', 'tradelineDispute', 'creditDispute'];
+    for (const f of sFields) {
+      const v = attrs[f];
+      if (typeof v === 'string' && /^(disputed|yes|true|y)$/i.test(v.trim())) return f + '=' + v;
+    }
+    // Apollo-style enum value, e.g. "ConsumerDisputesThisAccount" /
+    // "InDispute" — the FHFA / Fannie/Freddie credit feed sometimes
+    // surfaces dispute as a code on a sibling field.
+    const codeFields = ['disputeCode', 'disputeIndicator', 'fcraDisputeFlag', 'consumerDisputeIndicator'];
+    for (const f of codeFields) {
+      const v = attrs[f];
+      if (v && v !== 'NotDisputed' && v !== 'None' && v !== 'N') return f + '=' + v;
+    }
+    return false;
+  }
+
+  function classifyDisputedFromReact(item) {
+    const attrs = (item && item.attributes) || {};
+    const disputedReason = isDisputed(attrs);
+    if (!disputedReason) return [];
+    // Derogatory check: collection OR charge-off OR 30+day late in
+    // last 24mo. (These are the same buckets the FHA section header
+    // calls out.)
+    const type = String(attrs.type || '').toUpperCase().trim();
+    const status = String(attrs.accountStatus || '').toUpperCase().trim();
+    const remarks = String(attrs.remarks || '').toUpperCase();
+    const derog = [];
+    if (type === 'UNKNOWN' || type === 'COLLECTION') derog.push('collection');
+    if (/CHARGE\s*OFF|CHARGEOFF/.test(type) ||
+        /CHARGE\s*OFF|CHARGEOFF/.test(status) ||
+        /CHARGE\s*OFF|CHARGED\s*OFF|REPOSSESSION|REPO/.test(remarks)) {
+      derog.push('charge-off');
+    }
+    const lateCount =
+      (Number(attrs.thirtyDaysLateCount) || 0) +
+      (Number(attrs.sixtyDaysLateCount) || 0) +
+      (Number(attrs.ninetyDaysLateCount) || 0);
+    const lastDelinqRaw = attrs.lastDelinquencyDate || attrs.lastDelinquencyOn || null;
+    if (lateCount > 0 && lastDelinqRaw) {
+      const lastDelinq = new Date(lastDelinqRaw);
+      if (!isNaN(lastDelinq.getTime())) {
+        const ageMs = Date.now() - lastDelinq.getTime();
+        const TWENTY_FOUR_MO_MS = 1000 * 60 * 60 * 24 * 365.25 * 2;
+        if (ageMs <= TWENTY_FOUR_MO_MS) derog.push('late ' + lateCount + 'x in 24mo');
+        // Note: late pays aged >24mo are explicitly EXCLUDED per
+        // the FHA rule, so we don't add them as a reason.
+      }
+    }
+    if (!derog.length) return []; // disputed but not derogatory → exempt
+    // Zero balance exclusion.
+    if ((Number(attrs.unpaidBalance) || 0) <= 0) return [];
+    return [disputedReason].concat(derog);
+  }
+
+  function computeDisputedFromItems(items) {
+    const result = { total: 0, counted: [], excludedMedical: [] };
+    // Side-effect: log any item that has ANY disputed-ish field set
+    // so the user can confirm we matched the right field name (or
+    // tell us if we missed one). One log per page reload, since the
+    // sample-data probe doesn't surface this otherwise.
+    if (!window.__zhlDisputedFieldProbeDone) {
+      window.__zhlDisputedFieldProbeDone = true;
+      for (const item of items) {
+        const attrs = (item && item.attributes) || {};
+        const disputed = isDisputed(attrs);
+        if (disputed) {
+          console.log('[Disputed Probe] found disputed-flagged liability:', attrs.creditor, '— field match:', disputed);
+          console.log('  full attributes:', attrs);
+        }
+      }
+    }
+    for (const item of items) {
+      const attrs = (item && item.attributes) || {};
+      const reasons = classifyDisputedFromReact(item);
+      if (!reasons.length) continue;
+      const balance = Number(attrs.unpaidBalance) || 0;
+      const payee = String(attrs.creditor || '');
+      const row = { payee: payee, accountType: attrs.type || '', balance: balance };
+      if (isMedicalPayee(payee)) {
+        result.excludedMedical.push({ row: row, reasons: reasons });
+      } else {
+        result.total += balance;
+        result.counted.push({ row: row, reasons: reasons });
+      }
+    }
+    return result;
+  }
+
   // Match React-read tables to the on-page liabilities sections.
   // The bridge returns one entry per visible liabilities table in
   // DOM order. findLiabilitiesHeaders() also walks the DOM in order,
@@ -157,6 +276,99 @@
       }
     } catch (_) {}
     return cachedReactTables;
+  }
+
+  function ensureDisputedBadge() {
+    const sections = findLiabilitiesHeaders();
+    for (const sec of sections) {
+      let badge = sec.container.querySelector('.' + DISPUTED_BADGE_CLASS);
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = DISPUTED_BADGE_CLASS;
+        badge.style.cssText =
+          'display:inline-flex;align-items:center;gap:6px;' +
+          'padding:4px 10px;margin-left:8px;border-radius:14px;' +
+          'font:600 12px/1.3 Arial,sans-serif;cursor:pointer;' +
+          'border:1px solid transparent;user-select:none;';
+        badge.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Same as the collections badge — force a fresh React read.
+          cachedReactTables = null;
+          lastReactReadAt = 0;
+          updateDisputedBadge(sec, badge);
+        });
+        // Insert right after the collections badge so the two pills
+        // sit together visually. Falls back to appending if the
+        // collections badge isn't injected yet (race on first paint).
+        const collectionsBadge = sec.container.querySelector('.' + COLLECTIONS_BADGE_CLASS);
+        if (collectionsBadge && collectionsBadge.nextSibling) {
+          sec.container.insertBefore(badge, collectionsBadge.nextSibling);
+        } else if (collectionsBadge) {
+          collectionsBadge.parentNode.appendChild(badge);
+        } else {
+          const heading = sec.container.querySelector('h5');
+          if (heading && heading.nextSibling) sec.container.insertBefore(badge, heading.nextSibling);
+          else sec.container.appendChild(badge);
+        }
+      }
+      updateDisputedBadge(sec, badge);
+    }
+  }
+
+  function updateDisputedBadge(sec, badge) {
+    refreshReactCacheIfDue();
+    if (cachedReactTables) {
+      const allSections = findLiabilitiesHeaders();
+      const idx = allSections.findIndex(function (s) { return s.table === sec.table; });
+      const tableData = idx >= 0 ? cachedReactTables[idx] : null;
+      if (tableData && tableData.read && tableData.read.found && Array.isArray(tableData.read.items)) {
+        const result = computeDisputedFromItems(tableData.read.items);
+        paintDisputedBadge(badge, result, 'react');
+        return;
+      }
+    }
+    paintDisputedBadge(badge, { total: 0, counted: [], excludedMedical: [] }, 'fast');
+  }
+
+  function paintDisputedBadge(badge, result, mode) {
+    const overCap = result.total >= FHA_DISPUTED_CAP;
+    const icon = overCap ? '✕' : '✓';
+    const color = overCap ? '#b91c1c' : '#16a34a';
+    const bg = overCap ? '#fee2e2' : '#dcfce7';
+    badge.style.background = bg;
+    badge.style.color = color;
+    badge.style.borderColor = color;
+    const medicalNote = result.excludedMedical.length
+      ? ' · ' + result.excludedMedical.length + ' medical excluded'
+      : '';
+    const modeNote = mode === 'react' ? ' · live ✓' : ' · loading…';
+    badge.textContent = icon + ' Total Disputed: $' +
+      result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+      medicalNote + modeNote;
+    const lines = ['FHA disputed-derogatory cap: $' + FHA_DISPUTED_CAP.toLocaleString() + ' — over the cap downgrades to Refer / manual UW.'];
+    if (mode === 'fast') lines.push('(Loading — waiting for LOP\'s React state to hydrate.)');
+    if (result.counted.length) {
+      lines.push('');
+      lines.push('Counted (' + result.counted.length + '):');
+      for (const c of result.counted) {
+        const r = c.row || c;
+        const why = c.reasons ? ' [' + c.reasons.join(', ') + ']' : '';
+        lines.push('  • ' + r.payee + ' [' + r.accountType + ']' + why + ' — $' + (r.balance || 0).toLocaleString());
+      }
+    } else {
+      lines.push('');
+      lines.push('No disputed-derogatory accounts found.');
+    }
+    if (result.excludedMedical.length) {
+      lines.push('');
+      lines.push('Excluded as medical (' + result.excludedMedical.length + '):');
+      for (const c of result.excludedMedical) {
+        const r = c.row || c;
+        lines.push('  • ' + r.payee + ' [' + r.accountType + '] — $' + (r.balance || 0).toLocaleString());
+      }
+    }
+    badge.title = lines.join('\n');
   }
 
   function ensureCollectionsBadge() {
@@ -2321,6 +2533,7 @@
       try { ensureStudentLoanButton(); } catch (e) { console.error('[Residual Income Calc] sloan observer error', e); }
       try { ensureExcludeTelecomButton(); } catch (e) { console.error('[Exclude SelfReport] observer error', e); }
       try { ensureCollectionsBadge(); } catch (e) { console.error('[Collections Badge] observer error', e); }
+      try { ensureDisputedBadge(); } catch (e) { console.error('[Disputed Badge] observer error', e); }
     });
   }
 
