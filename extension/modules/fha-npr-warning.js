@@ -55,10 +55,57 @@
     return /\bFHA\b/i.test(name || '');
   }
 
-  // Walk up from a citizenship select to its borrower-pair tab
-  // panel, then look up the tab label so we can name the offender
-  // ("Nayibe Arenas" / "Sandra Arenas" / etc.) in the banner.
+  // Read the borrower's name from the Legal first / last name
+  // inputs inside a scope. Tries a few common LOP field-name
+  // variants. Returns null if neither field is populated.
+  function readBorrowerNameFromScope(scope) {
+    if (!scope) return null;
+    const firstSelectors = [
+      'input[name="legalFirstName"]',
+      'input[name="firstName"]',
+      'input[name*="legalFirstName" i]',
+      'input[name*="firstName" i]'
+    ];
+    const lastSelectors = [
+      'input[name="legalLastName"]',
+      'input[name="lastName"]',
+      'input[name*="legalLastName" i]',
+      'input[name*="lastName" i]'
+    ];
+    let firstName = '';
+    let lastName = '';
+    for (const s of firstSelectors) {
+      const inp = scope.querySelector(s);
+      if (inp && inp.value) { firstName = inp.value.trim(); break; }
+    }
+    for (const s of lastSelectors) {
+      const inp = scope.querySelector(s);
+      if (inp && inp.value) { lastName = inp.value.trim(); break; }
+    }
+    if (firstName && lastName) return firstName + ' ' + lastName;
+    return firstName || lastName || null;
+  }
+
+  // Walk up from a citizenship select to find the LARGEST ancestor
+  // that still contains exactly one citizenship select — that's the
+  // per-borrower section. Anything wider would contain the OTHER
+  // borrower's select too, and the name lookup would conflate them
+  // (which is how the v1.15.0 banner ended up listing the tab
+  // label "Nayibe Arenas & Sandra Arenas" twice). Within that
+  // scope, read the Legal first / last name inputs.
   function findBorrowerNameForSelect(sel) {
+    let largestSafeScope = sel;
+    let cur = sel.parentElement;
+    while (cur && cur !== document.body) {
+      const citizens = cur.querySelectorAll('select[name="citizenship"]');
+      if (citizens.length > 1) break;
+      largestSafeScope = cur;
+      cur = cur.parentElement;
+    }
+    const name = readBorrowerNameFromScope(largestSafeScope);
+    if (name) return name;
+    // Fallbacks if the legal-name inputs are empty (rare — usually
+    // citizenship is filled in well after the name is).
     let p = sel.parentElement;
     while (p && p !== document.body) {
       if (p.getAttribute && p.getAttribute('role') === 'tabpanel') {
@@ -70,9 +117,6 @@
             if (txt) return txt;
           }
         }
-        const dataCy = p.getAttribute('data-cy') || '';
-        const m = /borrower-pair-tab-(\d+)/.exec(dataCy);
-        if (m) return 'Borrower pair ' + (parseInt(m[1], 10) + 1);
         break;
       }
       p = p.parentElement;
@@ -145,8 +189,15 @@
       );
       (document.body || document.documentElement).appendChild(banner);
     }
-    const names = offenders.map(function (o) { return o.name; }).join(', ');
-    const isPlural = offenders.length !== 1;
+    const uniqueNames = [];
+    const seen = new Set();
+    for (const o of offenders) {
+      if (seen.has(o.name)) continue;
+      seen.add(o.name);
+      uniqueNames.push(o.name);
+    }
+    const names = uniqueNames.join(', ');
+    const isPlural = uniqueNames.length !== 1;
     const verbPhrase = isPlural ? 'are' : 'is';
     banner.innerHTML =
       '<span style="font-size:20px;margin-right:8px;vertical-align:-2px;">⚠</span>' +
