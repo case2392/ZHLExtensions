@@ -92,6 +92,94 @@
     }).join(';');
   }
 
+  // Instant read of the liabilities array from React state via the
+  // MAIN-world bridge. Returns the same { total, counted,
+  // excludedMedical } shape as computeCollectionsTotal so callers
+  // can swap implementations transparently. Returns null if the
+  // bridge isn't responding or the fiber walk turns up empty (e.g.
+  // page just loaded, React hasn't hydrated yet).
+  async function computeCollectionsFromReact() {
+    const result = await callMainWorldProbe({ mode: 'readLiabilities' }, 2000);
+    if (!result || !result.tables || !result.tables.length) return null;
+    // The bridge returns one entry per liabilities table on the page.
+    // Multi-borrower pairs each have their own — we return the array
+    // per table here and let the caller pair them with section
+    // scopes.
+    return result.tables;
+  }
+
+  function classifyLiabilityFromReact(item) {
+    const attrs = (item && item.attributes) || {};
+    const type = String(attrs.type || '').toUpperCase().trim();
+    const status = String(attrs.accountStatus || '').toUpperCase().trim();
+    const remarks = String(attrs.remarks || '').toUpperCase();
+    const reasons = [];
+    if (type === 'UNKNOWN') reasons.push('unknown→collection');
+    if (/COLLECTION|CHARGE\s*OFF|CHARGEOFF/.test(type)) reasons.push('type:' + (attrs.type || ''));
+    if (/CHARGE\s*OFF|CHARGEOFF/.test(status)) reasons.push('status:' + (attrs.accountStatus || ''));
+    if (/CHARGE\s*OFF|CHARGED\s*OFF|REPOSSESSION|REPO/.test(remarks)) reasons.push('remarks:charge-off');
+    // Late-payment / last-delinquency support: opportunistic field-
+    // name matching so we cover whatever LOP renames it to.
+    const lateCount =
+      (Number(attrs.thirtyDaysLateCount) || 0) +
+      (Number(attrs.sixtyDaysLateCount) || 0) +
+      (Number(attrs.ninetyDaysLateCount) || 0);
+    const lastDelinqRaw = attrs.lastDelinquencyDate || attrs.lastDelinquencyOn || null;
+    if (lateCount > 0 && lastDelinqRaw) {
+      const lastDelinq = new Date(lastDelinqRaw);
+      if (!isNaN(lastDelinq.getTime())) {
+        const ageMs = Date.now() - lastDelinq.getTime();
+        const TWENTY_FOUR_MO_MS = 1000 * 60 * 60 * 24 * 365.25 * 2;
+        if (ageMs <= TWENTY_FOUR_MO_MS) reasons.push('late ' + lateCount + 'x in 24mo');
+      }
+    }
+    return reasons;
+  }
+
+  function computeCollectionsFromItems(items) {
+    const result = { total: 0, counted: [], excludedMedical: [] };
+    for (const item of items) {
+      const attrs = (item && item.attributes) || {};
+      const reasons = classifyLiabilityFromReact(item);
+      if (!reasons.length) continue;
+      const balance = Number(attrs.unpaidBalance) || 0;
+      const payee = String(attrs.creditor || '');
+      const row = {
+        payee: payee,
+        accountType: attrs.type || '',
+        balance: balance
+      };
+      if (isMedicalPayee(payee)) {
+        result.excludedMedical.push({ row: row, reasons: reasons });
+      } else {
+        result.total += balance;
+        result.counted.push({ row: row, reasons: reasons });
+      }
+    }
+    return result;
+  }
+
+  // Match React-read tables to the on-page liabilities sections.
+  // The bridge returns one entry per visible liabilities table in
+  // DOM order. findLiabilitiesHeaders() also walks the DOM in order,
+  // so the indexes line up.
+  let lastReactReadAt = 0;
+  let cachedReactTables = null;
+  async function refreshReactCacheIfDue() {
+    const now = Date.now();
+    // Throttle to once per second so the observer tick doesn't spam
+    // postMessage round-trips.
+    if (cachedReactTables && now - lastReactReadAt < 1000) return cachedReactTables;
+    try {
+      const tables = await computeCollectionsFromReact();
+      if (tables) {
+        cachedReactTables = tables;
+        lastReactReadAt = now;
+      }
+    } catch (_) {}
+    return cachedReactTables;
+  }
+
   function ensureCollectionsBadge() {
     const sections = findLiabilitiesHeaders();
     for (const sec of sections) {
@@ -624,9 +712,29 @@
   }
 
   function updateCollectionsBadge(sec, badge) {
-    // Prefer a recent deep-scan result if the table hasn't changed
-    // since the scan ran. Otherwise compute the fast (summary-only)
-    // heuristic and mark the badge as needing a scan.
+    // Priority of data sources:
+    //   1. React fiber read (instant, accurate — sees attributes.type
+    //      / status / remarks without expanding rows).
+    //   2. Deep-scan cache (row-expansion result still valid for the
+    //      current table fingerprint).
+    //   3. Fast summary-only heuristic fallback.
+    // We fire the React refresh fire-and-forget; whatever the
+    // cachedReactTables already holds gets rendered now, and when
+    // the refresh resolves a later observer tick uses the new data.
+    refreshReactCacheIfDue();
+    if (cachedReactTables) {
+      // Match this section's table to the bridge's per-table result.
+      // findLiabilitiesHeaders order matches the bridge's table
+      // discovery order on the page, so we use the section's index.
+      const allSections = findLiabilitiesHeaders();
+      const idx = allSections.findIndex(function (s) { return s.table === sec.table; });
+      const tableData = idx >= 0 ? cachedReactTables[idx] : null;
+      if (tableData && tableData.read && tableData.read.found && Array.isArray(tableData.read.items)) {
+        const result = computeCollectionsFromItems(tableData.read.items);
+        paintBadge(badge, result, 'react');
+        return;
+      }
+    }
     const cached = deepScanCache.get(sec.table);
     const currentFp = tableFingerprint(sec.table);
     if (cached && cached.fingerprint === currentFp) {
@@ -634,7 +742,6 @@
       return;
     }
     if (cached && cached.fingerprint !== currentFp) {
-      // Table changed since scan — discard the stale result.
       deepScanCache.delete(sec.table);
     }
     const result = computeCollectionsTotal(sec.table);
@@ -652,15 +759,17 @@
     const medicalNote = result.excludedMedical.length
       ? ' · ' + result.excludedMedical.length + ' medical excluded'
       : '';
-    const modeNote = mode === 'deep'
-      ? ' · deep scan ✓'
-      : ' · click to deep scan';
+    const modeNote = mode === 'react' ? ' · live ✓'
+                    : mode === 'deep' ? ' · deep scan ✓'
+                    : ' · click to deep scan';
     badge.textContent = icon + ' Total Collections: $' +
       result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
       medicalNote + modeNote;
     const lines = ['FHA cumulative-balance cap: $' + FHA_COLLECTION_CAP.toLocaleString()];
     if (mode === 'fast') {
       lines.push('(Fast mode — only counts what\'s visible in the summary. Click the badge to deep-scan rows for charge-offs / late pays.)');
+    } else if (mode === 'react') {
+      lines.push('(Live mode — reading every liability\'s full attributes directly from LOP\'s React state. Updates automatically.)');
     }
     if (result.counted.length) {
       lines.push('');
