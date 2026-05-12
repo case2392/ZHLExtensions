@@ -204,6 +204,17 @@
   const observer = new MutationObserver(() => tick());
   observer.observe(document.documentElement, { childList: true, subtree: true });
   tick();
+  // LOP's purchase-price change keeps the down PERCENT constant and
+  // programmatically rewrites the down-payment dollar input via React
+  // state. React.value updates don't fire DOM input/change events,
+  // and the MutationObserver doesn't see input.value writes either
+  // (it's a property, not an attribute), so our wirePartner handlers
+  // never fire after a purchase change. Result: loan amount stays at
+  // (new purchase - OLD down), e.g. $540k - $100k = $440k even when
+  // LOP rebalanced down to $67,500. Heartbeat poll picks the new
+  // value up. We skip when the loan input is focused so we don't
+  // overwrite text mid-type.
+  setInterval(recalcLoanDisplay, 500);
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
