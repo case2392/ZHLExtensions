@@ -167,6 +167,23 @@
         // never got a badge. Now we anchor on container classes that
         // truly identify the toast layer.
         if (parent.closest(".notification-container, [class*='notification-container'], [class*='NotificationContainer'], [class*='toast-container'], [class*='ToastContainer'], [class*='oneToastContainer']")) return NodeFilter.FILTER_REJECT;
+        // Skip Salesforce Messaging / Conversation components. The
+        // user already sees the contact's name throughout the
+        // messaging UI (participants list, conversation header,
+        // phone-number autocomplete dropdown), so re-badging the
+        // phone numbers there is redundant and visually noisy. Class
+        // / tag patterns observed:
+        //   - oneConvoApp, convoMessenger, convo-conversation-app
+        //   - messaging-conversation, conversationViewport
+        //   - lightning-conversation-toolkit-host (Lightning host)
+        //   - data-component-id="convo*" on Lightning components
+        if (parent.closest(
+          "[class*='oneConvoApp'], [class*='convoMessenger']," +
+          " [class*='convo-conversation'], [class*='conversation-app']," +
+          " [class*='messaging-conversation'], [class*='conversationViewport']," +
+          " [class*='lightning-conversation'], lightning-conversation-toolkit-host," +
+          " [data-component-id*='convo' i], [data-aura-class*='convo' i]"
+        )) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       }
     });
