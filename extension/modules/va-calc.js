@@ -78,21 +78,6 @@
     return { total: total, counted: counted, excludedMedical: excludedMedical };
   }
 
-  // Per-table cache of the most recent deep-scan result so the
-  // visible badge keeps showing the accurate number across observer
-  // ticks. Keyed by table DOM node; the WeakMap auto-clears when the
-  // table is removed (tab switch / page leave). Invalidated when the
-  // summary-row fingerprint (count + payees + balances) changes — if
-  // the user edits a row after scanning, the badge falls back to the
-  // fast heuristic and shows a "stale, re-scan" hint.
-  const deepScanCache = new WeakMap();
-  function tableFingerprint(scopeTable) {
-    const rows = findLiabilityRows(scopeTable);
-    return rows.map(function (r) {
-      return (r.payee || '') + '|' + (r.accountType || '') + '|' + (r.balance || 0);
-    }).join(';');
-  }
-
   // Instant read of the liabilities array from React state via the
   // MAIN-world bridge. Returns the same { total, counted,
   // excludedMedical } shape as computeCollectionsTotal so callers
@@ -192,12 +177,16 @@
           if (e.shiftKey) {
             // Shift-click: probe the React fiber tree above the
             // liabilities table and dump the discovered data to the
-            // console. Used to figure out the field shape so we can
-            // read liability details without expanding rows.
+            // console. Used for debugging if LOP changes structure.
             probeReactFiber(sec.table);
-          } else {
-            runDeepScan(sec, badge);
+            return;
           }
+          // Regular click: invalidate the cached React snapshot and
+          // force a fresh read on the next observer tick. Useful if
+          // the data feels stale right after editing a row.
+          cachedReactTables = null;
+          lastReactReadAt = 0;
+          updateCollectionsBadge(sec, badge);
         });
         const heading = sec.container.querySelector('h5');
         if (heading && heading.nextSibling) sec.container.insertBefore(badge, heading.nextSibling);
@@ -708,18 +697,16 @@
   function updateCollectionsBadge(sec, badge) {
     // Priority of data sources:
     //   1. React fiber read (instant, accurate — sees attributes.type
-    //      / status / remarks without expanding rows).
-    //   2. Deep-scan cache (row-expansion result still valid for the
-    //      current table fingerprint).
-    //   3. Fast summary-only heuristic fallback.
+    //      / status / remarks without expanding rows). This is the
+    //      normal path.
+    //   2. Fast summary-only heuristic fallback (used only when the
+    //      MAIN-world bridge hasn't responded yet, e.g. very first
+    //      paint after a hard reload).
     // We fire the React refresh fire-and-forget; whatever the
     // cachedReactTables already holds gets rendered now, and when
     // the refresh resolves a later observer tick uses the new data.
     refreshReactCacheIfDue();
     if (cachedReactTables) {
-      // Match this section's table to the bridge's per-table result.
-      // findLiabilitiesHeaders order matches the bridge's table
-      // discovery order on the page, so we use the section's index.
       const allSections = findLiabilitiesHeaders();
       const idx = allSections.findIndex(function (s) { return s.table === sec.table; });
       const tableData = idx >= 0 ? cachedReactTables[idx] : null;
@@ -728,15 +715,6 @@
         paintBadge(badge, result, 'react');
         return;
       }
-    }
-    const cached = deepScanCache.get(sec.table);
-    const currentFp = tableFingerprint(sec.table);
-    if (cached && cached.fingerprint === currentFp) {
-      paintBadge(badge, cached.result, 'deep');
-      return;
-    }
-    if (cached && cached.fingerprint !== currentFp) {
-      deepScanCache.delete(sec.table);
     }
     const result = computeCollectionsTotal(sec.table);
     paintBadge(badge, result, 'fast');
@@ -753,17 +731,15 @@
     const medicalNote = result.excludedMedical.length
       ? ' · ' + result.excludedMedical.length + ' medical excluded'
       : '';
-    const modeNote = mode === 'react' ? ' · live ✓'
-                    : mode === 'deep' ? ' · deep scan ✓'
-                    : ' · click to deep scan';
+    const modeNote = mode === 'react' ? ' · live ✓' : ' · loading…';
     badge.textContent = icon + ' Total Collections: $' +
       result.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
       medicalNote + modeNote;
     const lines = ['FHA cumulative-balance cap: $' + FHA_COLLECTION_CAP.toLocaleString()];
     if (mode === 'fast') {
-      lines.push('(Fast mode — only counts what\'s visible in the summary. Click the badge to deep-scan rows for charge-offs / late pays.)');
+      lines.push('(Loading — waiting for LOP\'s React state to hydrate. The number will refresh momentarily.)');
     } else if (mode === 'react') {
-      lines.push('(Live mode — reading every liability\'s full attributes directly from LOP\'s React state. Updates automatically.)');
+      lines.push('(Reading every liability\'s full attributes directly from LOP\'s React state. Updates automatically.)');
     }
     if (result.counted.length) {
       lines.push('');
@@ -785,144 +761,13 @@
     badge.title = lines.join('\n');
   }
 
-  async function runDeepScan(sec, badge) {
-    const origText = badge.textContent;
-    const origCursor = badge.style.cursor;
-    badge.style.cursor = 'progress';
-    badge.style.background = '#fef3c7';
-    badge.style.color = '#92400e';
-    badge.style.borderColor = '#f59e0b';
-    badge.textContent = '⟳ Scanning rows…';
-    console.group('[Collections Scan] deep scan started');
-    try {
-      const result = await deepScanCollections(sec.table, function (i, n, payee) {
-        badge.textContent = '⟳ Scanning ' + (i + 1) + '/' + n + ' — ' + payee;
-      });
-      deepScanCache.set(sec.table, { fingerprint: tableFingerprint(sec.table), result: result });
-      paintBadge(badge, result, 'deep');
-      console.log('[Collections Scan] result:', result);
-    } catch (e) {
-      console.error('[Collections Scan] failed:', e);
-      badge.textContent = origText;
-      alert('Deep scan failed: ' + (e && e.message || e));
-    } finally {
-      badge.style.cursor = origCursor || 'pointer';
-      console.groupEnd();
-    }
-  }
-
-  function readFieldByLabelInPanel(panel, labelText) {
-    const target = normalizeText(labelText);
-    const labels = panel.querySelectorAll('label');
-    for (const lbl of labels) {
-      const t = normalizeText(lbl.textContent);
-      if (t === target || t.startsWith(target)) {
-        if (lbl.htmlFor) {
-          const el = document.getElementById(lbl.htmlFor);
-          if (el) return el;
-        }
-        const sibling = lbl.parentElement && lbl.parentElement.querySelector('input, select, textarea');
-        if (sibling) return sibling;
-      }
-    }
-    return null;
-  }
-
-  function getSelectedText(sel) {
-    if (!sel) return '';
-    if (sel.options && sel.options.length) {
-      const opt = sel.options[sel.selectedIndex];
-      return (opt && (opt.text || opt.value)) || '';
-    }
-    return sel.value || '';
-  }
-
-  function parseLooseDate(s) {
-    if (!s) return null;
-    const d = new Date(s);
-    if (!isNaN(d.getTime())) return d;
-    // Try MM/DD/YYYY explicitly.
-    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s).trim());
-    if (m) {
-      const dd = new Date(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10));
-      if (!isNaN(dd.getTime())) return dd;
-    }
-    return null;
-  }
-
-  async function deepScanCollections(scopeTable, onProgress) {
-    const summaryRows = findLiabilityRows(scopeTable);
-    const result = { total: 0, counted: [], excludedMedical: [] };
-    const now = Date.now();
-    const TWENTY_FOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 365.25 * 2;
-
-    for (let i = 0; i < summaryRows.length; i++) {
-      const row = summaryRows[i];
-      if (onProgress) onProgress(i, summaryRows.length, row.payee || '?');
-      // Re-resolve the row by accountNo / payee since the table can
-      // rerender between iterations.
-      const fresh = findLiabilityRows(scopeTable).find(function (r) {
-        if (row.accountNo && r.accountNo === row.accountNo) return true;
-        return r.payee === row.payee && r.balance === row.balance;
-      });
-      const target = fresh || row;
-      const wasExpanded = isLiabilityRowExpanded(target.tr);
-      if (!wasExpanded) {
-        const ok = await toggleLiabilityRow(target.tr, true);
-        if (!ok) {
-          console.warn('[Collections Scan] could not expand row', target.payee);
-          continue;
-        }
-      }
-      // Let React render the form.
-      await waitMs(200);
-      const panel = findEditPanelFor(target.tr);
-      let highestAdverse = '';
-      let remarks = '';
-      let lateCount = 0;
-      let lastDelinq = null;
-      if (panel) {
-        const adverseSel = readFieldByLabelInPanel(panel, 'Highest adverse rating');
-        highestAdverse = getSelectedText(adverseSel);
-        const remarksInp = readFieldByLabelInPanel(panel, 'Remarks');
-        remarks = (remarksInp && remarksInp.value) || '';
-        for (const lbl of ['30 days late count', '60 days late count', '90 days late count']) {
-          const inp = readFieldByLabelInPanel(panel, lbl);
-          if (inp && inp.value) lateCount += parseInt(inp.value, 10) || 0;
-        }
-        const delinqInp = readFieldByLabelInPanel(panel, 'Last delinquency date');
-        if (delinqInp && delinqInp.value) lastDelinq = parseLooseDate(delinqInp.value);
-      }
-
-      const reasons = [];
-      if (isCollectionAccount(target.accountType)) {
-        reasons.push(target.accountType.toUpperCase() === 'UNKNOWN' ? 'unknown→collection' : 'collection type');
-      }
-      // Charge-offs / repossessions / late pays / judgments are
-      // intentionally NOT counted (per FHA: only collection accounts
-      // count toward the $2k cumulative-balance cap; charge-offs are
-      // excluded from the DTI ratio entirely). Their form fields are
-      // still read above for telemetry / future toggling, but they
-      // don't add a reason here.
-
-      if (reasons.length) {
-        const balance = target.balance || 0;
-        if (isMedicalPayee(target.payee)) {
-          result.excludedMedical.push({ row: target, reasons: reasons });
-        } else {
-          result.total += balance;
-          result.counted.push({ row: target, reasons: reasons, highestAdverse: highestAdverse, remarks: remarks, lateCount: lateCount });
-        }
-      }
-
-      if (!wasExpanded) {
-        await toggleLiabilityRow(target.tr, false);
-        await waitMs(120);
-      }
-    }
-
-    return result;
-  }
+  // Note: the v1.12.x row-expanding deepScanCollections / runDeepScan
+  // implementations were removed in v1.13.2. The MAIN-world React
+  // fiber read (readLiabilitiesArray in lop-state-bridge.js +
+  // computeCollectionsFromReact above) supersedes them — same
+  // accuracy, no UI disruption. Helpers like findEditPanelFor and
+  // toggleLiabilityRow are kept because other features
+  // (Exclude SelfReport, Calc Student Loans) still use them.
 
   // When a borrower-pair tab's Run Residual Income Calc button is
   // clicked, we set this to that borrower's section root. findLabel /
