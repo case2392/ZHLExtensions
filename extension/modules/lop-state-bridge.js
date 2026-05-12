@@ -310,12 +310,60 @@
     return found;
   }
 
+  // Targeted read for the LOP liabilities array. The table is
+  // rendered by an internal "TableSection" component (minified name
+  // is "nO" in production) whose memoizedProps include the marker
+  // entityNamePlural === "liabilities" alongside the data array. We
+  // walk fibers from the table up looking for that marker and
+  // return the data array directly.
+  function readLiabilitiesArray(table) {
+    let fiber = findFiber(table);
+    if (!fiber) {
+      const probes = [table.querySelector('tbody'), table.querySelector('tbody tr')];
+      let p = table.parentElement;
+      for (let d = 0; d < 10 && p; d++) { probes.push(p); p = p.parentElement; }
+      for (const n of probes) { if (n && !fiber) fiber = findFiber(n); }
+    }
+    if (!fiber) return { found: false, reason: 'no fiber on table' };
+    let cur = fiber;
+    let depth = 0;
+    while (cur && depth < 40) {
+      try {
+        const p = cur.memoizedProps;
+        if (p && typeof p === 'object') {
+          const isLiabSection = p.entityNamePlural === 'liabilities' ||
+                                p.entityNameSingular === 'liability';
+          if (isLiabSection && Array.isArray(p.data)) {
+            return {
+              found: true,
+              depth: depth,
+              fiberName: fiberDisplayName(cur),
+              count: p.data.length,
+              items: p.data
+            };
+          }
+        }
+      } catch (_) {}
+      cur = cur.return;
+      depth++;
+    }
+    return { found: false, reason: 'no entityNamePlural=liabilities fiber found within 40 ancestors' };
+  }
+
   function probe(payload) {
     const out = { tables: [], globals: snapshotGlobals() };
     const tables = document.querySelectorAll('table[aria-label="Table for liabilities"]');
     for (let i = 0; i < tables.length; i++) {
+      if (payload && payload.mode === 'readLiabilities') {
+        const read = readLiabilitiesArray(tables[i]);
+        out.tables.push({ tableIndex: i, read: read });
+        continue;
+      }
       const info = probeTable(tables[i], i);
       info.apolloProbe = snapshotApolloIfReachable(tables[i]);
+      // Also include the targeted read so we can see what fields each
+      // liability object has, even when the user is just probing.
+      info.read = readLiabilitiesArray(tables[i]);
       out.tables.push(info);
     }
     // For read requests, strip the live .array reference (not

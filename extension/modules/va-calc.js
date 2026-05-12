@@ -418,6 +418,17 @@
       console.log('table own-keys:', info.keysOnTable);
       console.log('fiber chain (' + info.fiberChain.length + ' levels):');
       console.log('  ' + info.fiberChain.join(' → '));
+      if (info.read) {
+        if (info.read.found) {
+          console.log('%cliabilities array located via entityNamePlural marker',
+            'color:#16a34a;font-weight:bold;',
+            '— depth=' + info.read.depth + ' fiber=' + info.read.fiberName + ' count=' + info.read.count);
+          console.log('sample[0] (paste this back so I can map field names):');
+          console.log(JSON.stringify(info.read.items[0], null, 2));
+        } else {
+          console.warn('liabilities array NOT located:', info.read.reason);
+        }
+      }
       if (info.hits.length) {
         console.log('found ' + info.hits.length + ' liability-shaped array(s):');
         for (const h of info.hits) {
