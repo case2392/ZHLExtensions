@@ -39,16 +39,17 @@
     'UNITED HEALTHCARE', 'CHILDRENS HOSPITAL', 'CHILDREN\'S HOSPITAL'
   ];
 
-  // Heuristic for the FHA cumulative-balance rule. User chose "Both
-  // Unknown AND Collection" identification — so we count rows whose
-  // Account type column reads "Unknown", "Collection", "Collection
-  // Account", "ChargeOff", or "Charge Off". Excludes rows whose
-  // Company/Payee name matches the medical keyword list above.
+  // Heuristic for the FHA cumulative-balance rule. Only true
+  // COLLECTION accounts count toward the $2k cap. Charge-offs are
+  // explicitly excluded from the DTI ratio per the FHA matrix and
+  // per user direction do not count toward this total either. The
+  // "Unknown" account type catches collection-agency rows that LOP
+  // can't categorize as Revolving / Installment / Mortgage.
   function isCollectionAccount(accountType) {
     const at = (accountType || '').toUpperCase().trim();
     if (!at) return false;
     if (at === 'UNKNOWN') return true;
-    if (/COLLECTION|CHARGE\s*OFF|CHARGEOFF/.test(at)) return true;
+    if (/COLLECTION/.test(at)) return true;
     return false;
   }
 
@@ -108,32 +109,25 @@
     return result.tables;
   }
 
+  // Per the FHA rule the badge enforces ($2,000 cumulative-balance
+  // cap), only true COLLECTION accounts count. Charge-offs (whether
+  // expressed as a type, an accountStatus, or text in remarks like
+  // "CHARGE OFF" / "REPOSSESSION") are explicitly excluded from the
+  // DTI ratio per the rule, and per user clarification do not count
+  // toward this total either. Late-payment accounts and judgments
+  // share the same section header in the FHA matrix but the $2k
+  // cumulative-balance language applies specifically to collections.
+  //
+  // "Unknown" is treated as a collection because LOP's data shows
+  // every collection-agency row (I.C. SYSTEM, MIDLAND CREDIT, etc.)
+  // categorized as Unknown — they don't fit Revolving / Installment
+  // / Mortgage and have no first-party creditor.
   function classifyLiabilityFromReact(item) {
     const attrs = (item && item.attributes) || {};
     const type = String(attrs.type || '').toUpperCase().trim();
-    const status = String(attrs.accountStatus || '').toUpperCase().trim();
-    const remarks = String(attrs.remarks || '').toUpperCase();
-    const reasons = [];
-    if (type === 'UNKNOWN') reasons.push('unknown→collection');
-    if (/COLLECTION|CHARGE\s*OFF|CHARGEOFF/.test(type)) reasons.push('type:' + (attrs.type || ''));
-    if (/CHARGE\s*OFF|CHARGEOFF/.test(status)) reasons.push('status:' + (attrs.accountStatus || ''));
-    if (/CHARGE\s*OFF|CHARGED\s*OFF|REPOSSESSION|REPO/.test(remarks)) reasons.push('remarks:charge-off');
-    // Late-payment / last-delinquency support: opportunistic field-
-    // name matching so we cover whatever LOP renames it to.
-    const lateCount =
-      (Number(attrs.thirtyDaysLateCount) || 0) +
-      (Number(attrs.sixtyDaysLateCount) || 0) +
-      (Number(attrs.ninetyDaysLateCount) || 0);
-    const lastDelinqRaw = attrs.lastDelinquencyDate || attrs.lastDelinquencyOn || null;
-    if (lateCount > 0 && lastDelinqRaw) {
-      const lastDelinq = new Date(lastDelinqRaw);
-      if (!isNaN(lastDelinq.getTime())) {
-        const ageMs = Date.now() - lastDelinq.getTime();
-        const TWENTY_FOUR_MO_MS = 1000 * 60 * 60 * 24 * 365.25 * 2;
-        if (ageMs <= TWENTY_FOUR_MO_MS) reasons.push('late ' + lateCount + 'x in 24mo');
-      }
-    }
-    return reasons;
+    if (type === 'UNKNOWN') return ['unknown→collection'];
+    if (type === 'COLLECTION') return ['type:Collection'];
+    return [];
   }
 
   function computeCollectionsFromItems(items) {
@@ -904,20 +898,12 @@
       if (isCollectionAccount(target.accountType)) {
         reasons.push(target.accountType.toUpperCase() === 'UNKNOWN' ? 'unknown→collection' : 'collection type');
       }
-      const adverseU = highestAdverse.toUpperCase();
-      if (/CHARGE\s*OFF|REPOSSESSION|FORECLOSURE|JUDGMENT/.test(adverseU)) {
-        reasons.push('adverse:' + highestAdverse);
-      }
-      const remarksU = remarks.toUpperCase();
-      if (/CHARGE\s*OFF|CHARGED\s*OFF/.test(remarksU)) {
-        reasons.push('remarks:charge-off');
-      }
-      if (lateCount > 0 && lastDelinq) {
-        const ageMs = now - lastDelinq.getTime();
-        if (ageMs <= TWENTY_FOUR_MONTHS_MS) {
-          reasons.push('late ' + lateCount + 'x in 24mo');
-        }
-      }
+      // Charge-offs / repossessions / late pays / judgments are
+      // intentionally NOT counted (per FHA: only collection accounts
+      // count toward the $2k cumulative-balance cap; charge-offs are
+      // excluded from the DTI ratio entirely). Their form fields are
+      // still read above for telemetry / future toggling, but they
+      // don't add a reason here.
 
       if (reasons.length) {
         const balance = target.balance || 0;
