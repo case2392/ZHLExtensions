@@ -416,7 +416,8 @@
     for (const info of result.tables) {
       console.group('table[' + info.tableIndex + '] rows=' + info.rowCount + ' fiberFound=' + info.fiberFound);
       console.log('table own-keys:', info.keysOnTable);
-      console.log('fiber chain (' + info.fiberChain.length + ' levels):', info.fiberChain.slice(0, 15).join(' → '));
+      console.log('fiber chain (' + info.fiberChain.length + ' levels):');
+      console.log('  ' + info.fiberChain.join(' → '));
       if (info.hits.length) {
         console.log('found ' + info.hits.length + ' liability-shaped array(s):');
         for (const h of info.hits) {
@@ -426,7 +427,19 @@
         console.log('Top hit sample (paste this block back to me):');
         console.log(JSON.stringify(info.hits[0].sample, null, 2));
       } else {
-        console.warn('  no liability-shaped array found in this fiber tree');
+        console.warn('No liability-shaped array found by heuristic. Dumping each component fiber\'s prop/state shape so we can identify the data path manually:');
+        if (info.fiberShapes && info.fiberShapes.length) {
+          for (const s of info.fiberShapes) {
+            console.groupCollapsed('depth=' + s.depth + ' ' + s.name);
+            if (s.propsShape) console.log('props:', s.propsShape);
+            if (s.stateShape) console.log('state:', s.stateShape);
+            if (s.hooks) console.log('hooks (function component):', s.hooks);
+            console.groupEnd();
+          }
+          console.log('Look through the shapes above for any field whose name suggests liabilities (liabilities, liabs, accounts, derogs, tradelines, etc.) or any array that has the right count (' + info.rowCount + ' items). Paste any candidate group back.');
+        } else {
+          console.warn('No named-component fibers in the chain — page may use only styled-components / DOM elements.');
+        }
       }
       console.groupEnd();
     }

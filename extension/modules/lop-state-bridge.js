@@ -59,12 +59,23 @@
   }
 
   function deepFind(obj, path, depth, out, seen) {
-    if (depth > 8 || !obj || typeof obj !== 'object') return;
+    if (depth > 14 || !obj || typeof obj !== 'object') return;
     if (seen.has(obj)) return;
     seen.add(obj);
     if (looksLikeLiabArray(obj)) {
       out.push({ path: path, count: obj.length, sample: obj[0], array: obj });
       return;
+    }
+    // Also handle the "object map" case — LOP could store rows keyed
+    // by id rather than as an array.
+    if (!Array.isArray(obj) && typeof obj === 'object') {
+      const values = Object.values(obj);
+      if (values.length > 1 && values.every(function (v) { return v && typeof v === 'object'; })) {
+        if (looksLikeLiabArray(values)) {
+          out.push({ path: path + '/values()', count: values.length, sample: values[0], array: values });
+          return;
+        }
+      }
     }
     if (Array.isArray(obj)) {
       for (let i = 0; i < Math.min(obj.length, 50); i++) {
@@ -76,6 +87,33 @@
     for (const k of keys) {
       try { deepFind(obj[k], path + '.' + k, depth + 1, out, seen); } catch (_) {}
     }
+  }
+
+  // Diagnostic: top-level shape of an object (keys + each value's
+  // primitive type, length if array, or first sub-keys if object).
+  // Used so we can SEE what data each fiber's props/state hold even
+  // if our liability-array heuristic doesn't match.
+  function describeShape(obj, maxKeys) {
+    if (obj === null) return 'null';
+    if (obj === undefined) return 'undefined';
+    if (Array.isArray(obj)) return 'Array(' + obj.length + ')';
+    if (typeof obj !== 'object') return typeof obj;
+    const out = {};
+    const keys = Object.keys(obj);
+    let shown = 0;
+    for (const k of keys) {
+      if (shown >= (maxKeys || 30)) { out['...'] = (keys.length - shown) + ' more'; break; }
+      let v;
+      try { v = obj[k]; } catch (_) { out[k] = '<inaccessible>'; shown++; continue; }
+      if (v === null) out[k] = 'null';
+      else if (Array.isArray(v)) out[k] = 'Array(' + v.length + ')';
+      else if (typeof v === 'object') out[k] = '{ ' + Object.keys(v).slice(0, 5).join(', ') + (Object.keys(v).length > 5 ? ', ...' : '') + ' }';
+      else if (typeof v === 'function') out[k] = 'fn';
+      else if (typeof v === 'string') out[k] = '"' + v.slice(0, 40) + (v.length > 40 ? '…' : '') + '"';
+      else out[k] = String(v);
+      shown++;
+    }
+    return out;
   }
 
   // Build the probe payload for one liabilities table.
@@ -96,14 +134,48 @@
       for (const n of probes) { if (n && !fiber) fiber = findFiber(n); }
     }
     info.fiberFound = !!fiber;
+    info.fiberShapes = [];
     let cur = fiber;
     let depth = 0;
-    while (cur && depth < 30) {
-      info.fiberChain.push(fiberDisplayName(cur));
+    while (cur && depth < 40) {
+      const name = fiberDisplayName(cur);
+      info.fiberChain.push(name);
       try {
-        if (cur.memoizedProps) deepFind(cur.memoizedProps, '[' + depth + ':' + fiberDisplayName(cur) + '].props', 0, info.hits, new WeakSet());
-        if (cur.memoizedState) deepFind(cur.memoizedState, '[' + depth + ':' + fiberDisplayName(cur) + '].state', 0, info.hits, new WeakSet());
+        if (cur.memoizedProps) deepFind(cur.memoizedProps, '[' + depth + ':' + name + '].props', 0, info.hits, new WeakSet());
+        if (cur.memoizedState) deepFind(cur.memoizedState, '[' + depth + ':' + name + '].state', 0, info.hits, new WeakSet());
       } catch (_) {}
+      // Diagnostic shape dump for components that look like data
+      // holders (named, non-DOM elements). Skip plain html tags and
+      // styled-component wrappers whose name is a single char or
+      // begins with a quoted styled identifier.
+      if (typeof cur.type !== 'string' && name !== '?' && depth < 35) {
+        const shape = { depth: depth, name: name };
+        try {
+          if (cur.memoizedProps && typeof cur.memoizedProps === 'object') {
+            shape.propsShape = describeShape(cur.memoizedProps, 30);
+          }
+        } catch (_) {}
+        try {
+          if (cur.memoizedState && typeof cur.memoizedState === 'object') {
+            // memoizedState for function components is a linked list of
+            // hook states. Walk through it.
+            if (cur.memoizedState.next !== undefined && cur.memoizedState.baseState !== undefined) {
+              const hooks = [];
+              let h = cur.memoizedState;
+              let hi = 0;
+              while (h && hi < 20) {
+                hooks.push({ hook: hi, baseState: describeShape(h.baseState, 8), memoizedState: describeShape(h.memoizedState, 8) });
+                h = h.next;
+                hi++;
+              }
+              shape.hooks = hooks;
+            } else {
+              shape.stateShape = describeShape(cur.memoizedState, 30);
+            }
+          }
+        } catch (_) {}
+        info.fiberShapes.push(shape);
+      }
       cur = cur.return;
       depth++;
     }
