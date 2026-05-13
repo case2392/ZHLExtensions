@@ -406,21 +406,48 @@
     const btn = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
     if (!btn) return;
     const eligible = findEligibleSelectedScenarios();
-    if (eligible.length === 0) {
+    // Mirror LOP's own Generate PDF disabled state. When a selected
+    // scenario is stale ("RE-PRICE" pill in the corner), LOP disables
+    // its Generate PDF — we shouldn't ship a Buydown PDF off stale
+    // pricing either.
+    const generateBtn = findGeneratePdfButton();
+    const generateDisabled = !!generateBtn && (
+      generateBtn.disabled === true ||
+      generateBtn.getAttribute('aria-disabled') === 'true' ||
+      // The outer TriggerText wrapper button can also carry the
+      // disabled state.
+      (function () {
+        let p = generateBtn.parentElement;
+        while (p && p !== document.body) {
+          if (p.tagName === 'BUTTON' && (p.disabled === true || p.getAttribute('aria-disabled') === 'true')) return true;
+          if (p.tagName !== 'BUTTON') break;
+          p = p.parentElement;
+        }
+        return false;
+      })()
+    );
+    function disable(reason) {
       btn.disabled = true;
       btn.style.opacity = '0.55';
       btn.style.background = '#94a3b8';
       btn.style.borderColor = '#94a3b8';
       btn.style.cursor = 'not-allowed';
-      btn.title = 'Select at least one Conventional scenario to enable. ZHL doesn\'t offer 2-1 buydowns on FHA / VA / USDA / Jumbo.';
-    } else {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.style.background = '#006aff';
-      btn.style.borderColor = '#006aff';
-      btn.style.cursor = 'pointer';
-      btn.title = 'Generate a 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).';
+      btn.title = reason;
     }
+    if (eligible.length === 0) {
+      disable('Select at least one Conventional scenario to enable. ZHL doesn\'t offer 2-1 buydowns on FHA / VA / USDA / Jumbo.');
+      return;
+    }
+    if (generateDisabled) {
+      disable('Re-price the selected scenario before generating a Buydown PDF — the pricing is currently stale.');
+      return;
+    }
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.background = '#006aff';
+    btn.style.borderColor = '#006aff';
+    btn.style.cursor = 'pointer';
+    btn.title = 'Generate a 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).';
   }
 
   function computeBuydownForCard(card) {
@@ -514,7 +541,14 @@
       '<title>2-1 Buydown Analysis &mdash; ' + escapeHtml(today) + '</title>' +
       '<style>' +
       '@page { size: letter; margin: 0.85in 0.9in; }' +
-      'body { font: 10.5pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; }' +
+      // body padding handles the SCREEN view of the new tab (the
+      // user lands on this page before clicking print, and @page
+      // margins don't apply to on-screen rendering). The
+      // @media print block below strips body padding back to 0 so
+      // the @page margin owns the actual printed margins and we
+      // don't double-margin the output.
+      'body { font: 10.5pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; padding: 0.5in 0.65in; max-width: 8.5in; box-sizing: border-box; }' +
+      '@media print { body { padding: 0; max-width: none; } }' +
       'header { border-bottom: 3px solid #006aff; padding-bottom: 8pt; margin-bottom: 14pt; }' +
       'header h1 { margin: 0; font-size: 17pt; color: #006aff; }' +
       'header .date { color: #6b7280; font-size: 9.5pt; margin-top: 3pt; }' +
@@ -581,6 +615,13 @@
   }
 
   function onBuydownPdfClick() {
+    // Belt-and-suspenders: if the button reports as disabled (we
+    // grey it out via updateBuydownPdfButtonState whenever Generate
+    // PDF is disabled / nothing eligible is selected) the click
+    // handler must also bail. Disabled <button>s still fire click
+    // under some keyboard paths and via JS-triggered clicks.
+    const btn = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
+    if (btn && btn.disabled) return;
     const eligible = findEligibleSelectedScenarios();
     if (!eligible.length) return;
     const scenarios = eligible.map(computeBuydownForCard);
