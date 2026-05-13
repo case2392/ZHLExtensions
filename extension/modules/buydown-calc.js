@@ -720,13 +720,22 @@
     function f(n) { return fmtMoneyHtml(n); }
     function pct(n) { return isFinite(n) ? n.toFixed(3) + '%' : '&mdash;'; }
     const includeClosing = scenarios.some(function (s) { return isFinite(s.closingCosts); });
+    // Spacer row: blank tr that creates a visual gap between groups
+    // (Rates, Payments, Savings) without adding noisy borders.
+    const colCount = scenarios.length + 1;
+    const spacer = '<tr class="spacer"><td colspan="' + colCount + '">&nbsp;</td></tr>';
     let rowsHtml = '';
+    // --- Loan facts ---
     rowsHtml += row('Loan program', function (s) { return '<strong>' + escapeHtml(s.title) + '</strong>'; });
     rowsHtml += row('Loan amount', function (s) { return f(s.loanAmount); });
     rowsHtml += row('Term', function (s) { return (s.term / 12) + ' years'; });
-    rowsHtml += row('Note rate (Year 3+)', function (s) { return pct(s.rate); });
+    rowsHtml += spacer;
+    // --- Rates (chronological order) ---
     rowsHtml += row('Year 1 rate', function (s) { return pct(s.y1Rate); });
     rowsHtml += row('Year 2 rate', function (s) { return pct(s.y2Rate); });
+    rowsHtml += row('Year 3+ rate', function (s) { return pct(s.rate); });
+    rowsHtml += spacer;
+    // --- Payments ---
     rowsHtml += row('Year 1 payment', function (s) {
       const v = s.y1Pmt + (s.escrow || 0);
       return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
@@ -739,11 +748,15 @@
       const v = s.fullPmt + (s.escrow || 0);
       return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
     }, { emphasis: true });
+    rowsHtml += spacer;
+    // --- Savings / buydown cost ---
     rowsHtml += row('Year 1 savings', function (s) { return f(s.y1Savings); });
     rowsHtml += row('Year 2 savings', function (s) { return f(s.y2Savings); });
     rowsHtml += row('Total buydown cost', function (s) { return f(s.buydownCost); }, { emphasis: true });
     rowsHtml += row('% of loan amount', function (s) { return isFinite(s.buydownPct) ? s.buydownPct.toFixed(2) + '%' : '&mdash;'; });
     if (includeClosing) {
+      rowsHtml += spacer;
+      // --- Closing-cost impact ---
       rowsHtml += row('Current closing costs', function (s) { return isFinite(s.closingCosts) ? f(s.closingCosts) : '&mdash;'; });
       rowsHtml += row('+ 2-1 buydown cost', function (s) { return isFinite(s.closingCosts) ? f(s.buydownCost) : '&mdash;'; });
       rowsHtml += row('New total closing costs', function (s) {
@@ -792,6 +805,10 @@
       'table.cmp tr.emphasis th, table.cmp tr.emphasis td { font-weight: 700; color: #006aff; }' +
       'table.cmp tr.emphasis td { border-top: 1pt solid #006aff; border-bottom: 1pt solid #006aff; }' +
       'table.cmp tr.head th { font-weight: 700; }' +
+      // Spacer rows between metric groups — transparent, no stripe,
+      // no border. Gives visual breathing room between Rates,
+      // Payments, Savings without a heavy divider.
+      'table.cmp tr.spacer td { background: #ffffff !important; padding: 4pt 0; border: none; height: 6pt; }' +
       // Special handling for the first row (Loan program) — it carries the column headers
       // visually distinct from the data rows.
       'table.cmp tr:first-child th, table.cmp tr:first-child td { border-bottom: 1.5pt solid #d1d5db; padding-top: 8pt; padding-bottom: 8pt; font-size: 10pt; }' +
@@ -818,7 +835,9 @@
       '</header>' +
       '<div class="banner">Your actual rate, payment and costs could be higher: get an official loan estimate before choosing a loan.</div>' +
       '<table class="cmp">' + rowsHtml + '</table>' +
-      loBox +
+      // (LO contact box intentionally omitted per user preference —
+      // the existing loBox builder is left in place for future
+      // re-enablement but not rendered here.)
       '<div class="compliance">' +
         'Zillow Home Loans, LLC, NMLS # 10287 | 2600 Michelson Drive, Suite 1201, Irvine, CA 92612. An Equal Housing Lender. This is not a commitment to lend. ' +
         'About Zillow Home Loans, LLC at <a href="https://www.zillowhomeloans.com/">https://www.zillowhomeloans.com/</a> (888) 852-2212. ' +
