@@ -327,7 +327,6 @@
   // "Save as PDF" from the browser's print dialog to get a
   // borrower-friendly PDF.
 
-  const PDF_BUTTON_ATTR = 'data-zhl-buydown-pdf-btn';
   const BRANDED_PDF_BUTTON_ATTR = 'data-zhl-buydown-pdf-branded-btn';
 
   function isConventionalCard(card) {
@@ -373,44 +372,19 @@
 
   function ensureBuydownPdfButton() {
     const generateBtn = findGeneratePdfButton();
-    const existing = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
     const existingBranded = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
     if (!generateBtn) {
-      if (existing) existing.remove();
       if (existingBranded) existingBranded.remove();
       return;
     }
-    if (!existing) {
-      const ab = findActionBarFor(generateBtn);
-      if (!ab || !ab.container || !ab.anchor) return;
-      const btn = document.createElement('button');
-      btn.setAttribute(PDF_BUTTON_ATTR, '1');
-      btn.type = 'button';
-      btn.textContent = '2-1 Buydown PDF';
-      btn.style.cssText =
-        'display:inline-flex;align-items:center;justify-content:center;' +
-        'background:#006aff;color:#fff;border:1px solid #006aff;' +
-        'padding:8px 16px;border-radius:4px;' +
-        'font:600 13px/1 Arial,Helvetica,sans-serif;cursor:pointer;' +
-        'margin-right:8px;';
-      btn.addEventListener('mouseenter', function () { if (!btn.disabled) btn.style.background = '#0056d2'; });
-      btn.addEventListener('mouseleave', function () { btn.style.background = btn.disabled ? '#94a3b8' : '#006aff'; });
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        onBuydownPdfClick();
-      });
-      ab.container.insertBefore(btn, ab.anchor);
-    }
-    // Second button — branded borrower-facing PDF.
-    let brandedBtn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+    let brandedBtn = existingBranded;
     if (!brandedBtn) {
       const ab = findActionBarFor(generateBtn);
       if (ab && ab.container && ab.anchor) {
         brandedBtn = document.createElement('button');
         brandedBtn.setAttribute(BRANDED_PDF_BUTTON_ATTR, '1');
         brandedBtn.type = 'button';
-        brandedBtn.textContent = '2-1 Buydown PDF (Branded)';
+        brandedBtn.textContent = '2-1 Buydown PDF';
         brandedBtn.style.cssText =
           'display:inline-flex;align-items:center;justify-content:center;' +
           'background:#006aff;color:#fff;border:1px solid #006aff;' +
@@ -431,8 +405,8 @@
   }
 
   function updateBuydownPdfButtonState() {
-    const btn = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
-    if (!btn) return;
+    const brandedBtn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+    if (!brandedBtn) return;
     const eligible = findEligibleSelectedScenarios();
     // Mirror LOP's own Generate PDF disabled state. When a selected
     // scenario is stale ("RE-PRICE" pill in the corner), LOP disables
@@ -454,39 +428,31 @@
         return false;
       })()
     );
-    const brandedBtn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
-    function disableOne(b, reason) {
-      if (!b) return;
-      b.disabled = true;
-      b.style.opacity = '0.55';
-      b.style.background = '#94a3b8';
-      b.style.borderColor = '#94a3b8';
-      b.style.cursor = 'not-allowed';
-      b.title = reason;
+    function disable(reason) {
+      brandedBtn.disabled = true;
+      brandedBtn.style.opacity = '0.55';
+      brandedBtn.style.background = '#94a3b8';
+      brandedBtn.style.borderColor = '#94a3b8';
+      brandedBtn.style.cursor = 'not-allowed';
+      brandedBtn.title = reason;
     }
-    function enableOne(b, tooltip) {
-      if (!b) return;
-      b.disabled = false;
-      b.style.opacity = '1';
-      b.style.background = '#006aff';
-      b.style.borderColor = '#006aff';
-      b.style.cursor = 'pointer';
-      b.title = tooltip;
+    function enable(tooltip) {
+      brandedBtn.disabled = false;
+      brandedBtn.style.opacity = '1';
+      brandedBtn.style.background = '#006aff';
+      brandedBtn.style.borderColor = '#006aff';
+      brandedBtn.style.cursor = 'pointer';
+      brandedBtn.title = tooltip;
     }
     if (eligible.length === 0) {
-      const r = 'Select at least one Conventional scenario to enable. ZHL doesn\'t offer 2-1 buydowns on FHA / VA / USDA / Jumbo.';
-      disableOne(btn, r);
-      disableOne(brandedBtn, r);
+      disable('Select at least one Conventional scenario to enable. ZHL doesn\'t offer 2-1 buydowns on FHA / VA / USDA / Jumbo.');
       return;
     }
     if (generateDisabled) {
-      const r = 'Re-price the selected scenario before generating a Buydown PDF — the pricing is currently stale.';
-      disableOne(btn, r);
-      disableOne(brandedBtn, r);
+      disable('Re-price the selected scenario before generating a Buydown PDF — the pricing is currently stale.');
       return;
     }
-    enableOne(btn, 'Generate a quick 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).');
-    enableOne(brandedBtn, 'Generate a borrower-facing branded 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).');
+    enable('Generate a 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).');
   }
 
   function computeBuydownForCard(card) {
@@ -530,160 +496,10 @@
     return sign + '$' + abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
-  function renderBuydownPdfHtml(scenarios) {
-    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const multi = scenarios.length > 1;
-    const gridClass = multi ? 'scenarios-grid scenarios-multi' : 'scenarios-grid scenarios-single';
-    let scenarioHtml = '';
-    for (const s of scenarios) {
-      const escrow = s.escrow || 0;
-      const escrowSuffix = escrow > 0 ? '' : ' P&amp;I';
-      const closingBlock = isFinite(s.closingCosts) ? (
-        '<h3>Closing Cost Impact</h3>' +
-        '<table>' +
-          '<tr><td>Current total closing costs</td><td>' + fmtMoneyHtml(s.closingCosts) + '</td></tr>' +
-          '<tr><td>Current seller credit</td><td>' + fmtMoneyHtml(s.sellerCredit) + '</td></tr>' +
-          '<tr><td>Current net closing costs</td><td>' + fmtMoneyHtml(s.closingCosts - s.sellerCredit) + '</td></tr>' +
-          '<tr><td>+ 2-1 buydown cost</td><td>' + fmtMoneyHtml(s.buydownCost) + '</td></tr>' +
-          '<tr class="emphasis"><td>= New total closing costs</td><td>' + fmtMoneyHtml(s.closingCosts + s.buydownCost) + '</td></tr>' +
-          '<tr class="emphasis"><td>= New net closing costs</td><td>' + fmtMoneyHtml(s.closingCosts + s.buydownCost - s.sellerCredit) + '</td></tr>' +
-        '</table>'
-      ) : '';
-      scenarioHtml +=
-        '<section class="scenario">' +
-          '<h2>' + escapeHtml(s.title) + '</h2>' +
-          '<table>' +
-            '<tr><th colspan="2">Loan</th></tr>' +
-            '<tr><td>Loan amount</td><td>' + fmtMoneyHtml(s.loanAmount) + '</td></tr>' +
-            '<tr><td>Note rate (year 3+)</td><td>' + s.rate.toFixed(3) + '%</td></tr>' +
-            '<tr><td>Term</td><td>' + (s.term / 12) + ' years</td></tr>' +
-          '</table>' +
-          '<h3>Monthly Payments</h3>' +
-          '<table>' +
-            '<tr><th>Year</th><th>Rate</th><th>Monthly payment</th></tr>' +
-            '<tr><td>Year 1</td><td>' + s.y1Rate.toFixed(3) + '%</td><td>' + fmtMoneyHtml(s.y1Pmt + escrow) + escrowSuffix + '</td></tr>' +
-            '<tr><td>Year 2</td><td>' + s.y2Rate.toFixed(3) + '%</td><td>' + fmtMoneyHtml(s.y2Pmt + escrow) + escrowSuffix + '</td></tr>' +
-            '<tr><td>Year 3+</td><td>' + s.rate.toFixed(3) + '%</td><td>' + fmtMoneyHtml(s.fullPmt + escrow) + escrowSuffix + '</td></tr>' +
-          '</table>' +
-          (escrow > 0 ? '' : '<p class="note">Payments shown are P&amp;I only — taxes and insurance not included.</p>') +
-          '<h3>Buydown Cost</h3>' +
-          '<table>' +
-            '<tr><td>Year 1 savings (12 &times; monthly delta)</td><td>' + fmtMoneyHtml(s.y1Savings) + '</td></tr>' +
-            '<tr><td>Year 2 savings (12 &times; monthly delta)</td><td>' + fmtMoneyHtml(s.y2Savings) + '</td></tr>' +
-            '<tr class="emphasis"><td>Total buydown cost</td><td>' + fmtMoneyHtml(s.buydownCost) + '</td></tr>' +
-            '<tr><td>% of loan amount</td><td>' + (isFinite(s.buydownPct) ? s.buydownPct.toFixed(2) + '%' : '&mdash;') + '</td></tr>' +
-          '</table>' +
-          closingBlock +
-        '</section>';
-    }
-    return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-      '<title>2-1 Buydown Analysis &mdash; ' + escapeHtml(today) + '</title>' +
-      '<style>' +
-      // @page handles paper SIZE only. Margins come from body padding
-      // below — Chrome's print dialog can override @page margin if
-      // the user picks "Margins: None" in the print dialog, which
-      // left earlier versions of this PDF flush against the page
-      // edge. Body padding is part of the layout, so it survives
-      // any Margins setting the user picks.
-      '@page { size: letter; margin: 0; }' +
-      // body padding handles BOTH the on-screen view of the new
-      // tab AND the printed output's white-space-from-edge.
-      // max-width caps the on-screen render on wide monitors so it
-      // matches what gets printed.
-      'body { font: 10.5pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; padding: 0.6in 0.75in; max-width: 8.5in; box-sizing: border-box; }' +
-      'header { border-bottom: 3px solid #006aff; padding-bottom: 8pt; margin-bottom: 14pt; }' +
-      'header h1 { margin: 0; font-size: 17pt; color: #006aff; }' +
-      'header .date { color: #6b7280; font-size: 9.5pt; margin-top: 3pt; }' +
-      'header .intro { color: #374151; font-size: 9.5pt; margin-top: 8pt; max-width: 5.6in; }' +
-      '.scenario { page-break-inside: avoid; }' +
-      '.scenario h2 { margin: 0 0 8pt; font-size: 12.5pt; background: #f3f4f6; padding: 5pt 10pt; border-left: 4pt solid #006aff; }' +
-      '.scenario h3 { margin: 12pt 0 3pt; font-size: 10.5pt; color: #006aff; }' +
-      '.scenario .note { font-size: 8.5pt; color: #6b7280; font-style: italic; margin: 2pt 0 4pt; }' +
-      // Single-scenario layout: one centered column. Cap table width
-      // so labels and values stay close instead of being flex-pushed
-      // to opposite ends of the 7-inch printable area.
-      '.scenarios-single .scenario { margin-bottom: 14pt; }' +
-      '.scenarios-single table { width: 4.6in; max-width: 100%; border-collapse: collapse; margin: 0 0 4pt; }' +
-      // Multi-scenario layout: two-column side-by-side. Uses
-      // inline-block (more reliable for print pagination than CSS
-      // grid in most browsers). Tighter type so each column fits.
-      '.scenarios-multi { font-size: 0; /* eliminate inline-block whitespace */ }' +
-      '.scenarios-multi .scenario {' +
-        ' display: inline-block;' +
-        ' width: calc(50% - 0.18in);' +
-        ' margin-right: 0.32in;' +
-        ' margin-bottom: 16pt;' +
-        ' vertical-align: top;' +
-        ' font-size: 9.5pt;' +
-      '}' +
-      '.scenarios-multi .scenario:nth-child(2n) { margin-right: 0; }' +
-      '.scenarios-multi .scenario h2 { font-size: 11pt; padding: 4pt 8pt; }' +
-      '.scenarios-multi .scenario h3 { margin: 10pt 0 3pt; font-size: 9.5pt; }' +
-      '.scenarios-multi table { width: 100%; max-width: none; border-collapse: collapse; margin: 0 0 3pt; font-size: 9pt; }' +
-      // Generic table styling applies to both layouts.
-      'table { border-collapse: collapse; }' +
-      'table th { font-size: 9pt; color: #6b7280; text-align: left; padding: 3pt 8pt; border-bottom: 1px solid #e5e7eb; font-weight: 600; }' +
-      'table th:last-child { text-align: right; }' +
-      'table td { padding: 3pt 8pt; border-bottom: 1px solid #f3f4f6; }' +
-      'table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }' +
-      'tr.emphasis td { font-weight: 700; border-top: 1pt solid #006aff; }' +
-      'footer { margin-top: 22pt; padding-top: 8pt; border-top: 1px solid #e5e7eb; font-size: 8.5pt; color: #6b7280; }' +
-      '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
-      '</style></head><body>' +
-      '<header>' +
-        '<h1>2-1 Temporary Buydown Analysis</h1>' +
-        '<div class="date">Prepared ' + escapeHtml(today) + '</div>' +
-        '<div class="intro">A 2-1 temporary buydown lowers the interest rate by 2.000% in year 1 and 1.000% in year 2, returning to the full note rate in year 3 and beyond. The total buydown cost is typically funded as a closing-cost credit by the seller or builder.</div>' +
-      '</header>' +
-      '<div class="' + gridClass + '">' + scenarioHtml + '</div>' +
-      '<footer>This worksheet is for illustration only. Final pricing, rate, and closing costs are subject to credit approval and underwriting review. Not a commitment to lend.</footer>' +
-      '</body></html>';
-  }
-
-  function openBuydownPdfWindow(scenarios) {
-    const html = renderBuydownPdfHtml(scenarios);
-    const w = window.open('', '_blank');
-    if (!w) {
-      alert('Could not open print window. Please allow popups for this site and try again.');
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    // Wait one tick for layout/fonts, then trigger the print dialog.
-    setTimeout(function () {
-      try { w.focus(); w.print(); } catch (_) {}
-    }, 400);
-  }
-
-  function onBuydownPdfClick() {
-    // Belt-and-suspenders: if the button reports as disabled (we
-    // grey it out via updateBuydownPdfButtonState whenever Generate
-    // PDF is disabled / nothing eligible is selected) the click
-    // handler must also bail. Disabled <button>s still fire click
-    // under some keyboard paths and via JS-triggered clicks.
-    const btn = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
-    if (btn && btn.disabled) return;
-    const eligible = findEligibleSelectedScenarios();
-    if (!eligible.length) return;
-    const scenarios = eligible.map(computeBuydownForCard);
-    track('buydown_pdf_generate', { count: scenarios.length });
-    openBuydownPdfWindow(scenarios);
-  }
-
-  // Lightweight telemetry hook (matches the existing `track` calls).
-  function track(event, props) {
-    try { chrome.runtime.sendMessage({ type: 'TRACK', event: event, props: props || {} }); } catch (_) {}
-  }
-
-  // ---- Branded borrower-facing PDF ------------------------------------
-  //
-  // Mirrors Zillow's official "Loan Comparison" PDF layout: header
-  // with title + ZHL wordmark + issued timestamp, centered disclaimer
-  // banner, side-by-side comparison columns (one per scenario), LO
-  // contact info box, and a compliance footer. Pulls the LO's name /
-  // NMLS / phone / email from chrome.storage.local (filled in on the
-  // setup page).
+  // ---- Borrower-facing PDF --------------------------------------------
+  // Header with title + issued timestamp, centered disclaimer banner,
+  // side-by-side comparison columns (one per scenario), and a compliance
+  // footer. LO contact box is currently not rendered.
 
   function readLoProfile() {
     return new Promise(function (resolve) {
@@ -736,17 +552,19 @@
     rowsHtml += row('Year 3+ rate', function (s) { return pct(s.rate); });
     rowsHtml += spacer;
     // --- Payments ---
-    rowsHtml += row('Year 1 payment', function (s) {
-      const v = s.y1Pmt + (s.escrow || 0);
-      return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
+    // PITIA when escrow > 0 (taxes + insurance + assoc. dues bundled in
+    // from LOP's PITI column), P&I when escrow is unknown / zero. The
+    // suffix lives in the row label so columns stay numerically clean.
+    const allEscrow = scenarios.every(function (s) { return (s.escrow || 0) > 0; });
+    const paySuffix = allEscrow ? ' (PITIA)' : ' (P&amp;I)';
+    rowsHtml += row('Year 1 payment' + paySuffix, function (s) {
+      return f(s.y1Pmt + (s.escrow || 0));
     });
-    rowsHtml += row('Year 2 payment', function (s) {
-      const v = s.y2Pmt + (s.escrow || 0);
-      return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
+    rowsHtml += row('Year 2 payment' + paySuffix, function (s) {
+      return f(s.y2Pmt + (s.escrow || 0));
     });
-    rowsHtml += row('Year 3+ payment', function (s) {
-      const v = s.fullPmt + (s.escrow || 0);
-      return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
+    rowsHtml += row('Year 3+ payment' + paySuffix, function (s) {
+      return f(s.fullPmt + (s.escrow || 0));
     }, { emphasis: true });
     rowsHtml += spacer;
     // --- Savings / buydown cost ---
@@ -791,8 +609,6 @@
       '.zhl-hdr h1 { margin: 0; font-size: 18pt; color: #1f2937; font-weight: 700; }' +
       '.zhl-hdr .borrower { color: #6b7280; font-size: 10pt; margin-top: 2pt; }' +
       '.zhl-hdr .brand-block { text-align: right; }' +
-      '.zhl-hdr .brand { font-size: 14pt; color: #006aff; font-weight: 700; letter-spacing: 0.2pt; }' +
-      '.zhl-hdr .brand .home { color: #1f2937; font-weight: 600; }' +
       '.zhl-hdr .issued { color: #6b7280; font-size: 8.5pt; margin-top: 3pt; }' +
       // Banner
       '.banner { text-align: center; padding: 8pt 4pt 12pt; color: #374151; font-size: 10pt; }' +
@@ -820,7 +636,6 @@
       '.lo-box .lo-tagline { font-size: 9pt; color: #1f2937; font-weight: 600; margin-top: 6pt; }' +
       // Compliance footer
       '.compliance { margin-top: 14pt; font-size: 7.5pt; color: #6b7280; line-height: 1.4; }' +
-      '.compliance .pageno { text-align: center; margin-top: 8pt; font-size: 8.5pt; color: #1f2937; }' +
       '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
       '</style></head><body>' +
       '<header class="zhl-hdr">' +
@@ -829,20 +644,14 @@
           '<div class="borrower">' + scenarios.length + ' scenario' + (scenarios.length === 1 ? '' : 's') + '</div>' +
         '</div>' +
         '<div class="brand-block">' +
-          '<div class="brand">Zillow<span class="home">HomeLoans</span></div>' +
           '<div class="issued">Issued ' + escapeHtml(dateStr) + '</div>' +
         '</div>' +
       '</header>' +
       '<div class="banner">Your actual rate, payment and costs could be higher: get an official loan estimate before choosing a loan.</div>' +
       '<table class="cmp">' + rowsHtml + '</table>' +
-      // (LO contact box intentionally omitted per user preference —
-      // the existing loBox builder is left in place for future
-      // re-enablement but not rendered here.)
       '<div class="compliance">' +
-        'Zillow Home Loans, LLC, NMLS # 10287 | 2600 Michelson Drive, Suite 1201, Irvine, CA 92612. An Equal Housing Lender. This is not a commitment to lend. ' +
-        'About Zillow Home Loans, LLC at <a href="https://www.zillowhomeloans.com/">https://www.zillowhomeloans.com/</a> (888) 852-2212. ' +
-        'Mortgage interest rates can change daily, sometimes hourly. A 2-1 temporary buydown lowers the interest rate by 2.000% in year 1 and 1.000% in year 2, returning to the full note rate in year 3 and beyond. The buydown cost is typically funded as a closing-cost credit by the seller or builder.' +
-        '<div class="pageno">Page 1 of 1</div>' +
+        'A 2-1 temporary buydown lowers the interest rate by 2.000% in year 1 and 1.000% in year 2, returning to the full note rate in year 3 and beyond. The buydown cost is typically funded as a closing-cost credit by the seller or builder. ' +
+        'This worksheet is for illustration only — final pricing, rate, and closing costs are subject to credit approval and underwriting review. Not a commitment to lend.' +
       '</div>' +
       '</body></html>';
   }
@@ -879,8 +688,6 @@
       document.querySelectorAll('.' + WRAPPER_CLASS).forEach(function (w) { w.remove(); });
       const panel = document.getElementById(PANEL_ID);
       if (panel) panel.remove();
-      const pdfBtn = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
-      if (pdfBtn) pdfBtn.remove();
       const brandedBtn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
       if (brandedBtn) brandedBtn.remove();
       return;
