@@ -328,6 +328,7 @@
   // borrower-friendly PDF.
 
   const PDF_BUTTON_ATTR = 'data-zhl-buydown-pdf-btn';
+  const BRANDED_PDF_BUTTON_ATTR = 'data-zhl-buydown-pdf-branded-btn';
 
   function isConventionalCard(card) {
     return /\bConf\b/i.test(getCardTitle(card));
@@ -373,8 +374,10 @@
   function ensureBuydownPdfButton() {
     const generateBtn = findGeneratePdfButton();
     const existing = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
+    const existingBranded = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
     if (!generateBtn) {
       if (existing) existing.remove();
+      if (existingBranded) existingBranded.remove();
       return;
     }
     if (!existing) {
@@ -398,6 +401,31 @@
         onBuydownPdfClick();
       });
       ab.container.insertBefore(btn, ab.anchor);
+    }
+    // Second button — branded borrower-facing PDF.
+    let brandedBtn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+    if (!brandedBtn) {
+      const ab = findActionBarFor(generateBtn);
+      if (ab && ab.container && ab.anchor) {
+        brandedBtn = document.createElement('button');
+        brandedBtn.setAttribute(BRANDED_PDF_BUTTON_ATTR, '1');
+        brandedBtn.type = 'button';
+        brandedBtn.textContent = '2-1 Buydown PDF (Branded)';
+        brandedBtn.style.cssText =
+          'display:inline-flex;align-items:center;justify-content:center;' +
+          'background:#006aff;color:#fff;border:1px solid #006aff;' +
+          'padding:8px 16px;border-radius:4px;' +
+          'font:600 13px/1 Arial,Helvetica,sans-serif;cursor:pointer;' +
+          'margin-right:8px;';
+        brandedBtn.addEventListener('mouseenter', function () { if (!brandedBtn.disabled) brandedBtn.style.background = '#0056d2'; });
+        brandedBtn.addEventListener('mouseleave', function () { brandedBtn.style.background = brandedBtn.disabled ? '#94a3b8' : '#006aff'; });
+        brandedBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          onBrandedBuydownPdfClick();
+        });
+        ab.container.insertBefore(brandedBtn, ab.anchor);
+      }
     }
     updateBuydownPdfButtonState();
   }
@@ -426,28 +454,39 @@
         return false;
       })()
     );
-    function disable(reason) {
-      btn.disabled = true;
-      btn.style.opacity = '0.55';
-      btn.style.background = '#94a3b8';
-      btn.style.borderColor = '#94a3b8';
-      btn.style.cursor = 'not-allowed';
-      btn.title = reason;
+    const brandedBtn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+    function disableOne(b, reason) {
+      if (!b) return;
+      b.disabled = true;
+      b.style.opacity = '0.55';
+      b.style.background = '#94a3b8';
+      b.style.borderColor = '#94a3b8';
+      b.style.cursor = 'not-allowed';
+      b.title = reason;
+    }
+    function enableOne(b, tooltip) {
+      if (!b) return;
+      b.disabled = false;
+      b.style.opacity = '1';
+      b.style.background = '#006aff';
+      b.style.borderColor = '#006aff';
+      b.style.cursor = 'pointer';
+      b.title = tooltip;
     }
     if (eligible.length === 0) {
-      disable('Select at least one Conventional scenario to enable. ZHL doesn\'t offer 2-1 buydowns on FHA / VA / USDA / Jumbo.');
+      const r = 'Select at least one Conventional scenario to enable. ZHL doesn\'t offer 2-1 buydowns on FHA / VA / USDA / Jumbo.';
+      disableOne(btn, r);
+      disableOne(brandedBtn, r);
       return;
     }
     if (generateDisabled) {
-      disable('Re-price the selected scenario before generating a Buydown PDF — the pricing is currently stale.');
+      const r = 'Re-price the selected scenario before generating a Buydown PDF — the pricing is currently stale.';
+      disableOne(btn, r);
+      disableOne(brandedBtn, r);
       return;
     }
-    btn.disabled = false;
-    btn.style.opacity = '1';
-    btn.style.background = '#006aff';
-    btn.style.borderColor = '#006aff';
-    btn.style.cursor = 'pointer';
-    btn.title = 'Generate a 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).';
+    enableOne(btn, 'Generate a quick 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).');
+    enableOne(brandedBtn, 'Generate a borrower-facing branded 2-1 Buydown PDF for ' + eligible.length + ' selected Conventional scenario(s).');
   }
 
   function computeBuydownForCard(card) {
@@ -637,6 +676,184 @@
     try { chrome.runtime.sendMessage({ type: 'TRACK', event: event, props: props || {} }); } catch (_) {}
   }
 
+  // ---- Branded borrower-facing PDF ------------------------------------
+  //
+  // Mirrors Zillow's official "Loan Comparison" PDF layout: header
+  // with title + ZHL wordmark + issued timestamp, centered disclaimer
+  // banner, side-by-side comparison columns (one per scenario), LO
+  // contact info box, and a compliance footer. Pulls the LO's name /
+  // NMLS / phone / email from chrome.storage.local (filled in on the
+  // setup page).
+
+  function readLoProfile() {
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.get(['lo_name', 'lo_nmls', 'lo_phone', 'lo_email'], function (data) {
+          resolve({
+            name: (data && data.lo_name) || '',
+            nmls: (data && data.lo_nmls) || '',
+            phone: (data && data.lo_phone) || '',
+            email: (data && data.lo_email) || ''
+          });
+        });
+      } catch (_) { resolve({ name: '', nmls: '', phone: '', email: '' }); }
+    });
+  }
+
+  function renderBuydownPdfHtmlBranded(scenarios, lo) {
+    const now = new Date();
+    const dateStr = now.toLocaleString('en-US', {
+      month: 'numeric', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit'
+    }).replace(',', '');
+    // Compose the comparison rows. Each row has a label + one value
+    // per scenario column. Buydown-rows-only per the user's
+    // selection at design time.
+    function row(label, getValue, opts) {
+      opts = opts || {};
+      const cells = scenarios.map(function (s) {
+        const v = getValue(s);
+        return '<td' + (opts.emphasis ? ' class="emphasis"' : '') + '>' + (v == null ? '&mdash;' : v) + '</td>';
+      }).join('');
+      return '<tr' + (opts.emphasis ? ' class="emphasis"' : '') + '><th>' + label + '</th>' + cells + '</tr>';
+    }
+    function f(n) { return fmtMoneyHtml(n); }
+    function pct(n) { return isFinite(n) ? n.toFixed(3) + '%' : '&mdash;'; }
+    const includeClosing = scenarios.some(function (s) { return isFinite(s.closingCosts); });
+    let rowsHtml = '';
+    rowsHtml += row('Loan program', function (s) { return '<strong>' + escapeHtml(s.title) + '</strong>'; });
+    rowsHtml += row('Loan amount', function (s) { return f(s.loanAmount); });
+    rowsHtml += row('Term', function (s) { return (s.term / 12) + ' years'; });
+    rowsHtml += row('Note rate (Year 3+)', function (s) { return pct(s.rate); });
+    rowsHtml += row('Year 1 rate', function (s) { return pct(s.y1Rate); });
+    rowsHtml += row('Year 2 rate', function (s) { return pct(s.y2Rate); });
+    rowsHtml += row('Year 1 payment', function (s) {
+      const v = s.y1Pmt + (s.escrow || 0);
+      return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
+    });
+    rowsHtml += row('Year 2 payment', function (s) {
+      const v = s.y2Pmt + (s.escrow || 0);
+      return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
+    });
+    rowsHtml += row('Year 3+ payment', function (s) {
+      const v = s.fullPmt + (s.escrow || 0);
+      return f(v) + (s.escrow > 0 ? '' : ' P&amp;I');
+    }, { emphasis: true });
+    rowsHtml += row('Year 1 savings', function (s) { return f(s.y1Savings); });
+    rowsHtml += row('Year 2 savings', function (s) { return f(s.y2Savings); });
+    rowsHtml += row('Total buydown cost', function (s) { return f(s.buydownCost); }, { emphasis: true });
+    rowsHtml += row('% of loan amount', function (s) { return isFinite(s.buydownPct) ? s.buydownPct.toFixed(2) + '%' : '&mdash;'; });
+    if (includeClosing) {
+      rowsHtml += row('Current closing costs', function (s) { return isFinite(s.closingCosts) ? f(s.closingCosts) : '&mdash;'; });
+      rowsHtml += row('+ 2-1 buydown cost', function (s) { return isFinite(s.closingCosts) ? f(s.buydownCost) : '&mdash;'; });
+      rowsHtml += row('New total closing costs', function (s) {
+        return isFinite(s.closingCosts) ? f(s.closingCosts + s.buydownCost) : '&mdash;';
+      }, { emphasis: true });
+    }
+
+    // LO contact line — only render the segments the user actually
+    // filled in on the setup page.
+    const loSegs = [];
+    if (lo.name) loSegs.push('<strong>' + escapeHtml(lo.name) + '</strong>');
+    if (lo.nmls) loSegs.push('NMLS ID# ' + escapeHtml(lo.nmls));
+    if (lo.phone) loSegs.push('P ' + escapeHtml(lo.phone));
+    if (lo.email) loSegs.push('E ' + escapeHtml(lo.email));
+    const loLine = loSegs.length
+      ? '<span class="phone-icon">☎</span> Questions? ' + loSegs.join(' &nbsp;|&nbsp; ')
+      : '';
+    const loBox = loLine
+      ? ('<div class="lo-box">' +
+          '<div class="lo-line">' + loLine + '</div>' +
+          '<div class="lo-tagline">Mortgage interest rates can change daily, sometimes hourly. Contact your loan officer today!</div>' +
+        '</div>')
+      : '';
+
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+      '<title>2-1 Buydown Analysis — ' + escapeHtml(dateStr) + '</title>' +
+      '<style>' +
+      '@page { size: letter; margin: 0; }' +
+      'body { font: 10pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; padding: 0.55in 0.7in; max-width: 8.5in; box-sizing: border-box; }' +
+      // Header
+      '.zhl-hdr { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 8pt; border-bottom: 1.5pt solid #006aff; }' +
+      '.zhl-hdr h1 { margin: 0; font-size: 18pt; color: #1f2937; font-weight: 700; }' +
+      '.zhl-hdr .borrower { color: #6b7280; font-size: 10pt; margin-top: 2pt; }' +
+      '.zhl-hdr .brand-block { text-align: right; }' +
+      '.zhl-hdr .brand { font-size: 14pt; color: #006aff; font-weight: 700; letter-spacing: 0.2pt; }' +
+      '.zhl-hdr .brand .home { color: #1f2937; font-weight: 600; }' +
+      '.zhl-hdr .issued { color: #6b7280; font-size: 8.5pt; margin-top: 3pt; }' +
+      // Banner
+      '.banner { text-align: center; padding: 8pt 4pt 12pt; color: #374151; font-size: 10pt; }' +
+      // Comparison table
+      'table.cmp { width: 100%; border-collapse: collapse; margin-top: 4pt; }' +
+      'table.cmp th { text-align: left; padding: 5pt 8pt; font-size: 9.5pt; font-weight: 600; color: #1f2937; }' +
+      'table.cmp tr.head th { color: #1f2937; background: #f3f4f6; }' +
+      'table.cmp td { padding: 5pt 8pt; font-size: 9.5pt; text-align: right; font-variant-numeric: tabular-nums; color: #1f2937; }' +
+      'table.cmp tr:nth-child(even) th, table.cmp tr:nth-child(even) td { background: #f9fafb; }' +
+      'table.cmp tr.emphasis th, table.cmp tr.emphasis td { font-weight: 700; color: #006aff; }' +
+      'table.cmp tr.emphasis td { border-top: 1pt solid #006aff; border-bottom: 1pt solid #006aff; }' +
+      'table.cmp tr.head th { font-weight: 700; }' +
+      // Special handling for the first row (Loan program) — it carries the column headers
+      // visually distinct from the data rows.
+      'table.cmp tr:first-child th, table.cmp tr:first-child td { border-bottom: 1.5pt solid #d1d5db; padding-top: 8pt; padding-bottom: 8pt; font-size: 10pt; }' +
+      // LO contact box
+      '.lo-box { margin-top: 16pt; border: 1pt solid #006aff; border-radius: 4pt; padding: 10pt 14pt; text-align: center; }' +
+      '.lo-box .lo-line { font-size: 10pt; color: #1f2937; }' +
+      '.lo-box .lo-line strong { color: #1f2937; }' +
+      '.lo-box .lo-line .phone-icon { color: #006aff; margin-right: 4pt; }' +
+      '.lo-box .lo-tagline { font-size: 9pt; color: #1f2937; font-weight: 600; margin-top: 6pt; }' +
+      // Compliance footer
+      '.compliance { margin-top: 14pt; font-size: 7.5pt; color: #6b7280; line-height: 1.4; }' +
+      '.compliance .pageno { text-align: center; margin-top: 8pt; font-size: 8.5pt; color: #1f2937; }' +
+      '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
+      '</style></head><body>' +
+      '<header class="zhl-hdr">' +
+        '<div>' +
+          '<h1>2-1 Buydown Analysis</h1>' +
+          '<div class="borrower">' + scenarios.length + ' scenario' + (scenarios.length === 1 ? '' : 's') + '</div>' +
+        '</div>' +
+        '<div class="brand-block">' +
+          '<div class="brand">Zillow<span class="home">HomeLoans</span></div>' +
+          '<div class="issued">Issued ' + escapeHtml(dateStr) + '</div>' +
+        '</div>' +
+      '</header>' +
+      '<div class="banner">Your actual rate, payment and costs could be higher: get an official loan estimate before choosing a loan.</div>' +
+      '<table class="cmp">' + rowsHtml + '</table>' +
+      loBox +
+      '<div class="compliance">' +
+        'Zillow Home Loans, LLC, NMLS # 10287 | 2600 Michelson Drive, Suite 1201, Irvine, CA 92612. An Equal Housing Lender. This is not a commitment to lend. ' +
+        'About Zillow Home Loans, LLC at <a href="https://www.zillowhomeloans.com/">https://www.zillowhomeloans.com/</a> (888) 852-2212. ' +
+        'Mortgage interest rates can change daily, sometimes hourly. A 2-1 temporary buydown lowers the interest rate by 2.000% in year 1 and 1.000% in year 2, returning to the full note rate in year 3 and beyond. The buydown cost is typically funded as a closing-cost credit by the seller or builder.' +
+        '<div class="pageno">Page 1 of 1</div>' +
+      '</div>' +
+      '</body></html>';
+  }
+
+  function openBuydownPdfWindowBranded(html) {
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Could not open print window. Please allow popups for this site and try again.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    setTimeout(function () {
+      try { w.focus(); w.print(); } catch (_) {}
+    }, 400);
+  }
+
+  async function onBrandedBuydownPdfClick() {
+    const btn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+    if (btn && btn.disabled) return;
+    const eligible = findEligibleSelectedScenarios();
+    if (!eligible.length) return;
+    const scenarios = eligible.map(computeBuydownForCard);
+    const lo = await readLoProfile();
+    const html = renderBuydownPdfHtmlBranded(scenarios, lo);
+    track('buydown_pdf_generate_branded', { count: scenarios.length });
+    openBuydownPdfWindowBranded(html);
+  }
+
   function scan() {
     if (!isOnScenariosPage()) {
       // Navigated away — clean up any stale buttons.
@@ -645,6 +862,8 @@
       if (panel) panel.remove();
       const pdfBtn = document.querySelector('[' + PDF_BUTTON_ATTR + ']');
       if (pdfBtn) pdfBtn.remove();
+      const brandedBtn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+      if (brandedBtn) brandedBtn.remove();
       return;
     }
     document.querySelectorAll(STYLED_CARD_SELECTOR).forEach(injectButton);

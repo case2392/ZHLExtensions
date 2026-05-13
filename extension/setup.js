@@ -64,4 +64,29 @@ document.querySelectorAll('input[data-feature]').forEach((input) => {
   });
 });
 
+// Loan Officer Profile — name / NMLS / phone / email used by
+// borrower-facing PDFs. Stored in chrome.storage.local under the
+// lo_* keys. Saves on input (debounced) so the user doesn't have
+// to click a Save button.
+const LO_FIELDS = ['lo_name', 'lo_nmls', 'lo_phone', 'lo_email'];
+async function loadLoProfile() {
+  const data = await chrome.storage.local.get(LO_FIELDS);
+  document.querySelectorAll('input[data-lo-field]').forEach((input) => {
+    const key = input.dataset.loField;
+    if (data[key] != null) input.value = data[key];
+  });
+}
+const loSaveTimers = {};
+document.querySelectorAll('input[data-lo-field]').forEach((input) => {
+  input.addEventListener('input', () => {
+    const key = input.dataset.loField;
+    clearTimeout(loSaveTimers[key]);
+    loSaveTimers[key] = setTimeout(async () => {
+      await chrome.storage.local.set({ [key]: input.value.trim() });
+      showStatus('Profile saved');
+    }, 400);
+  });
+});
+loadLoProfile();
+
 loadFeatureStates();

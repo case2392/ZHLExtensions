@@ -23,6 +23,41 @@
 
   <main class="modules">
 
+    <!-- ============== Section: Loan Officer Profile ============== -->
+    <section class="module-card" data-module data-profile>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Loan Officer Profile</h2>
+          <p class="module-runs-on">Stamped onto borrower-facing PDFs. Stored locally on this Chrome profile only.</p>
+        </div>
+      </div>
+      <div class="module-body">
+        <div class="module-screenshot" style="display:flex;flex-direction:column;gap:10px;align-items:stretch;width:340px;background:transparent;border:none;padding:0;">
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Name</span>
+            <input type="text" data-lo-field="lo_name" placeholder="e.g. Justin Case" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">NMLS ID</span>
+            <input type="text" data-lo-field="lo_nmls" placeholder="e.g. 2182068" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Phone</span>
+            <input type="tel" data-lo-field="lo_phone" placeholder="e.g. +1 913-845-9564" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Email</span>
+            <input type="email" data-lo-field="lo_email" placeholder="e.g. justinca@zillowhomeloans.com" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+        </div>
+        <ul class="module-features">
+          <li>These four fields appear in the footer of any borrower-facing PDF the extension generates (currently the <strong>2-1 Buydown PDF (Branded)</strong>).</li>
+          <li>Values are saved to <code>chrome.storage.local</code> on this Chrome profile only &mdash; they don&rsquo;t sync to other devices and never leave your browser.</li>
+          <li>If you leave a field blank, the corresponding line is omitted from the PDF footer rather than showing a placeholder.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: VA Calc + Student Loans ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
