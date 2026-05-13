@@ -89,4 +89,55 @@ document.querySelectorAll('input[data-lo-field]').forEach((input) => {
 });
 loadLoProfile();
 
+// "Pull from Salesforce" button — asks the SW to fetch the current user's
+// Name / Email / Phone from chatter/users/me and (best effort) NMLS from
+// a User custom field discovered via describe. Only fills inputs that
+// come back populated; never blanks out a value the user already typed.
+const loPullBtn = $('lo-pull-from-sf');
+const loPullStatus = $('lo-pull-status');
+function setLoPullStatus(text, color) {
+  if (!loPullStatus) return;
+  loPullStatus.textContent = text || '';
+  loPullStatus.style.color = color || '#6b7280';
+}
+function setInputValue(field, value) {
+  const input = document.querySelector(`input[data-lo-field="${field}"]`);
+  if (!input || value == null || String(value).trim() === '') return false;
+  input.value = String(value).trim();
+  return true;
+}
+if (loPullBtn) {
+  loPullBtn.addEventListener('click', async () => {
+    loPullBtn.disabled = true;
+    setLoPullStatus('Looking up…', '#6b7280');
+    try {
+      const resp = await chrome.runtime.sendMessage({ type: 'GET_SF_LO_PROFILE' });
+      if (!resp || !resp.ok) {
+        setLoPullStatus(resp && resp.error ? resp.error : 'Lookup failed', '#b91c1c');
+        return;
+      }
+      const filled = [];
+      const updates = {};
+      if (setInputValue('lo_name', resp.name))  { filled.push('Name');  updates.lo_name  = resp.name.trim(); }
+      if (setInputValue('lo_email', resp.email)) { filled.push('Email'); updates.lo_email = resp.email.trim(); }
+      if (setInputValue('lo_phone', resp.phone)) { filled.push('Phone'); updates.lo_phone = resp.phone.trim(); }
+      if (setInputValue('lo_nmls', resp.nmls))   { filled.push('NMLS');  updates.lo_nmls  = resp.nmls.trim(); }
+      if (Object.keys(updates).length) await chrome.storage.local.set(updates);
+      if (filled.length === 0) {
+        setLoPullStatus('Connected to Salesforce but nothing to fill.', '#b91c1c');
+      } else {
+        const missingNmls = !resp.nmls;
+        const note = missingNmls
+          ? ` (NMLS not found${resp.nmlsFieldName ? ` in field ${resp.nmlsFieldName}` : ''} — enter manually)`
+          : '';
+        setLoPullStatus(`Filled: ${filled.join(', ')}${note}`, '#15803d');
+      }
+    } catch (e) {
+      setLoPullStatus(String(e && e.message || e), '#b91c1c');
+    } finally {
+      loPullBtn.disabled = false;
+    }
+  });
+}
+
 loadFeatureStates();

@@ -310,6 +310,80 @@ async function lookupContactPhone(contactId) {
 }
 
 // -------------------------------------------------------------------------
+// Loan Officer Profile pulled from Salesforce.
+//
+// The setup page has Name / NMLS / Phone / Email inputs that get stamped
+// onto borrower-facing PDFs. Rather than make users type them, we can pull
+// most of it straight from Salesforce using the same session cookie the
+// Caller ID plumbing already uses.
+//
+//   - Name / Email / Phone: /chatter/users/me
+//   - NMLS: User object, custom field. The API name varies across orgs
+//     (NMLS_ID__c, NMLSId__c, NMLS_Number__c, etc.) so we describe the
+//     User object once, find any custom field whose label/name contains
+//     "NMLS", then SOQL the current user's record for it.
+// -------------------------------------------------------------------------
+
+let cachedNmlsFieldName = null;
+
+async function discoverNmlsField(host, apiVersion, sid) {
+  if (cachedNmlsFieldName) return cachedNmlsFieldName;
+  const url = `https://${host}/services/data/${apiVersion}/sobjects/User/describe`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${sid}`, Accept: "application/json" }
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const fields = (data && data.fields) || [];
+  const match = fields.find((f) => {
+    const n = String(f.name || "").toLowerCase();
+    const l = String(f.label || "").toLowerCase();
+    return /nmls/.test(n) || /nmls/.test(l);
+  });
+  cachedNmlsFieldName = match ? match.name : null;
+  return cachedNmlsFieldName;
+}
+
+async function fetchSalesforceLoProfile() {
+  const cfg = await getCallerIdConfig();
+  const sid = await getSessionId(cfg.myDomainHost);
+  if (!sid) {
+    return { error: "No Salesforce session. Log into Salesforce in this browser." };
+  }
+  const meUrl = `https://${cfg.myDomainHost}/services/data/${cfg.apiVersion}/chatter/users/me`;
+  const meRes = await fetch(meUrl, {
+    headers: { Authorization: `Bearer ${sid}`, Accept: "application/json" }
+  });
+  if (!meRes.ok) {
+    return { error: `Salesforce returned ${meRes.status} for chatter/users/me` };
+  }
+  const me = await meRes.json();
+  const userId = me && me.id;
+  const name = (me && (me.displayName || me.name)) || null;
+  const email = (me && me.email) ? String(me.email).trim() : null;
+  const phone = (me && (me.phoneNumber || me.mobilePhone)) || null;
+
+  let nmls = null;
+  let nmlsFieldName = null;
+  try {
+    nmlsFieldName = await discoverNmlsField(cfg.myDomainHost, cfg.apiVersion, sid);
+    if (nmlsFieldName && userId) {
+      const safeId = String(userId).replace(/[^a-zA-Z0-9]/g, "");
+      const soql = `SELECT ${nmlsFieldName} FROM User WHERE Id = '${safeId}' LIMIT 1`;
+      const data = await querySalesforce(cfg.myDomainHost, cfg.apiVersion, sid, soql);
+      const rec = data.records && data.records[0];
+      const raw = rec ? rec[nmlsFieldName] : null;
+      if (raw != null && String(raw).trim() !== "") nmls = String(raw).trim();
+    }
+  } catch (e) {
+    // Best-effort: if NMLS lookup fails we still return name/email/phone.
+    console.warn("[ZHL Pack] NMLS lookup failed", e && e.message || e);
+  }
+
+  return { name, email, phone, nmls, nmlsFieldName };
+}
+
+// -------------------------------------------------------------------------
 // Telemetry — sends usage events to a Google Apps Script web app (admin
 // dashboard). Configured ONCE: deploy apps-script/Code.gs as a web app,
 // paste the deployment URL into TELEMETRY_ENDPOINT below, and bump the
@@ -490,6 +564,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg && msg.type === "GET_CONTACT_PHONE") {
     lookupContactPhone(msg.contactId).then(
+      (result) => sendResponse(Object.assign({ ok: !result.error }, result)),
+      (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
+    );
+    return true;
+  }
+  if (msg && msg.type === "GET_SF_LO_PROFILE") {
+    fetchSalesforceLoProfile().then(
       (result) => sendResponse(Object.assign({ ok: !result.error }, result)),
       (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
     );

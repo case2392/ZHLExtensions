@@ -49,9 +49,14 @@
             <span style="margin-bottom:4px;font-weight:600;">Email</span>
             <input type="email" data-lo-field="lo_email" placeholder="e.g. justinca@zillowhomeloans.com" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
           </label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+            <button type="button" id="lo-pull-from-sf" style="padding:8px 12px;border:1px solid #0b5cab;background:#0b5cab;color:#fff;border-radius:4px;font:600 12px Arial,sans-serif;cursor:pointer;">Pull from Salesforce</button>
+            <span id="lo-pull-status" style="font:12px Arial,sans-serif;color:#6b7280;"></span>
+          </div>
         </div>
         <ul class="module-features">
           <li>These four fields appear in the footer of any borrower-facing PDF the extension generates (currently the <strong>2-1 Buydown PDF (Branded)</strong>).</li>
+          <li><strong>Pull from Salesforce</strong> fills Name / Email / Phone from your Salesforce profile and tries to auto-discover your NMLS field. You must be logged into Salesforce in this browser.</li>
           <li>Values are saved to <code>chrome.storage.local</code> on this Chrome profile only &mdash; they don&rsquo;t sync to other devices and never leave your browser.</li>
           <li>If you leave a field blank, the corresponding line is omitted from the PDF footer rather than showing a placeholder.</li>
         </ul>
