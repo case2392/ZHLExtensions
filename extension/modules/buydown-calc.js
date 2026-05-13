@@ -389,7 +389,12 @@
         // same height. Pulls font-size / padding / min-height from the
         // anchor's computed style so we follow LOP's design system
         // instead of hardcoding pixel values that drift if LOP retunes.
+        // Horizontal padding is widened (+8px each side on top of LOP's
+        // value) because our label is longer than "Generate PDF" and
+        // looked cramped at LOP's native padding.
         const cs = window.getComputedStyle(ab.anchor);
+        const padLeftPx = (parseFloat(cs.paddingLeft) || 20) + 8;
+        const padRightPx = (parseFloat(cs.paddingRight) || 20) + 8;
         brandedBtn.style.cssText =
           'display:inline-flex;align-items:center;justify-content:center;' +
           'background:#006aff;color:#fff;border:1px solid #006aff;' +
@@ -398,7 +403,7 @@
           'font-weight:' + (cs.fontWeight || '600') + ';' +
           'font-size:' + (cs.fontSize || '14px') + ';' +
           'line-height:' + (cs.lineHeight && cs.lineHeight !== 'normal' ? cs.lineHeight : '1.2') + ';' +
-          'padding:' + (cs.paddingTop || '10px') + ' ' + (cs.paddingRight || '20px') + ' ' + (cs.paddingBottom || '10px') + ' ' + (cs.paddingLeft || '20px') + ';' +
+          'padding:' + (cs.paddingTop || '10px') + ' ' + padRightPx + 'px ' + (cs.paddingBottom || '10px') + ' ' + padLeftPx + 'px;' +
           'min-height:' + (cs.height || '36px') + ';' +
           'box-sizing:border-box;';
         brandedBtn.addEventListener('mouseenter', function () { if (!brandedBtn.disabled) brandedBtn.style.background = '#0056d2'; });
