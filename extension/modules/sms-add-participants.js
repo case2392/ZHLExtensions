@@ -328,67 +328,27 @@
 
   // ---- Co-Borrower phone lookup via background worker -------------------
 
-  // Show a sticky red banner at the top of the Salesforce page when
-  // chrome.runtime is dead (the extension was reloaded/updated while
-  // this tab was open, orphaning the content script). There's no way
-  // to revive the port in-page — the user has to reload — but a
-  // one-click button at the top makes that trivial instead of
-  // leaving them puzzled by a generic "Extension context not
-  // available" alert.
-  let contextDeadBannerShown = false;
-  function showContextDeadBanner() {
-    if (contextDeadBannerShown) return;
-    contextDeadBannerShown = true;
-    if (document.getElementById('zhl-sms-context-dead')) return;
-    const bar = document.createElement('div');
-    bar.id = 'zhl-sms-context-dead';
-    bar.setAttribute('style',
-      'position:fixed;top:0;left:0;right:0;z-index:2147483646;' +
-      'background:#b91c1c;color:#fff;padding:12px 20px;' +
-      'font:600 13px/1.4 Arial,sans-serif;text-align:center;' +
-      'box-shadow:0 4px 12px rgba(0,0,0,.3);' +
-      'display:flex;align-items:center;justify-content:center;gap:14px;');
-    const msg = document.createElement('span');
-    msg.textContent = 'ZHL Pack was updated while this tab was open — the page needs to reload before the SMS / Caller ID buttons can talk to the extension again.';
-    const btn = document.createElement('button');
-    btn.textContent = 'Reload tab';
-    btn.setAttribute('style',
-      'background:#fff;color:#b91c1c;border:none;border-radius:4px;' +
-      'padding:6px 14px;font:700 13px/1 Arial,sans-serif;cursor:pointer;');
-    btn.addEventListener('click', function () { location.reload(); });
-    const close = document.createElement('button');
-    close.textContent = '×';
-    close.setAttribute('aria-label', 'Dismiss');
-    close.setAttribute('style',
-      'background:transparent;border:none;color:#fff;' +
-      'font:700 20px/1 sans-serif;cursor:pointer;padding:0 4px;');
-    close.addEventListener('click', function () { bar.remove(); });
-    bar.appendChild(msg);
-    bar.appendChild(btn);
-    bar.appendChild(close);
-    (document.body || document.documentElement).appendChild(bar);
-  }
-
   // Returns either a digits-only phone string, or an object
-  // { error: "..." } so the caller can show a specific reason.
+  // { error: "...", reloadNeeded?: true } so the caller can show a
+  // specific reason. reloadNeeded is set when chrome.runtime is
+  // dead — the user has to reload the page (Chrome only injects
+  // content scripts at navigation time, so there's no in-page
+  // recovery). Callers can format their own reload-prompt copy.
   function fetchContactPhone(contactId) {
     return new Promise((resolve) => {
       try {
         if (!chrome || !chrome.runtime || !chrome.runtime.id) {
-          showContextDeadBanner();
-          resolve({ error: 'Extension context not available — click "Reload tab" in the red banner at the top of the page.' });
+          resolve({ error: 'Page reload required to access Salesforce data.', reloadNeeded: true });
           return;
         }
         chrome.runtime.sendMessage({ type: 'GET_CONTACT_PHONE', contactId }, (resp) => {
           if (chrome.runtime.lastError) {
-            // sendMessage can also throw context-invalidated via
-            // lastError when the SW was replaced mid-flight.
-            if (/Extension context invalidated|message port closed|receiving end does not exist/i.test(chrome.runtime.lastError.message || '')) {
-              showContextDeadBanner();
-              resolve({ error: 'Extension context invalidated — click "Reload tab" in the red banner at the top of the page.' });
+            const lemsg = chrome.runtime.lastError.message || '';
+            if (/Extension context invalidated|message port closed|receiving end does not exist/i.test(lemsg)) {
+              resolve({ error: 'Page reload required to access Salesforce data.', reloadNeeded: true });
               return;
             }
-            resolve({ error: chrome.runtime.lastError.message || 'Background worker unreachable' });
+            resolve({ error: lemsg || 'Background worker unreachable' });
             return;
           }
           if (!resp) { resolve({ error: 'No response from background worker' }); return; }
@@ -401,12 +361,12 @@
           resolve(String(phone).replace(/\D/g, ''));
         });
       } catch (e) {
-        if (/Extension context invalidated|message port closed|receiving end does not exist/i.test(String(e && e.message || e))) {
-          showContextDeadBanner();
-          resolve({ error: 'Extension context invalidated — click "Reload tab" in the red banner at the top of the page.' });
+        const msg = String(e && e.message || e);
+        if (/Extension context invalidated|message port closed|receiving end does not exist/i.test(msg)) {
+          resolve({ error: 'Page reload required to access Salesforce data.', reloadNeeded: true });
           return;
         }
-        resolve({ error: String(e && e.message || e) });
+        resolve({ error: msg });
       }
     });
   }
@@ -479,17 +439,25 @@
         // "Buyer's Agent Phone" field if the API doesn't return one.
         let phoneToUse = null;
         let lookupError = null;
+        let needsReload = false;
         if (contactId) {
           b.textContent = 'Looking up mobile…';
           const lookup = await fetchContactPhone(contactId);
           if (typeof lookup === 'string') phoneToUse = lookup;
-          else if (lookup && lookup.error) lookupError = lookup.error;
+          else if (lookup && lookup.error) {
+            lookupError = lookup.error;
+            if (lookup.reloadNeeded) needsReload = true;
+          }
         }
         if (!phoneToUse) phoneToUse = fallbackPhone;
         if (!phoneToUse) {
           b.textContent = orig;
           b.disabled = false;
-          alert('Could not find a phone number for the Buyer’s Agent.' + (lookupError ? '\n\n' + lookupError : ''));
+          if (needsReload) {
+            alert("Buyer's Agent added and no reload detected. Please reload the page so the extension can pull their phone from Salesforce.");
+          } else {
+            alert('Could not find a phone number for the Buyer’s Agent.' + (lookupError ? '\n\n' + lookupError : ''));
+          }
           return;
         }
         b.textContent = 'Adding…';
@@ -514,8 +482,12 @@
         if (!phone) {
           b.textContent = orig;
           b.disabled = false;
-          const reason = lookup && lookup.error ? lookup.error : 'No phone returned.';
-          alert('Could not find a phone number for the Co-Borrower in Salesforce.\n\n' + reason);
+          if (lookup && lookup.reloadNeeded) {
+            alert('Co-borrower added and no reload detected. Please reload the page so the extension can pull their phone from Salesforce.');
+          } else {
+            const reason = lookup && lookup.error ? lookup.error : 'No phone returned.';
+            alert('Could not find a phone number for the Co-Borrower in Salesforce.\n\n' + reason);
+          }
           return;
         }
         b.textContent = 'Adding…';
@@ -557,16 +529,6 @@
   let scanCount = 0;
   function scan() {
     scanCount++;
-    // Proactive context-dead check: if our chrome.runtime port died
-    // (extension reloaded while this tab was open), surface the
-    // reload banner immediately instead of waiting for the user to
-    // click a button and hit the silent-fail path. We only act on
-    // it once chrome was ever defined here — i.e. the extension
-    // injected us cleanly at page load and the runtime later got
-    // invalidated.
-    if (typeof chrome !== 'undefined' && chrome.runtime && !chrome.runtime.id) {
-      showContextDeadBanner();
-    }
     // After ~3 seconds of failing to find the panel, dump the diagnostic
     // once so we can see what's actually visible to the script.
     if (scanCount > 15 && !diagDone) dumpDiag();
