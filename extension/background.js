@@ -23,6 +23,7 @@ const FEATURE_KEYS = [
   "feature_autoMessagingTab",
   "feature_scenarioSort",
   "feature_gmailDragAttachments",
+  "feature_gmailCallerId",
   "feature_taskBulkDelete",
   "feature_fhaBadges",
   "feature_fhaNprWarning",

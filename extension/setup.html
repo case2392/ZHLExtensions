@@ -346,6 +346,33 @@
       </div>
     </section>
 
+    <!-- ============== Module: Gmail Caller ID ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Gmail Caller ID for Switchboard emails</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_gmailCallerId" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/gmail-caller-id.svg" alt="Gmail open-email subject reading 'Do Not Reply: Incoming Text Message from +1 (336) 707-3765' with a blue 'Aspen Vaughn' Caller ID pill appended" />
+        </div>
+        <ul class="module-features">
+          <li>When Switchboard sends a <strong>&ldquo;Do Not Reply: Incoming Text Message from &lt;phone&gt;&rdquo;</strong> email and the phone number is in a Salesforce contact&rsquo;s <strong>Phone</strong> or <strong>Work Phone</strong> field (not Mobile), Switchboard&rsquo;s subject has no name &mdash; just the digits. This module fills the gap.</li>
+          <li>Looks the number up in Salesforce via the same Caller ID plumbing the Genesys / Salesforce widget uses (searches Phone <em>and</em> MobilePhone across Lead / Contact / Loan), then appends a blue <strong>Caller ID</strong> pill with the contact&rsquo;s name next to the subject.</li>
+          <li>Only triggers on phone-only subjects. Emails where Switchboard already put a name in the subject (because the number was in Mobile) are left alone &mdash; no duplicate badging.</li>
+          <li>Requires you to be signed into Salesforce in the same browser, same as the existing Caller ID module.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: FHA / Non-Permanent Resident Alien warning ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
