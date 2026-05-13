@@ -540,15 +540,18 @@
     return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
       '<title>2-1 Buydown Analysis &mdash; ' + escapeHtml(today) + '</title>' +
       '<style>' +
-      '@page { size: letter; margin: 0.85in 0.9in; }' +
-      // body padding handles the SCREEN view of the new tab (the
-      // user lands on this page before clicking print, and @page
-      // margins don't apply to on-screen rendering). The
-      // @media print block below strips body padding back to 0 so
-      // the @page margin owns the actual printed margins and we
-      // don't double-margin the output.
-      'body { font: 10.5pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; padding: 0.5in 0.65in; max-width: 8.5in; box-sizing: border-box; }' +
-      '@media print { body { padding: 0; max-width: none; } }' +
+      // @page handles paper SIZE only. Margins come from body padding
+      // below — Chrome's print dialog can override @page margin if
+      // the user picks "Margins: None" in the print dialog, which
+      // left earlier versions of this PDF flush against the page
+      // edge. Body padding is part of the layout, so it survives
+      // any Margins setting the user picks.
+      '@page { size: letter; margin: 0; }' +
+      // body padding handles BOTH the on-screen view of the new
+      // tab AND the printed output's white-space-from-edge.
+      // max-width caps the on-screen render on wide monitors so it
+      // matches what gets printed.
+      'body { font: 10.5pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; padding: 0.6in 0.75in; max-width: 8.5in; box-sizing: border-box; }' +
       'header { border-bottom: 3px solid #006aff; padding-bottom: 8pt; margin-bottom: 14pt; }' +
       'header h1 { margin: 0; font-size: 17pt; color: #006aff; }' +
       'header .date { color: #6b7280; font-size: 9.5pt; margin-top: 3pt; }' +
