@@ -345,7 +345,7 @@
         badge.className = DISPUTED_BADGE_CLASS;
         badge.style.cssText =
           'display:inline-flex;align-items:center;gap:6px;' +
-          'padding:4px 10px;margin-left:8px;border-radius:14px;' +
+          'padding:4px 10px;border-radius:14px;' +
           'font:600 12px/1.3 Arial,sans-serif;cursor:pointer;' +
           'border:1px solid transparent;user-select:none;';
         badge.addEventListener('click', function (e) {
@@ -356,18 +356,19 @@
           lastReactReadAt = 0;
           updateDisputedBadge(sec, badge);
         });
-        // Insert right after the collections badge so the two pills
-        // sit together visually. Falls back to appending if the
-        // collections badge isn't injected yet (race on first paint).
-        const collectionsBadge = sec.container.querySelector('.' + COLLECTIONS_BADGE_CLASS);
-        if (collectionsBadge && collectionsBadge.nextSibling) {
-          sec.container.insertBefore(badge, collectionsBadge.nextSibling);
-        } else if (collectionsBadge) {
-          collectionsBadge.parentNode.appendChild(badge);
+        // Insert into the shared Liabilities-group wrapper, after the
+        // collections badge if present, otherwise before any action
+        // buttons. Keeps order [Collections][Disputed][buttons…].
+        const group = getOrCreateLiabilitiesGroup(sec);
+        const collBadge = group.querySelector(':scope > .' + COLLECTIONS_BADGE_CLASS);
+        if (collBadge && collBadge.nextSibling) {
+          group.insertBefore(badge, collBadge.nextSibling);
+        } else if (collBadge) {
+          group.appendChild(badge);
         } else {
-          const heading = sec.container.querySelector('h5');
-          if (heading && heading.nextSibling) sec.container.insertBefore(badge, heading.nextSibling);
-          else sec.container.appendChild(badge);
+          const firstBtn = group.querySelector(':scope > .rric-button');
+          if (firstBtn) group.insertBefore(badge, firstBtn);
+          else group.appendChild(badge);
         }
       }
       updateDisputedBadge(sec, badge);
@@ -429,6 +430,27 @@
     badge.title = lines.join('\n');
   }
 
+  // Single flex wrapper shared by every ZHL control we add to the
+  // Liabilities header — both badges (Total Collections, Total
+  // Disputed) and both buttons (Calc Student Loans, Exclude
+  // SelfReport). Putting all four in one inline-flex child keeps
+  // them grouped together visually instead of getting flex-pushed
+  // to opposite ends of the section's space-between layout. Sits
+  // right after the "Liabilities" h5 heading; LOP's own
+  // "+ Add liability" button stays on the far right.
+  function getOrCreateLiabilitiesGroup(sec) {
+    let group = sec.container.querySelector(':scope > .rric-button-group');
+    if (group) return group;
+    group = document.createElement('div');
+    group.className = 'rric-button-group';
+    group.style.cssText = 'display:inline-flex;gap:8px;align-items:center;margin-left:12px;';
+    const heading = sec.container.querySelector('h5');
+    if (heading && heading.nextSibling) sec.container.insertBefore(group, heading.nextSibling);
+    else if (sec.addBtn) sec.container.insertBefore(group, sec.addBtn);
+    else sec.container.appendChild(group);
+    return group;
+  }
+
   function ensureCollectionsBadge() {
     const sections = findLiabilitiesHeaders();
     for (const sec of sections) {
@@ -442,7 +464,7 @@
         badge.className = COLLECTIONS_BADGE_CLASS;
         badge.style.cssText =
           'display:inline-flex;align-items:center;gap:6px;' +
-          'padding:4px 10px;margin-left:12px;border-radius:14px;' +
+          'padding:4px 10px;border-radius:14px;' +
           'font:600 12px/1.3 Arial,sans-serif;cursor:pointer;' +
           'border:1px solid transparent;user-select:none;';
         badge.addEventListener('click', function (e) {
@@ -462,9 +484,12 @@
           lastReactReadAt = 0;
           updateCollectionsBadge(sec, badge);
         });
-        const heading = sec.container.querySelector('h5');
-        if (heading && heading.nextSibling) sec.container.insertBefore(badge, heading.nextSibling);
-        else sec.container.appendChild(badge);
+        // Insert the badge into the shared Liabilities-group wrapper,
+        // before any action buttons (status-then-actions order).
+        const group = getOrCreateLiabilitiesGroup(sec);
+        const firstBtn = group.querySelector(':scope > .rric-button');
+        if (firstBtn) group.insertBefore(badge, firstBtn);
+        else group.appendChild(badge);
       }
       updateCollectionsBadge(sec, badge);
     }
@@ -1992,7 +2017,8 @@
         e.stopPropagation();
         showStudentLoanPicker(scopedTable);
       });
-      sec.container.insertBefore(btn, sec.addBtn);
+      const group = getOrCreateLiabilitiesGroup(sec);
+      group.appendChild(btn);
     }
   }
 
@@ -2005,7 +2031,6 @@
     if (!sections.length) return;
     for (const sec of sections) {
       if (sec.container.querySelector('.' + EXCLUDE_TELECOM_BUTTON_CLASS)) continue;
-      const sloanBtn = sec.container.querySelector('.' + STUDENT_LOAN_BUTTON_CLASS);
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'rric-button ' + EXCLUDE_TELECOM_BUTTON_CLASS;
@@ -2017,22 +2042,8 @@
         e.stopPropagation();
         excludeTelecomSelfReportedAll(btn, scopedTable);
       });
-      // Wrap Calc Student Loans + Exclude SelfReport in a single flex
-      // group so the parent's flex spacing doesn't push them apart.
-      if (sloanBtn) {
-        let group = sloanBtn.parentElement;
-        const isOurGroup = group && group.classList && group.classList.contains('rric-button-group');
-        if (!isOurGroup) {
-          group = document.createElement('div');
-          group.className = 'rric-button-group';
-          group.style.cssText = 'display:inline-flex;gap:8px;align-items:center;';
-          sloanBtn.parentNode.insertBefore(group, sloanBtn);
-          group.appendChild(sloanBtn);
-        }
-        group.appendChild(btn);
-      } else {
-        sec.container.insertBefore(btn, sec.addBtn);
-      }
+      const group = getOrCreateLiabilitiesGroup(sec);
+      group.appendChild(btn);
     }
   }
 
