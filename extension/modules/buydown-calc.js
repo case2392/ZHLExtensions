@@ -385,12 +385,22 @@
         brandedBtn.setAttribute(BRANDED_PDF_BUTTON_ATTR, '1');
         brandedBtn.type = 'button';
         brandedBtn.textContent = '2-1 Buydown PDF';
+        // Match LOP's Generate PDF wrapper button's box so we sit at the
+        // same height. Pulls font-size / padding / min-height from the
+        // anchor's computed style so we follow LOP's design system
+        // instead of hardcoding pixel values that drift if LOP retunes.
+        const cs = window.getComputedStyle(ab.anchor);
         brandedBtn.style.cssText =
           'display:inline-flex;align-items:center;justify-content:center;' +
           'background:#006aff;color:#fff;border:1px solid #006aff;' +
-          'padding:8px 16px;border-radius:4px;' +
-          'font:600 13px/1 Arial,Helvetica,sans-serif;cursor:pointer;' +
-          'margin-right:8px;';
+          'border-radius:4px;cursor:pointer;margin-right:8px;' +
+          'font-family:' + (cs.fontFamily || 'Arial,Helvetica,sans-serif') + ';' +
+          'font-weight:' + (cs.fontWeight || '600') + ';' +
+          'font-size:' + (cs.fontSize || '14px') + ';' +
+          'line-height:' + (cs.lineHeight && cs.lineHeight !== 'normal' ? cs.lineHeight : '1.2') + ';' +
+          'padding:' + (cs.paddingTop || '10px') + ' ' + (cs.paddingRight || '20px') + ' ' + (cs.paddingBottom || '10px') + ' ' + (cs.paddingLeft || '20px') + ';' +
+          'min-height:' + (cs.height || '36px') + ';' +
+          'box-sizing:border-box;';
         brandedBtn.addEventListener('mouseenter', function () { if (!brandedBtn.disabled) brandedBtn.style.background = '#0056d2'; });
         brandedBtn.addEventListener('mouseleave', function () { brandedBtn.style.background = brandedBtn.disabled ? '#94a3b8' : '#006aff'; });
         brandedBtn.addEventListener('click', function (e) {
