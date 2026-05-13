@@ -466,6 +466,8 @@
 
   function renderBuydownPdfHtml(scenarios) {
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const multi = scenarios.length > 1;
+    const gridClass = multi ? 'scenarios-grid scenarios-multi' : 'scenarios-grid scenarios-single';
     let scenarioHtml = '';
     for (const s of scenarios) {
       const escrow = s.escrow || 0;
@@ -511,24 +513,45 @@
     return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
       '<title>2-1 Buydown Analysis &mdash; ' + escapeHtml(today) + '</title>' +
       '<style>' +
-      '@page { size: letter; margin: 0.6in; }' +
-      'body { font: 11pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; }' +
+      '@page { size: letter; margin: 0.85in 0.9in; }' +
+      'body { font: 10.5pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; }' +
       'header { border-bottom: 3px solid #006aff; padding-bottom: 8pt; margin-bottom: 14pt; }' +
-      'header h1 { margin: 0; font-size: 18pt; color: #006aff; }' +
-      'header .date { color: #6b7280; font-size: 10pt; margin-top: 4pt; }' +
-      'header .intro { color: #374151; font-size: 10pt; margin-top: 8pt; max-width: 6.5in; }' +
-      '.scenario { page-break-inside: avoid; margin-bottom: 18pt; }' +
-      '.scenario + .scenario { margin-top: 22pt; }' +
-      '.scenario h2 { margin: 0 0 8pt; font-size: 13pt; background: #f3f4f6; padding: 6pt 10pt; border-left: 4pt solid #006aff; }' +
-      '.scenario h3 { margin: 12pt 0 4pt; font-size: 11pt; color: #006aff; }' +
-      '.scenario .note { font-size: 9pt; color: #6b7280; font-style: italic; margin: 2pt 0 4pt; }' +
-      'table { width: 100%; border-collapse: collapse; margin-bottom: 4pt; }' +
-      'table th { font-size: 10pt; color: #6b7280; text-align: left; padding: 4pt 8pt; border-bottom: 1px solid #e5e7eb; font-weight: 600; }' +
+      'header h1 { margin: 0; font-size: 17pt; color: #006aff; }' +
+      'header .date { color: #6b7280; font-size: 9.5pt; margin-top: 3pt; }' +
+      'header .intro { color: #374151; font-size: 9.5pt; margin-top: 8pt; max-width: 5.6in; }' +
+      '.scenario { page-break-inside: avoid; }' +
+      '.scenario h2 { margin: 0 0 8pt; font-size: 12.5pt; background: #f3f4f6; padding: 5pt 10pt; border-left: 4pt solid #006aff; }' +
+      '.scenario h3 { margin: 12pt 0 3pt; font-size: 10.5pt; color: #006aff; }' +
+      '.scenario .note { font-size: 8.5pt; color: #6b7280; font-style: italic; margin: 2pt 0 4pt; }' +
+      // Single-scenario layout: one centered column. Cap table width
+      // so labels and values stay close instead of being flex-pushed
+      // to opposite ends of the 7-inch printable area.
+      '.scenarios-single .scenario { margin-bottom: 14pt; }' +
+      '.scenarios-single table { width: 4.6in; max-width: 100%; border-collapse: collapse; margin: 0 0 4pt; }' +
+      // Multi-scenario layout: two-column side-by-side. Uses
+      // inline-block (more reliable for print pagination than CSS
+      // grid in most browsers). Tighter type so each column fits.
+      '.scenarios-multi { font-size: 0; /* eliminate inline-block whitespace */ }' +
+      '.scenarios-multi .scenario {' +
+        ' display: inline-block;' +
+        ' width: calc(50% - 0.18in);' +
+        ' margin-right: 0.32in;' +
+        ' margin-bottom: 16pt;' +
+        ' vertical-align: top;' +
+        ' font-size: 9.5pt;' +
+      '}' +
+      '.scenarios-multi .scenario:nth-child(2n) { margin-right: 0; }' +
+      '.scenarios-multi .scenario h2 { font-size: 11pt; padding: 4pt 8pt; }' +
+      '.scenarios-multi .scenario h3 { margin: 10pt 0 3pt; font-size: 9.5pt; }' +
+      '.scenarios-multi table { width: 100%; max-width: none; border-collapse: collapse; margin: 0 0 3pt; font-size: 9pt; }' +
+      // Generic table styling applies to both layouts.
+      'table { border-collapse: collapse; }' +
+      'table th { font-size: 9pt; color: #6b7280; text-align: left; padding: 3pt 8pt; border-bottom: 1px solid #e5e7eb; font-weight: 600; }' +
       'table th:last-child { text-align: right; }' +
-      'table td { padding: 4pt 8pt; border-bottom: 1px solid #f3f4f6; }' +
+      'table td { padding: 3pt 8pt; border-bottom: 1px solid #f3f4f6; }' +
       'table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }' +
       'tr.emphasis td { font-weight: 700; border-top: 1pt solid #006aff; }' +
-      'footer { margin-top: 24pt; padding-top: 10pt; border-top: 1px solid #e5e7eb; font-size: 8.5pt; color: #6b7280; }' +
+      'footer { margin-top: 22pt; padding-top: 8pt; border-top: 1px solid #e5e7eb; font-size: 8.5pt; color: #6b7280; }' +
       '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
       '</style></head><body>' +
       '<header>' +
@@ -536,7 +559,7 @@
         '<div class="date">Prepared ' + escapeHtml(today) + '</div>' +
         '<div class="intro">A 2-1 temporary buydown lowers the interest rate by 2.000% in year 1 and 1.000% in year 2, returning to the full note rate in year 3 and beyond. The total buydown cost is typically funded as a closing-cost credit by the seller or builder.</div>' +
       '</header>' +
-      scenarioHtml +
+      '<div class="' + gridClass + '">' + scenarioHtml + '</div>' +
       '<footer>This worksheet is for illustration only. Final pricing, rate, and closing costs are subject to credit approval and underwriting review. Not a commitment to lend.</footer>' +
       '</body></html>';
   }
