@@ -177,6 +177,7 @@
     if (!banner) {
       banner = document.createElement('div');
       banner.id = BANNER_ID;
+      banner.title = 'Built by Justin Case. Karma appreciated 💛';
       banner.setAttribute('style',
         'position:fixed;top:0;left:0;right:0;z-index:2147483646;' +
         'background:#b91c1c;color:#fff;' +

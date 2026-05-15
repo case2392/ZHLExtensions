@@ -22,6 +22,8 @@
     ? chrome.runtime.getManifest().version : '?';
   console.log('[Task Bulk Delete v' + VERSION + '] loaded');
 
+  const ZHL_TIP = 'Built by Justin Case. Karma appreciated 💛';
+
   // Per-section attribute keys keep the checkbox/header/button DOM for
   // each section independent. We could share attribute names since all
   // queries are scoped to a specific <table> anyway, but distinct
@@ -84,7 +86,7 @@
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.setAttribute(section.headerCbAttr, '1');
-      cb.title = 'Select all ' + section.label;
+      cb.title = 'Select all ' + section.label + '\n\n' + ZHL_TIP;
       cb.style.cssText = 'cursor:pointer;';
       cb.addEventListener('change', function () {
         const rowCbs = table.querySelectorAll('tbody input[' + section.rowCbAttr + ']');
@@ -123,7 +125,7 @@
     btn.setAttribute(section.buttonAttr, '1');
     btn.type = 'button';
     btn.textContent = 'Delete Selected';
-    btn.title = 'Delete every checked ' + section.label + ' task';
+    btn.title = 'Delete every checked ' + section.label + ' task\n\n' + ZHL_TIP;
     btn.style.cssText =
       'display:inline-flex;align-items:center;margin-left:16px;' +
       'padding:6px 12px;background:#b91c1c;color:#fff;border:none;' +

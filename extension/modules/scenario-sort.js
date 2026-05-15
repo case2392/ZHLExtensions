@@ -473,6 +473,7 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = label;
+    btn.title = 'Built by Justin Case. Karma appreciated 💛';
     let bg = '#ffffff', fg = '#006aff', border = '#006aff', hoverBg = '#eef4ff';
     if (opts.primary) { bg = '#006aff'; fg = '#ffffff'; border = '#006aff'; hoverBg = '#0056d2'; }
     if (opts.secondary) { bg = '#ffffff'; fg = '#374151'; border = '#d1d5db'; hoverBg = '#f3f4f6'; }

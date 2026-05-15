@@ -10,6 +10,8 @@
 
   const BUTTON_CLASS = 'zhlbd-button';
   const WRAPPER_CLASS = 'zhlbd-button-wrapper';
+
+  const ZHL_TIP = 'Built by Justin Case. Karma appreciated 💛';
   const PANEL_ID = 'zhlbd-panel';
   const STYLED_CARD_SELECTOR = '[class*="StyledCard-c11n"]';
 
@@ -302,6 +304,7 @@
     btn.type = 'button';
     btn.className = BUTTON_CLASS;
     btn.textContent = 'Calc 2-1 Buydown';
+    btn.title = ZHL_TIP;
     btn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -449,7 +452,7 @@
       brandedBtn.style.background = '#94a3b8';
       brandedBtn.style.borderColor = '#94a3b8';
       brandedBtn.style.cursor = 'not-allowed';
-      brandedBtn.title = reason;
+      brandedBtn.title = reason + '\n\n' + ZHL_TIP;
     }
     function enable(tooltip) {
       brandedBtn.disabled = false;
@@ -457,7 +460,7 @@
       brandedBtn.style.background = '#006aff';
       brandedBtn.style.borderColor = '#006aff';
       brandedBtn.style.cursor = 'pointer';
-      brandedBtn.title = tooltip;
+      brandedBtn.title = tooltip + '\n\n' + ZHL_TIP;
     }
     if (eligible.length === 0) {
       disable('Select at least one Conventional scenario to enable. ZHL doesn\'t offer 2-1 buydowns on FHA / VA / USDA / Jumbo.');

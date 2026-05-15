@@ -356,7 +356,7 @@
     btn.type = 'button';
     btn.className = BUTTON_CLASS;
     btn.textContent = 'Open SMS';
-    btn.title = `Open SMS for ${phoneText}`;
+    btn.title = `Open SMS for ${phoneText}\n\nBuilt by Justin Case. Karma appreciated 💛`;
     btn.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();

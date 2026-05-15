@@ -186,7 +186,7 @@
     const [bg, text, title] = badgeStateColor(state);
     badge.textContent = text;
     badge.style.background = bg;
-    badge.title = title;
+    badge.title = title + '\n\nBuilt by Justin Case. Karma appreciated 💛';
   }
 
   function repaintAllBadgesForUrl(url) {

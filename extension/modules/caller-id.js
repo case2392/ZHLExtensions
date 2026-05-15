@@ -51,7 +51,7 @@
       el.appendChild(badge);
     }
     badge.textContent = name;
-    badge.title = `Salesforce match: ${name}`;
+    badge.title = `Salesforce match: ${name}\n\nBuilt by Justin Case. Karma appreciated 💛`;
   }
 
   const inFlight = new Map(); // phone -> Promise<match|null>

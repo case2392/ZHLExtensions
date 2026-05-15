@@ -10,6 +10,7 @@
 
   const BUTTON_ID = 'rric-run-button';
   const BUTTON_CLASS = 'rric-run-button-cls';
+  const ZHL_TIP = 'Built by Justin Case. Karma appreciated 💛';
   const PANEL_ID = 'rric-panel';
   const STUDENT_LOAN_BUTTON_ID = 'rric-sloan-button';
   const STUDENT_LOAN_BUTTON_CLASS = 'rric-sloan-button-cls';
@@ -462,7 +463,7 @@
         lines.push('  • ' + r.payee + ' [' + r.accountType + '] — $' + (r.balance || 0).toLocaleString());
       }
     }
-    badge.title = lines.join('\n');
+    badge.title = lines.join('\n') + '\n\n' + ZHL_TIP;
   }
 
   // Single flex wrapper shared by every ZHL control we add to the
@@ -1092,7 +1093,7 @@
         lines.push('  • ' + r.payee + ' [' + r.accountType + '] — $' + (r.balance || 0).toLocaleString());
       }
     }
-    badge.title = lines.join('\n');
+    badge.title = lines.join('\n') + '\n\n' + ZHL_TIP;
   }
 
   // Note: the v1.12.x row-expanding deepScanCollections / runDeepScan
@@ -1999,6 +2000,7 @@
       btn.type = 'button';
       btn.className = 'rric-button ' + BUTTON_CLASS;
       btn.textContent = 'Run Residual Income Calc';
+      btn.title = ZHL_TIP;
       const scope = sec.scope;
       btn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -2051,6 +2053,7 @@
       btn.type = 'button';
       btn.className = 'rric-button ' + STUDENT_LOAN_BUTTON_CLASS;
       btn.textContent = 'Calc Student Loans';
+      btn.title = ZHL_TIP;
       const scopedTable = sec.table;
       btn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -2075,7 +2078,7 @@
       btn.type = 'button';
       btn.className = 'rric-button ' + EXCLUDE_TELECOM_BUTTON_CLASS;
       btn.textContent = 'Exclude SelfReport';
-      btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".';
+      btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".\n\n' + ZHL_TIP;
       const scopedTable = sec.table;
       btn.addEventListener('click', function (e) {
         e.preventDefault();

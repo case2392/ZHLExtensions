@@ -404,6 +404,7 @@
     btn.type = 'button';
     btn.className = BUTTON_CLASS;
     btn.textContent = label;
+    btn.title = 'Built by Justin Case. Karma appreciated 💛';
     btn.setAttribute('style', BTN_STYLE_BASE);
     btn.addEventListener('mouseenter', () => { btn.style.backgroundColor = '#0070d2'; });
     btn.addEventListener('mouseleave', () => { btn.style.backgroundColor = '#1589ee'; });
