@@ -1149,7 +1149,12 @@
     // Private student-loan lenders
     'DISCOVER STUDENT', 'WELLS FARGO STUDENT', 'CITIZENS STUDENT',
     'SOFI STUDENT', 'EARNEST', 'COMMONBOND', 'COLLEGE AVE',
-    'FIRSTMARK', 'CONDUENT', 'ACS EDUCATION', 'ASCENT'
+    'FIRSTMARK', 'CONDUENT', 'ACS EDUCATION', 'ASCENT',
+    // Default-collection agencies that show up as the creditor on
+    // defaulted federal student loans after they're transferred from
+    // the original servicer. "CENTRAL RESEARCH" matches both
+    // "CENTRAL RESEARCH INC" and "CENTRAL RESEARCH INC/D".
+    'CENTRAL RESEARCH'
   ];
 
   const FED_TAX_RATE = 0.15;
