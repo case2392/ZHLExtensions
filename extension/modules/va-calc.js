@@ -120,9 +120,35 @@
   // every collection-agency row (I.C. SYSTEM, MIDLAND CREDIT, etc.)
   // categorized as Unknown — they don't fit Revolving / Installment
   // / Mortgage and have no first-party creditor.
+  function isChargeOff(attrs) {
+    if (!attrs) return false;
+    const type = String(attrs.type || '').toUpperCase();
+    const status = String(attrs.accountStatus || '').toUpperCase();
+    // Highest adverse rating is the user-visible "Charge Off" pill
+    // on the LOP liability card. LOP's API field name isn't confirmed
+    // so we check the likely camelCase variants.
+    const rating = String(
+      attrs.highestAdverseRating ||
+      attrs.highestAdverse ||
+      attrs.adverseRating ||
+      attrs.worstRating ||
+      attrs.worstStatus ||
+      ''
+    ).toUpperCase();
+    const remarks = String(attrs.remarks || '').toUpperCase();
+    return /CHARGE\s*OFF|CHARGEOFF/.test(type) ||
+           /CHARGE\s*OFF|CHARGEOFF/.test(status) ||
+           /CHARGE\s*OFF|CHARGEOFF/.test(rating) ||
+           /CHARGE\s*OFF|CHARGED\s*OFF|REPOSSESSION|REPO/.test(remarks);
+  }
+
   function classifyLiabilityFromReact(item) {
     const attrs = (item && item.attributes) || {};
     const type = String(attrs.type || '').toUpperCase().trim();
+    // Charge-offs and repossessions are excluded from the collections
+    // bucket per user clarification, even when LOP categorizes them as
+    // type=Unknown (which would otherwise route them to collections).
+    if (isChargeOff(attrs)) return [];
     if (type === 'UNKNOWN') return ['unknown→collection'];
     if (type === 'COLLECTION') return ['type:Collection'];
     return [];
@@ -193,6 +219,17 @@
       const v = attrs[f];
       if (v && v !== 'NotDisputed' && v !== 'None' && v !== 'N') return f + '=' + v;
     }
+    // Remarks text. In practice this is the only signal LOP exposes —
+    // none of the structured fields above get populated. The credit
+    // bureaus stamp phrases like "ACCT IN DISPUTE", "ACCOUNT IN
+    // DISPUTE", "CONSUMER DISPUTES THIS ACCOUNT", or just "DISPUTED"
+    // into the Remarks string when the borrower has filed an FCRA
+    // dispute on the tradeline.
+    const remarks = String(attrs.remarks || '');
+    if (/\b(ACCT|ACCOUNT)\s+IN\s+DISPUTE\b/i.test(remarks)) return 'remarks=ACCT IN DISPUTE';
+    if (/\bCONSUMER\s+DISPUTES?\s+THIS\s+ACCOUNT\b/i.test(remarks)) return 'remarks=CONSUMER DISPUTES';
+    if (/\bIN\s+DISPUTE\b/i.test(remarks)) return 'remarks=IN DISPUTE';
+    if (/\bDISPUTED\b/i.test(remarks)) return 'remarks=DISPUTED';
     return false;
   }
 
@@ -200,19 +237,17 @@
     const attrs = (item && item.attributes) || {};
     const disputedReason = isDisputed(attrs);
     if (!disputedReason) return [];
-    // Derogatory check: collection OR charge-off OR 30+day late in
-    // last 24mo. (These are the same buckets the FHA section header
-    // calls out.)
+    // Charge-offs and repossessions are excluded from the disputed
+    // bucket per user clarification ("Charge Offs do not count as
+    // collections or disputed accounts"), even when ACCT IN DISPUTE
+    // is stamped on the tradeline remarks.
+    if (isChargeOff(attrs)) return [];
+    // Derogatory check: collection OR 30+day late in last 24mo.
+    // (These are the same buckets the FHA section header calls out;
+    // charge-offs would also be in this list but are exempt above.)
     const type = String(attrs.type || '').toUpperCase().trim();
-    const status = String(attrs.accountStatus || '').toUpperCase().trim();
-    const remarks = String(attrs.remarks || '').toUpperCase();
     const derog = [];
     if (type === 'UNKNOWN' || type === 'COLLECTION') derog.push('collection');
-    if (/CHARGE\s*OFF|CHARGEOFF/.test(type) ||
-        /CHARGE\s*OFF|CHARGEOFF/.test(status) ||
-        /CHARGE\s*OFF|CHARGED\s*OFF|REPOSSESSION|REPO/.test(remarks)) {
-      derog.push('charge-off');
-    }
     const lateCount =
       (Number(attrs.thirtyDaysLateCount) || 0) +
       (Number(attrs.sixtyDaysLateCount) || 0) +
