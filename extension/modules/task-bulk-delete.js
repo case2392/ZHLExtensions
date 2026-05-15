@@ -1,12 +1,16 @@
 // ZHL Productivity Pack module — feature key: feature_taskBulkDelete
 //
-// Adds a checkbox column to LOP's Unsent tasks table and a "Delete
-// Selected" button in the section header so multiple unsent tasks can
-// be deleted in one click instead of one-at-a-time trash + confirm.
+// Adds a checkbox column + a "Delete Selected" button to LOP's task
+// sections that have per-row trash-can delete buttons. Currently
+// wired up for both:
+//   - Unsent (top of the Tasks tab)
+//   - Awaiting borrower (lower on the Tasks tab)
 //
-// LOP's per-task delete opens a confirm dialog; this module clicks it
-// automatically for each selected task so the user only confirms once
-// (via our own JS confirm() up front).
+// Each section gets its own independent checkbox state and Delete
+// Selected button — selecting rows in one section does not affect the
+// other. The bulk-delete flow opens LOP's per-task confirm dialog and
+// auto-clicks the confirm button for each selected task, so the user
+// only confirms once (via our own JS confirm() up front).
 (function () {
   'use strict';
   const __ZHL_FEATURE_KEY = 'feature_taskBulkDelete';
@@ -18,57 +22,72 @@
     ? chrome.runtime.getManifest().version : '?';
   console.log('[Task Bulk Delete v' + VERSION + '] loaded');
 
-  const ROW_CHECKBOX_ATTR = 'data-zhl-task-checkbox';
-  const HEADER_CHECKBOX_ATTR = 'data-zhl-task-header-checkbox';
-  const BULK_BUTTON_ATTR = 'data-zhl-bulk-delete-btn';
-  const HEADER_CELL_ATTR = 'data-zhl-checkbox-th';
-
-  function findUnsentTable() {
-    return document.querySelector('table[data-cy="unsent-tasks-table"]');
-  }
+  // Per-section attribute keys keep the checkbox/header/button DOM for
+  // each section independent. We could share attribute names since all
+  // queries are scoped to a specific <table> anyway, but distinct
+  // attributes make the rendered DOM easier to inspect.
+  const SECTIONS = [
+    {
+      key: 'unsent',
+      label: 'unsent',
+      tableSelector: 'table[data-cy="unsent-tasks-table"]',
+      gleamSelector: '[data-cy="unsent-gleam"]',
+      heading: 'Unsent',
+      rowCbAttr:    'data-zhl-task-checkbox',
+      headerCbAttr: 'data-zhl-task-header-checkbox',
+      buttonAttr:   'data-zhl-bulk-delete-btn',
+      headerCellAttr: 'data-zhl-checkbox-th'
+    },
+    {
+      key: 'awaiting',
+      label: 'awaiting borrower',
+      tableSelector: 'table[data-cy="awaiting-borrower-tasks-table"]',
+      gleamSelector: '[data-cy="awaiting-borrower-gleam"]',
+      heading: 'Awaiting borrower',
+      rowCbAttr:    'data-zhl-ab-checkbox',
+      headerCbAttr: 'data-zhl-ab-header-checkbox',
+      buttonAttr:   'data-zhl-ab-bulk-delete-btn',
+      headerCellAttr: 'data-zhl-ab-checkbox-th'
+    }
+  ];
 
   function hasAnyDeletableRows(table) {
     return !!(table && table.querySelector('tbody button[data-cy="delete-task-btn"]'));
   }
 
-  // Returns the Flex that contains the "Unsent" heading + gleam (left
-  // side of the section header bar). We anchor our Delete Selected
-  // button here so it sits next to the heading and aligns vertically
-  // with the leftmost (checkbox) column of the table — instead of all
-  // the way on the right next to "Send unsent tasks", which made the
-  // UI annoying to use.
-  function findUnsentTitleArea() {
-    const gleam = document.querySelector('[data-cy="unsent-gleam"]');
+  // Returns the Flex containing the section heading + gleam (left side
+  // of the section header bar). Anchors our Delete Selected button
+  // here so it sits next to the heading instead of on the far right.
+  function findTitleArea(section) {
+    const gleam = document.querySelector(section.gleamSelector);
     if (gleam && gleam.parentElement) return gleam.parentElement;
     const h4s = document.querySelectorAll('h4');
     for (const h of h4s) {
-      if ((h.textContent || '').trim() === 'Unsent') return h.parentElement;
+      if ((h.textContent || '').trim() === section.heading) return h.parentElement;
     }
     return null;
   }
 
-  function ensureCheckboxColumn(table) {
+  function ensureCheckboxColumn(section, table) {
     const thead = table.querySelector('thead tr');
     const hasTasks = hasAnyDeletableRows(table);
     if (!hasTasks) {
-      // No deletable rows — tear down our header cell so the table
-      // looks like stock LOP when the section is empty.
-      const existingTh = thead && thead.querySelector('[' + HEADER_CELL_ATTR + ']');
+      const existingTh = thead && thead.querySelector('[' + section.headerCellAttr + ']');
       if (existingTh) existingTh.remove();
       return;
     }
-    if (thead && !thead.querySelector('[' + HEADER_CELL_ATTR + ']')) {
+    if (thead && !thead.querySelector('[' + section.headerCellAttr + ']')) {
       const th = document.createElement('th');
-      th.setAttribute(HEADER_CELL_ATTR, '1');
+      th.setAttribute(section.headerCellAttr, '1');
       th.setAttribute('scope', 'col');
       th.style.cssText = 'width:36px;padding:8px 4px;text-align:center;';
       const cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.setAttribute(HEADER_CHECKBOX_ATTR, '1');
-      cb.title = 'Select all unsent';
+      cb.setAttribute(section.headerCbAttr, '1');
+      cb.title = 'Select all ' + section.label;
       cb.style.cssText = 'cursor:pointer;';
       cb.addEventListener('change', function () {
-        const rowCbs = table.querySelectorAll('tbody input[' + ROW_CHECKBOX_ATTR + ']');
+        const rowCbs = table.querySelectorAll('tbody input[' + section.rowCbAttr + ']');
         rowCbs.forEach(function (rcb) { rcb.checked = cb.checked; });
       });
       th.appendChild(cb);
@@ -76,39 +95,35 @@
     }
     const rows = table.querySelectorAll('tbody tr');
     rows.forEach(function (tr) {
-      if (tr.querySelector('[' + ROW_CHECKBOX_ATTR + ']')) return;
-      // Skip rows that don't have a delete button (e.g. an empty-state
-      // "No tasks added" row).
+      if (tr.querySelector('[' + section.rowCbAttr + ']')) return;
       if (!tr.querySelector('button[data-cy="delete-task-btn"]')) return;
       const td = document.createElement('td');
       td.style.cssText = 'width:36px;padding:8px 4px;text-align:center;';
       const cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.setAttribute(ROW_CHECKBOX_ATTR, '1');
+      cb.setAttribute(section.rowCbAttr, '1');
       cb.style.cssText = 'cursor:pointer;';
-      // Stop propagation so checking the box doesn't also toggle the
-      // row-expand chevron sitting in the adjacent cell.
       cb.addEventListener('click', function (e) { e.stopPropagation(); });
       td.appendChild(cb);
       tr.insertBefore(td, tr.firstChild);
     });
   }
 
-  function ensureBulkButton(table) {
-    const titleArea = findUnsentTitleArea();
+  function ensureBulkButton(section, table) {
+    const titleArea = findTitleArea(section);
     if (!titleArea) return;
     const hasTasks = hasAnyDeletableRows(table);
-    const existing = titleArea.querySelector('[' + BULK_BUTTON_ATTR + ']');
+    const existing = titleArea.querySelector('[' + section.buttonAttr + ']');
     if (!hasTasks) {
       if (existing) existing.remove();
       return;
     }
     if (existing) return;
     const btn = document.createElement('button');
-    btn.setAttribute(BULK_BUTTON_ATTR, '1');
+    btn.setAttribute(section.buttonAttr, '1');
     btn.type = 'button';
     btn.textContent = 'Delete Selected';
-    btn.title = 'Delete every checked unsent task';
+    btn.title = 'Delete every checked ' + section.label + ' task';
     btn.style.cssText =
       'display:inline-flex;align-items:center;margin-left:16px;' +
       'padding:6px 12px;background:#b91c1c;color:#fff;border:none;' +
@@ -118,7 +133,7 @@
     btn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      bulkDelete(table, btn);
+      bulkDelete(section, table, btn);
     });
     titleArea.appendChild(btn);
   }
@@ -128,12 +143,11 @@
   }
 
   // After clicking a row's delete trash-can, LOP opens a confirm
-  // dialog ("Delete task" title, "Are you sure…" body, Cancel +
-  // Delete task buttons). Find the primary "Delete task" button.
-  // Priority:
-  //   1. button text exactly "Delete task" (the confirmed UX text)
-  //   2. button data-cy containing "confirm" (NEVER the trash-can's
-  //      "delete-task-btn" — that's the row button we just clicked)
+  // dialog ("Delete task" title, Cancel + Delete task buttons). Find
+  // the primary "Delete task" button.
+  //   1. button text exactly "Delete task"
+  //   2. button data-cy containing "confirm" (NEVER the row's
+  //      "delete-task-btn" — that's the trash-can we just clicked)
   //   3. loose text matches as a safety net
   async function findConfirmButton(maxMs) {
     const start = Date.now();
@@ -143,20 +157,17 @@
       for (const d of dialogs) {
         if (d.offsetParent === null) continue;
         const buttons = Array.from(d.querySelectorAll('button'));
-        // 1. Exact text match.
         for (const b of buttons) {
           if (b.disabled) continue;
           const txt = (b.textContent || '').trim();
           if (/^delete task$/i.test(txt)) return b;
         }
-        // 2. data-cy containing "confirm" — skipping the row trash-can.
         for (const b of buttons) {
           if (b.disabled) continue;
           const dc = (b.getAttribute('data-cy') || '').toLowerCase();
           if (dc === 'delete-task-btn') continue;
           if (/confirm/i.test(dc)) return b;
         }
-        // 3. Loose text matches (other dialog wording variants).
         for (const b of buttons) {
           if (b.disabled) continue;
           const txt = (b.textContent || '').trim().toLowerCase();
@@ -183,10 +194,10 @@
     return false;
   }
 
-  async function bulkDelete(table, btn) {
+  async function bulkDelete(section, table, btn) {
     // Snapshot the rows to delete BY UUID. The table re-renders after
     // each delete, so any direct row reference goes stale immediately.
-    const checked = Array.from(table.querySelectorAll('tbody input[' + ROW_CHECKBOX_ATTR + ']:checked'));
+    const checked = Array.from(table.querySelectorAll('tbody input[' + section.rowCbAttr + ']:checked'));
     if (!checked.length) {
       alert('No tasks selected. Check the boxes next to the tasks you want to delete.');
       return;
@@ -204,18 +215,21 @@
       console.warn('[Task Bulk Delete] checked rows had no task-* data-cy attributes');
       return;
     }
-    if (!confirm('Delete ' + taskIds.length + ' selected unsent task' + (taskIds.length === 1 ? '' : 's') + '?')) return;
+    if (!confirm('Delete ' + taskIds.length + ' selected ' + section.label + ' task' + (taskIds.length === 1 ? '' : 's') + '?')) return;
 
     const origText = btn.textContent;
     btn.disabled = true;
     let okCount = 0;
     let failCount = 0;
-    console.group('[Task Bulk Delete] run started; ' + taskIds.length + ' task(s)');
+    console.group('[Task Bulk Delete:' + section.key + '] run started; ' + taskIds.length + ' task(s)');
     try {
       for (let i = 0; i < taskIds.length; i++) {
         const id = taskIds[i];
         btn.textContent = 'Deleting ' + (i + 1) + '/' + taskIds.length + '…';
-        const row = document.querySelector('tr[data-cy="task-' + CSS.escape(id) + '"]');
+        // Re-resolve the row inside the section's table each iteration —
+        // a global lookup could match the same task id rendered in a
+        // different section if LOP ever shows duplicates.
+        const row = table.querySelector('tr[data-cy="task-' + CSS.escape(id) + '"]');
         if (!row) {
           console.warn('[' + (i + 1) + '/' + taskIds.length + '] row not found for id=' + id + ' (already removed?)');
           failCount++;
@@ -233,7 +247,6 @@
         if (!confirmBtn) {
           console.warn('[' + (i + 1) + '/' + taskIds.length + '] confirm dialog never appeared');
           failCount++;
-          // Try to dismiss whatever's on screen so the next iteration isn't blocked.
           document.body.click();
           await waitMs(200);
           continue;
@@ -242,24 +255,23 @@
         confirmBtn.click();
         const closed = await waitForDialogClose(2500);
         if (!closed) console.warn('[' + (i + 1) + '/' + taskIds.length + '] dialog did not close within 2.5s');
-        // Settle so LOP's table can re-render before we hit the next id.
         await waitMs(350);
         okCount++;
       }
     } catch (e) {
-      console.error('[Task Bulk Delete] run failed:', e);
+      console.error('[Task Bulk Delete:' + section.key + '] run failed:', e);
       alert('Bulk delete error: ' + (e && e.message || e));
     } finally {
       btn.disabled = false;
       btn.textContent = origText;
-      console.log('[Task Bulk Delete] done. ok=' + okCount + ' failed=' + failCount);
+      console.log('[Task Bulk Delete:' + section.key + '] done. ok=' + okCount + ' failed=' + failCount);
       console.groupEnd();
     }
     try {
       chrome.runtime.sendMessage({
         type: 'TRACK',
         event: 'task_bulk_delete',
-        props: { requested: taskIds.length, ok: okCount, failed: failCount }
+        props: { section: section.key, requested: taskIds.length, ok: okCount, failed: failCount }
       });
     } catch (_) {}
     if (failCount) {
@@ -268,10 +280,12 @@
   }
 
   function scan() {
-    const table = findUnsentTable();
-    if (!table) return;
-    try { ensureCheckboxColumn(table); } catch (e) { console.warn('[Task Bulk Delete] checkbox col error', e); }
-    try { ensureBulkButton(table); } catch (e) { console.warn('[Task Bulk Delete] button error', e); }
+    for (const section of SECTIONS) {
+      const table = document.querySelector(section.tableSelector);
+      if (!table) continue;
+      try { ensureCheckboxColumn(section, table); } catch (e) { console.warn('[Task Bulk Delete:' + section.key + '] checkbox col error', e); }
+      try { ensureBulkButton(section, table); } catch (e) { console.warn('[Task Bulk Delete:' + section.key + '] button error', e); }
+    }
   }
 
   const observer = new MutationObserver(function () { scan(); });
