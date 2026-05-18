@@ -439,6 +439,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: FHA Manual Underwrite eligibility badge ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA Manual Underwrite eligibility</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaManualEligible" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Reads each borrower&rsquo;s three bureau scores from the Credit section, takes the middle, then uses the <strong>LOWER middle score</strong> across borrowers as the qualifying score.</li>
+          <li>Pins a green <strong>&check; FHA Manual Eligible</strong> pill under the Credit heading when the qualifying score is <strong>&ge; 640</strong> (ZHL&rsquo;s manual-UW floor), or a red <strong>&times; FHA Manual Ineligible</strong> pill when below 640.</li>
+          <li>Hovering the pill reveals the full <strong>FHA Manual UW guideline matrix</strong> &mdash; min-score overlays (PHH &ge; 680, Mr.&nbsp;Cooper not allowed), max DTI 50%, reserve requirements, the four ratio tiers (31/43, 37/47, 40/40, 40/50), and the compensating-factor options for each.</li>
+          <li>If credit hasn&rsquo;t been pulled yet, the pill shows a neutral &ldquo;eligibility unknown&rdquo; state and still surfaces the guideline matrix on hover.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Bulk-delete unsent tasks ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
