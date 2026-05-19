@@ -463,6 +463,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: Copy addresses primary → co-borrower ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Copy addresses primary &rarr; co-borrower</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_copyAddresses" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>On the <strong>Full application &rarr; Addresses</strong> section, every empty co-borrower gets a <strong>Copy addresses from primary</strong> button next to its <em>Add address</em> link.</li>
+          <li>One click re-adds every address on the primary borrower&rsquo;s list for the co-borrower &mdash; leans on LOP&rsquo;s built-in <em>Use existing address</em> dropdown so Street / City / State / Zip / Country come in cleanly, then fills the four fields LOP leaves blank: <strong>Address type</strong>, <strong>Mailing same as current</strong> checkbox, <strong>Housing type</strong>, and the <strong>Move in / Move out</strong> dates.</li>
+          <li>Button only appears when the destination has <strong>zero addresses</strong> &mdash; it never appends to a co-borrower who already has rows, so you can&rsquo;t accidentally duplicate.</li>
+          <li>Works for files with 3+ borrowers: the button appears next to every empty co-borrower and copies from the primary borrower&rsquo;s list.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Bulk-delete unsent tasks ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

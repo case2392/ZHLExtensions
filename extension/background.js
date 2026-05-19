@@ -28,6 +28,7 @@ const FEATURE_KEYS = [
   "feature_fhaBadges",
   "feature_fhaNprWarning",
   "feature_fhaManualEligible",
+  "feature_copyAddresses",
   "feature_telemetry"
 ];
 
