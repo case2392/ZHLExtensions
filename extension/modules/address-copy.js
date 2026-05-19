@@ -384,7 +384,25 @@
         const okHousing = await setDropdownByLabel(form, 'Housing type', addr.housing, { startsWith: true });
         if (!okHousing) console.warn('  → housing type set failed');
       }
-      await wait(150);
+      await wait(250); // let the form re-render — Rent reveals a "Monthly rent" input
+
+      // 4b. Monthly rent (only when housing = Rent and the source row
+      //     showed a non-N/A amount). Strip currency formatting; LOP
+      //     expects a plain number, the dollar sign is a prefix glyph.
+      if (/rent/i.test(addr.housing) && addr.rent && !/^n\/a$/i.test(addr.rent)) {
+        const rentAmount = String(addr.rent).replace(/[^0-9.]/g, '');
+        if (rentAmount) {
+          console.log('step 4b: Monthly rent →', rentAmount);
+          const rentInput = findTextInputByLabel(form, 'Monthly rent');
+          if (!rentInput) console.warn('  → monthly rent input not found');
+          else {
+            const ok = setReactInputValue(rentInput, rentAmount);
+            try { rentInput.blur(); } catch (_) {}
+            await wait(250);
+            console.log('  → monthly rent set ' + (ok ? 'ok' : 'FAILED') + ' (final value: "' + rentInput.value + '")');
+          }
+        }
+      }
 
       // 5. Move in date ----------------------------------------------------
       // After each date write we explicitly .blur() the input (the
@@ -449,7 +467,7 @@
 
   // Debug helper — pretty-prints what's filled and what's blank in the form.
   function dumpFormState(form) {
-    const fields = ['Address type', 'Use existing address', 'Street address', 'Unit', 'City', 'State', 'Zip code', 'Country', 'Housing type', 'Move in date', 'Move out date'];
+    const fields = ['Address type', 'Use existing address', 'Street address', 'Unit', 'City', 'State', 'Zip code', 'Country', 'Housing type', 'Monthly rent', 'Move in date', 'Move out date'];
     fields.forEach(function (lbl) {
       const lblEl = findLabel(form, lbl);
       if (!lblEl) { console.warn('  ·', lbl, '→ label not found'); return; }
