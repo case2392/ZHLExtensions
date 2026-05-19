@@ -118,45 +118,50 @@
 
   // ---- Field finders ------------------------------------------------------
 
-  // Walk descendants of `form`, find an element whose text content trims
-  // to `labelText` (or matches the regex), then return the next form
-  // control of `tag` within the same wrapper group.
-  function findFieldByLabel(form, labelText, tag) {
+  function norm(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
+
+  // Find the label element that matches `labelText` (string === or regex).
+  function findLabel(form, labelText) {
     const matcher = typeof labelText === 'string'
-      ? function (txt) { return txt === labelText; }
-      : function (txt) { return labelText.test(txt); };
+      ? function (t) { return t === labelText; }
+      : function (t) { return labelText.test(t); };
     const all = form.querySelectorAll('label, span, div, h4, h5, h6, p');
-    for (const lbl of all) {
-      // textContent matches if THIS node's own text (ignoring nested
-      // text) equals the label. We approximate by checking the trimmed
-      // textContent — labels are short single-line elements.
-      const txt = (lbl.textContent || '').trim();
+    for (const el of all) {
+      const txt = (el.textContent || '').trim();
       if (!txt || !matcher(txt)) continue;
-      // Look within the immediate ancestor wrappers for the control.
-      let p = lbl.parentElement;
-      for (let depth = 0; depth < 4 && p; depth++) {
-        const found = p.querySelector(tag);
-        if (found) return found;
-        p = p.parentElement;
+      return el;
+    }
+    return null;
+  }
+
+  // From a label element, walk up at most `depth` levels and return the
+  // first descendant of any of the requested tag/role types.
+  function controlNear(labelEl, predicate, maxDepth) {
+    let p = labelEl ? labelEl.parentElement : null;
+    for (let d = 0; d < (maxDepth || 4) && p; d++) {
+      const all = p.querySelectorAll('*');
+      for (const el of all) {
+        if (predicate(el)) return el;
       }
+      p = p.parentElement;
     }
     return null;
   }
 
   function findCheckboxByLabel(form, labelRegex) {
-    const all = form.querySelectorAll('label, span, div');
-    for (const el of all) {
-      const txt = (el.textContent || '').trim();
-      if (!txt || !labelRegex.test(txt)) continue;
-      // Check the label itself and its ancestors for a checkbox.
-      let p = el;
-      for (let depth = 0; depth < 4 && p; depth++) {
-        const cb = p.querySelector('input[type="checkbox"]');
-        if (cb) return cb;
-        p = p.parentElement;
-      }
-    }
-    return null;
+    const lbl = findLabel(form, labelRegex);
+    if (!lbl) return null;
+    return controlNear(lbl, function (el) {
+      return el.tagName === 'INPUT' && el.type === 'checkbox';
+    });
+  }
+
+  function findTextInputByLabel(form, labelText) {
+    const lbl = findLabel(form, labelText);
+    if (!lbl) return null;
+    return controlNear(lbl, function (el) {
+      return el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'tel' || el.type === 'date' || el.type === '');
+    });
   }
 
   function findSubmitButton(form) {
@@ -166,6 +171,110 @@
       if (t === 'add' || t === 'save') return b;
     }
     return null;
+  }
+
+  // ---- Dropdown handling (native + custom) --------------------------------
+
+  // Set a dropdown field by its label and the option's visible text.
+  // Tries native <select> first, then falls back to a custom React
+  // dropdown (button[aria-haspopup] / [role="combobox"]).
+  async function setDropdownByLabel(form, labelText, optionText, opts) {
+    opts = opts || {};
+    const lbl = findLabel(form, labelText);
+    if (!lbl) {
+      console.warn('  [dropdown] label not found:', labelText);
+      return false;
+    }
+    console.log('  [dropdown] label found:', labelText);
+
+    // Walk up to find a native select OR a dropdown trigger.
+    let p = lbl.parentElement;
+    for (let d = 0; d < 5 && p; d++) {
+      const native = p.querySelector('select');
+      if (native) {
+        console.log('  [dropdown] native <select> found near "' + labelText + '"');
+        const want = norm(optionText);
+        let value = null;
+        for (const o of native.options) {
+          const t = norm(o.text);
+          if (t === want) { value = o.value; break; }
+        }
+        if (value == null) {
+          for (const o of native.options) {
+            const t = norm(o.text);
+            if (t.indexOf(want) === 0 || t.indexOf(want) !== -1) { value = o.value; break; }
+          }
+        }
+        if (value == null) {
+          console.warn('  [dropdown] no native option for "' + optionText + '" — available:',
+            Array.from(native.options).map(function (o) { return o.text; }));
+          return false;
+        }
+        return setReactSelectValue(native, value);
+      }
+      // Custom React dropdown trigger detection. Constellation uses
+      // button[aria-haspopup="listbox"] (or "true") with a chevron.
+      const trigger = p.querySelector(
+        'button[aria-haspopup="listbox"], button[aria-haspopup="true"], [role="combobox"], button[aria-expanded]'
+      );
+      if (trigger && p.contains(trigger) && trigger !== lbl) {
+        console.log('  [dropdown] custom trigger found near "' + labelText + '":', trigger.tagName, trigger.textContent && trigger.textContent.trim().slice(0, 40));
+        return await pickCustomOption(trigger, optionText, opts);
+      }
+      p = p.parentElement;
+    }
+    console.warn('  [dropdown] no control found near label "' + labelText + '"');
+    return false;
+  }
+
+  async function pickCustomOption(trigger, optionText, opts) {
+    opts = opts || {};
+    try { trigger.click(); } catch (e) { console.warn('  [dropdown] trigger.click() threw', e); }
+    await wait(180);
+    const want = norm(optionText);
+    const start = Date.now();
+    const optionSelectors = [
+      '[role="option"]',
+      'li[role="option"]',
+      '[role="listbox"] [role="option"]',
+      '[role="menu"] [role="menuitem"]',
+      'li[role="menuitem"]'
+    ];
+    while (Date.now() - start < 2500) {
+      for (const sel of optionSelectors) {
+        const all = document.querySelectorAll(sel);
+        for (const o of all) {
+          if (o.offsetParent === null && o.getClientRects().length === 0) continue;
+          const t = norm(o.textContent);
+          let match = (t === want);
+          if (!match && opts.startsWith) match = (t.indexOf(want) === 0);
+          if (!match && opts.includes) match = (t.indexOf(want) !== -1);
+          if (match) {
+            console.log('  [dropdown] clicking custom option:', t);
+            try { o.click(); } catch (e) { console.warn('  [dropdown] option.click() threw', e); }
+            await wait(150);
+            return true;
+          }
+        }
+      }
+      await wait(80);
+    }
+    // Timed out — log what's visible so the user can paste back.
+    const visible = [];
+    optionSelectors.forEach(function (sel) {
+      document.querySelectorAll(sel).forEach(function (o) {
+        if (o.offsetParent === null) return;
+        const t = (o.textContent || '').trim();
+        if (t) visible.push(sel + ' → "' + t + '"');
+      });
+    });
+    console.warn('  [dropdown] timed out waiting for option matching "' + optionText + '"; visible options:', visible);
+    // Close any open popover by pressing Escape so the next iteration isn't blocked.
+    try {
+      document.activeElement && document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      document.body.click();
+    } catch (_) {}
+    return false;
   }
 
   // ---- React-aware setters ------------------------------------------------
@@ -206,127 +315,126 @@
     return String(select.value) === String(value);
   }
 
-  // Match a <select>'s option by visible text (case-insensitive, trims
-  // surrounding whitespace, normalizes internal whitespace). Returns
-  // the option's value attribute so we can pass it to setReactSelectValue.
-  function findOptionValueByText(select, targetText, opts) {
-    opts = opts || {};
-    const want = String(targetText).trim().replace(/\s+/g, ' ').toLowerCase();
-    for (const o of select.options) {
-      const t = (o.text || '').trim().replace(/\s+/g, ' ').toLowerCase();
-      if (!t) continue;
-      if (opts.startsWith) {
-        if (t.indexOf(want) === 0) return o.value;
-      } else if (opts.includes) {
-        if (t.indexOf(want) !== -1) return o.value;
-      } else {
-        if (t === want) return o.value;
-      }
-    }
-    return null;
-  }
-
   // ---- Per-address copy ---------------------------------------------------
 
   async function copyOneAddress(destSection, addr, idx, total) {
     console.group('[Address Copy] ' + (idx + 1) + '/' + total + ' — ' + addr.addressLine);
     try {
+      console.log('source:', addr);
       const addBtn = destSection.querySelector('button[data-cy="add-entity-button"]');
       if (!addBtn) { console.warn('Add address button not found'); return false; }
+      console.log('clicking Add address button…');
       addBtn.click();
       const form = await waitForForm(destSection);
-      if (!form) { console.warn('Add address form never opened'); return false; }
+      if (!form) { console.warn('Add address form never opened within 3s'); return false; }
+      console.log('form opened:', form);
+      // Give React a tick to mount form children (dropdown triggers etc.)
+      await wait(250);
 
-      // 1. Address type
-      const typeSel = findFieldByLabel(form, 'Address type', 'select');
-      if (typeSel) {
-        const wantText = addr.type === 'previous' ? 'previous address' : 'current address';
-        const v = findOptionValueByText(typeSel, wantText) ||
-                  findOptionValueByText(typeSel, addr.type, { startsWith: true });
-        if (v != null) setReactSelectValue(typeSel, v);
-        else console.warn('Address type option not found for', addr.type);
-      } else {
-        console.warn('Address type select not found');
-      }
-      await wait(120);
-
-      // 2. Mailing same as current/previous — only when the source row
-      //    had "Mailing" in its type. Use the checkbox's current state
-      //    to decide whether to click.
-      if (addr.isMailingSame) {
-        const cb = findCheckboxByLabel(form, /mailing\s+same\s+as/i);
-        if (cb && !cb.checked) {
-          cb.click();
-          await wait(80);
-        }
-      }
-
-      // 3. Use existing address — picks our source's full address line.
-      //    This is the heavy lifter: LOP populates street / city / state
-      //    / zip / country in one shot, none of which we'd otherwise be
-      //    able to drive without poking the State and Country dropdowns.
-      const existingSel = findFieldByLabel(form, /^Use existing address$/, 'select');
-      if (existingSel) {
-        let v = findOptionValueByText(existingSel, addr.addressLine);
-        if (v == null) {
-          // Some option strings include "(Current)" / "(Previous)" suffixes.
-          v = findOptionValueByText(existingSel, addr.addressLine, { startsWith: true }) ||
-              findOptionValueByText(existingSel, addr.addressLine, { includes: true });
-        }
-        if (v != null) {
-          setReactSelectValue(existingSel, v);
-          await wait(200);
-        } else {
-          console.warn('Use existing address option not found for', addr.addressLine);
-          console.warn('Available options:', Array.from(existingSel.options).map(function (o) { return o.text; }));
-          // Cancel this form rather than save partial data.
-          const cancel = Array.from(form.querySelectorAll('button')).find(function (b) {
-            return (b.textContent || '').trim().toLowerCase() === 'cancel';
-          });
-          if (cancel) cancel.click();
-          return false;
-        }
-      } else {
-        console.warn('Use existing address select not found');
-      }
-
-      // 4. Housing type — source shows "Own" / "Rent" / "Live rent free".
-      const housingSel = findFieldByLabel(form, 'Housing type', 'select');
-      if (housingSel && addr.housing) {
-        const v = findOptionValueByText(housingSel, addr.housing);
-        if (v != null) setReactSelectValue(housingSel, v);
-        else console.warn('Housing type option not found for', addr.housing);
-      }
-      await wait(80);
-
-      // 5. Move in date (always present)
-      const moveInInput = findFieldByLabel(form, 'Move in date', 'input');
-      if (moveInInput && addr.moveIn) {
-        setReactInputValue(moveInInput, normalizeDate(addr.moveIn));
-      }
-
-      // 6. Move out date (Previous addresses only)
-      if (addr.type === 'previous' && addr.moveOut && !/present/i.test(addr.moveOut)) {
-        const moveOutInput = findFieldByLabel(form, 'Move out date', 'input');
-        if (moveOutInput) setReactInputValue(moveOutInput, normalizeDate(addr.moveOut));
-      }
-
-      // 7. Submit
+      // 1. Address type ----------------------------------------------------
+      console.log('step 1: Address type →', addr.type === 'previous' ? 'Previous address' : 'Current address');
+      const typeWant = addr.type === 'previous' ? 'Previous address' : 'Current address';
+      const okType = await setDropdownByLabel(form, 'Address type', typeWant, { startsWith: true });
+      if (!okType) console.warn('  → address type set failed');
       await wait(200);
-      const submit = findSubmitButton(form);
-      if (!submit) { console.warn('Submit button not found'); return false; }
-      if (submit.disabled || submit.getAttribute('aria-disabled') === 'true') {
-        console.warn('Submit button is disabled — form likely failed validation. Check fields above.');
+
+      // 2. Mailing same as current/previous --------------------------------
+      if (addr.isMailingSame) {
+        console.log('step 2: ticking "Mailing same as current/previous" checkbox');
+        const cb = findCheckboxByLabel(form, /mailing\s+same\s+as/i);
+        if (!cb) console.warn('  → mailing checkbox not found');
+        else if (cb.checked) console.log('  → already checked, skipping');
+        else { cb.click(); await wait(120); }
+      } else {
+        console.log('step 2: skipped (source row had no "Mailing" in its type)');
+      }
+
+      // 3. Use existing address — the heavy lifter -------------------------
+      console.log('step 3: Use existing address →', addr.addressLine);
+      const okExisting = await setDropdownByLabel(form, 'Use existing address', addr.addressLine, { includes: true });
+      if (!okExisting) {
+        console.warn('  → Use existing address pick failed; canceling this form so we don\'t save partial data');
+        const cancel = Array.from(form.querySelectorAll('button')).find(function (b) {
+          return (b.textContent || '').trim().toLowerCase() === 'cancel';
+        });
+        if (cancel) cancel.click();
+        await waitForFormClose(destSection, 2000);
         return false;
       }
+      await wait(350); // let LOP populate street/city/state/zip/country
+
+      // 4. Housing type ----------------------------------------------------
+      if (addr.housing) {
+        console.log('step 4: Housing type →', addr.housing);
+        const okHousing = await setDropdownByLabel(form, 'Housing type', addr.housing, { startsWith: true });
+        if (!okHousing) console.warn('  → housing type set failed');
+      }
+      await wait(150);
+
+      // 5. Move in date ----------------------------------------------------
+      const moveInDate = normalizeDate(addr.moveIn);
+      console.log('step 5: Move in date →', moveInDate);
+      const moveInInput = findTextInputByLabel(form, 'Move in date');
+      if (!moveInInput) console.warn('  → move-in date input not found');
+      else if (moveInDate) {
+        const ok = setReactInputValue(moveInInput, moveInDate);
+        console.log('  → move-in set ' + (ok ? 'ok' : 'FAILED') + ' (final value: "' + moveInInput.value + '")');
+      }
+
+      // 6. Move out date (Previous addresses only) -------------------------
+      if (addr.type === 'previous' && addr.moveOut && !/present/i.test(addr.moveOut)) {
+        const moveOutDate = normalizeDate(addr.moveOut);
+        console.log('step 6: Move out date →', moveOutDate);
+        const moveOutInput = findTextInputByLabel(form, 'Move out date');
+        if (!moveOutInput) console.warn('  → move-out date input not found');
+        else {
+          const ok = setReactInputValue(moveOutInput, moveOutDate);
+          console.log('  → move-out set ' + (ok ? 'ok' : 'FAILED') + ' (final value: "' + moveOutInput.value + '")');
+        }
+      } else {
+        console.log('step 6: skipped (Current address or "Present" move-out)');
+      }
+
+      // 7. Submit ----------------------------------------------------------
+      await wait(300);
+      const submit = findSubmitButton(form);
+      if (!submit) { console.warn('step 7: submit (Add/Save) button not found'); return false; }
+      const disabled = submit.disabled || submit.getAttribute('aria-disabled') === 'true';
+      if (disabled) {
+        // Validation failed — dump the form's current state for debugging.
+        console.warn('step 7: submit button is DISABLED — form did not validate. State dump:');
+        dumpFormState(form);
+        return false;
+      }
+      console.log('step 7: clicking submit (' + (submit.textContent || '').trim() + ')');
       submit.click();
       const closed = await waitForFormClose(destSection);
-      if (!closed) console.warn('Form did not close after Save — borrower may still be open.');
-      await wait(300); // let LOP re-render the table
+      if (!closed) console.warn('  → form did not close after submit (4s); LOP may have rejected it silently');
+      await wait(400); // let LOP re-render the table
+      console.log('done.');
       return true;
     } finally {
       console.groupEnd();
     }
+  }
+
+  // Debug helper — pretty-prints what's filled and what's blank in the form.
+  function dumpFormState(form) {
+    const fields = ['Address type', 'Use existing address', 'Street address', 'Unit', 'City', 'State', 'Zip code', 'Country', 'Housing type', 'Move in date', 'Move out date'];
+    fields.forEach(function (lbl) {
+      const lblEl = findLabel(form, lbl);
+      if (!lblEl) { console.warn('  ·', lbl, '→ label not found'); return; }
+      // Look at the closest input / select / button next to the label.
+      const ctrl = controlNear(lblEl, function (el) {
+        return el.tagName === 'INPUT' || el.tagName === 'SELECT' ||
+               (el.tagName === 'BUTTON' && el.getAttribute('aria-haspopup'));
+      });
+      if (!ctrl) { console.warn('  ·', lbl, '→ no control near label'); return; }
+      const val = ctrl.tagName === 'BUTTON'
+        ? (ctrl.textContent || '').trim()
+        : (ctrl.value || '');
+      console.warn('  ·', lbl, '→', '"' + val + '"', ctrl);
+    });
   }
 
   // LOP's date inputs accept "M/D/YYYY" as displayed but want
