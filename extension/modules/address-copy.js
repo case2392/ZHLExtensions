@@ -482,7 +482,14 @@
   async function copyAllAddresses(sourceSection, destSection, btn) {
     const addrs = parseAddressesFromSection(sourceSection);
     if (!addrs.length) { alert('No addresses on the primary borrower to copy.'); return; }
-    if (!confirm('Copy ' + addrs.length + ' address(es) from the primary borrower to this co-borrower?')) return;
+    const destAddrs = parseAddressesFromSection(destSection);
+    const promptMsg = destAddrs.length
+      ? 'This co-borrower already has ' + destAddrs.length + ' address(es). ' +
+        'Adding ' + addrs.length + ' more from the primary borrower will create duplicates — ' +
+        'delete the existing co-borrower addresses first if you want a clean copy.\n\n' +
+        'Continue anyway?'
+      : 'Copy ' + addrs.length + ' address(es) from the primary borrower to this co-borrower?';
+    if (!confirm(promptMsg)) return;
 
     const origText = btn.textContent;
     btn.disabled = true;
@@ -556,14 +563,13 @@
     if (sections.length < 2) { removeAllButtons(); return; }
     const primary = sections[0];
     if (isSectionEmpty(primary)) { removeAllButtons(); return; }
+    // Button now appears next to EVERY co-borrower section regardless
+    // of whether it already has addresses — that way a partial / broken
+    // previous run can be retried after the user trashes the bad rows.
+    // The click handler shows a duplicate-warning confirm when the
+    // destination is non-empty so they don't accidentally re-add.
     for (let i = 1; i < sections.length; i++) {
-      const dest = sections[i];
-      if (isSectionEmpty(dest)) {
-        injectButton(dest, primary);
-      } else {
-        const stale = dest.querySelector('[' + COPY_BUTTON_ATTR + ']');
-        if (stale) stale.remove();
-      }
+      injectButton(sections[i], primary);
     }
   }
 
