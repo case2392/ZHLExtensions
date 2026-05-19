@@ -76,19 +76,24 @@
   // ---- Form discovery -----------------------------------------------------
 
   // After clicking Add address, the edit form is appended inside the
-  // section. Identify it as the closest descendant that contains a
-  // Cancel button AND an Add or Save button at its footer.
+  // section. Find the wrapping div that contains the field labels —
+  // NOT just the footer that holds Cancel + Add (those two buttons
+  // live in their own row inside the form, so the smallest common
+  // ancestor of them is just the footer, which doesn't include the
+  // labels). We require the ancestor to contain the canonical
+  // "Address type" and "Street address" label text so we know we got
+  // the whole form.
   function findOpenForm(destSection) {
     const buttons = destSection.querySelectorAll('button');
     for (const b of buttons) {
       const t = (b.textContent || '').trim().toLowerCase();
       if (t !== 'add' && t !== 'save') continue;
       let p = b.parentElement;
-      for (let depth = 0; depth < 8 && p && p !== destSection; depth++) {
-        const cancel = Array.from(p.querySelectorAll('button')).find(function (x) {
-          return (x.textContent || '').trim().toLowerCase() === 'cancel';
-        });
-        if (cancel) return p;
+      for (let depth = 0; depth < 14 && p && p !== destSection; depth++) {
+        const text = (p.textContent || '').toLowerCase();
+        if (text.indexOf('address type') !== -1 && text.indexOf('street address') !== -1) {
+          return p;
+        }
         p = p.parentElement;
       }
     }
@@ -120,12 +125,22 @@
 
   function norm(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
 
+  // Strip the trailing markers c11n adds to required / help-iconed labels
+  // so "Address type *" / "Mailing same as current address ?" become
+  // "Address type" / "Mailing same as current address" for matching.
+  function cleanLabel(s) {
+    return String(s || '').trim().replace(/[\s*?]+$/g, '').trim();
+  }
+
   // Find the label element that matches `labelText` (string === or regex).
+  // Only inspects single-line label-like elements (label/span/p/headings)
+  // because divs typically wrap the label AND its control, so their
+  // textContent is the label + the field value.
   function findLabel(form, labelText) {
     const matcher = typeof labelText === 'string'
-      ? function (t) { return t === labelText; }
+      ? function (t) { return cleanLabel(t) === labelText; }
       : function (t) { return labelText.test(t); };
-    const all = form.querySelectorAll('label, span, div, h4, h5, h6, p');
+    const all = form.querySelectorAll('label, span, p, h4, h5, h6');
     for (const el of all) {
       const txt = (el.textContent || '').trim();
       if (!txt || !matcher(txt)) continue;
