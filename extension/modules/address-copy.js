@@ -343,15 +343,16 @@
       const form = await waitForForm(destSection);
       if (!form) { console.warn('Add address form never opened within 3s'); return false; }
       console.log('form opened:', form);
-      // Give React a tick to mount form children (dropdown triggers etc.)
-      await wait(250);
+      // Brief settle for React to mount the form's children. The
+      // dropdowns are native <select>s so we don't need much.
+      await wait(150);
 
       // 1. Address type ----------------------------------------------------
       console.log('step 1: Address type →', addr.type === 'previous' ? 'Previous address' : 'Current address');
       const typeWant = addr.type === 'previous' ? 'Previous address' : 'Current address';
       const okType = await setDropdownByLabel(form, 'Address type', typeWant, { startsWith: true });
       if (!okType) console.warn('  → address type set failed');
-      await wait(200);
+      await wait(80);
 
       // 2. Mailing same as current/previous --------------------------------
       if (addr.isMailingSame) {
@@ -359,7 +360,7 @@
         const cb = findCheckboxByLabel(form, /mailing\s+same\s+as/i);
         if (!cb) console.warn('  → mailing checkbox not found');
         else if (cb.checked) console.log('  → already checked, skipping');
-        else { cb.click(); await wait(120); }
+        else { cb.click(); await wait(80); }
       } else {
         console.log('step 2: skipped (source row had no "Mailing" in its type)');
       }
@@ -376,7 +377,8 @@
         await waitForFormClose(destSection, 2000);
         return false;
       }
-      await wait(350); // let LOP populate street/city/state/zip/country
+      // LOP needs a moment here to populate Street/City/State/Zip/Country.
+      await wait(220);
 
       // 4. Housing type ----------------------------------------------------
       if (addr.housing) {
@@ -384,7 +386,8 @@
         const okHousing = await setDropdownByLabel(form, 'Housing type', addr.housing, { startsWith: true });
         if (!okHousing) console.warn('  → housing type set failed');
       }
-      await wait(250); // let the form re-render — Rent reveals a "Monthly rent" input
+      // Settle so Rent can reveal its Monthly rent input.
+      await wait(150);
 
       // 4b. Monthly rent (only when housing = Rent and the source row
       //     showed a non-N/A amount). Strip currency formatting; LOP
@@ -457,7 +460,7 @@
       submit.click();
       const closed = await waitForFormClose(destSection);
       if (!closed) console.warn('  → form did not close after submit (4s); LOP may have rejected it silently');
-      await wait(400); // let LOP re-render the table
+      await wait(200); // let LOP re-render the table
       console.log('done.');
       return true;
     } finally {
@@ -501,13 +504,15 @@
     const addrs = parseAddressesFromSection(sourceSection);
     if (!addrs.length) { alert('No addresses on the primary borrower to copy.'); return; }
     const destAddrs = parseAddressesFromSection(destSection);
-    const promptMsg = destAddrs.length
-      ? 'This co-borrower already has ' + destAddrs.length + ' address(es). ' +
+    // Only prompt when the destination already has addresses — otherwise
+    // there's nothing to lose, just run it.
+    if (destAddrs.length) {
+      const promptMsg = 'This co-borrower already has ' + destAddrs.length + ' address(es). ' +
         'Adding ' + addrs.length + ' more from the primary borrower will create duplicates — ' +
         'delete the existing co-borrower addresses first if you want a clean copy.\n\n' +
-        'Continue anyway?'
-      : 'Copy ' + addrs.length + ' address(es) from the primary borrower to this co-borrower?';
-    if (!confirm(promptMsg)) return;
+        'Continue anyway?';
+      if (!confirm(promptMsg)) return;
+    }
 
     const origText = btn.textContent;
     btn.disabled = true;
