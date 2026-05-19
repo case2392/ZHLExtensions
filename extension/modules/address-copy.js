@@ -387,12 +387,21 @@
       await wait(150);
 
       // 5. Move in date ----------------------------------------------------
+      // After each date write we explicitly .blur() the input (the
+      // real DOM method, not a synthetic event) and wait 250ms so
+      // React fires its onBlur handler and commits the value to
+      // internal state BEFORE Submit fires. Without this, the last
+      // input written reverts to "Unknown" — the Submit click blurs
+      // the input but the form's submit payload is built before
+      // React's setState has flushed.
       const moveInDate = normalizeDate(addr.moveIn);
       console.log('step 5: Move in date →', moveInDate);
       const moveInInput = findTextInputByLabel(form, 'Move in date');
       if (!moveInInput) console.warn('  → move-in date input not found');
       else if (moveInDate) {
         const ok = setReactInputValue(moveInInput, moveInDate);
+        try { moveInInput.blur(); } catch (_) {}
+        await wait(250);
         console.log('  → move-in set ' + (ok ? 'ok' : 'FAILED') + ' (final value: "' + moveInInput.value + '")');
       }
 
@@ -404,6 +413,8 @@
         if (!moveOutInput) console.warn('  → move-out date input not found');
         else {
           const ok = setReactInputValue(moveOutInput, moveOutDate);
+          try { moveOutInput.blur(); } catch (_) {}
+          await wait(250);
           console.log('  → move-out set ' + (ok ? 'ok' : 'FAILED') + ' (final value: "' + moveOutInput.value + '")');
         }
       } else {
@@ -411,7 +422,10 @@
       }
 
       // 7. Submit ----------------------------------------------------------
-      await wait(300);
+      // Extra settle before submit — the last input's blur commit
+      // needs to complete its React render cycle before the form
+      // gathers values for the submit payload.
+      await wait(400);
       const submit = findSubmitButton(form);
       if (!submit) { console.warn('step 7: submit (Add/Save) button not found'); return false; }
       const disabled = submit.disabled || submit.getAttribute('aria-disabled') === 'true';
