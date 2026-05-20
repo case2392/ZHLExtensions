@@ -544,6 +544,71 @@
       </div>
     </div>
 
+    <!-- SMS mark all as read -->
+    <div class="feature is-new" id="sms-mark-read">
+      <div class="shot">
+        <svg viewBox="0 0 240 160" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            /* Three rows; bold-with-count flips to regular-no-count in
+               sequence, illustrating each thread getting marked read. */
+            .row-bold { animation: unbold 3.6s ease-in-out infinite; }
+            .row-count { animation: hide-count 3.6s ease-in-out infinite; }
+            .row1 { animation-delay: 0s; }
+            .row2 { animation-delay: 0.7s; }
+            .row3 { animation-delay: 1.4s; }
+            @keyframes unbold {
+              0%, 35%   { font-weight: 700; fill: #111; }
+              50%, 100% { font-weight: 400; fill: #6b7280; }
+            }
+            @keyframes hide-count {
+              0%, 35%   { opacity: 1; }
+              50%, 100% { opacity: 0; }
+            }
+            .btn-pulse {
+              animation: btn-pulse 3.6s ease-in-out infinite;
+              fill: #0b5cab;
+            }
+            @keyframes btn-pulse {
+              0%, 8%   { opacity: 0.7; }
+              12%, 25% { opacity: 1; }
+              30%, 100% { opacity: 0.7; }
+            }
+          </style>
+          <!-- Header row with "New thread" + "Mark All As Read" -->
+          <rect x="8" y="6" width="60" height="16" rx="3" fill="#fff" stroke="#d1d5db"/>
+          <text x="38" y="17" font="500 9px Arial" fill="#111" text-anchor="middle">New thread</text>
+          <rect class="btn-pulse" x="72" y="6" width="86" height="16" rx="3"/>
+          <text x="115" y="17" font="600 9px Arial" fill="#fff" text-anchor="middle">Mark All As Read</text>
+          <!-- Thread rows -->
+          <g class="row1">
+            <text class="row-bold" x="14" y="44" font="600 10px Arial">Mark Malone — Will do</text>
+            <circle class="row-count" cx="220" cy="40" r="6" fill="#0b5cab"/>
+            <text class="row-count" x="220" y="43" font="700 8px Arial" fill="#fff" text-anchor="middle">1</text>
+          </g>
+          <g class="row2">
+            <text class="row-bold" x="14" y="68" font="600 10px Arial">Hunter Parrott — Fantastic</text>
+            <circle class="row-count" cx="220" cy="64" r="6" fill="#0b5cab"/>
+            <text class="row-count" x="220" y="67" font="700 8px Arial" fill="#fff" text-anchor="middle">1</text>
+          </g>
+          <g class="row3">
+            <text class="row-bold" x="14" y="92" font="600 10px Arial">Devan McNeil — Good deal!</text>
+            <circle class="row-count" cx="220" cy="88" r="6" fill="#0b5cab"/>
+            <text class="row-count" x="220" y="91" font="700 8px Arial" fill="#fff" text-anchor="middle">1</text>
+          </g>
+          <text x="14" y="120" font="500 10px Arial" fill="#16a34a">All caught up ✓</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Mark All As Read</h3>
+        <div class="where">Salesforce Messaging panel → header (next to "New thread")</div>
+        <p>One-click button that walks every unread thread in the inbox, opens each (which is how Salesforce stamps a read receipt), then clicks <em>Back</em> to return. After the run, every thread is unbold and the unread counts are gone.</p>
+        <ul>
+          <li>Detects unread via bold subject text, the right-side unread-count pill, or the <code>unread</code> class on the row.</li>
+          <li>Heavy console logging at every step — failure modes are debuggable without round-tripping for a new build.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- Contact SMS -->
     <div class="feature" id="contact-sms">
       <div class="shot"><img src="images/contact-sms.svg" alt="Salesforce Contact record page with an Open SMS button next to the phone number" /></div>

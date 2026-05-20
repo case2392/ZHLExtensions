@@ -30,6 +30,7 @@ const FEATURE_KEYS = [
   "feature_fhaManualEligible",
   "feature_copyAddresses",
   "feature_updateToast",
+  "feature_smsMarkAllRead",
   "feature_telemetry"
 ];
 

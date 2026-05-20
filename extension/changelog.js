@@ -12,6 +12,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.21.0",
+    headline: "Mark all SMS threads as read with one button",
+    highlights: [
+      "Salesforce Messaging panel gets a Mark All As Read button next to New thread.",
+      "Walks each unread thread, opens it (which is what Salesforce uses to mark a thread as read), then clicks Back to return to the inbox.",
+      "Heavy console logging at every step so any failure mode is debuggable from the F12 console."
+    ],
+    sections: ["sms-mark-read"]
+  },
+  {
     version: "1.20.3",
     headline: "Toast 'View' button bypasses adblockers + clearer Copy-addresses demo",
     highlights: [

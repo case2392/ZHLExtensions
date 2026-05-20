@@ -304,6 +304,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: SMS Mark All As Read ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>SMS Mark All As Read</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> &mdash; the Salesforce Messaging utility panel</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_smsMarkAllRead" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a <strong>Mark All As Read</strong> button in the Messaging panel header next to <em>New thread</em>.</li>
+          <li>One click walks every unread thread, opens it (which is how Salesforce registers a read receipt), then clicks Back to return to the inbox.</li>
+          <li>Detects unread threads via the bold subject text, the right-side unread count pill (<code>.unread-count</code> / <code>.unread-countZuid</code>), or any <code>.unread</code> class.</li>
+          <li>Verbose console logging at every step &mdash; if anything misbehaves, F12 &rarr; Console will say exactly what it found / clicked / waited on.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Loan Amount Field ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
