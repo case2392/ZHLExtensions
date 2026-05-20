@@ -141,3 +141,18 @@ if (loPullBtn) {
 }
 
 loadFeatureStates();
+
+// Karma-link telemetry — fires when anyone clicks the "drop me karma"
+// link in the banner. Lets us see whether the banner actually drives
+// traffic to the Zall Wall.
+document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
+  a.addEventListener('click', () => {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'TRACK',
+        event: 'karma_link_clicked',
+        props: { source: a.getAttribute('data-zhl-karma-link') || 'setup' }
+      });
+    } catch (_) {}
+  });
+});

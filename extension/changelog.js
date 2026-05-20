@@ -6,47 +6,57 @@
 //                that introduced these changes.
 //   headline:   one-line summary used in the toast.
 //   highlights: short bullet strings rendered in the walkthrough
-//                "What's new" section.
+//                "What's new" section. Plain English, no jargon —
+//                this is what users read, not what engineers debug.
 //   sections:   optional array of walkthrough section ids to deep-link
 //                from the toast's "View what's new" button.
 
 window.ZHL_CHANGELOG = [
   {
-    version: "1.21.4",
-    headline: "Walkthrough: New features section now sorts most-recent first",
+    version: "1.22.0",
+    headline: "Plain-English changelog + karma link to my Zall Wall",
     highlights: [
-      "Cards in the top 'New features' section are now ordered by the newest changelog version that introduced or touched each one, so the freshest stuff is always at the top regardless of where it lives in the per-app sections below."
+      "Rewrote every 'What's new' entry on the walkthrough page in plain English — no more PubNub / DOM / virtualization jargon.",
+      "Added a karma callout at the top of the Setup page and the Walkthrough page with a link to my Zall Wall — if the pack saves you time, drop me karma!",
+      "Update toast (the bottom-right notification when the extension updates) now also has the karma link at the bottom."
+    ],
+    sections: ["whats-new"]
+  },
+  {
+    version: "1.21.4",
+    headline: "Newest features now show first on the walkthrough page",
+    highlights: [
+      "The 'New features' section at the top of the walkthrough now lists the freshest stuff first instead of jumbling the order."
     ],
     sections: []
   },
   {
     version: "1.21.3",
-    headline: "Mark All As Read: finds unread threads scrolled out of view",
+    headline: "Mark All As Read now catches threads scrolled out of view",
     highlights: [
-      "The messaging panel's thread list is virtualized — only visible rows live in the DOM. v1.21.2 silently missed any unread thread scrolled below the fold (you'd see the red unread dot on the tray icon but the dialog would say 'No unread threads').",
-      "Now flips Salesforce's built-in Unread toggle ON before scanning so the list collapses to only unread threads, then auto-scrolls the filtered list to mount any virtualized rows.",
-      "Restores the Unread toggle to its original state when the run finishes so the panel looks identical to before."
+      "Before this fix, if your unread messages were scrolled below what you could see, the button would say 'No unread threads' even though the red dot in the tray was on.",
+      "Now it flips Salesforce's own 'Unread' filter on first so the inbox shows only unread messages, marks them all, then flips the filter back so the panel looks the same as before."
     ],
     sections: ["sms-mark-read"]
   },
   {
     version: "1.21.2",
-    headline: "Mark All As Read: accurate success counts + clean UX",
+    headline: "Mark All As Read: cleaner look + accurate count",
     highlights: [
-      "Fixed: 'Marked 0 of N as read' dialog when threads were actually being marked correctly. The success check used to run while the thread view was still open — now it re-queries the inbox after Back to confirm the conversation is gone from the unread list.",
-      "Added: 'Marking 2/3 threads as read…' overlay during the run so users don't see threads flickering open and closed.",
-      "Button now hides itself when you have a conversation open — it only makes sense in the inbox view. Reappears when you click Back.",
-      "Honest about the constraint: Salesforce only marks threads read by opening them (PubNub READ broadcast fires on open). There's no public 'mark as read' API to call directly."
+      "Fixed the dialog that wrongly said 'Marked 0 of 3' when threads were actually being marked correctly.",
+      "Added a 'Marking 2 of 3 threads as read…' overlay so you don't see threads flickering open and closed during the run.",
+      "The button is now hidden when you're inside a conversation — it only shows when you're looking at the inbox.",
+      "Heads up: Salesforce only marks a thread read by opening it, so the button has to open each one briefly. There's no behind-the-scenes way to do it without that."
     ],
     sections: ["sms-mark-read"]
   },
   {
     version: "1.21.1",
-    headline: "Multiple workspace fixes + dedicated New Features section in the walkthrough",
+    headline: "Several Salesforce features now work across multiple open tabs",
     highlights: [
-      "Auto Call Details Tab + Salesforce Promotions auto-hide: now work across multiple open Lead workspace tabs in Console mode (tracked per DOM node instead of per URL — Console mounts every open workspace simultaneously so the URL-keyed approach only fired on the first tab).",
-      "SMS Mark All As Read: clicks now use composed:true events so they cross shadow DOM into LWC handlers, and the module tries multiple inner targets (.row-container → c-slds-sms-inbox-thread → h3 → .preview → li) instead of giving up after the first one didn't navigate.",
-      "Walkthrough page: NEW features now appear in a dedicated 'New features' section at the top of the page in addition to their app sections, so the freshest stuff is always above the fold."
+      "Auto Call Details Tab and the Show Promotions auto-hide used to only work on the first Lead you opened. Now they work on every Lead workspace tab you have open.",
+      "Mark All As Read clicks now reliably open the thread instead of doing nothing.",
+      "Walkthrough page got a dedicated 'New features' section at the top so the latest stuff is always front and center."
     ],
     sections: ["new-features"]
   },
@@ -54,28 +64,26 @@ window.ZHL_CHANGELOG = [
     version: "1.21.0",
     headline: "Mark all SMS threads as read with one button",
     highlights: [
-      "Salesforce Messaging panel gets a Mark All As Read button next to New thread.",
-      "Walks each unread thread, opens it (which is what Salesforce uses to mark a thread as read), then clicks Back to return to the inbox.",
-      "Heavy console logging at every step so any failure mode is debuggable from the F12 console."
+      "New Mark All As Read button in the Salesforce Messaging panel next to New thread.",
+      "Clicks each unread thread once to mark it read, then returns to the inbox automatically."
     ],
     sections: ["sms-mark-read"]
   },
   {
     version: "1.20.3",
-    headline: "Toast 'View' button bypasses adblockers + clearer Copy-addresses demo",
+    headline: "Toast 'View' button now opens reliably + clearer Copy-addresses demo",
     highlights: [
-      "Update toast's View what's new button now opens the walkthrough through the service worker so uBlock / privacy extensions can't block it.",
-      "Copy-addresses demo animation now actually shows the address landing in the co-borrower section (was sliding down and fading without arriving)."
+      "Fixed the 'View what's new' button in the update toast — it wouldn't open the walkthrough for users with ad blockers installed.",
+      "The Copy-addresses demo animation now actually shows the address landing on the co-borrower side instead of just sliding off."
     ],
     sections: ["whats-new", "address-copy"]
   },
   {
     version: "1.20.2",
-    headline: "Fixed: update toast now actually appears on first page load after an update",
+    headline: "Update notification toast now actually appears after an update",
     highlights: [
-      "Update toast was silently stamping 'seen' on the first load when no prior version was stored — meaning existing users updating to v1.20.0 never saw it.",
-      "Fresh installs vs. existing users are now distinguished via chrome.runtime.onInstalled instead of guessing from storage.",
-      "Added startup console.log so you can verify the toast module loaded and see why it did/didn't show."
+      "The bottom-right 'new version' toast wasn't showing the first time anyone updated to a new version.",
+      "Fixed so it appears on the first page load after every update."
     ],
     sections: ["whats-new"]
   },
@@ -83,41 +91,42 @@ window.ZHL_CHANGELOG = [
     version: "1.20.0",
     headline: "New: in-extension walkthrough page + update notifications",
     highlights: [
-      "Walkthrough page collects every feature in one place with screenshots and 'where to find it' hints.",
-      "Bottom-right toast appears on LOP/Gmail/Salesforce when the extension updates so you don't miss new features.",
-      "Fresh installs now auto-open the walkthrough instead of the setup page."
+      "Walkthrough page collects every feature in one place with screenshots and 'where to find it' hints — open it from the setup page anytime.",
+      "Bottom-right toast appears on LOP/Gmail/Salesforce after an update so you don't miss new features.",
+      "Fresh installs auto-open the walkthrough so new users can see what they just installed."
     ],
     sections: ["whats-new"]
   },
   {
     version: "1.19.8",
-    headline: "Drag Gmail attachments to your INLINE reply (not just popups)",
+    headline: "Drag Gmail attachments into your inline reply (not just popups)",
     highlights: [
-      "Gmail Drag — inline replies (no popup) now accept attachment drops instead of pasting the filename as text.",
-      "Copy addresses — confirm dialog skipped when the destination is empty.",
-      "Copy addresses — ~700ms faster per address.",
-      "FHA Manual Eligible pill — hover for the full Manual UW guideline matrix.",
-      "FHA Disputed badge — now reads ACCT IN DISPUTE from the Remarks field (LOP's structured dispute flags are never populated)."
+      "When you reply to an email inline (without popping out a separate compose window), you can now drag attachments straight into the reply instead of having them paste as plain filename text.",
+      "Copy addresses primary → co-borrower: no more confirm prompt when the co-borrower has no addresses yet — just runs.",
+      "Copy addresses: about 700ms faster per address.",
+      "FHA Manual Eligible pill: hover it to see the complete FHA Manual UW guideline matrix (score floor, max DTI, ratio tiers, compensating factors).",
+      "FHA Disputed badge: now reads 'ACCT IN DISPUTE' out of the Remarks field, which is how most credit-report disputes actually show up."
     ],
     sections: ["gmail-drag", "address-copy", "fha-manual"]
   },
   {
     version: "1.19.0",
-    headline: "FHA Manual UW eligibility badge under the Credit section",
+    headline: "FHA Manual Underwrite eligibility pill on every Lead",
     highlights: [
-      "Pill under the Credit heading shows ✓ FHA Manual Eligible (green) or ✗ FHA Manual Ineligible (red).",
-      "Uses the LOWER middle score across borrowers; hover reveals the full UW guideline matrix.",
-      "Copy addresses primary → co-borrower button on every empty co-borrower section."
+      "Green ✓ FHA Manual Eligible or red ✗ FHA Manual Ineligible pill appears under the Credit section based on each borrower's middle score.",
+      "Uses the lower middle score when you have multiple borrowers, which is what underwriting actually qualifies off of.",
+      "Hover the pill for the complete FHA Manual UW guideline matrix.",
+      "New 'Copy addresses from primary' button on every empty co-borrower addresses section."
     ],
     sections: ["fha-manual", "address-copy"]
   },
   {
     version: "1.18.0",
-    headline: "Branded 2-1 Buydown PDF + LO Profile",
+    headline: "Branded 2-1 Buydown PDF + auto-fill your LO profile from Salesforce",
     highlights: [
-      "One 2-1 Buydown PDF button (side-by-side scenario columns, PITIA payment labels).",
-      "Pull LO Profile (Name/Email/Phone) straight from Salesforce on the setup page.",
-      "Attribution tooltip — hover any ZHL Pack UI element to see who built it."
+      "One 2-1 Buydown PDF button that produces a borrower-facing comparison sheet with side-by-side scenarios and PITIA payment labels.",
+      "Pull your Loan Officer profile (Name / Email / Phone) straight from Salesforce on the setup page instead of typing it.",
+      "Hover any element added by this extension to see who built it."
     ],
     sections: ["buydown-pdf"]
   },
@@ -125,16 +134,17 @@ window.ZHL_CHANGELOG = [
     version: "1.15.0",
     headline: "FHA + Non-Permanent Resident Alien warning banner",
     highlights: [
-      "Sticky red banner when FHA + NPRA borrowers are detected (HUD removed NPRA from FHA eligibility May 25, 2025)."
+      "Sticky red banner across the top of the Lead page when the loan is FHA and any borrower is marked as a Non-Permanent Resident Alien.",
+      "HUD removed NPRAs from FHA eligibility on May 25, 2025 — this catches the combination before it ships."
     ],
     sections: ["fha-npr"]
   },
   {
     version: "1.12.0",
-    headline: "FHA Collections + Disputed badges with $2k / $1k cumulative caps",
+    headline: "FHA Collections + Disputed badges with $2k / $1k caps",
     highlights: [
-      "Live badges on the Liabilities section showing total Collections and Disputed against the FHA cumulative caps.",
-      "Tasks bulk-delete — checkbox column + Delete Selected button on Unsent and Awaiting borrower tables."
+      "Live badges on the Liabilities section showing total Collections (against the $2k FHA cap) and total Disputed Derogatory (against the $1k FHA cap).",
+      "Bulk-delete unsent tasks: checkbox column + Delete Selected button on the Unsent and Awaiting borrower task tables."
     ],
     sections: ["fha-badges", "task-bulk"]
   }

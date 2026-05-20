@@ -156,4 +156,12 @@
       track('walkthrough_section_clicked', { section: a.getAttribute('href').slice(1) });
     });
   });
+
+  // Karma-link clicks anywhere on the page get telemetry too — useful
+  // signal for "did the banner actually drive traffic to the Zall Wall".
+  document.querySelectorAll('a[data-zhl-karma-link]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      track('karma_link_clicked', { source: a.getAttribute('data-zhl-karma-link') || 'walkthrough', version: VERSION });
+    });
+  });
 })();

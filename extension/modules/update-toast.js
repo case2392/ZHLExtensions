@@ -26,19 +26,24 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
-    "1.21.3": "Mark All As Read now finds unread threads scrolled out of view.",
-    "1.21.2": "Mark All As Read: accurate counts, marking overlay, hidden inside threads.",
-    "1.21.1": "Mark All As Read now actually opens threads + multi-workspace fixes.",
-    "1.21.0": "Salesforce Messaging panel now has a Mark All As Read button.",
-    "1.20.3": "Toast View button now opens reliably + Copy-addresses demo redone.",
-    "1.20.2": "Update toast fixed — this is the one you're looking at now.",
-    "1.20.0": "Walkthrough page added! Click View to see every feature in the pack.",
-    "1.19.8": "Gmail attachments now drop on INLINE replies (not just popup composes).",
-    "1.19.0": "FHA Manual UW eligibility pill + Copy addresses primary → co-borrower.",
-    "1.18.0": "Branded 2-1 Buydown PDF + LO Profile auto-pull from Salesforce.",
-    "1.15.0": "FHA + Non-Permanent Resident Alien warning banner.",
-    "1.12.0": "FHA Collections + Disputed cumulative-cap badges."
+    "1.22.0": "Plain-English changelog + a karma link to my Zall Wall on every update screen.",
+    "1.21.4": "The Walkthrough's 'New features' section now lists the freshest items first.",
+    "1.21.3": "Mark All As Read now catches unread messages scrolled out of view.",
+    "1.21.2": "Mark All As Read: accurate counts and a cleaner look during the run.",
+    "1.21.1": "Several Salesforce features now work across multiple open Lead tabs.",
+    "1.21.0": "New: one-click Mark All As Read button in the Salesforce Messaging panel.",
+    "1.20.3": "Update toast 'View' button now opens reliably for users with ad blockers.",
+    "1.20.2": "Update notification toast now actually appears after an update.",
+    "1.20.0": "New: in-extension walkthrough page so you can find every feature.",
+    "1.19.8": "Drag Gmail attachments straight into your inline reply.",
+    "1.19.0": "New: FHA Manual eligibility pill + one-click Copy Addresses to co-borrower.",
+    "1.18.0": "Branded 2-1 Buydown PDF + LO Profile auto-fills from Salesforce.",
+    "1.15.0": "Warning banner when a Lead is FHA + Non-Permanent Resident Alien.",
+    "1.12.0": "FHA Collections / Disputed cumulative-cap badges on Liabilities."
   };
+
+  // Justin's Zall Wall — shown as a karma link at the bottom of the toast.
+  const ZALL_WALL_URL = 'https://zallwall.zillowgroup.com/justinca';
 
   const STORAGE_KEY = '_zhl_last_seen_version';
   const TOAST_ID = 'zhl-update-toast';
@@ -166,9 +171,41 @@
     actions.appendChild(dismissBtn);
     actions.appendChild(viewBtn);
 
+    // Karma footer — a small "💛 Like what you see? Drop karma" line
+    // with a clickable link to Justin's Zall Wall. Opened via the SW
+    // (same path as the View button) so adblockers don't intercept
+    // window.open from a content script.
+    const karma = document.createElement('div');
+    karma.setAttribute('style',
+      'margin-top:10px;padding-top:10px;border-top:1px dashed #e5e7eb;' +
+      'font:500 11.5px/1.4 Arial,sans-serif;color:#6b7280;text-align:center;');
+    karma.innerHTML = 'Built by <strong>Justin Case</strong>. Like the pack? ' +
+      '<a href="' + ZALL_WALL_URL + '" target="_blank" rel="noopener" ' +
+      'style="color:#0b5cab;text-decoration:underline;font-weight:600;" ' +
+      'data-zhl-karma-link="1">Drop me karma 💛</a>';
+    // Route the karma link through the SW too — same adblocker
+    // resilience as the View button.
+    const karmaLink = karma.querySelector('a[data-zhl-karma-link]');
+    if (karmaLink) {
+      karmaLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        track('karma_link_clicked', { source: 'update_toast', version: VERSION });
+        try {
+          chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: ZALL_WALL_URL }, function () {
+            if (chrome.runtime.lastError) {
+              try { window.open(ZALL_WALL_URL, '_blank'); } catch (_) {}
+            }
+          });
+        } catch (_) {
+          try { window.open(ZALL_WALL_URL, '_blank'); } catch (__) {}
+        }
+      });
+    }
+
     toast.appendChild(header);
     toast.appendChild(body);
     toast.appendChild(actions);
+    toast.appendChild(karma);
     toast.title = 'Built by Justin Case. Karma appreciated 💛';
     document.body.appendChild(toast);
 
