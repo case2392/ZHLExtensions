@@ -1558,6 +1558,17 @@
     const maintenance = sqft * MAINT_PER_SQFT;
     const childcare = state.childcare || 0;
     const totalDeductions = fedTax + fica + stateTax + monthlyDebts + piti + maintenance + childcare;
+    // LOP's "VA total deductions" field is what DU reads back from
+    // the URLA — and DU treats it as the NON-housing, NON-debt
+    // portion of deductions only (it subtracts PITI and monthly
+    // debts separately from the URLA). If we put the full sum here,
+    // DU double-counts PITI and debts and reports a residual income
+    // ~$3,400 lower than reality. So we split the field into:
+    //   totalDeductions: the full sum (gross − this = our residual)
+    //   urlaDeductions:  just taxes + maintenance + childcare (what
+    //                    LOP's "VA total deductions" field should
+    //                    contain so DU's residual matches LPA's)
+    const urlaDeductions = fedTax + fica + stateTax + maintenance + childcare;
     const residual = gross - totalDeductions;
     const requirement = vaTableRequirement(state.familySize, state.region, state.loanAmount);
     const dtiOver41 = state.dti != null && state.dti > 41;
@@ -1568,6 +1579,7 @@
       fica,
       stateTax,
       totalDeductions: Math.round(totalDeductions * 100) / 100,
+      urlaDeductions: Math.round(urlaDeductions * 100) / 100,
       residualIncome: Math.round(residual * 100) / 100,
       requirement,
       requirement120,
@@ -1661,8 +1673,18 @@
     // residual, keeps both values alive through the save round-trip.
     // Confirmed via 6-second polling in v1.10.12 — deductions stays
     // populated. Don't reorder without re-verifying.
-    if (deductionsField && result.totalDeductions != null) {
-      setReactInputValue(deductionsField, result.totalDeductions.toFixed(2));
+    // Use urlaDeductions (taxes + maintenance + childcare only) for
+    // LOP's "VA total deductions" field, NOT result.totalDeductions
+    // which includes PITI + monthly debts. DU and other AUS readers
+    // pull this field from the URLA and subtract housing + debts
+    // SEPARATELY — so writing the full sum here causes DU to
+    // double-count PITI + debts and report a residual ~$3.4k lower
+    // than LPA / the actual VA formula. See diagnosis vs DU's
+    // "Residual Income Actual: $-2499.32" report — that number is
+    // exactly `gross − full-totalDeductions − PITI − debts`, which
+    // is what DU does when we hand it the full sum.
+    if (deductionsField && result.urlaDeductions != null) {
+      setReactInputValue(deductionsField, result.urlaDeductions.toFixed(2));
       try { deductionsField.blur(); } catch (_) {}
       await waitMs(250);
     }

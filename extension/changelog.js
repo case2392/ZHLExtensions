@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.23.2",
+    headline: "VA Calc fix: DU was reporting a wildly wrong residual income (huge bug)",
+    highlights: [
+      "Found it: the VA calc was filling LOP's 'VA total deductions' field with the FULL sum of every deduction (taxes + monthly debts + PITI + maintenance). DU and some other AUS readers expect that field to be the NON-housing, NON-debt portion only — they subtract PITI and monthly debts separately from the URLA. So DU was double-counting those, reporting a residual income about $3,400 lower than the real value and referring files unnecessarily.",
+      "Example from a real submission: our calc showed +$893 residual, LPA showed +$813 (close, ~$80 tax-table difference, expected), DU showed −$2,499 (off by exactly the PITI + debts double-count).",
+      "Fix: 'VA total deductions' now gets only taxes + maintenance + childcare. The on-screen residual and the panel breakdown still show the full picture. Re-run the VA Residual Income Calc on any open files to repopulate the field with the corrected value before re-submitting to DU."
+    ],
+    sections: ["va-calc"]
+  },
+  {
     version: "1.23.1",
     headline: "FHA Manual Analyzer: auto-evaluates VA residual + accurate tier indicators",
     highlights: [
