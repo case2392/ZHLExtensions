@@ -12,6 +12,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.21.4",
+    headline: "Walkthrough: New features section now sorts most-recent first",
+    highlights: [
+      "Cards in the top 'New features' section are now ordered by the newest changelog version that introduced or touched each one, so the freshest stuff is always at the top regardless of where it lives in the per-app sections below."
+    ],
+    sections: []
+  },
+  {
     version: "1.21.3",
     headline: "Mark All As Read: finds unread threads scrolled out of view",
     highlights: [

@@ -63,22 +63,66 @@
   // — which is the same content, just the deeper copy). The clones still
   // run their own SVG animations independently because the CSS in each
   // demo SVG is scoped via @keyframes that apply per-element.
+  //
+  // Order: most-recently-introduced first. We compute "recency" from
+  // changelog.js by finding the newest version whose `sections` array
+  // references each card's id. Cards not referenced anywhere in the
+  // changelog fall to the bottom in their original DOM order.
   (function populateNewFeatures() {
     const host = document.getElementById('new-features-host');
     if (!host) return;
-    const news = document.querySelectorAll('.feature.is-new');
+    const news = Array.from(document.querySelectorAll('.feature.is-new'));
     if (!news.length) {
-      // Hide the whole section if there's nothing new this release.
       const sec = document.getElementById('new-features');
       if (sec) sec.style.display = 'none';
       const tocLink = document.querySelector('nav.toc a[href="#new-features"]');
       if (tocLink) tocLink.style.display = 'none';
       return;
     }
-    news.forEach(function (orig) {
-      const clone = orig.cloneNode(true);
-      // Strip the id from the clone so we don't have duplicate IDs in
-      // the DOM (TOC links still anchor to the original further down).
+
+    function newestVersionFor(sectionId) {
+      const log = window.ZHL_CHANGELOG || [];
+      // changelog is maintained newest-first; the first hit is therefore
+      // the most-recent version that touched this section.
+      for (const entry of log) {
+        if (!entry || !entry.sections) continue;
+        if (entry.sections.indexOf(sectionId) !== -1) return entry.version;
+      }
+      return null;
+    }
+    function cmpVersionDesc(a, b) {
+      // Treat missing version as oldest. Otherwise lexicographic
+      // comparison of numeric parts (semver-ish).
+      if (!a && !b) return 0;
+      if (!a) return 1;
+      if (!b) return -1;
+      const pa = String(a).split('.').map(function (n) { return parseInt(n, 10) || 0; });
+      const pb = String(b).split('.').map(function (n) { return parseInt(n, 10) || 0; });
+      const len = Math.max(pa.length, pb.length);
+      for (let i = 0; i < len; i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x !== y) return y - x;
+      }
+      return 0;
+    }
+
+    // Stable sort by recency: capture the original DOM index as the
+    // tiebreaker so cards introduced in the same version stay in their
+    // original order.
+    const annotated = news.map(function (el, i) {
+      return {
+        el: el,
+        version: newestVersionFor(el.id || ''),
+        domIndex: i
+      };
+    });
+    annotated.sort(function (a, b) {
+      const cmp = cmpVersionDesc(a.version, b.version);
+      return cmp !== 0 ? cmp : (a.domIndex - b.domIndex);
+    });
+
+    annotated.forEach(function (entry) {
+      const clone = entry.el.cloneNode(true);
       clone.removeAttribute('id');
       clone.querySelectorAll('[id]').forEach(function (n) { n.removeAttribute('id'); });
       host.appendChild(clone);
