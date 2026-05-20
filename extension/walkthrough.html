@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ZHL Productivity Pack — Tour</title>
+  <style>
+    :root {
+      --bg: #f9fafb;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #0b5cab;
+      --accent-soft: #eaf2fb;
+      --green: #16a34a;
+      --red: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ---- Layout ---- */
+    .page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 80px; }
+    header.top {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 0 16px;
+      border-bottom: 2px solid var(--accent);
+      margin-bottom: 24px;
+    }
+    header.top .logo {
+      width: 48px; height: 48px; border-radius: 8px;
+      background: var(--accent); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      font: 700 22px/1 Arial,sans-serif;
+    }
+    header.top .titles h1 {
+      margin: 0; font-size: 22px; color: var(--accent); letter-spacing: -.01em;
+    }
+    header.top .titles .sub {
+      margin-top: 2px; color: var(--muted); font-size: 13px;
+    }
+    header.top .version-pill {
+      margin-left: auto;
+      background: var(--accent-soft); color: var(--accent);
+      padding: 4px 10px; border-radius: 999px;
+      font: 600 12px/1 Arial,sans-serif;
+    }
+
+    /* ---- Nav (sticky table of contents) ---- */
+    nav.toc {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--bg);
+      padding: 8px 0 12px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    nav.toc a {
+      padding: 6px 12px; border-radius: 6px;
+      background: var(--card); border: 1px solid var(--border);
+      color: var(--text); font-size: 13px; font-weight: 500;
+    }
+    nav.toc a:hover { background: var(--accent-soft); border-color: var(--accent); text-decoration: none; }
+
+    /* ---- Section headings ---- */
+    section.app {
+      margin: 32px 0 16px;
+    }
+    section.app > h2 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      color: var(--text);
+      display: flex; align-items: center; gap: 10px;
+    }
+    section.app > h2 .icon { font-size: 24px; }
+    section.app > .runs-on {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    section.app > .runs-on code {
+      background: #f3f4f6; padding: 2px 6px; border-radius: 4px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    /* ---- Feature cards ---- */
+    .feature {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 18px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 14px;
+      transition: box-shadow .15s;
+    }
+    .feature:hover { box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+    .feature .shot {
+      background: #f3f4f6;
+      border-radius: 8px;
+      min-height: 130px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      padding: 8px;
+    }
+    .feature .shot img,
+    .feature .shot svg {
+      max-width: 100%; max-height: 220px; height: auto;
+    }
+    .feature .body h3 {
+      margin: 0 0 4px; font-size: 16px;
+    }
+    .feature .body .where {
+      color: var(--muted); font-size: 12px; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .feature .body .where::before {
+      content: "📍"; font-size: 11px;
+    }
+    .feature .body p, .feature .body ul {
+      margin: 6px 0; font-size: 13.5px; color: #1f2937;
+    }
+    .feature .body ul { padding-left: 18px; }
+    .feature .body li { margin: 3px 0; }
+    .feature .body strong { color: var(--text); }
+    .feature.is-new::before {
+      content: "NEW";
+      grid-column: 1 / -1;
+      justify-self: end;
+      background: var(--green); color: #fff;
+      padding: 2px 8px; border-radius: 4px;
+      font: 700 10px/1.2 Arial,sans-serif; letter-spacing: .04em;
+      align-self: start;
+    }
+
+    /* ---- What's new section ---- */
+    .whats-new {
+      background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+      border: 1px solid #fdba74;
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 28px;
+    }
+    .whats-new h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      color: #9a3412;
+    }
+    .whats-new .ver {
+      color: #9a3412; font-weight: 600; font-size: 13px; margin-bottom: 8px;
+    }
+    .whats-new ul { margin: 6px 0 0; padding-left: 20px; }
+    .whats-new li { margin: 4px 0; font-size: 13.5px; }
+    .whats-new details { margin-top: 12px; }
+    .whats-new details summary {
+      cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 500;
+    }
+    .whats-new details[open] summary { margin-bottom: 8px; }
+    .whats-new .older-version { margin-top: 14px; }
+    .whats-new .older-version strong { color: #9a3412; }
+
+    /* ---- Footer ---- */
+    footer.bottom {
+      margin-top: 48px; padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: var(--muted); font-size: 12.5px;
+      text-align: center;
+    }
+    footer.bottom .karma {
+      margin-top: 6px; font-style: italic;
+    }
+
+    /* ---- Animated SVG demo styles ---- */
+    .demo-svg { width: 100%; height: auto; }
+
+    @media (max-width: 720px) {
+      .feature { grid-template-columns: 1fr; }
+      .feature .shot { min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+  <header class="top">
+    <div class="logo">Z</div>
+    <div class="titles">
+      <h1>ZHL Productivity Pack — Tour</h1>
+      <div class="sub">Every feature, where it lives, and what it does</div>
+    </div>
+    <span class="version-pill" id="version-pill">v?</span>
+  </header>
+
+  <nav class="toc">
+    <a href="#whats-new">🆕 What's new</a>
+    <a href="#lop">🏠 Loan Officer Portal</a>
+    <a href="#gmail">📧 Gmail</a>
+    <a href="#salesforce">☁️ Salesforce</a>
+    <a href="setup.html">⚙️ Open setup</a>
+  </nav>
+
+  <!-- ====================== What's new ====================== -->
+  <div class="whats-new" id="whats-new">
+    <h2>What's new</h2>
+    <div id="whats-new-content">
+      <!-- populated by walkthrough.js from changelog.js -->
+    </div>
+  </div>
+
+  <!-- ====================== LOP ====================== -->
+  <section class="app" id="lop">
+    <h2><span class="icon">🏠</span> Loan Officer Portal</h2>
+    <p class="runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+
+    <!-- Address copy -->
+    <div class="feature is-new" id="address-copy">
+      <div class="shot">
+        <!-- animated SVG: row sliding from primary borrower into co-borrower section -->
+        <svg viewBox="0 0 240 160" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .anim-row { animation: slide 3.2s ease-in-out infinite; }
+            @keyframes slide {
+              0%, 18% { transform: translate(0, 0); opacity: 1; }
+              35%, 50% { transform: translate(0, 64px); opacity: 1; }
+              60%, 100% { transform: translate(0, 64px); opacity: 0.25; }
+            }
+            .pulse { animation: pulse 3.2s ease-in-out infinite; }
+            @keyframes pulse {
+              0%, 55% { fill: #f3f4f6; }
+              60%, 78% { fill: #dcfce7; }
+              85%, 100% { fill: #f3f4f6; }
+            }
+          </style>
+          <text x="10" y="18" font="600 11px Arial" fill="#0b5cab">Primary borrower</text>
+          <rect class="anim-row" x="10" y="26" width="220" height="22" rx="3" fill="#0b5cab" opacity="0.85"/>
+          <text class="anim-row" x="18" y="41" font="600 10px Arial" fill="#fff">10910 W 109th St · Own · 1/1/2025</text>
+          <text x="10" y="80" font="600 11px Arial" fill="#0b5cab">Co-borrower</text>
+          <rect class="pulse" x="10" y="86" width="220" height="22" rx="3" stroke="#d1d5db"/>
+          <rect class="pulse" x="10" y="112" width="220" height="22" rx="3" stroke="#d1d5db"/>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Copy addresses primary → co-borrower</h3>
+        <div class="where">Full application → Addresses → empty co-borrower section</div>
+        <p>One click re-adds every address on the primary borrower's list for the co-borrower. Picks each address via LOP's built-in "Use existing address" dropdown, then fills the fields LOP leaves blank: address type, housing type, dates, monthly rent, and the "Mailing same as current" checkbox.</p>
+        <ul>
+          <li>Confirm prompt only if the co-borrower already has rows (prevents accidental duplicates).</li>
+          <li>Works for files with 3+ borrowers — the button appears on every co-borrower section.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FHA Manual Eligible -->
+    <div class="feature is-new" id="fha-manual">
+      <div class="shot">
+        <svg viewBox="0 0 240 130" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <text x="10" y="20" font="600 12px Arial" fill="#111">Credit</text>
+          <rect x="10" y="28" width="220" height="22" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+          <circle cx="22" cy="39" r="6" fill="#16a34a"/>
+          <text x="22" y="42" font="700 9px Arial" fill="#fff" text-anchor="middle">✓</text>
+          <text x="35" y="42" font="600 11px Arial" fill="#14532d">FHA Manual Eligible</text>
+          <text x="138" y="42" font="500 10px Arial" fill="#14532d">— mid 765</text>
+          <text x="10" y="68" font="500 10px Arial" fill="#6b7280">Gavin Allen — Hard 772 / 757 / 765 (middle)</text>
+          <text x="10" y="82" font="500 10px Arial" fill="#6b7280">Mairenn Allen — Hard 792 / 764 / 783 (middle)</text>
+          <text x="10" y="106" font="500 10px Arial" fill="#9a3412">Hover the pill for full UW guideline matrix</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>FHA Manual Underwrite eligibility pill</h3>
+        <div class="where">Full application → Credit section</div>
+        <p>Reads the three bureau scores for each borrower, takes the middle, then uses the <strong>LOWER middle</strong> across borrowers. Shows green ✓ when ≥ 640, red ✗ when below.</p>
+        <ul>
+          <li>Hover the pill for the complete UW guideline matrix — score floor (PHH 680, Mr. Cooper not allowed), max 50% DTI, reserves, and the four ratio tiers (31/43, 37/47, 40/40, 40/50) with comp factors.</li>
+          <li>Scores in the 640–679 grey zone surface a "won't work at PHH or Mr. Cooper" heads-up in the tooltip.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FHA Collections + Disputed badges -->
+    <div class="feature" id="fha-badges">
+      <div class="shot"><img src="images/fha-badges.svg" alt="FHA Collections $2k cap badge and FHA Disputed $1k cap badge on a Liabilities section" /></div>
+      <div class="body">
+        <h3>FHA Collections + Disputed badges ($2k / $1k caps)</h3>
+        <div class="where">Full application → Liabilities</div>
+        <p>Live cumulative-balance badges that flag when the file approaches FHA's $2,000 collections cap or $1,000 disputed-derogatory cap.</p>
+        <ul>
+          <li>Reads liabilities through the React-fiber bridge — no need to expand each row.</li>
+          <li>Excludes medical collections (counted separately by FHA), charge-offs (don't count toward either bucket), and zero-balance rows.</li>
+          <li>Detects "ACCT IN DISPUTE" in the Remarks field — LOP's structured dispute flags are never populated in practice.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FHA NPR warning -->
+    <div class="feature" id="fha-npr">
+      <div class="shot"><img src="images/fha-npr-warning.svg" alt="Sticky red FHA INELIGIBLE banner across the top of an LOP loan page" /></div>
+      <div class="body">
+        <h3>FHA + Non-Permanent Resident Alien warning</h3>
+        <div class="where">Full application — any page</div>
+        <p>Sticky red banner across the top whenever the loan is FHA AND any borrower's citizenship is Non-Permanent Resident Alien. HUD removed NPRAs from FHA eligibility on May 25, 2025 — this catches the combo before it ships to underwriting.</p>
+      </div>
+    </div>
+
+    <!-- VA Calc -->
+    <div class="feature" id="va-calc">
+      <div class="shot"><img src="images/va-calc.svg" alt="VA residual income calc panel showing taxes, debts, PITI, and table requirement" /></div>
+      <div class="body">
+        <h3>VA Residual Income + Student Loan Calc</h3>
+        <div class="where">Full application → Liabilities (per borrower pair)</div>
+        <p><strong>Run Residual Income Calc</strong> reads income, debts, PITI, family size, and state, then shows residual vs. the VA table requirement with editable Non-Taxable / Maintenance & Utilities / Childcare rows.</p>
+        <p><strong>Calc Student Loans</strong> fills monthly payments on student-loan liabilities that have no payment listed using FHA / DU / LPA / VA formulas. Now recognizes CENTRAL RESEARCH (the default-collection agency for defaulted federal loans) too.</p>
+      </div>
+    </div>
+
+    <!-- 2-1 Buydown PDF -->
+    <div class="feature" id="buydown-pdf">
+      <div class="shot"><img src="images/buydown-calc.svg" alt="2-1 Buydown side-by-side scenario PDF with rates, payments, savings, and closing cost impact" /></div>
+      <div class="body">
+        <h3>2-1 Buydown calc + Branded PDF</h3>
+        <div class="where">Scenarios page</div>
+        <p>Each Conventional scenario gets a <strong>Calc 2-1 Buydown</strong> button. The action bar gets a <strong>2-1 Buydown PDF</strong> button that generates a borrower-facing comparison sheet with Year 1 / Year 2 / Year 3+ rates and PITIA payments, savings, total buydown cost, and the closing-cost impact (with or without seller credit).</p>
+        <ul>
+          <li>Side-by-side columns when multiple scenarios are selected.</li>
+          <li>Auto-disabled when LOP's own Generate PDF is disabled (e.g. RE-PRICE pending).</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Task bulk delete -->
+    <div class="feature" id="task-bulk">
+      <div class="shot">
+        <svg viewBox="0 0 240 130" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .cb { animation: check 2.6s ease-in-out infinite; }
+            @keyframes check {
+              0%, 30% { fill: #fff; stroke: #d1d5db; }
+              45%, 70% { fill: #0b5cab; stroke: #0b5cab; }
+              85%, 100% { fill: #fff; stroke: #d1d5db; }
+            }
+            .delete-btn { animation: btn-pulse 2.6s ease-in-out infinite; }
+            @keyframes btn-pulse {
+              0%, 50% { fill: #b91c1c; opacity: 0.5; }
+              70%, 90% { fill: #b91c1c; opacity: 1; }
+              100% { fill: #b91c1c; opacity: 0.5; }
+            }
+          </style>
+          <text x="10" y="18" font="600 11px Arial" fill="#111">Unsent</text>
+          <rect class="delete-btn" x="170" y="9" width="60" height="14" rx="3"/>
+          <text x="200" y="19" font="600 9px Arial" fill="#fff" text-anchor="middle">Delete Selected</text>
+          <rect class="cb" x="14" y="34" width="10" height="10" rx="2" stroke-width="1"/>
+          <text x="30" y="43" font="500 10px Arial" fill="#111">2023 W-2 - PSA Airlines</text>
+          <rect class="cb" x="14" y="52" width="10" height="10" rx="2" stroke-width="1"/>
+          <text x="30" y="61" font="500 10px Arial" fill="#111">Most recent pay stubs</text>
+          <rect class="cb" x="14" y="70" width="10" height="10" rx="2" stroke-width="1"/>
+          <text x="30" y="79" font="500 10px Arial" fill="#111">2 most recent Fidelity statements</text>
+          <rect class="cb" x="14" y="88" width="10" height="10" rx="2" stroke-width="1"/>
+          <text x="30" y="97" font="500 10px Arial" fill="#111">2024 W-2 - PSA Airlines</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Bulk-delete tasks</h3>
+        <div class="where">Tasks → Unsent OR Awaiting borrower section</div>
+        <p>Adds a checkbox column and a <strong>Delete Selected</strong> button. Check the boxes for the tasks you want gone, click Delete Selected, and the extension clicks through LOP's per-task confirm dialog for each one — you only confirm once at the start.</p>
+        <ul>
+          <li>Independent selection state per section: checking rows in Unsent doesn't affect Awaiting borrower.</li>
+          <li>UI tears down when the section is empty so it looks like stock LOP.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Loan amount -->
+    <div class="feature" id="loan-amount">
+      <div class="shot"><img src="images/loan-amount.svg" alt="Loan amount input enhancement on the LOP scenarios page" /></div>
+      <div class="body">
+        <h3>Loan amount input fix</h3>
+        <div class="where">Scenarios page → Loan amount field</div>
+        <p>Lets you type a loan amount directly instead of LOP's percentage-only behavior. When the purchase price changes, the loan amount stays put (instead of jumping with the percentage).</p>
+      </div>
+    </div>
+
+    <!-- Scenario sort -->
+    <div class="feature" id="scenario-sort">
+      <div class="shot"><img src="images/scenario-sort.svg" alt="Scenario sort buttons on the LOP Pricing & Scenarios page" /></div>
+      <div class="body">
+        <h3>Scenario sort + Select all</h3>
+        <div class="where">Pricing &amp; Scenarios</div>
+        <p>Sort buttons (Rate, Payment, Cash to close, etc.) plus a Select all checkbox so you can pick every visible scenario in one click.</p>
+      </div>
+    </div>
+
+    <!-- Auto-tab to Call Details / Messaging -->
+    <div class="feature" id="auto-tabs">
+      <div class="shot"><img src="images/auto-call-details-tab.svg" alt="Salesforce console auto-switching to the Call Details tab" /></div>
+      <div class="body">
+        <h3>Auto-tab to Call Details / Messaging</h3>
+        <div class="where">Salesforce console</div>
+        <p>When you take an inbound call, the console auto-clicks the Call Details tab. When an inbound SMS arrives, it auto-clicks the Messaging tab. No more hunting through tabs while the borrower is on the line.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== Gmail ====================== -->
+  <section class="app" id="gmail">
+    <h2><span class="icon">📧</span> Gmail</h2>
+    <p class="runs-on">Runs on: <code>mail.google.com</code></p>
+
+    <!-- Gmail drag attachments -->
+    <div class="feature" id="gmail-drag">
+      <div class="shot">
+        <svg viewBox="0 0 240 130" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .chip { animation: fly 3.4s ease-in-out infinite; }
+            @keyframes fly {
+              0%, 12% { transform: translate(0, 0); }
+              45%, 60% { transform: translate(110px, 50px); }
+              72%, 100% { transform: translate(110px, 50px); opacity: 0; }
+            }
+            .target-zone {
+              animation: glow 3.4s ease-in-out infinite;
+              fill: #f3f4f6; stroke: #d1d5db; stroke-dasharray: 4 3;
+            }
+            @keyframes glow {
+              0%, 35% { fill: #f3f4f6; stroke: #d1d5db; }
+              50%, 65% { fill: #dcfce7; stroke: #16a34a; }
+              80%, 100% { fill: #f3f4f6; stroke: #d1d5db; }
+            }
+            .badge-dot {
+              animation: badge 3.4s ease-in-out infinite;
+            }
+            @keyframes badge {
+              0%, 8% { fill: #f59e0b; }
+              12%, 100% { fill: #10b981; }
+            }
+          </style>
+          <text x="10" y="16" font="600 10px Arial" fill="#6b7280">GMAIL</text>
+          <g class="chip">
+            <rect x="10" y="22" width="92" height="32" rx="4" fill="#fff" stroke="#d1d5db"/>
+            <rect x="14" y="26" width="20" height="24" rx="2" fill="#dc2626"/>
+            <text x="24" y="42" font="700 8px Arial" fill="#fff" text-anchor="middle">PDF</text>
+            <text x="38" y="38" font="500 9px Arial" fill="#111">W-2.pdf</text>
+            <text x="38" y="48" font="400 8px Arial" fill="#6b7280">203 KB</text>
+            <circle class="badge-dot" cx="98" cy="26" r="6"/>
+            <text x="98" y="29" font="700 8px Arial" fill="#fff" text-anchor="middle">↓</text>
+          </g>
+          <text x="135" y="80" font="600 10px Arial" fill="#6b7280">LOP / Slack / file inputs</text>
+          <rect class="target-zone" x="130" y="86" width="100" height="36" rx="6" stroke-width="2"/>
+          <text x="180" y="108" font="500 9px Arial" fill="#6b7280" text-anchor="middle">Drop here</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Drag attachments anywhere</h3>
+        <div class="where">Any email with attachments</div>
+        <p>Every attachment chip gets a small green ↓ badge once the file is cached (orange ⋯ while caching). Drag the chip and drop on:</p>
+        <ul>
+          <li><strong>LOP file-upload areas</strong> (Loan documents, task uploads, etc.).</li>
+          <li><strong>Slack, file inputs, or any other website</strong> that accepts file drops.</li>
+          <li><strong>Your own Gmail reply</strong> (popup compose OR inline reply) — works as of v1.19.8.</li>
+        </ul>
+        <p>Up to 25 MB per file for cross-tab drag (Chrome's IPC limit). Larger files still drag to in-Gmail composes.</p>
+      </div>
+    </div>
+
+    <!-- Gmail Caller ID -->
+    <div class="feature" id="gmail-caller-id">
+      <div class="shot"><img src="images/gmail-caller-id.svg" alt="Blue Caller ID badge next to a Switchboard 'Do Not Reply' email subject line in Gmail" /></div>
+      <div class="body">
+        <h3>Caller ID on incoming-text emails</h3>
+        <div class="where">Gmail inbox / open email</div>
+        <p>When a Switchboard "Do Not Reply: Incoming Text Message from &lt;phone&gt;" email arrives with just a phone number (no name), a blue pill appears next to the subject with the Salesforce contact's name. Same plumbing as the Salesforce-side Caller ID, so matches stay consistent.</p>
+      </div>
+    </div>
+
+    <!-- Gmail tweaks -->
+    <div class="feature" id="gmail-tweaks">
+      <div class="shot"><img src="images/gmail-tweaks.svg" alt="Gmail compose window with attachment area no longer hidden under the toolbar" /></div>
+      <div class="body">
+        <h3>Gmail layout tweaks + Salesforce promotions auto-hide</h3>
+        <div class="where">Gmail (any view) and Salesforce</div>
+        <ul>
+          <li>Compose attachment area no longer hides under the toolbar when you attach more than one file.</li>
+          <li>Salesforce "Show Promotions" panel is auto-dismissed.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== Salesforce ====================== -->
+  <section class="app" id="salesforce">
+    <h2><span class="icon">☁️</span> Salesforce</h2>
+    <p class="runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.my.salesforce.com</code>, Genesys Cloud</p>
+
+    <!-- Caller ID -->
+    <div class="feature" id="caller-id">
+      <div class="shot"><img src="images/caller-id.svg" alt="Blue Caller ID badge with a contact's name next to an inbound phone number in Salesforce" /></div>
+      <div class="body">
+        <h3>Caller ID badge on inbound calls + voicemails</h3>
+        <div class="where">Salesforce console, Genesys Cloud embedded panels</div>
+        <p>When a phone number appears in the UI (inbound call, voicemail, call history row), the extension queries Salesforce for a matching Contact / Lead / Loan and stamps a blue pill with the borrower's name next to the number. 5-minute lookup cache so popular numbers don't hit the API repeatedly.</p>
+      </div>
+    </div>
+
+    <!-- SMS add participants -->
+    <div class="feature" id="sms-add-participants">
+      <div class="shot"><img src="images/sms-add-participants.svg" alt="Salesforce SMS panel with quick-add Co-Borrower and Buyer's Agent buttons" /></div>
+      <div class="body">
+        <h3>SMS quick-add: Co-Borrower / Buyer's Agent</h3>
+        <div class="where">Salesforce SMS panel → New thread</div>
+        <p>One-click buttons that look up the Co-Borrower's and Buyer's Agent's phone numbers from Salesforce and add them as participants to the SMS thread — no copy/paste from the Contact record.</p>
+      </div>
+    </div>
+
+    <!-- Contact SMS -->
+    <div class="feature" id="contact-sms">
+      <div class="shot"><img src="images/contact-sms.svg" alt="Salesforce Contact record page with an Open SMS button next to the phone number" /></div>
+      <div class="body">
+        <h3>Open SMS button on Contact records</h3>
+        <div class="where">Salesforce Contact / Lead record pages</div>
+        <p>Adds an Open SMS button next to the phone number that jumps straight into the messaging panel with that number pre-filled.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="bottom">
+    <div>ZHL Productivity Pack — see <a href="setup.html">Setup</a> to toggle individual features on or off.</div>
+    <div class="karma">Built by Justin Case. Karma appreciated 💛</div>
+  </footer>
+</div>
+
+<script src="changelog.js"></script>
+<script src="walkthrough.js"></script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+// Walkthrough page logic. Renders the "What's new" block from
+// changelog.js, fills in the current version pill, smooth-scrolls
+// to deep-linked sections (#fha-manual etc.), and fires a lightweight
+// telemetry event when the page is opened or when a section anchor
+// in the TOC is clicked.
+
+(function () {
+  'use strict';
+
+  const VERSION = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '?';
+  document.getElementById('version-pill').textContent = 'v' + VERSION;
+
+  // ---- Render "What's new" ------------------------------------------------
+  const changelog = window.ZHL_CHANGELOG || [];
+  const root = document.getElementById('whats-new-content');
+  if (changelog.length) {
+    const latest = changelog[0];
+    const verLine = document.createElement('div');
+    verLine.className = 'ver';
+    verLine.textContent = 'v' + latest.version + ' · ' + latest.headline;
+    root.appendChild(verLine);
+
+    const ul = document.createElement('ul');
+    (latest.highlights || []).forEach(function (h) {
+      const li = document.createElement('li');
+      li.textContent = h;
+      ul.appendChild(li);
+    });
+    root.appendChild(ul);
+
+    // Older versions — collapsed.
+    if (changelog.length > 1) {
+      const det = document.createElement('details');
+      const sum = document.createElement('summary');
+      sum.textContent = 'Older versions (' + (changelog.length - 1) + ')';
+      det.appendChild(sum);
+      changelog.slice(1).forEach(function (entry) {
+        const wrap = document.createElement('div');
+        wrap.className = 'older-version';
+        const head = document.createElement('div');
+        head.innerHTML = '<strong>v' + entry.version + '</strong> &middot; ' + entry.headline;
+        wrap.appendChild(head);
+        const oul = document.createElement('ul');
+        (entry.highlights || []).forEach(function (h) {
+          const li = document.createElement('li');
+          li.textContent = h;
+          oul.appendChild(li);
+        });
+        wrap.appendChild(oul);
+        det.appendChild(wrap);
+      });
+      root.appendChild(det);
+    }
+  } else {
+    root.textContent = 'No changelog entries yet.';
+  }
+
+  // ---- Smooth-scroll deep-links + telemetry --------------------------------
+  function track(event, props) {
+    try { chrome.runtime.sendMessage({ type: 'TRACK', event: event, props: props || {} }); } catch (_) {}
+  }
+
+  // Fire once on page open. Read the source from the URL query so we know
+  // whether the user got here from install / update toast / setup link.
+  const src = new URLSearchParams(location.search).get('src') || 'direct';
+  track('walkthrough_opened', { source: src, version: VERSION });
+
+  // If the URL has a hash, scroll to it after the page is laid out.
+  if (location.hash) {
+    requestAnimationFrame(function () {
+      const el = document.querySelector(location.hash);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // Track TOC clicks so we can see which sections people care about.
+  document.querySelectorAll('nav.toc a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      track('walkthrough_section_clicked', { section: a.getAttribute('href').slice(1) });
+    });
+  });
+})();

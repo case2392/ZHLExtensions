@@ -29,6 +29,7 @@ const FEATURE_KEYS = [
   "feature_fhaNprWarning",
   "feature_fhaManualEligible",
   "feature_copyAddresses",
+  "feature_updateToast",
   "feature_telemetry"
 ];
 
@@ -43,7 +44,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (Object.keys(updates).length) await chrome.storage.local.set(updates);
 
   if (details.reason === "install") {
-    chrome.runtime.openOptionsPage();
+    // Fresh install — open the walkthrough page so new users get the
+    // tour. Updates don't open anything; the in-page update toast on
+    // LOP/Gmail/Salesforce handles that.
+    chrome.tabs.create({ url: chrome.runtime.getURL("walkthrough.html?src=install") });
   }
 });
 
