@@ -12,6 +12,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.21.1",
+    headline: "Multiple workspace fixes + dedicated New Features section in the walkthrough",
+    highlights: [
+      "Auto Call Details Tab + Salesforce Promotions auto-hide: now work across multiple open Lead workspace tabs in Console mode (tracked per DOM node instead of per URL — Console mounts every open workspace simultaneously so the URL-keyed approach only fired on the first tab).",
+      "SMS Mark All As Read: clicks now use composed:true events so they cross shadow DOM into LWC handlers, and the module tries multiple inner targets (.row-container → c-slds-sms-inbox-thread → h3 → .preview → li) instead of giving up after the first one didn't navigate.",
+      "Walkthrough page: NEW features now appear in a dedicated 'New features' section at the top of the page in addition to their app sections, so the freshest stuff is always above the fold."
+    ],
+    sections: ["new-features"]
+  },
+  {
     version: "1.21.0",
     headline: "Mark all SMS threads as read with one button",
     highlights: [

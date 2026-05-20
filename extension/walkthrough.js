@@ -55,6 +55,36 @@
     root.textContent = 'No changelog entries yet.';
   }
 
+  // ---- Clone every .is-new card into the top "New features" section -------
+  // Single-source-of-truth: NEW cards live in their canonical app section
+  // (LOP / Gmail / Salesforce). We clone them up here so users see the
+  // freshest stuff first without scrolling. Each clone gets its ID
+  // stripped (originals keep theirs so TOC anchors still scroll to them
+  // — which is the same content, just the deeper copy). The clones still
+  // run their own SVG animations independently because the CSS in each
+  // demo SVG is scoped via @keyframes that apply per-element.
+  (function populateNewFeatures() {
+    const host = document.getElementById('new-features-host');
+    if (!host) return;
+    const news = document.querySelectorAll('.feature.is-new');
+    if (!news.length) {
+      // Hide the whole section if there's nothing new this release.
+      const sec = document.getElementById('new-features');
+      if (sec) sec.style.display = 'none';
+      const tocLink = document.querySelector('nav.toc a[href="#new-features"]');
+      if (tocLink) tocLink.style.display = 'none';
+      return;
+    }
+    news.forEach(function (orig) {
+      const clone = orig.cloneNode(true);
+      // Strip the id from the clone so we don't have duplicate IDs in
+      // the DOM (TOC links still anchor to the original further down).
+      clone.removeAttribute('id');
+      clone.querySelectorAll('[id]').forEach(function (n) { n.removeAttribute('id'); });
+      host.appendChild(clone);
+    });
+  })();
+
   // ---- Smooth-scroll deep-links + telemetry --------------------------------
   function track(event, props) {
     try { chrome.runtime.sendMessage({ type: 'TRACK', event: event, props: props || {} }); } catch (_) {}

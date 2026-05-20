@@ -38,20 +38,23 @@
 
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-  // Re-use the click pattern that contact-sms.js settled on — Salesforce
-  // LWCs sometimes ignore a bare .click() until they see the pointer/
-  // mouse sequence, so we fire all four.
+  // Salesforce LWCs ignore bare .click() in many cases and care about
+  // the full pointer/mouse/click sequence — and the events MUST be
+  // composed:true so they cross shadow DOM boundaries to reach the
+  // delegated listeners that handle conversation-open. Without
+  // composed:true an event dispatched on a shadow-host element stops at
+  // the shadow boundary and the LWC never sees it, which is the failure
+  // mode we hit in v1.21.0: pointerdown / mousedown / mouseup all fired
+  // but nothing navigated.
   function realClick(el) {
-    try {
-      const opts = { bubbles: true, cancelable: true, composed: true, view: window };
-      el.dispatchEvent(new PointerEvent('pointerdown', opts));
-      el.dispatchEvent(new MouseEvent('mousedown', opts));
-      el.dispatchEvent(new PointerEvent('pointerup', opts));
-      el.dispatchEvent(new MouseEvent('mouseup', opts));
-    } catch (e) {
-      console.warn(TAG, 'realClick pointer/mouse events threw', e);
-    }
-    try { el.click(); } catch (e) { console.warn(TAG, 'realClick .click() threw', e); }
+    if (!el) return;
+    const opts = { bubbles: true, cancelable: true, composed: true, view: window };
+    try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (e) { console.warn(TAG, 'pointerdown threw', e); }
+    try { el.dispatchEvent(new MouseEvent('mousedown', opts)); } catch (e) { console.warn(TAG, 'mousedown threw', e); }
+    try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (e) { console.warn(TAG, 'pointerup threw', e); }
+    try { el.dispatchEvent(new MouseEvent('mouseup', opts)); } catch (e) { console.warn(TAG, 'mouseup threw', e); }
+    try { el.dispatchEvent(new MouseEvent('click', opts)); } catch (e) { console.warn(TAG, 'click threw', e); }
+    try { el.click(); } catch (e) { console.warn(TAG, '.click() threw', e); }
   }
 
   function findMessagingPanel() {
@@ -139,27 +142,80 @@
     return false;
   }
 
+  // Try clicking each candidate target in order. v1.21.0 only tried
+  // c-slds-sms-inbox-thread which fired pointerdown/mousedown/up but
+  // never actually navigated — the conversation-open click handler is
+  // delegated higher up the tree, so we need to also try the row's
+  // .row-container, the inner h3, the .preview div, and finally the li
+  // itself. Returns the first target whose click was followed by the
+  // row settling (no longer bold / no unread count).
+  async function tryClickTargets(info) {
+    const li = info.li;
+    const candidates = [
+      { name: '.row-container',          el: li.querySelector('.row-container') },
+      { name: 'c-slds-sms-inbox-thread', el: li.querySelector('c-slds-sms-inbox-thread') },
+      { name: 'h3 (name)',               el: li.querySelector('h3') },
+      { name: '.preview',                el: li.querySelector('.preview') },
+      { name: 'li (row itself)',         el: li }
+    ].filter(function (c) { return !!c.el; });
+
+    for (const c of candidates) {
+      console.log('  click attempt:', c.name, c.el);
+      realClick(c.el);
+      // Give Salesforce time to mount the thread view + fire its read
+      // receipt. Read-receipt timing varies; 1.5s is generally enough.
+      const settled = await waitUntilRead(li, 1500);
+      console.log('  settled after', c.name, ':', settled);
+      if (settled) return c.name;
+      // If not settled, ALSO check whether a thread-view materialized
+      // (Back button became visible). If yes, the click DID work; just
+      // the read-receipt didn't post yet. Return back to inbox and try
+      // a longer wait on the next iteration.
+      const back = findBackButton(panel_ref);
+      if (back && back.offsetParent !== null) {
+        console.log('  thread view opened (Back button visible) after', c.name, '— waiting another 1s for read receipt');
+        await wait(1000);
+        const settled2 = await waitUntilRead(li, 800);
+        if (settled2) return c.name;
+        // Back out and try the next target.
+        await backToInbox(panel_ref);
+      }
+    }
+    return null;
+  }
+
+  // panel reference is set by markAllReadFlow before tryClickTargets is
+  // called — keeps the helper signature short.
+  let panel_ref = null;
+
   async function markOneRead(panel, info, idx, total) {
+    panel_ref = panel;
     console.group(TAG + ' ' + (idx + 1) + '/' + total + ' — ' + info.convId);
     try {
       console.log('preview:', info.preview);
       console.log('reasons:', info.reasons);
-      // The thread's row container is the click target. contact-sms.js
-      // already settled on c-slds-sms-inbox-thread or .row-container.
-      const target = info.li.querySelector('c-slds-sms-inbox-thread, .row-container') || info.li;
-      console.log('click target:', target);
-      realClick(target);
-      // Give the thread-view a moment to mount + read receipt to fire.
-      await wait(400);
-      const settled = await waitUntilRead(info.li, 1500);
-      console.log('settled (no longer bold / no count):', settled);
-      // Return to inbox so we can find the next unread.
-      const backOk = await backToInbox(panel);
-      console.log('back to inbox:', backOk);
-      // Brief settle so the next iteration's findUnreadThreads sees the
-      // updated state.
+      console.log('li:', info.li);
+      const winner = await tryClickTargets(info);
+      if (winner) {
+        console.log('SUCCESS via', winner);
+        await backToInbox(panel);
+        await wait(180);
+        return true;
+      }
+      // None of the click targets worked. Log everything we know about
+      // the DOM state so the failure mode is debuggable.
+      console.warn('FAILED — no click target navigated. Diagnostics:');
+      console.warn('  li.outerHTML (first 500 chars):',
+        (info.li.outerHTML || '').slice(0, 500));
+      console.warn('  inbox children count:',
+        panel.querySelectorAll('li.thread-line-item').length);
+      console.warn('  back button found:', findBackButton(panel));
+      console.warn('  document.activeElement:', document.activeElement);
+      console.warn('  location.href:', location.href);
+      // Best-effort: back out in case any partial state opened.
+      await backToInbox(panel);
       await wait(180);
-      return settled;
+      return false;
     } catch (e) {
       console.error('threw:', e);
       return false;

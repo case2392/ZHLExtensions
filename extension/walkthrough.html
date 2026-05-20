@@ -201,6 +201,7 @@
 
   <nav class="toc">
     <a href="#whats-new">🆕 What's new</a>
+    <a href="#new-features">✨ New features</a>
     <a href="#lop">🏠 Loan Officer Portal</a>
     <a href="#gmail">📧 Gmail</a>
     <a href="#salesforce">☁️ Salesforce</a>
@@ -214,6 +215,15 @@
       <!-- populated by walkthrough.js from changelog.js -->
     </div>
   </div>
+
+  <!-- ====================== NEW features (cloned into here by walkthrough.js) ====================== -->
+  <section class="app" id="new-features">
+    <h2><span class="icon">✨</span> New features</h2>
+    <p class="runs-on">The latest additions, pulled from each app section below so you don't have to scroll for them.</p>
+    <div id="new-features-host">
+      <!-- populated by walkthrough.js — clones every .feature.is-new card in the document order they appear in their app sections -->
+    </div>
+  </section>
 
   <!-- ====================== LOP ====================== -->
   <section class="app" id="lop">
@@ -524,33 +534,11 @@
     <h2><span class="icon">☁️</span> Salesforce</h2>
     <p class="runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.my.salesforce.com</code>, Genesys Cloud</p>
 
-    <!-- Caller ID -->
-    <div class="feature" id="caller-id">
-      <div class="shot"><img src="images/caller-id.svg" alt="Blue Caller ID badge with a contact's name next to an inbound phone number in Salesforce" /></div>
-      <div class="body">
-        <h3>Caller ID badge on inbound calls + voicemails</h3>
-        <div class="where">Salesforce console, Genesys Cloud embedded panels</div>
-        <p>When a phone number appears in the UI (inbound call, voicemail, call history row), the extension queries Salesforce for a matching Contact / Lead / Loan and stamps a blue pill with the borrower's name next to the number. 5-minute lookup cache so popular numbers don't hit the API repeatedly.</p>
-      </div>
-    </div>
-
-    <!-- SMS add participants -->
-    <div class="feature" id="sms-add-participants">
-      <div class="shot"><img src="images/sms-add-participants.svg" alt="Salesforce SMS panel with quick-add Co-Borrower and Buyer's Agent buttons" /></div>
-      <div class="body">
-        <h3>SMS quick-add: Co-Borrower / Buyer's Agent</h3>
-        <div class="where">Salesforce SMS panel → New thread</div>
-        <p>One-click buttons that look up the Co-Borrower's and Buyer's Agent's phone numbers from Salesforce and add them as participants to the SMS thread — no copy/paste from the Contact record.</p>
-      </div>
-    </div>
-
-    <!-- SMS mark all as read -->
+    <!-- SMS mark all as read (NEW — kept at top of Salesforce section) -->
     <div class="feature is-new" id="sms-mark-read">
       <div class="shot">
         <svg viewBox="0 0 240 160" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
           <style>
-            /* Three rows; bold-with-count flips to regular-no-count in
-               sequence, illustrating each thread getting marked read. */
             .row-bold { animation: unbold 3.6s ease-in-out infinite; }
             .row-count { animation: hide-count 3.6s ease-in-out infinite; }
             .row1 { animation-delay: 0s; }
@@ -574,12 +562,10 @@
               30%, 100% { opacity: 0.7; }
             }
           </style>
-          <!-- Header row with "New thread" + "Mark All As Read" -->
           <rect x="8" y="6" width="60" height="16" rx="3" fill="#fff" stroke="#d1d5db"/>
           <text x="38" y="17" font="500 9px Arial" fill="#111" text-anchor="middle">New thread</text>
           <rect class="btn-pulse" x="72" y="6" width="86" height="16" rx="3"/>
           <text x="115" y="17" font="600 9px Arial" fill="#fff" text-anchor="middle">Mark All As Read</text>
-          <!-- Thread rows -->
           <g class="row1">
             <text class="row-bold" x="14" y="44" font="600 10px Arial">Mark Malone — Will do</text>
             <circle class="row-count" cx="220" cy="40" r="6" fill="#0b5cab"/>
@@ -606,6 +592,26 @@
           <li>Detects unread via bold subject text, the right-side unread-count pill, or the <code>unread</code> class on the row.</li>
           <li>Heavy console logging at every step — failure modes are debuggable without round-tripping for a new build.</li>
         </ul>
+      </div>
+    </div>
+
+    <!-- Caller ID -->
+    <div class="feature" id="caller-id">
+      <div class="shot"><img src="images/caller-id.svg" alt="Blue Caller ID badge with a contact's name next to an inbound phone number in Salesforce" /></div>
+      <div class="body">
+        <h3>Caller ID badge on inbound calls + voicemails</h3>
+        <div class="where">Salesforce console, Genesys Cloud embedded panels</div>
+        <p>When a phone number appears in the UI (inbound call, voicemail, call history row), the extension queries Salesforce for a matching Contact / Lead / Loan and stamps a blue pill with the borrower's name next to the number. 5-minute lookup cache so popular numbers don't hit the API repeatedly.</p>
+      </div>
+    </div>
+
+    <!-- SMS add participants -->
+    <div class="feature" id="sms-add-participants">
+      <div class="shot"><img src="images/sms-add-participants.svg" alt="Salesforce SMS panel with quick-add Co-Borrower and Buyer's Agent buttons" /></div>
+      <div class="body">
+        <h3>SMS quick-add: Co-Borrower / Buyer's Agent</h3>
+        <div class="where">Salesforce SMS panel → New thread</div>
+        <p>One-click buttons that look up the Co-Borrower's and Buyer's Agent's phone numbers from Salesforce and add them as participants to the SMS thread — no copy/paste from the Contact record.</p>
       </div>
     </div>
 
