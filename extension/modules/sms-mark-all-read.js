@@ -142,80 +142,76 @@
     return false;
   }
 
-  // Try clicking each candidate target in order. v1.21.0 only tried
-  // c-slds-sms-inbox-thread which fired pointerdown/mousedown/up but
-  // never actually navigated — the conversation-open click handler is
-  // delegated higher up the tree, so we need to also try the row's
-  // .row-container, the inner h3, the .preview div, and finally the li
-  // itself. Returns the first target whose click was followed by the
-  // row settling (no longer bold / no unread count).
-  async function tryClickTargets(info) {
-    const li = info.li;
-    const candidates = [
-      { name: '.row-container',          el: li.querySelector('.row-container') },
-      { name: 'c-slds-sms-inbox-thread', el: li.querySelector('c-slds-sms-inbox-thread') },
-      { name: 'h3 (name)',               el: li.querySelector('h3') },
-      { name: '.preview',                el: li.querySelector('.preview') },
-      { name: 'li (row itself)',         el: li }
-    ].filter(function (c) { return !!c.el; });
-
-    for (const c of candidates) {
-      console.log('  click attempt:', c.name, c.el);
-      realClick(c.el);
-      // Give Salesforce time to mount the thread view + fire its read
-      // receipt. Read-receipt timing varies; 1.5s is generally enough.
-      const settled = await waitUntilRead(li, 1500);
-      console.log('  settled after', c.name, ':', settled);
-      if (settled) return c.name;
-      // If not settled, ALSO check whether a thread-view materialized
-      // (Back button became visible). If yes, the click DID work; just
-      // the read-receipt didn't post yet. Return back to inbox and try
-      // a longer wait on the next iteration.
-      const back = findBackButton(panel_ref);
-      if (back && back.offsetParent !== null) {
-        console.log('  thread view opened (Back button visible) after', c.name, '— waiting another 1s for read receipt');
-        await wait(1000);
-        const settled2 = await waitUntilRead(li, 800);
-        if (settled2) return c.name;
-        // Back out and try the next target.
-        await backToInbox(panel_ref);
-      }
+  // Wait until the Back button becomes visible — confirms the thread
+  // view actually mounted (which is when Salesforce fires the READ
+  // status update over PubNub).
+  async function waitForThreadView(panel, maxMs) {
+    const start = Date.now();
+    const max = maxMs || 2500;
+    while (Date.now() - start < max) {
+      const back = findBackButton(panel);
+      if (back && back.offsetParent !== null) return back;
+      await wait(80);
     }
     return null;
   }
 
-  // panel reference is set by markAllReadFlow before tryClickTargets is
-  // called — keeps the helper signature short.
-  let panel_ref = null;
-
+  // Markdown a thread by clicking it open, letting the PubNub READ
+  // status update broadcast, then clicking Back to return to the inbox.
+  // SUCCESS is detected by re-querying the inbox AFTER returning and
+  // confirming our conversation id is no longer in the unread list —
+  // checking the original li mid-flight doesn't work because Salesforce
+  // only re-renders the row's bold/count classes once the inbox view is
+  // active again.
   async function markOneRead(panel, info, idx, total) {
-    panel_ref = panel;
     console.group(TAG + ' ' + (idx + 1) + '/' + total + ' — ' + info.convId);
     try {
       console.log('preview:', info.preview);
       console.log('reasons:', info.reasons);
-      console.log('li:', info.li);
-      const winner = await tryClickTargets(info);
-      if (winner) {
-        console.log('SUCCESS via', winner);
+
+      // Click target priority: .row-container is the visual row,
+      // c-slds-sms-inbox-thread is the LWC host, then the visible label
+      // elements as fallback.
+      const target = info.li.querySelector('.row-container')
+        || info.li.querySelector('c-slds-sms-inbox-thread')
+        || info.li.querySelector('h3')
+        || info.li.querySelector('.preview')
+        || info.li;
+      console.log('clicking:', target);
+      realClick(target);
+
+      // Wait for thread view to mount — confirms the click actually
+      // navigated and the LWC fired its handleThreadClick.
+      const back = await waitForThreadView(panel, 2500);
+      if (!back) {
+        console.warn('thread view never opened (Back button not visible after 2.5s)');
+        // Best-effort: try clicking back anyway in case we're in some
+        // weird half-state.
         await backToInbox(panel);
-        await wait(180);
-        return true;
+        return false;
       }
-      // None of the click targets worked. Log everything we know about
-      // the DOM state so the failure mode is debuggable.
-      console.warn('FAILED — no click target navigated. Diagnostics:');
-      console.warn('  li.outerHTML (first 500 chars):',
-        (info.li.outerHTML || '').slice(0, 500));
-      console.warn('  inbox children count:',
-        panel.querySelectorAll('li.thread-line-item').length);
-      console.warn('  back button found:', findBackButton(panel));
-      console.warn('  document.activeElement:', document.activeElement);
-      console.warn('  location.href:', location.href);
-      // Best-effort: back out in case any partial state opened.
+      console.log('thread view mounted — waiting 500ms for PubNub READ broadcast');
+      // PubNub round-trip — the log shows the READ statusUpdate fires
+      // almost immediately, but 500ms gives Salesforce time to commit
+      // the local state change too.
+      await wait(500);
+
+      // Return to inbox so we can both verify success AND find the next
+      // unread thread on the next iteration.
+      console.log('clicking Back to return to inbox');
       await backToInbox(panel);
-      await wait(180);
-      return false;
+      await wait(250);
+
+      // SUCCESS check: is our conversation still in the unread list?
+      const stillUnread = findUnreadThreads(panel).some(function (u) {
+        return u.convId === info.convId;
+      });
+      if (stillUnread) {
+        console.warn('still appears unread in the inbox after click+back — Salesforce did not commit the read receipt');
+        return false;
+      }
+      console.log('SUCCESS — conversation no longer in unread list');
+      return true;
     } catch (e) {
       console.error('threw:', e);
       return false;
@@ -235,6 +231,10 @@
     btn.disabled = true;
     let ok = 0, fail = 0, attempted = 0;
 
+    // Paint the overlay over the messaging panel so the user doesn't
+    // see threads flickering open and closed during the run.
+    showOverlay(panel, 'Marking 0/' + initial.length + ' threads as read…');
+
     console.group(TAG + ' run started; initial unread = ' + initial.length);
     try {
       // Re-query unread threads each iteration in case the DOM
@@ -249,6 +249,7 @@
         const next = current[0];
         attempted++;
         btn.textContent = 'Marking ' + attempted + '/' + initial.length + '…';
+        updateOverlayText(panel, 'Marking ' + attempted + '/' + initial.length + ' threads as read…');
         const success = await markOneRead(panel, next, attempted - 1, initial.length);
         if (success) ok++; else fail++;
         if (fail >= 3) {
@@ -263,6 +264,7 @@
     } finally {
       btn.disabled = false;
       btn.textContent = origText;
+      hideOverlay(panel);
       console.log(TAG, 'done. ok=' + ok + ' failed=' + fail + ' attempted=' + attempted);
       console.groupEnd();
     }
@@ -281,6 +283,24 @@
   }
 
   // ---- Button injection ---------------------------------------------------
+
+  // We're "in the inbox view" when the New thread button is visible.
+  // When a thread is opened, Salesforce swaps the header to show a Back
+  // arrow + the conversation participant instead, and the New thread
+  // button disappears. Mark All As Read only makes sense in the inbox
+  // view, so we toggle the button's display based on that signal.
+  function isInboxView(panel) {
+    const header = panel.querySelector('c-slds-sms-header');
+    if (!header) return false;
+    // Look for a button whose text is exactly "New thread" — that's
+    // the canonical inbox-view marker.
+    const buttons = header.querySelectorAll('button');
+    for (const b of buttons) {
+      const t = (b.textContent || '').trim();
+      if (t === 'New thread' && b.offsetParent !== null) return true;
+    }
+    return false;
+  }
 
   // Find the header bar inside the messaging panel where "New thread"
   // lives, then inject our button right after it.
@@ -333,6 +353,96 @@
     }
   }
 
+  // Show/hide the button based on inbox-vs-thread view. Called every
+  // scan tick so the toggle stays in sync as the user navigates around
+  // the messaging panel without us needing a per-thread event listener.
+  function updateButtonVisibility(panel) {
+    const btn = panel.querySelector('[' + BUTTON_ATTR + ']');
+    if (!btn) return;
+    const shouldShow = isInboxView(panel);
+    const isShowing = btn.style.display !== 'none';
+    if (shouldShow && !isShowing) {
+      btn.style.display = '';
+    } else if (!shouldShow && isShowing) {
+      btn.style.display = 'none';
+    }
+  }
+
+  // ---- "Marking..." overlay -----------------------------------------------
+  // While the run is in progress we paint a semi-opaque overlay on top
+  // of the messaging panel so the user doesn't see threads flickering
+  // open and closed. The overlay shows "Marking N/M..." text and the
+  // user can't interact with the messaging panel until the run
+  // finishes (then we remove it). The actual marking still happens on
+  // the live DOM underneath — Salesforce needs to render the thread
+  // view to fire its PubNub READ receipt — but the overlay hides it.
+  function showOverlay(panel, text) {
+    let overlay = panel.querySelector('[data-zhl-mark-overlay]');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.setAttribute('data-zhl-mark-overlay', '1');
+      overlay.style.cssText = [
+        'position: absolute',
+        'top: 0', 'left: 0', 'right: 0', 'bottom: 0',
+        'background: rgba(255,255,255,0.96)',
+        'z-index: 9999',
+        'display: flex',
+        'flex-direction: column',
+        'align-items: center',
+        'justify-content: center',
+        'gap: 12px',
+        'font: 600 14px/1.4 Arial,Helvetica,sans-serif',
+        'color: #0b5cab',
+        'text-align: center',
+        'pointer-events: all',
+        'cursor: wait',
+        'padding: 24px'
+      ].join(';');
+      const spinner = document.createElement('div');
+      spinner.style.cssText = [
+        'width: 28px', 'height: 28px',
+        'border: 3px solid #cfe1f5',
+        'border-top-color: #0b5cab',
+        'border-radius: 50%',
+        'animation: zhl-mark-spin 0.8s linear infinite'
+      ].join(';');
+      const msg = document.createElement('div');
+      msg.setAttribute('data-zhl-mark-msg', '1');
+      msg.textContent = text;
+      const sub = document.createElement('div');
+      sub.style.cssText = 'font: 500 12px/1.4 Arial,sans-serif;color:#6b7280;max-width:240px;';
+      sub.textContent = 'Salesforce only marks threads read by opening them — please don\'t interact with the panel until this finishes.';
+      overlay.appendChild(spinner);
+      overlay.appendChild(msg);
+      overlay.appendChild(sub);
+      // Ensure the panel can host an absolutely-positioned overlay.
+      if (getComputedStyle(panel).position === 'static') {
+        panel.style.position = 'relative';
+      }
+      panel.appendChild(overlay);
+
+      // Inject the spinner keyframes once.
+      if (!document.getElementById('zhl-mark-spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'zhl-mark-spin-style';
+        style.textContent = '@keyframes zhl-mark-spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+      }
+    } else {
+      const msg = overlay.querySelector('[data-zhl-mark-msg]');
+      if (msg) msg.textContent = text;
+    }
+    return overlay;
+  }
+  function updateOverlayText(panel, text) {
+    const msg = panel.querySelector('[data-zhl-mark-overlay] [data-zhl-mark-msg]');
+    if (msg) msg.textContent = text;
+  }
+  function hideOverlay(panel) {
+    const overlay = panel.querySelector('[data-zhl-mark-overlay]');
+    if (overlay) overlay.remove();
+  }
+
   // ---- Scan loop ----------------------------------------------------------
   // The Messaging panel can open/close/re-render; keep looking for it
   // and inject our button when it's mounted. Cheap — early-returns when
@@ -341,6 +451,7 @@
     const panel = findMessagingPanel();
     if (!panel) return;
     try { injectButton(panel); } catch (e) { console.warn(TAG, 'inject error', e); }
+    try { updateButtonVisibility(panel); } catch (e) { console.warn(TAG, 'visibility error', e); }
   }
 
   const observer = new MutationObserver(function () { scan(); });

@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.21.2": "Mark All As Read: accurate counts, marking overlay, hidden inside threads.",
     "1.21.1": "Mark All As Read now actually opens threads + multi-workspace fixes.",
     "1.21.0": "Salesforce Messaging panel now has a Mark All As Read button.",
     "1.20.3": "Toast View button now opens reliably + Copy-addresses demo redone.",

@@ -12,6 +12,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.21.2",
+    headline: "Mark All As Read: accurate success counts + clean UX",
+    highlights: [
+      "Fixed: 'Marked 0 of N as read' dialog when threads were actually being marked correctly. The success check used to run while the thread view was still open — now it re-queries the inbox after Back to confirm the conversation is gone from the unread list.",
+      "Added: 'Marking 2/3 threads as read…' overlay during the run so users don't see threads flickering open and closed.",
+      "Button now hides itself when you have a conversation open — it only makes sense in the inbox view. Reappears when you click Back.",
+      "Honest about the constraint: Salesforce only marks threads read by opening them (PubNub READ broadcast fires on open). There's no public 'mark as read' API to call directly."
+    ],
+    sections: ["sms-mark-read"]
+  },
+  {
     version: "1.21.1",
     headline: "Multiple workspace fixes + dedicated New Features section in the walkthrough",
     highlights: [
