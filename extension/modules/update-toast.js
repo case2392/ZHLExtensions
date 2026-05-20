@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.23.0": "New: one-click FHA Manual UW analyzer with ✓/✗ on every check.",
     "1.22.1": "VA Calc: enter square footage instead of doing the maintenance math yourself.",
     "1.22.0": "Plain-English changelog + a karma link to my Zall Wall on every update screen.",
     "1.21.4": "The Walkthrough's 'New features' section now lists the freshest items first.",

@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.23.0",
+    headline: "New: FHA Manual Underwrite Analyzer — one click, full ✓/✗ workup",
+    highlights: [
+      "New 'Analyze Manual UW' button next to the FHA Manual eligibility pill on the Credit section.",
+      "One click opens a panel that runs every Manual UW check against your file: credit score floor, max DTI, the four ratio tiers (31/43, 37/47, 40/40, 40/50), and every compensating factor with ✓ green / ✗ red / ? gray for unknown.",
+      "Auto-evaluates: minimum credit score, max DTI, ratio-tier eligibility from front/back DTI, cash reserves (Total assets ÷ PITI vs the 3-month / 6-month rule), minimal increase in housing payment ($100 or 5% rule from current rent → PITI).",
+      "Manual checkboxes for the things the extension can't read: significant additional income, residual income via VA tables, no discretionary debt (for 40/40), Energy Efficient Home. Your checks persist as you navigate around the loan.",
+      "Final recommendation box: green 'Qualifies under tier 31/43' when DTI fits with no comp factors needed, amber 'Likely does not qualify — needs X' with a specific list of what's missing, or red when score/DTI hard-fails."
+    ],
+    sections: ["fha-manual"]
+  },
+  {
     version: "1.22.1",
     headline: "VA Calc: enter square footage instead of doing the math yourself",
     highlights: [
