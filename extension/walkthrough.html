@@ -223,28 +223,55 @@
     <!-- Address copy -->
     <div class="feature is-new" id="address-copy">
       <div class="shot">
-        <!-- animated SVG: row sliding from primary borrower into co-borrower section -->
+        <!-- animated SVG: primary's row gets copied down into the empty
+             co-borrower slot. The original stays put; a "ghost copy"
+             slides from primary's position into the co-borrower slot,
+             then the slot turns blue/filled to show the copy completed. -->
         <svg viewBox="0 0 240 160" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
           <style>
-            .anim-row { animation: slide 3.2s ease-in-out infinite; }
-            @keyframes slide {
-              0%, 18% { transform: translate(0, 0); opacity: 1; }
-              35%, 50% { transform: translate(0, 64px); opacity: 1; }
-              60%, 100% { transform: translate(0, 64px); opacity: 0.25; }
+            /* The traveling copy: starts at primary's row position,
+               slides into the empty co-borrower slot, then fades as
+               the destination slot fills in. */
+            .ghost { animation: ghost 4s ease-in-out infinite; opacity: 0; }
+            @keyframes ghost {
+              0%, 10%   { transform: translate(0, 0);   opacity: 0; }
+              15%, 22%  { transform: translate(0, 0);   opacity: 1; }
+              45%, 55%  { transform: translate(0, 64px); opacity: 1; }
+              65%, 100% { transform: translate(0, 64px); opacity: 0; }
             }
-            .pulse { animation: pulse 3.2s ease-in-out infinite; }
-            @keyframes pulse {
-              0%, 55% { fill: #f3f4f6; }
-              60%, 78% { fill: #dcfce7; }
-              85%, 100% { fill: #f3f4f6; }
+            /* The destination slot: empty/grey for the first half of
+               the animation, then fills with blue + text once the copy
+               "lands". Stays filled briefly, then resets. */
+            .target-rect { animation: fill-rect 4s ease-in-out infinite; }
+            @keyframes fill-rect {
+              0%, 55%   { fill: #f3f4f6; stroke: #d1d5db; }
+              60%, 88%  { fill: #0b5cab; stroke: #0b5cab; }
+              95%, 100% { fill: #f3f4f6; stroke: #d1d5db; }
+            }
+            .target-text { animation: fill-text 4s ease-in-out infinite; opacity: 0; }
+            @keyframes fill-text {
+              0%, 58%   { opacity: 0; }
+              62%, 88%  { opacity: 1; }
+              95%, 100% { opacity: 0; }
             }
           </style>
+          <!-- Primary borrower (static — always has the row) -->
           <text x="10" y="18" font="600 11px Arial" fill="#0b5cab">Primary borrower</text>
-          <rect class="anim-row" x="10" y="26" width="220" height="22" rx="3" fill="#0b5cab" opacity="0.85"/>
-          <text class="anim-row" x="18" y="41" font="600 10px Arial" fill="#fff">1234 Zillow St · Own · 1/1/2025</text>
+          <rect x="10" y="26" width="220" height="22" rx="3" fill="#0b5cab"/>
+          <text x="18" y="41" font="600 10px Arial" fill="#fff">1234 Zillow St · Own · 1/1/2025</text>
+
+          <!-- Co-borrower (initially empty, fills in as the copy lands) -->
           <text x="10" y="80" font="600 11px Arial" fill="#0b5cab">Co-borrower</text>
-          <rect class="pulse" x="10" y="86" width="220" height="22" rx="3" stroke="#d1d5db"/>
-          <rect class="pulse" x="10" y="112" width="220" height="22" rx="3" stroke="#d1d5db"/>
+          <rect class="target-rect" x="10" y="86" width="220" height="22" rx="3" stroke-width="1"/>
+          <text class="target-text" x="18" y="101" font="600 10px Arial" fill="#fff">1234 Zillow St · Own · 1/1/2025</text>
+          <rect x="10" y="112" width="220" height="22" rx="3" fill="#f3f4f6" stroke="#d1d5db"/>
+
+          <!-- Ghost copy that travels from primary's row to the
+               co-borrower slot. Rendered above the targets. -->
+          <g class="ghost">
+            <rect x="10" y="26" width="220" height="22" rx="3" fill="#0b5cab" opacity="0.6"/>
+            <text x="18" y="41" font="600 10px Arial" fill="#fff">1234 Zillow St · Own · 1/1/2025</text>
+          </g>
         </svg>
       </div>
       <div class="body">

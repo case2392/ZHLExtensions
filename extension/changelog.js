@@ -12,6 +12,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.20.3",
+    headline: "Toast 'View' button bypasses adblockers + clearer Copy-addresses demo",
+    highlights: [
+      "Update toast's View what's new button now opens the walkthrough through the service worker so uBlock / privacy extensions can't block it.",
+      "Copy-addresses demo animation now actually shows the address landing in the co-borrower section (was sliding down and fading without arriving)."
+    ],
+    sections: ["whats-new", "address-copy"]
+  },
+  {
     version: "1.20.2",
     headline: "Fixed: update toast now actually appears on first page load after an update",
     highlights: [

@@ -573,6 +573,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     );
     return true;
   }
+  if (msg && msg.type === "OPEN_TAB") {
+    // Content scripts on some pages have window.open() blocked by
+    // uBlock / privacy extensions when the target URL is a
+    // chrome-extension:// page. The toast's "View what's new" button
+    // routes through here so the tab opens via the SW's
+    // chrome.tabs.create, which adblockers can't intercept.
+    const url = String(msg.url || "");
+    if (url) chrome.tabs.create({ url });
+    sendResponse({ ok: true });
+    return false;
+  }
   if (msg && msg.type === "GET_CONTACT_PHONE") {
     lookupContactPhone(msg.contactId).then(
       (result) => sendResponse(Object.assign({ ok: !result.error }, result)),

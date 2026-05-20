@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.20.3": "Toast View button now opens reliably + Copy-addresses demo redone.",
     "1.20.2": "Update toast fixed — this is the one you're looking at now.",
     "1.20.0": "Walkthrough page added! Click View to see every feature in the pack.",
     "1.19.8": "Gmail attachments now drop on INLINE replies (not just popup composes).",
@@ -138,8 +139,22 @@
     viewBtn.setAttribute('style', 'background:#0b5cab;border:none;color:#fff;font:600 12px/1.2 Arial,sans-serif;cursor:pointer;padding:7px 12px;border-radius:4px;');
     viewBtn.addEventListener('click', function () {
       track('update_toast_clicked', { from: prevVersion, to: VERSION });
-      const url = chrome.runtime.getURL('walkthrough.html?src=toast#whats-new');
-      window.open(url, '_blank');
+      // Route the tab-open through the SW. Some users have uBlock /
+      // privacy extensions that block content-script window.open() to
+      // chrome-extension:// URLs (the same target works fine when
+      // clicked from a normal anchor on the setup page). chrome.tabs
+      // .create from the SW bypasses that block.
+      const url = chrome.runtime.getURL('walkthrough.html?from=update_toast#whats-new');
+      try {
+        chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: url }, function () {
+          // Best-effort fallback if SW didn't respond — try direct.
+          if (chrome.runtime.lastError) {
+            try { window.open(url, '_blank'); } catch (_) {}
+          }
+        });
+      } catch (_) {
+        try { window.open(url, '_blank'); } catch (__) {}
+      }
       stampSeen();
       removeToast();
     });
