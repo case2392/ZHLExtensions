@@ -469,7 +469,68 @@
   function buildBody(body, state, rerender) {
     const d = state.data;
     const dti = d.dti;
-    const tiers = evaluateRatioTiers(dti);
+    const dtiTiers = evaluateRatioTiers(dti);
+
+    // ---- Up-front: compute every compensating factor so tier rows
+    // and the recommendation use the same numbers, and so toggling a
+    // manual check propagates to the tier indicators on re-render. ----
+    const m = state.manualChecks;
+
+    // Cash reserves (auto).
+    const reservesMonths = (d.totalAssets != null && d.piti && d.piti > 0)
+      ? (d.totalAssets / d.piti) : null;
+    const reservesNeeded = (d.units != null && d.units >= 3) ? 6 : 3;
+    const reservesOk = reservesMonths != null && reservesMonths >= reservesNeeded;
+
+    // Minimal increase in housing payment (auto).
+    let payIncreaseOk = false;
+    let payIncreaseDetail = 'Need current rent on the Addresses section + PITI to evaluate';
+    let payIncreaseIndeterminate = true;
+    if (d.rent && d.rent.type === 'rent' && d.rent.amount > 0 && d.piti != null) {
+      const allowed = Math.min(100, d.rent.amount * 0.05);
+      const delta = d.piti - d.rent.amount;
+      payIncreaseOk = delta <= allowed;
+      payIncreaseIndeterminate = false;
+      payIncreaseDetail = 'Current rent $' + fmtMoney(d.rent.amount) + ' → PITI $' + fmtMoney(d.piti) +
+        ' = ' + (delta >= 0 ? '+$' : '−$') + fmtMoney(Math.abs(delta)) +
+        ' (rule allows ≤ $' + allowed.toFixed(2) + ')';
+    } else if (d.rent && d.rent.type === 'own') {
+      payIncreaseDetail = 'Currently owns — minimal-increase rule does not apply (compare against current mortgage manually)';
+    }
+
+    // Residual income (auto via the VA Calc module's exposed API).
+    // The va-calc.js content script publishes window.ZHL_VA_CALC_API
+    // which we call into here so users don't have to manually click
+    // through the VA Residual Income Calc panel first.
+    let residualResult = null;
+    try {
+      if (window.ZHL_VA_CALC_API && typeof window.ZHL_VA_CALC_API.computeResidualForPage === 'function') {
+        residualResult = window.ZHL_VA_CALC_API.computeResidualForPage();
+      }
+    } catch (e) { console.warn('[FHA Analyzer] residual API call threw', e); }
+    const residualAuto = residualResult && typeof residualResult.passes === 'boolean';
+    const residualOk = residualAuto ? !!residualResult.passes : !!m.residualIncomeVA;
+
+    // Manual factors that don't have an auto-detection path.
+    const addlIncomeOk = !!m.addlIncome;
+    const noDiscretionaryDebtOk = !!m.noDiscretionaryDebt;
+
+    // Verified comp-factor count, used for the 37/47 (need 1) and
+    // 40/50 (need 2) tier indicators and the final recommendation.
+    const verifiedCFs = [];
+    if (reservesOk) verifiedCFs.push('Cash reserves');
+    if (payIncreaseOk) verifiedCFs.push('Minimal increase in housing payment');
+    if (addlIncomeOk) verifiedCFs.push('Significant additional income');
+    if (residualOk) verifiedCFs.push('Residual income (VA tables)');
+
+    // Per-tier final eligibility — DTI gate AND any required
+    // compensating-factor count or manual gate.
+    const tiers = {
+      tier31:     dtiTiers.tier31,
+      tier37:     dtiTiers.tier37 === null ? null : (dtiTiers.tier37 && verifiedCFs.length >= 1),
+      tier40_40:  dtiTiers.tier40_40 === null ? null : (dtiTiers.tier40_40 && noDiscretionaryDebtOk),
+      tier40_50:  dtiTiers.tier40_50 === null ? null : (dtiTiers.tier40_50 && verifiedCFs.length >= 2)
+    };
 
     // ---- Top summary line ----
     const summary = document.createElement('div');
@@ -500,7 +561,7 @@
     });
 
     // ---- Ratio tier evaluation ----
-    addH(body, 'Ratio tier eligibility (DTI-based)');
+    addH(body, 'Ratio tier eligibility');
     addCheck(body, {
       ok: tiers.tier31 === true,
       indeterminate: tiers.tier31 === null,
@@ -510,43 +571,45 @@
            (tiers.tier31 ? ' — fits' : ' — exceeds 31/43'))
         : 'DTI not available'
     });
+    // 37/47: passes only if DTI fits AND ≥1 verified comp factor.
     addCheck(body, {
       ok: tiers.tier37 === true,
-      indeterminate: tiers.tier37 === null,
-      label: '37 / 47 — Requires ONE compensating factor (see below)',
-      detail: dti.front != null
-        ? ('Your DTI: ' + dti.front.toFixed(2) + '% / ' + dti.back.toFixed(2) + '%' +
-           (tiers.tier37 ? ' — fits' : ' — exceeds 37/47'))
-        : 'DTI not available'
+      indeterminate: tiers.tier37 === null || (dtiTiers.tier37 === true && verifiedCFs.length < 1),
+      label: '37 / 47 — Requires ONE compensating factor',
+      detail: dtiTiers.tier37 === null
+        ? 'DTI not available'
+        : (dtiTiers.tier37
+           ? ('Your DTI: ' + dti.front.toFixed(2) + '% / ' + dti.back.toFixed(2) + '% — fits. Comp factors verified: ' + verifiedCFs.length + ' / 1')
+           : ('Your DTI: ' + dti.front.toFixed(2) + '% / ' + dti.back.toFixed(2) + '% — exceeds 37/47'))
     });
+    // 40/40: passes only if DTI fits AND user confirmed no discretionary debt.
     addCheck(body, {
-      ok: tiers.tier40_40 === true && state.manualChecks.noDiscretionaryDebt,
-      indeterminate: tiers.tier40_40 === null,
+      ok: tiers.tier40_40 === true,
+      indeterminate: tiers.tier40_40 === null || (dtiTiers.tier40_40 === true && !noDiscretionaryDebtOk),
       label: '40 / 40 — Requires NO discretionary debt',
-      detail: dti.back != null
-        ? ('Back-end ≤ 40%? ' + (tiers.tier40_40 ? 'yes' : 'no') +
-           '. Discretionary debt check: ' + (state.manualChecks.noDiscretionaryDebt ? 'confirmed below' : 'unchecked'))
-        : 'DTI not available'
+      detail: dtiTiers.tier40_40 === null
+        ? 'DTI not available'
+        : (dtiTiers.tier40_40
+           ? ('Back-end ≤ 40%: yes. No-discretionary-debt confirmation: ' + (noDiscretionaryDebtOk ? 'confirmed' : 'unchecked (toggle the box below)'))
+           : ('Back-end ' + dti.back.toFixed(2) + '% — exceeds 40%'))
     });
+    // 40/50: passes only if DTI fits AND ≥2 verified comp factors.
     addCheck(body, {
       ok: tiers.tier40_50 === true,
-      indeterminate: tiers.tier40_50 === null,
+      indeterminate: tiers.tier40_50 === null || (dtiTiers.tier40_50 === true && verifiedCFs.length < 2),
       label: '40 / 50 — Requires TWO compensating factors',
-      detail: dti.front != null
-        ? ('Your DTI: ' + dti.front.toFixed(2) + '% / ' + dti.back.toFixed(2) + '%' +
-           (tiers.tier40_50 ? ' — fits' : ' — exceeds 40/50'))
-        : 'DTI not available'
+      detail: dtiTiers.tier40_50 === null
+        ? 'DTI not available'
+        : (dtiTiers.tier40_50
+           ? ('Your DTI: ' + dti.front.toFixed(2) + '% / ' + dti.back.toFixed(2) + '% — fits. Comp factors verified: ' + verifiedCFs.length + ' / 2')
+           : ('Your DTI: ' + dti.front.toFixed(2) + '% / ' + dti.back.toFixed(2) + '% — exceeds 40/50'))
     });
 
     // ---- Compensating factors ----
     addH(body, 'Compensating factors');
 
-    // Reserves: total assets ÷ PITI. Threshold varies by unit count.
-    const reservesMonths = (d.totalAssets != null && d.piti && d.piti > 0)
-      ? (d.totalAssets / d.piti) : null;
-    const reservesNeeded = (d.units != null && d.units >= 3) ? 6 : 3;
     addCheck(body, {
-      ok: reservesMonths != null && reservesMonths >= reservesNeeded,
+      ok: reservesOk,
       indeterminate: reservesMonths == null,
       label: 'Cash reserves — ' + reservesNeeded + '+ months PITIA' + (d.units != null ? ' (' + d.units + '-unit)' : ' (1–2 units assumed)'),
       detail: reservesMonths != null
@@ -554,34 +617,33 @@
         : 'Need both Total assets and Monthly PITI on this page to evaluate'
     });
 
-    // Minimal increase in housing payment: ≤ lower of $100 or 5% of current rent.
-    let payIncreaseResult = null;
-    if (d.rent && d.rent.type === 'rent' && d.rent.amount > 0 && d.piti != null) {
-      const allowed = Math.min(100, d.rent.amount * 0.05);
-      const delta = d.piti - d.rent.amount;
-      payIncreaseResult = {
-        ok: delta <= allowed,
-        detail: 'Current rent $' + fmtMoney(d.rent.amount) + ' → PITI $' + fmtMoney(d.piti) +
-                ' = ' + (delta >= 0 ? '+$' : '−$') + fmtMoney(Math.abs(delta)) +
-                ' (rule allows ≤ $' + allowed.toFixed(2) + ')'
-      };
-    } else if (d.rent && d.rent.type === 'own') {
-      payIncreaseResult = { ok: null, detail: 'Currently owns — minimal-increase rule does not apply (compare against current mortgage manually)' };
-    }
     addCheck(body, {
-      ok: payIncreaseResult ? payIncreaseResult.ok : null,
-      indeterminate: !payIncreaseResult || payIncreaseResult.ok === null,
+      ok: payIncreaseOk,
+      indeterminate: payIncreaseIndeterminate && !payIncreaseOk,
       label: 'Minimal increase in housing payment (≤ lower of $100 or 5%)',
-      detail: payIncreaseResult ? payIncreaseResult.detail : 'Need current rent on the Addresses section + PITI to evaluate'
+      detail: payIncreaseDetail
     });
 
-    // Manual checks — each is a checkbox the user toggles.
+    // Residual income — auto if VA Calc API is available, manual fallback otherwise.
+    if (residualAuto) {
+      addCheck(body, {
+        ok: residualResult.passes,
+        label: 'Residual income — VA tables' + (residualResult.dtiOver41 ? ' (DTI > 41% → 120% bump)' : ''),
+        detail: 'Computed residual: $' + fmtMoney(residualResult.residualIncome) +
+          ' vs requirement $' + fmtMoney(residualResult.requirementEffective) +
+          ' (' + (residualResult.region || 'unknown region') + ', family of ' + (residualResult.familySize || '?') + ')'
+      });
+    } else {
+      addManualCheck(body, state, 'residualIncomeVA',
+        'Residual income — follow VA calculations',
+        'VA Calc auto-evaluation unavailable — run the VA Residual Income Calc on the Liabilities section and tick this box if it passes.',
+        rerender);
+    }
+
+    // Pure-manual factors (no automation possible).
     addManualCheck(body, state, 'addlIncome',
       'Significant additional income not reflected in effective income',
       'Auto-detection not possible — verify from "Other income" or VOE notes.', rerender);
-    addManualCheck(body, state, 'residualIncomeVA',
-      'Residual income — follow VA calculations',
-      'Run the VA Residual Income Calc (on the Liabilities section) and confirm the file passes the VA table.', rerender);
     addManualCheck(body, state, 'noDiscretionaryDebt',
       'No discretionary debt (required for 40/40 tier)',
       'All accounts are paid in full OR have been paid in full monthly for 6+ months.', rerender);
@@ -590,7 +652,7 @@
       'Property meets HUD\'s EEH standards per 4000.1.', rerender);
 
     // ---- Recommendation ----
-    renderRecommendation(body, state, tiers);
+    renderRecommendation(body, state, tiers, verifiedCFs, noDiscretionaryDebtOk);
 
     // ---- Footer ----
     const foot = document.createElement('div');
@@ -600,30 +662,10 @@
     body.appendChild(foot);
   }
 
-  function renderRecommendation(body, state, tiers) {
-    const m = state.manualChecks;
+  function renderRecommendation(body, state, tiers, verifiedCFs, noDiscretionaryDebtOk) {
     const d = state.data;
-    // Count verified compensating factors.
-    // We treat the two auto-evaluated factors as "true" only when the
-    // check actually passed. Manual checks count when the user ticks
-    // them.
-    const reservesMonths = (d.totalAssets != null && d.piti && d.piti > 0)
-      ? (d.totalAssets / d.piti) : null;
-    const reservesNeeded = (d.units != null && d.units >= 3) ? 6 : 3;
-    const reservesOk = reservesMonths != null && reservesMonths >= reservesNeeded;
-    let payIncreaseOk = false;
-    if (d.rent && d.rent.type === 'rent' && d.rent.amount > 0 && d.piti != null) {
-      const allowed = Math.min(100, d.rent.amount * 0.05);
-      payIncreaseOk = (d.piti - d.rent.amount) <= allowed;
-    }
-    const verifiedCFs = [];
-    if (reservesOk) verifiedCFs.push('Cash reserves');
-    if (payIncreaseOk) verifiedCFs.push('Minimal increase in housing payment');
-    if (m.addlIncome) verifiedCFs.push('Significant additional income');
-    if (m.residualIncomeVA) verifiedCFs.push('Residual income (VA tables)');
-
-    // Hard gates first.
     const dti = d.dti;
+    // Hard gates first.
     const scoreOk = d.score != null && d.score >= MIN_SCORE;
     const dtiOk = dti.back != null && dti.back <= MAX_DTI;
 
@@ -653,27 +695,36 @@
         'Back-end DTI ' + (dti.back != null ? dti.back.toFixed(2) + '%' : 'unknown') + ' exceeds the 50% cap.',
         { bg: '#fee2e2', border: '#dc2626', fg: '#7f1d1d' });
     } else {
-      // Pick the strongest tier that's satisfied.
+      // Pick the strongest tier that's satisfied. `tiers` already
+      // incorporates the DTI fit + comp-factor count, so a `true`
+      // value means "fully qualifies under this tier".
       let chosen = null;
-      if (tiers.tier31) chosen = { name: '31 / 43', need: 0, factors: [] };
-      else if (tiers.tier37 && verifiedCFs.length >= 1) chosen = { name: '37 / 47', need: 1, factors: verifiedCFs.slice(0, 1) };
-      else if (tiers.tier40_40 && m.noDiscretionaryDebt) chosen = { name: '40 / 40', need: 0, factors: ['No discretionary debt confirmed'] };
-      else if (tiers.tier40_50 && verifiedCFs.length >= 2) chosen = { name: '40 / 50', need: 2, factors: verifiedCFs.slice(0, 2) };
+      if (tiers.tier31 === true) chosen = { name: '31 / 43', factors: [] };
+      else if (tiers.tier37 === true) chosen = { name: '37 / 47', factors: verifiedCFs.slice(0, 1) };
+      else if (tiers.tier40_40 === true) chosen = { name: '40 / 40', factors: ['No discretionary debt confirmed'] };
+      else if (tiers.tier40_50 === true) chosen = { name: '40 / 50', factors: verifiedCFs.slice(0, 2) };
 
       if (chosen) {
-        const factorLine = chosen.need === 0
-          ? (chosen.factors.length ? 'Comp factors satisfied: ' + chosen.factors.join(', ') : 'No compensating factors required.')
-          : 'Comp factors verified: <strong>' + chosen.factors.join('</strong>, <strong>') + '</strong>';
+        const factorLine = chosen.factors.length
+          ? 'Comp factors satisfied: <strong>' + chosen.factors.join('</strong>, <strong>') + '</strong>'
+          : 'No compensating factors required.';
         lay('✓ Qualifies for FHA Manual UW under tier ' + chosen.name,
           factorLine, { bg: '#dcfce7', border: '#16a34a', fg: '#14532d' });
       } else {
-        // DTI is in range somewhere but compensating factors aren't met.
-        // Tell the user what they'd need.
+        // DTI fits some tier but the gates aren't met yet — tell the
+        // user exactly which gate they're short on.
         const need = [];
-        if (tiers.tier37 && verifiedCFs.length < 1) need.push('Tier 37/47 needs 1 compensating factor (you have ' + verifiedCFs.length + ').');
-        if (tiers.tier40_40 && !m.noDiscretionaryDebt) need.push('Tier 40/40 needs confirmation of no discretionary debt.');
-        if (tiers.tier40_50 && verifiedCFs.length < 2) need.push('Tier 40/50 needs 2 compensating factors (you have ' + verifiedCFs.length + ').');
-        if (!tiers.tier31 && !tiers.tier37 && !tiers.tier40_40 && !tiers.tier40_50) need.push('DTI exceeds every Manual UW ratio tier.');
+        // Note: tiers here are post-gate, so tier37 === false could
+        // mean either DTI doesn't fit OR comp factors are short. We
+        // can distinguish by checking the underlying dtiTiers... but
+        // re-evaluate via dti directly to avoid threading state.
+        const dtiFit37 = dti.front != null && dti.front <= 37 && dti.back <= 47;
+        const dtiFit40_40 = dti.back != null && dti.back <= 40;
+        const dtiFit40_50 = dti.front != null && dti.front <= 40 && dti.back <= 50;
+        if (dtiFit37 && verifiedCFs.length < 1) need.push('Tier 37/47 needs 1 compensating factor (you have ' + verifiedCFs.length + ').');
+        if (dtiFit40_40 && !noDiscretionaryDebtOk) need.push('Tier 40/40 needs confirmation of no discretionary debt — toggle it above.');
+        if (dtiFit40_50 && verifiedCFs.length < 2) need.push('Tier 40/50 needs 2 compensating factors (you have ' + verifiedCFs.length + ').');
+        if (!dtiFit37 && !dtiFit40_40 && !dtiFit40_50) need.push('DTI exceeds every Manual UW ratio tier.');
         lay('⚠ Likely does NOT qualify — see what\'s missing',
           (need.length ? need.join('<br>') : 'See the checks above.'),
           { bg: '#fef3c7', border: '#f59e0b', fg: '#78350f' });

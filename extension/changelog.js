@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.23.1",
+    headline: "FHA Manual Analyzer: auto-evaluates VA residual + accurate tier indicators",
+    highlights: [
+      "Residual income (VA tables) is now auto-evaluated — pulls everything the VA Residual Income Calc reads (income, debts, family size, state, loan amount) and shows ✓ pass / ✗ fail with the actual numbers, instead of being a manual checkbox.",
+      "Ratio tier indicators (37/47, 40/40, 40/50) now reflect BOTH conditions: DTI fits AND enough compensating factors verified. A tier with the DTI in range but factors still short shows '?' until the factor is checked.",
+      "Toggling 'No discretionary debt' now flips the 40/40 indicator live as expected."
+    ],
+    sections: ["fha-manual"]
+  },
+  {
     version: "1.23.0",
     headline: "New: FHA Manual Underwrite Analyzer — one click, full ✓/✗ workup",
     highlights: [

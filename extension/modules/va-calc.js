@@ -2717,6 +2717,36 @@
   document.addEventListener('change', schedule, true);
   document.addEventListener('input', schedule, true);
   schedule();
+
+  // Public-ish API for sibling modules in the same isolated world.
+  // The FHA Manual UW Analyzer (fha-manual-eligible.js) calls this so
+  // it can auto-evaluate the "Residual income — VA tables" compensating
+  // factor without making the user click into the VA calc first.
+  window.ZHL_VA_CALC_API = window.ZHL_VA_CALC_API || {};
+  window.ZHL_VA_CALC_API.computeResidualForPage = function () {
+    try {
+      const state = readPageInputs();
+      if (!state || !state.grossIncome) return null;
+      const result = calculate(state);
+      if (result.residualIncome == null || result.requirement == null) return null;
+      return {
+        residualIncome: result.residualIncome,
+        requirement: result.requirement,
+        // VA bumps the requirement to 120% when back-end DTI > 41%.
+        requirementEffective: result.dtiOver41 && result.requirement120 != null
+          ? result.requirement120 : result.requirement,
+        passes: result.residualIncome >= (result.dtiOver41 && result.requirement120 != null
+          ? result.requirement120 : result.requirement),
+        familySize: state.familySize,
+        region: state.region,
+        loanAmount: state.loanAmount,
+        dtiOver41: !!result.dtiOver41
+      };
+    } catch (e) {
+      console.warn('[VA Calc API] computeResidualForPage threw', e);
+      return null;
+    }
+  };
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
