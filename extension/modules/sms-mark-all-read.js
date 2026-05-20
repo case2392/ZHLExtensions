@@ -71,6 +71,90 @@
     return panel.querySelector('c-slds-sms-inbox') || panel.querySelector('section[role="log"]');
   }
 
+  // ---- "Unread" filter toggle --------------------------------------------
+  //
+  // The messaging panel header has a Unread on/off toggle next to the
+  // search input. Flipping it ON collapses the list to ONLY unread
+  // threads, which both:
+  //   - massively shrinks the number of rows we need to walk
+  //   - bypasses the virtualization problem (a typical unread set is
+  //     small enough to render in full)
+  //
+  // We save the user's original state on entry and restore on exit so
+  // the panel looks the same after a run.
+  function findUnreadToggle(panel) {
+    // The lightning-input wrapper carries the class "unread-toggle".
+    const wrapper = panel.querySelector('lightning-input.unread-toggle');
+    if (wrapper) {
+      // The actual input + clickable label live inside the wrapper.
+      const input = wrapper.querySelector('input[type="checkbox"][role="switch"], input[type="checkbox"]');
+      const label = wrapper.querySelector('label.slds-checkbox_toggle');
+      if (input) return { input: input, label: label, wrapper: wrapper };
+    }
+    // Fallback: walk by label text.
+    const spans = panel.querySelectorAll('span.slds-form-element__label');
+    for (const s of spans) {
+      if ((s.textContent || '').trim() !== 'Unread') continue;
+      const lbl = s.closest('label.slds-checkbox_toggle');
+      if (!lbl) continue;
+      const inp = lbl.querySelector('input[type="checkbox"]') ||
+                  (lbl.parentElement && lbl.parentElement.querySelector('input[type="checkbox"]'));
+      if (inp) return { input: inp, label: lbl, wrapper: lbl.closest('lightning-input') };
+    }
+    return null;
+  }
+
+  async function setUnreadFilter(panel, wantOn) {
+    const t = findUnreadToggle(panel);
+    if (!t) {
+      console.warn(TAG, 'unread toggle not found — proceeding without filter');
+      return { changed: false, was: null };
+    }
+    const was = !!t.input.checked;
+    if (was === !!wantOn) {
+      console.log(TAG, 'unread toggle already', was ? 'on' : 'off', '— no change');
+      return { changed: false, was: was };
+    }
+    // Clicking the label is the most reliable trigger for LWC toggles;
+    // direct input.click() sometimes skips the LWC change handler.
+    const target = t.label || t.input;
+    console.log(TAG, 'flipping unread toggle', was ? 'on→off' : 'off→on', 'via', target);
+    realClick(target);
+    // Wait for the filter to apply and the inbox to re-render.
+    await wait(400);
+    console.log(TAG, 'unread toggle now', t.input.checked ? 'on' : 'off');
+    return { changed: true, was: was };
+  }
+
+  // ---- Inbox auto-scroll (in case filtered list also virtualizes) --------
+  function findScrollContainer(start) {
+    let p = start;
+    while (p && p !== document.body) {
+      const cs = p.style && (p.style.overflowY || '') ||
+                 (window.getComputedStyle ? window.getComputedStyle(p).overflowY : '');
+      if (p.scrollHeight - p.clientHeight > 4 &&
+          (cs === 'auto' || cs === 'scroll' || cs === 'overlay' || p.scrollTop > 0)) {
+        return p;
+      }
+      p = p.parentElement;
+    }
+    return null;
+  }
+  async function scrollInboxDown(panel) {
+    const inbox = findInbox(panel);
+    if (!inbox) return false;
+    const container = findScrollContainer(inbox) ||
+                      inbox.querySelector('section') ||
+                      inbox;
+    if (!container || container.scrollHeight <= container.clientHeight) return false;
+    const before = container.scrollTop;
+    container.scrollTop = container.scrollHeight;
+    await wait(350); // let lazy-load fire
+    const after = container.scrollTop;
+    console.log(TAG, 'scrolled inbox', before, '→', after, '(maxScroll=', (container.scrollHeight - container.clientHeight), ')');
+    return after > before;
+  }
+
   // Returns the visible unread thread <li> elements in DOM order, with
   // detection reasons for each (logged for debugging).
   function findUnreadThreads(panel) {
@@ -221,29 +305,67 @@
   }
 
   async function markAllReadFlow(panel, btn) {
-    const initial = findUnreadThreads(panel);
-    if (!initial.length) {
-      alert('No unread threads in this Messaging panel.');
-      return;
-    }
-
     const origText = btn.textContent;
     btn.disabled = true;
     let ok = 0, fail = 0, attempted = 0;
+    let initialUnreadCount = 0;
+    let toggleRestore = { changed: false, was: null };
 
-    // Paint the overlay over the messaging panel so the user doesn't
-    // see threads flickering open and closed during the run.
-    showOverlay(panel, 'Marking 0/' + initial.length + ' threads as read…');
+    // Paint the overlay BEFORE we flip the Unread filter — the filter
+    // flip causes a visible re-render of the inbox and we don't want
+    // the user to see it.
+    showOverlay(panel, 'Finding unread threads…');
 
-    console.group(TAG + ' run started; initial unread = ' + initial.length);
+    console.group(TAG + ' run started');
     try {
-      // Re-query unread threads each iteration in case the DOM
-      // reorders / removes the row as it transitions to read.
+      // 1. Flip Salesforce's Unread filter ON so the inbox renders
+      //    only unread threads. Without this, the panel's virtualized
+      //    thread list only mounts the visible window of (read +
+      //    unread) rows, and any unread thread scrolled out of view
+      //    is invisible to our scan.
+      toggleRestore = await setUnreadFilter(panel, true);
+
+      // 2. Scroll the filtered list down a few times so any
+      //    virtualized rows mount into the DOM.
+      let scrolledAny = true;
+      let scrollGuard = 0;
+      while (scrolledAny && scrollGuard < 10) {
+        scrolledAny = await scrollInboxDown(panel);
+        scrollGuard++;
+      }
+      // 3. Snap back to top so the first iteration starts on the
+      //    first unread row in the visible viewport.
+      const inbox = findInbox(panel);
+      if (inbox) {
+        const sc = findScrollContainer(inbox);
+        if (sc) sc.scrollTop = 0;
+      }
+      await wait(200);
+
+      // 4. NOW count unread.
+      const initial = findUnreadThreads(panel);
+      initialUnreadCount = initial.length;
+      if (!initial.length) {
+        hideOverlay(panel);
+        alert('No unread threads in this Messaging panel.');
+        return;
+      }
+
+      // 5. Run the marking loop.
+      showOverlay(panel, 'Marking 0/' + initial.length + ' threads as read…');
       let guard = 0;
       while (guard < initial.length + 5) {
-        const current = findUnreadThreads(panel);
+        let current = findUnreadThreads(panel);
         if (!current.length) {
-          console.log(TAG, 'no more unread — done');
+          // Try scrolling down in case more unread rows are below the
+          // fold. If scroll moves at all, re-scan.
+          const moved = await scrollInboxDown(panel);
+          if (moved) {
+            current = findUnreadThreads(panel);
+          }
+        }
+        if (!current.length) {
+          console.log(TAG, 'no more unread visible after scroll — done');
           break;
         }
         const next = current[0];
@@ -262,6 +384,12 @@
       console.error(TAG, 'run failed:', e);
       alert('Mark all as read error: ' + (e && e.message || e));
     } finally {
+      // Restore the Unread toggle to the user's original state so the
+      // panel looks the same as before we started.
+      if (toggleRestore.changed) {
+        try { await setUnreadFilter(panel, !!toggleRestore.was); }
+        catch (e) { console.warn(TAG, 'failed to restore unread toggle', e); }
+      }
       btn.disabled = false;
       btn.textContent = origText;
       hideOverlay(panel);
@@ -273,12 +401,12 @@
       chrome.runtime.sendMessage({
         type: 'TRACK',
         event: 'sms_mark_all_read',
-        props: { initialUnread: initial.length, ok: ok, failed: fail, attempted: attempted }
+        props: { initialUnread: initialUnreadCount, ok: ok, failed: fail, attempted: attempted }
       });
     } catch (_) {}
 
     if (fail) {
-      alert('Marked ' + ok + ' of ' + initial.length + ' threads as read. ' + fail + ' failed — see browser console.');
+      alert('Marked ' + ok + ' of ' + initialUnreadCount + ' threads as read. ' + fail + ' failed — see browser console.');
     }
   }
 

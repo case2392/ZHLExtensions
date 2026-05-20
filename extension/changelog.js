@@ -12,6 +12,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.21.3",
+    headline: "Mark All As Read: finds unread threads scrolled out of view",
+    highlights: [
+      "The messaging panel's thread list is virtualized — only visible rows live in the DOM. v1.21.2 silently missed any unread thread scrolled below the fold (you'd see the red unread dot on the tray icon but the dialog would say 'No unread threads').",
+      "Now flips Salesforce's built-in Unread toggle ON before scanning so the list collapses to only unread threads, then auto-scrolls the filtered list to mount any virtualized rows.",
+      "Restores the Unread toggle to its original state when the run finishes so the panel looks identical to before."
+    ],
+    sections: ["sms-mark-read"]
+  },
+  {
     version: "1.21.2",
     headline: "Mark All As Read: accurate success counts + clean UX",
     highlights: [
