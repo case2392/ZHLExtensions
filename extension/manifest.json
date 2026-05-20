@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ZHL Productivity Pack",
   "short_name": "ZHL Pack",
-  "version": "1.23.4",
+  "version": "1.24.0",
   "description": "Productivity helpers for Zillow Home Loans staff: VA Calc, 2-1 Buydown, Caller ID, SMS shortcuts, and Gmail tweaks.",
   "author": "Justin Case",
   "homepage_url": "https://github.com/case2392/zhlextensions",
@@ -32,7 +32,9 @@
     "https://*.mypurecloud.jp/*",
     "https://*.pure.cloud/*",
     "https://script.google.com/*",
-    "https://script.googleusercontent.com/*"
+    "https://script.googleusercontent.com/*",
+    "https://app.slack.com/*",
+    "https://*.slack.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -135,6 +137,15 @@
     },
     {
       "matches": ["https://operator.zillowhomeloans.com/*"],
+      "js": ["modules/lop-drop-receiver.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://app.slack.com/*",
+        "https://*.slack.com/*"
+      ],
       "js": ["modules/lop-drop-receiver.js"],
       "run_at": "document_start",
       "all_frames": true

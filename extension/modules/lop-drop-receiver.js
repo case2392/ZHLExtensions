@@ -19,7 +19,10 @@
 
   const VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
     ? chrome.runtime.getManifest().version : '?';
-  console.log('[LOP Drop Receiver v' + VERSION + '] loaded at', location.href);
+  // This script runs on both LOP and Slack now — keep the tag generic
+  // so the log lines say where they came from rather than implying LOP.
+  const TAG = '[Gmail Drag → ' + location.hostname + ' v' + VERSION + ']';
+  console.log(TAG, 'loaded at', location.href);
 
   // Cache the active drag's metadata for the duration of one drag
   // session. Refreshed on dragenter so we know whether to preventDefault
@@ -44,7 +47,7 @@
       'background:#b91c1c;color:#fff;padding:10px 16px;' +
       'font:600 13px/1.4 Arial,sans-serif;text-align:center;' +
       'box-shadow:0 2px 6px rgba(0,0,0,.25);');
-    bar.textContent = 'ZHL Pack updated — reload this LOP tab to re-enable Gmail attachment drops.';
+    bar.textContent = 'ZHL Pack updated — reload this tab to re-enable Gmail attachment drops.';
     const close = document.createElement('button');
     close.textContent = '×';
     close.setAttribute('style', 'background:transparent;border:none;color:#fff;font:700 18px/1 sans-serif;margin-left:16px;cursor:pointer;');
@@ -55,7 +58,7 @@
   function markContextDead(reason) {
     if (contextDead) return;
     contextDead = true;
-    console.warn('[LOP Drop Receiver] extension context invalidated — drops disabled until tab reload.', reason || '');
+    console.warn(TAG, 'extension context invalidated — drops disabled until tab reload.', reason || '');
     try { showContextDeadBanner(); } catch (_) {}
   }
 
@@ -121,7 +124,44 @@
       input.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
     } catch (err) {
-      console.warn('[LOP Drop Receiver] inject failed:', err);
+      console.warn(TAG, 'inject failed:', err);
+      return false;
+    }
+  }
+
+  // Fallback for sites whose drop targets don't expose an
+  // input[type=file] — Slack web is the canonical example, the
+  // entire React composer reads dataTransfer.files directly from a
+  // custom drop handler. Re-dispatches a DragEvent on the target
+  // with a real DataTransfer containing our File, so the site's
+  // custom handler sees a populated dataTransfer.files and picks
+  // it up the same as a native OS drop.
+  function synthesizeDropEvent(target, file, originalEvent) {
+    if (!target) return false;
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const baseOpts = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        dataTransfer: dt,
+        clientX: originalEvent ? originalEvent.clientX : 0,
+        clientY: originalEvent ? originalEvent.clientY : 0,
+        screenX: originalEvent ? originalEvent.screenX : 0,
+        screenY: originalEvent ? originalEvent.screenY : 0
+      };
+      // Mark each synthesized event so our own top-level drop
+      // listener doesn't re-process and loop forever.
+      function mark(ev) { ev._zhlSynth = true; return ev; }
+      // Some custom handlers wire dragenter / dragover instead of
+      // (or in addition to) drop, so fire the full sequence.
+      target.dispatchEvent(mark(new DragEvent('dragenter', baseOpts)));
+      target.dispatchEvent(mark(new DragEvent('dragover', baseOpts)));
+      target.dispatchEvent(mark(new DragEvent('drop', baseOpts)));
+      return true;
+    } catch (err) {
+      console.warn(TAG, 'synthesize drop failed:', err);
       return false;
     }
   }
@@ -149,8 +189,8 @@
     lastRefreshAt = now;
     refreshActiveDrag().then(function (drag) {
       cachedDrag = drag;
-      if (drag) console.log('[LOP Drop Receiver] active Gmail drag detected:', drag.name, drag.size, 'bytes (drag types=', types, ')');
-      else if (types.length || filesLen) console.log('[LOP Drop Receiver] dragenter, SW reports no Gmail drag (types=', types, 'files.length=', filesLen, ') — letting native through');
+      if (drag) console.log(TAG, 'active Gmail drag detected:', drag.name, drag.size, 'bytes (drag types=', types, ')');
+      else if (types.length || filesLen) console.log(TAG, 'dragenter, SW reports no Gmail drag (types=', types, 'files.length=', filesLen, ') — letting native through');
     });
   }, true);
 
@@ -168,13 +208,18 @@
   }, true);
 
   window.addEventListener('drop', function (e) {
+    // Ignore our own synthesized drop events (Slack fallback) — those
+    // re-fire the drop on the same target with a real DataTransfer so
+    // Slack's custom handler picks them up. Without this guard we'd
+    // re-process them and loop.
+    if (e._zhlSynth) return;
     const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
     const filesLen = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
     let firstFileName = '';
     if (filesLen > 0) firstFileName = e.dataTransfer.files[0].name + ' (' + e.dataTransfer.files[0].type + ')';
-    console.log('[LOP Drop Receiver] drop fired: types=', types, 'files.length=', filesLen, 'firstFile=', firstFileName, 'target=', e.target && e.target.tagName, 'cachedDrag=', cachedDrag ? cachedDrag.name : 'null');
-    // No hasFilesType gate here: cross-tab Gmail drags arrive on LOP
-    // with types=['text/plain'] (Chrome strips the JS-File entirely).
+    console.log(TAG, 'drop fired: types=', types, 'files.length=', filesLen, 'firstFile=', firstFileName, 'target=', e.target && e.target.tagName, 'cachedDrag=', cachedDrag ? cachedDrag.name : 'null');
+    // No hasFilesType gate here: cross-tab Gmail drags arrive with
+    // types=['text/plain'] (Chrome strips the JS-File entirely).
     // The only reliable signal is the SW cache. If cachedDrag is set
     // OR the SW reports an active drag on a fresh lookup, intercept.
     // Otherwise this is something else and we let it through untouched.
@@ -185,13 +230,20 @@
       e.stopImmediatePropagation();
       const blob = b64ToBlob(drag.b64, drag.mime);
       const file = new File([blob], drag.name, { type: drag.mime });
+      // Strategy: try file-input injection first (works on LOP and
+      // most upload widgets). If no input is found, fall back to
+      // synthesizing a drop event with the file on the target —
+      // that's what Slack web and other custom-drop-handler sites
+      // need because they read dataTransfer.files directly from
+      // their own drop listener.
       const input = findFileInput(e.target);
-      if (!input) {
-        console.warn('[LOP Drop Receiver] no file input found near drop target');
-        return;
-      }
-      if (injectFile(input, file)) {
-        console.log('[LOP Drop Receiver] injected', file.name, '(' + file.size + ' bytes,', file.type + ') into', input);
+      if (input && injectFile(input, file)) {
+        console.log(TAG, 'injected', file.name, '(' + file.size + ' bytes,', file.type + ') into', input);
+      } else {
+        console.log(TAG, 'no input[type=file] near drop target — synthesizing drop event with DataTransfer for', file.name);
+        const ok = synthesizeDropEvent(e.target, file, e);
+        if (ok) console.log(TAG, 'synthesized drop dispatched on', e.target);
+        else console.warn(TAG, 'synthesize fallback also failed');
       }
       cachedDrag = null;
       try { chrome.runtime.sendMessage({ type: 'GMAIL_DRAG_END' }); } catch (_) {}
@@ -201,19 +253,21 @@
       return;
     }
     // No cachedDrag — most likely a real OS file drop. Don't
-    // intercept; let LOP's own drop handler run on the native files.
-    // If the SW *did* have a stale Gmail drag we missed (dragenter
-    // race), best-effort late inject after the fact; LOP may already
-    // have begun processing the webp, but the PDF will appear in the
-    // upload list alongside, which the user can keep.
+    // intercept; let the page's own drop handler run on the native
+    // files. If the SW *did* have a stale Gmail drag we missed
+    // (dragenter race), best-effort late inject / synthesize after.
     const savedTarget = e.target;
     refreshActiveDrag().then(function (drag) {
       if (!drag) return;
       const blob = b64ToBlob(drag.b64, drag.mime);
       const file = new File([blob], drag.name, { type: drag.mime });
       const input = findFileInput(savedTarget);
-      if (!input || !injectFile(input, file)) return;
-      console.log('[LOP Drop Receiver] late-inject', file.name, '(' + file.size + ' bytes) — LOP may also have processed the OS payload');
+      if (input && injectFile(input, file)) {
+        console.log(TAG, 'late-inject', file.name, '(' + file.size + ' bytes) — page may also have processed the OS payload');
+      } else {
+        synthesizeDropEvent(savedTarget, file, e);
+        console.log(TAG, 'late-synthesize drop for', file.name);
+      }
       cachedDrag = null;
       try { chrome.runtime.sendMessage({ type: 'GMAIL_DRAG_END' }); } catch (_) {}
     });

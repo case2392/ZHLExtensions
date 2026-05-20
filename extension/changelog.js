@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.24.0",
+    headline: "Drag Gmail attachments straight into Slack",
+    highlights: [
+      "Previously the Gmail drag worked on LOP but Slack would silently drop the file (no error, just nothing happened). Slack web uses a custom React drop handler that doesn't expose an input[type=file] for us to inject into.",
+      "Fix: receiver now ALSO runs on app.slack.com / *.slack.com, and when no file input is found, it synthesizes a real drop event on the target with a populated DataTransfer so Slack's own composer picks up the file like a native OS drop.",
+      "Same fallback applies to any other site we add later — file-input injection first, drop-event synthesis as a fallback."
+    ],
+    sections: ["gmail-drag"]
+  },
+  {
     version: "1.23.4",
     headline: "Gmail compose: scrollbar no longer disappears when typing past the visible area",
     highlights: [
