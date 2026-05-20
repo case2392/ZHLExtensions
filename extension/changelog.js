@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.23.4",
+    headline: "Gmail compose: scrollbar no longer disappears when typing past the visible area",
+    highlights: [
+      "When you typed a long email in the popup compose, the cursor could scroll below the visible window and the scrollbar would seemingly disappear — actually the body's bottom was sitting behind the toolbar, hiding the scrollbar thumb.",
+      "Fix: added 90px of clearance below the compose body so the toolbar doesn't overlap content or the scrollbar. Also tells the browser to keep the typing cursor 90px above the bottom edge when auto-scrolling, so your text stays visible above the toolbar."
+    ],
+    sections: ["gmail-tweaks"]
+  },
+  {
     version: "1.23.3",
     headline: "FHA Analyzer: cash reserves now subtract cash-to-close from total assets",
     highlights: [

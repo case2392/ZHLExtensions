@@ -122,3 +122,25 @@ html[dir] body[class*="dark"] .gm-reply-all-btn {
 [data-zhl-compose-drag] .bv8 {
   transform: translateY(-90px) !important;
 }
+
+/* Same problem applies to the compose BODY area: our position:fixed
+   toolbar (.aDj) takes itself out of flow, but Gmail's body wrapper
+   (.GP and the inner .Am / .Ar contenteditable region) still grows
+   to fill the dialog's full height. The bottom ~60-90px of the body
+   ends up underneath the toolbar — including the scrollbar thumb,
+   which is why users typing past the visible area can't see (or
+   click) the scrollbar.
+
+   padding-bottom on .GP shifts the inner body's effective bottom
+   above where the toolbar starts. scroll-padding-bottom keeps the
+   typing cursor visible above the toolbar when Gmail auto-scrolls
+   the body to follow the caret. */
+[data-zhl-compose-drag] .GP {
+  padding-bottom: 90px !important;
+}
+[data-zhl-compose-drag] .GP,
+[data-zhl-compose-drag] .Am,
+[data-zhl-compose-drag] .Ar,
+[data-zhl-compose-drag] div[contenteditable="true"][role="textbox"][aria-label*="Body"] {
+  scroll-padding-bottom: 90px;
+}
