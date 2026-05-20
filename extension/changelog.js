@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.23.3",
+    headline: "FHA Analyzer: cash reserves now subtract cash-to-close from total assets",
+    highlights: [
+      "The Cash reserves check was using gross Total Assets, ignoring the cash the borrower has to bring to closing. A file with $30k in assets but $28k cash-to-close only has $2k in actual reserves — but the analyzer was reporting 7.7 months of reserves instead of the real 0.5 months.",
+      "Now reads 'Cash (to) / from' from the right rail and subtracts it from Total assets before dividing by PITI, so the reserve months reflect what's actually available AFTER closing. Cash-out refis (negative cash-to-close) are handled too.",
+      "Detail line now shows the math: 'Assets $30,008 − cash to close $28,142.82 = $1,865.18 ÷ PITI $3,880.29 = 0.5 months'."
+    ],
+    sections: ["fha-manual"]
+  },
+  {
     version: "1.23.2",
     headline: "VA Calc fix: DU was reporting a wildly wrong residual income (huge bug)",
     highlights: [

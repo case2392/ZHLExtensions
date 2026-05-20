@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.23.3": "FHA Analyzer fix: cash reserves now subtract cash-to-close from total assets.",
     "1.23.2": "BUG FIX: VA Calc was filling 'VA total deductions' with too much, causing DU to report wrong residual income. Re-run on open files.",
     "1.23.1": "FHA Analyzer: auto-evaluates VA residual income + tier ✓/✗ now reflects comp-factor count.",
     "1.23.0": "New: one-click FHA Manual UW analyzer with ✓/✗ on every check.",

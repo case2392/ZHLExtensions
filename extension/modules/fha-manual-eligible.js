@@ -391,6 +391,16 @@
     const piti = findRightRailNumber('Monthly PITI') || findRightRailNumber('PITI');
     const monthlyIncome = findRightRailNumber('Monthly income');
     const totalAssets = findRightRailNumber('Total assets') || findRightRailNumber('Total Assets');
+    // "Cash (to) / from" is the borrower's net cash position at
+    // closing — positive when they're BRINGING money to closing
+    // (purchase: down payment + closing costs − credits), negative
+    // when they're getting cash back (cash-out refi). Subtracting
+    // it from Total assets yields the reserves actually available
+    // AFTER closing, which is what FHA's 3-mo / 6-mo reserve rule
+    // measures.
+    const cashToClose = findRightRailNumber('Cash (to) / from') ||
+                        findRightRailNumber('Cash to close') ||
+                        findRightRailNumber('Cash to / from');
     const monthlyLiabilities = findRightRailNumber('Monthly liabilities') || findRightRailNumber('Monthly debts');
     const rent = getCurrentRent();
     const units = getNumberOfUnits();
@@ -402,6 +412,7 @@
       piti: piti,
       monthlyIncome: monthlyIncome,
       totalAssets: totalAssets,
+      cashToClose: cashToClose,
       monthlyLiabilities: monthlyLiabilities,
       rent: rent,
       units: units
@@ -476,9 +487,15 @@
     // manual check propagates to the tier indicators on re-render. ----
     const m = state.manualChecks;
 
-    // Cash reserves (auto).
-    const reservesMonths = (d.totalAssets != null && d.piti && d.piti > 0)
-      ? (d.totalAssets / d.piti) : null;
+    // Cash reserves (auto). Subtract the cash needed to close from
+    // Total assets so we're measuring post-closing reserves. A
+    // borrower with $30k in assets but $28k cash-to-close has only
+    // ~$2k left for reserves — not the full $30k.
+    const cashToClose = (d.cashToClose != null && isFinite(d.cashToClose)) ? d.cashToClose : 0;
+    const reservesAvailable = (d.totalAssets != null)
+      ? Math.max(0, d.totalAssets - cashToClose) : null;
+    const reservesMonths = (reservesAvailable != null && d.piti && d.piti > 0)
+      ? (reservesAvailable / d.piti) : null;
     const reservesNeeded = (d.units != null && d.units >= 3) ? 6 : 3;
     const reservesOk = reservesMonths != null && reservesMonths >= reservesNeeded;
 
@@ -613,7 +630,9 @@
       indeterminate: reservesMonths == null,
       label: 'Cash reserves — ' + reservesNeeded + '+ months PITIA' + (d.units != null ? ' (' + d.units + '-unit)' : ' (1–2 units assumed)'),
       detail: reservesMonths != null
-        ? ('Assets $' + fmtMoney(d.totalAssets) + ' ÷ PITI $' + fmtMoney(d.piti) + ' = ' + reservesMonths.toFixed(1) + ' months')
+        ? ('Assets $' + fmtMoney(d.totalAssets) +
+           (cashToClose ? ' − cash to close $' + fmtMoney(cashToClose) + ' = $' + fmtMoney(reservesAvailable) : '') +
+           ' ÷ PITI $' + fmtMoney(d.piti) + ' = ' + reservesMonths.toFixed(1) + ' months')
         : 'Need both Total assets and Monthly PITI on this page to evaluate'
     });
 
