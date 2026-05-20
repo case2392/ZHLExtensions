@@ -374,7 +374,19 @@
     if (!el || !el.closest) return null;
     const body = el.closest('div[contenteditable="true"][role="textbox"][aria-label*="Body"], div[contenteditable="true"][g_editable]');
     if (!body) return null;
-    return body.closest('div[role="dialog"]');
+    // Popup compose: closest dialog wraps the whole form.
+    const dialog = body.closest('div[role="dialog"]');
+    if (dialog) return dialog;
+    // Inline reply: no dialog wrapper exists. Walk up to the nearest
+    // ancestor that contains an <input type="file"> — that's the inline
+    // compose form (Gmail's hidden file input lives next to the
+    // paperclip button regardless of compose mode).
+    let p = body.parentElement;
+    while (p && p !== document.body) {
+      if (p.querySelector('input[type="file"]')) return p;
+      p = p.parentElement;
+    }
+    return null;
   }
 
   function injectFilesIntoCompose(dialog, fileList) {
