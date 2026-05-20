@@ -45,10 +45,15 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
   if (details.reason === "install") {
     // Fresh install — open the walkthrough page so new users get the
-    // tour. Updates don't open anything; the in-page update toast on
-    // LOP/Gmail/Salesforce handles that.
+    // tour. Stamp the toast's "last seen" key to the current version
+    // so the content script's update-toast doesn't ALSO fire on the
+    // user's first LOP/Gmail/Salesforce tab load.
+    await chrome.storage.local.set({ "_zhl_last_seen_version": VERSION });
     chrome.tabs.create({ url: chrome.runtime.getURL("walkthrough.html?src=install") });
   }
+  // For "update" we intentionally do NOT stamp the version — that's
+  // how the content script's update-toast knows to fire on the next
+  // LOP/Gmail/Salesforce tab load.
 });
 
 // Clicking the toolbar icon opens the setup page too — gives users a second

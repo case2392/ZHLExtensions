@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.20.2": "Update toast fixed — this is the one you're looking at now.",
     "1.20.0": "Walkthrough page added! Click View to see every feature in the pack.",
     "1.19.8": "Gmail attachments now drop on INLINE replies (not just popup composes).",
     "1.19.0": "FHA Manual UW eligibility pill + Copy addresses primary → co-borrower.",
@@ -39,12 +40,17 @@
   const AUTO_DISMISS_MS = 14000;
   const VERSION = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '?';
 
+  console.log('[Update Toast v' + VERSION + '] loaded');
+
   function track(event, props) {
     try { chrome.runtime.sendMessage({ type: 'TRACK', event: event, props: props || {} }); } catch (_) {}
   }
 
   // Only show on top-level frames — don't double-toast in nested iframes.
-  if (window.top !== window.self) return;
+  if (window.top !== window.self) {
+    console.log('[Update Toast] in iframe, skipping');
+    return;
+  }
 
   // Defer until DOM ready (we run at document_idle but Gmail can still
   // be assembling its shell when we fire — wait until body is there).
@@ -56,17 +62,20 @@
   whenBodyReady(function () {
     chrome.storage.local.get([STORAGE_KEY], function (data) {
       const last = data && data[STORAGE_KEY];
-      // First install (no stored version): the install path opens the
-      // walkthrough automatically, so we don't toast here. Just stamp
-      // the current version and bail.
-      if (!last) {
-        chrome.storage.local.set({ [STORAGE_KEY]: VERSION });
+      // Same version already seen — nothing to do.
+      if (last === VERSION) {
+        console.log('[Update Toast] last seen version is current (' + VERSION + ') — not showing');
         return;
       }
-      // Same version already seen — nothing to do.
-      if (last === VERSION) return;
-      // Different version — show toast and stamp.
-      showToast(last);
+      // No stored version: either a fresh install (handled by
+      // chrome.runtime.onInstalled which stamps the key before any
+      // content script runs) OR an existing user upgrading from
+      // before the toast feature existed. In the latter case we
+      // SHOULD show the toast. Fresh installs will have already
+      // been stamped by background.js's onInstalled handler, so
+      // they'll hit the early-return above and skip this branch.
+      console.log('[Update Toast] showing — lastSeen=' + (last || '<none>') + ' current=' + VERSION);
+      showToast(last || 'previous version');
     });
   });
 

@@ -12,6 +12,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.20.2",
+    headline: "Fixed: update toast now actually appears on first page load after an update",
+    highlights: [
+      "Update toast was silently stamping 'seen' on the first load when no prior version was stored — meaning existing users updating to v1.20.0 never saw it.",
+      "Fresh installs vs. existing users are now distinguished via chrome.runtime.onInstalled instead of guessing from storage.",
+      "Added startup console.log so you can verify the toast module loaded and see why it did/didn't show."
+    ],
+    sections: ["whats-new"]
+  },
+  {
     version: "1.20.0",
     headline: "New: in-extension walkthrough page + update notifications",
     highlights: [
