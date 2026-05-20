@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.22.1",
+    headline: "VA Calc: enter square footage instead of doing the math yourself",
+    highlights: [
+      "VA Residual Income Calc: the Maintenance & Utilities row now takes square footage as input (defaulting to 2,500 sq ft). The calc multiplies by $0.14/sqft for you and shows the computed dollar amount below the input.",
+      "FHA Manual UW guideline tooltip rewritten to match the published ZHL matrix verbatim.",
+      "Update toast's 'View what's new' button now lands you at the top of the walkthrough (showing the karma banner + new features) instead of jumping straight to the changelog block."
+    ],
+    sections: ["va-calc", "fha-manual"]
+  },
+  {
     version: "1.22.0",
     headline: "Plain-English changelog + karma link to my Zall Wall",
     highlights: [

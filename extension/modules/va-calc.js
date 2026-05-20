@@ -1526,7 +1526,11 @@
       nonTaxableIncome,
       monthlyDebts,
       piti,
-      maintenance: MAINT_PER_SQFT * DEFAULT_SQFT,
+      // Sq footage of the subject property — the user edits this and
+      // we derive the maintenance/utilities dollar amount from it
+      // (sqft × MAINT_PER_SQFT). Used to be a dollar input that
+      // required the user to do the math themselves.
+      maintSqft: DEFAULT_SQFT,
       childcare: 0,
       familySize,
       state,
@@ -1544,7 +1548,14 @@
     const stateTax = taxableIncome * STATE_TAX_RATE;
     const monthlyDebts = state.monthlyDebts || 0;
     const piti = state.piti || 0;
-    const maintenance = state.maintenance || 0;
+    // Maintenance/utilities derives from sqft × $0.14. Older versions
+    // stored it as a dollar amount the user typed directly; the input
+    // is now sqft and we do the math.
+    const sqft = (typeof state.maintSqft === 'number') ? state.maintSqft
+               : (typeof state.maintenance === 'number' && state.maintenance > 0
+                  ? Math.round(state.maintenance / MAINT_PER_SQFT)
+                  : DEFAULT_SQFT);
+    const maintenance = sqft * MAINT_PER_SQFT;
     const childcare = state.childcare || 0;
     const totalDeductions = fedTax + fica + stateTax + monthlyDebts + piti + maintenance + childcare;
     const residual = gross - totalDeductions;
@@ -1767,6 +1778,49 @@
       body.appendChild(row);
     }
 
+    // Numeric input variant of addEditableRow: no "$" prefix, "sq ft"
+    // suffix instead. Used for the Maintenance & utilities row so the
+    // user enters square footage directly and the calc derives the
+    // dollar amount (was: user typed dollars and had to do the math).
+    function addSqftRow(label, value, computedSuffix, onChange) {
+      const row = document.createElement('div');
+      row.className = 'rric-row rric-editable';
+      const lbl = document.createElement('div');
+      lbl.className = 'rric-label';
+      lbl.textContent = label;
+      const val = document.createElement('div');
+      val.className = 'rric-value';
+      const wrap = document.createElement('span');
+      wrap.className = 'rric-input-wrap';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'rric-input';
+      input.value = String(Math.max(0, Math.round(value || 0)));
+      input.addEventListener('input', function () {
+        const n = parseInt(String(input.value).replace(/[^0-9]/g, ''), 10);
+        onChange(isFinite(n) ? n : 0);
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); rerun.click(); }
+      });
+      const unit = document.createElement('span');
+      unit.className = 'rric-input-suffix';
+      unit.textContent = 'sq ft';
+      unit.style.cssText = 'margin-left:6px;color:#6b7280;font-size:12px;';
+      wrap.appendChild(input);
+      wrap.appendChild(unit);
+      val.appendChild(wrap);
+      if (computedSuffix) {
+        const sfx = document.createElement('div');
+        sfx.className = 'rric-suffix';
+        sfx.textContent = computedSuffix;
+        val.appendChild(sfx);
+      }
+      row.appendChild(lbl);
+      row.appendChild(val);
+      body.appendChild(row);
+    }
+
     function renderBody() {
       body.innerHTML = '';
       const result = calculate(state);
@@ -1782,9 +1836,17 @@
       addRow('− State tax (2%)', '−' + fmt(result.stateTax));
       addRow('− Monthly debts', '−' + fmt(state.monthlyDebts));
       addRow('− Proposed PITI', '−' + fmt(state.piti));
-      addEditableRow('− Maintenance & utilities', state.maintenance, '2,500 sq ft × $0.14 default', function (v) {
-        state.maintenance = v;
-      });
+      // Maintenance & utilities: user enters square footage; the calc
+      // multiplies by $0.14/sqft. Showing the computed dollar amount
+      // beneath the input so they can sanity-check the math.
+      const sqftValue = (typeof state.maintSqft === 'number') ? state.maintSqft : DEFAULT_SQFT;
+      const maintDollars = sqftValue * MAINT_PER_SQFT;
+      addSqftRow(
+        '− Maintenance & utilities',
+        sqftValue,
+        '= ' + fmt(maintDollars) + '  (sq ft × $0.14)',
+        function (v) { state.maintSqft = v; }
+      );
       addEditableRow('− Childcare / daycare', state.childcare, 'Defaults to $0', function (v) {
         state.childcare = v;
       });

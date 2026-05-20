@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.22.1": "VA Calc: enter square footage instead of doing the maintenance math yourself.",
     "1.22.0": "Plain-English changelog + a karma link to my Zall Wall on every update screen.",
     "1.21.4": "The Walkthrough's 'New features' section now lists the freshest items first.",
     "1.21.3": "Mark All As Read now catches unread messages scrolled out of view.",
@@ -153,7 +154,10 @@
       // chrome-extension:// URLs (the same target works fine when
       // clicked from a normal anchor on the setup page). chrome.tabs
       // .create from the SW bypasses that block.
-      const url = chrome.runtime.getURL('walkthrough.html?from=update_toast#whats-new');
+      // No #whats-new hash — the walkthrough auto-scrolls to a hash if
+      // present, and users prefer landing at the top of the page so
+      // they see the karma banner + the freshest NEW cards first.
+      const url = chrome.runtime.getURL('walkthrough.html?from=update_toast');
       try {
         chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: url }, function () {
           // Best-effort fallback if SW didn't respond — try direct.
