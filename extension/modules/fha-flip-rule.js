@@ -251,24 +251,11 @@
       'cursor: pointer',
       'box-sizing: border-box'
     ].join(';');
-    pill.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('[FHA Flip Rule] pill clicked → opening panel');
-      try { openPanel(); }
-      catch (err) {
-        console.error('[FHA Flip Rule] openPanel threw:', err);
-        // Last-ditch fallback so the user can at least enter
-        // something if the modal blew up.
-        try {
-          const typed = window.prompt('FHA Flip Rule — enter the property address:');
-          if (typed && typed.trim()) {
-            stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { address: typed.trim() });
-            paintPill(pill);
-          }
-        } catch (_) {}
-      }
-    });
+    // No per-pill click handler here — the document-level
+    // delegation below (installed once on module load) catches the
+    // click in capture phase. That survives LOP's React
+    // reconciliation if/when it strips the listener off a
+    // re-rendered element.
     paintPill(pill);
     return pill;
   }
@@ -632,7 +619,11 @@
     });
     if (heading) heading.insertAdjacentElement('afterend', pill);
     else host.insertBefore(pill, host.firstChild);
-    console.log('[FHA Flip Rule] pill injected on ' + productName);
+    // Diagnostic counter — if "pill injected" logs many times, LOP
+    // is stripping our injection and the document-level click
+    // delegation is what makes the click actually work.
+    window.__zhlFlipPillInjectCount = (window.__zhlFlipPillInjectCount || 0) + 1;
+    console.log('[FHA Flip Rule] pill injected on ' + productName + ' (injection #' + window.__zhlFlipPillInjectCount + ')');
 
     // First-time auto-lookup: if we have an address but no seller
     // date yet, kick off the Zillow scrape in the background so the
@@ -674,6 +665,35 @@
   observer.observe(document.documentElement, { childList: true, subtree: true });
   setInterval(schedule, 2000);
   schedule();
+
+  // Document-level capture-phase click delegation for the pill.
+  // Attaching the handler to the document instead of the pill
+  // survives any LOP / React re-render that strips listeners off
+  // our injected button. Capture phase ensures we fire BEFORE any
+  // React synthetic-event delegate higher up the tree gets a
+  // chance to stop propagation. Installed exactly once for the
+  // lifetime of the content script.
+  document.addEventListener('click', function (e) {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const pill = t.closest('#' + PILL_ID);
+    if (!pill) return;
+    console.log('[FHA Flip Rule] document-delegated click on pill → opening panel');
+    e.preventDefault();
+    e.stopPropagation();
+    try { openPanel(); }
+    catch (err) {
+      console.error('[FHA Flip Rule] openPanel threw:', err);
+      try {
+        const typed = window.prompt('FHA Flip Rule — enter the property address:');
+        if (typed && typed.trim()) {
+          stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { address: typed.trim() });
+          const p = document.getElementById(PILL_ID);
+          if (p) paintPill(p);
+        }
+      } catch (_) {}
+    }
+  }, true);
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {

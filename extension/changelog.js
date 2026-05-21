@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.3",
+    headline: "FHA Flip Rule: pill click now works even when LOP re-renders the section",
+    highlights: [
+      "Switched the pill's click handler from per-element to document-level capture-phase delegation. Survives LOP's React reconciliation (which can strip event listeners off our injected button) and fires before any React synthetic-event delegate higher up the tree can stop propagation.",
+      "Added an injection counter to the log so future 'click does nothing' reports show whether the pill is being re-injected repeatedly (a sign LOP is stripping our DOM)."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.26.2",
     headline: "FHA Flip Rule: clicking the pill now reliably opens the popup",
     highlights: [
