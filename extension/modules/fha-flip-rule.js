@@ -680,7 +680,19 @@
               console.log('[FHA Flip Rule] auto-filled seller date ' + iso + ' from Zillow');
             }
           } else {
-            console.log('[FHA Flip Rule] background Zillow lookup failed:', resp && resp.error);
+            // Surface the full diagnostic payload here so the page
+            // console (not just the service-worker console) shows
+            // what Zillow returned. Helps debug "still showing
+            // unknown" reports without asking the user to dig
+            // through chrome://extensions → service worker logs.
+            console.log('[FHA Flip Rule] background Zillow lookup failed:',
+              resp && resp.error,
+              'finalUrl=' + (resp && resp.finalUrl),
+              'htmlLen=' + (resp && resp.htmlLen),
+              'blocked=' + (resp && resp.blocked));
+            if (resp && resp.snippet) {
+              console.log('[FHA Flip Rule] Zillow snippet around "Sold":', resp.snippet);
+            }
           }
         });
       } catch (e) {

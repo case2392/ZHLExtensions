@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.7",
+    headline: "FHA Flip Rule: Zillow-lookup diagnostics now visible in the page console",
+    highlights: [
+      "When the background Zillow lookup fails, the full diagnostic payload (final URL, HTML length, the captcha/blocked flag, and the snippet around 'Sold') now logs to the LOP page console — not just the service-worker console. Easier to debug 'still showing unknown' reports without digging through chrome://extensions → service worker logs."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.26.6",
     headline: "FHA Flip Rule: Subject Property address now auto-detected on Full Application page",
     highlights: [

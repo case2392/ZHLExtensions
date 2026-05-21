@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.26.7": "FHA Flip Rule: lookup-failure diagnostics now visible in the page console.",
     "1.26.6": "FHA Flip Rule: Subject Property address now auto-detected on the Full Application page.",
     "1.26.5": "FHA Flip Rule: Zillow auto-fill now actually pulls the sale date (parser fix).",
     "1.26.3": "FHA Flip Rule: pill click now works even when LOP re-renders Loan Details.",
