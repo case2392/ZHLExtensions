@@ -475,6 +475,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: ZHL Loan Comparison PDF ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>ZHL Loan Comparison PDF</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_loanComparisonPdf" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a <strong>ZHL Comparison PDF</strong> button next to LOP&rsquo;s existing <strong>Generate PDF</strong> on the Scenarios review page. Click to generate a borrower-facing comparison PDF for every selected scenario.</li>
+          <li>Mirrors LOP&rsquo;s standard comparison output with the following changes: <strong>Seller credit</strong> is shown as its own line, the <strong>Credit score</strong> and <strong>DTI</strong> rows are removed (the borrower doesn&rsquo;t need their qualifying credit pulled into a handout), and <strong>Estimated monthly cost (PITI)</strong> and <strong>Cash (to)/from</strong> are rendered noticeably bigger / bolder so the borrower&rsquo;s eye lands on the two numbers that matter.</li>
+          <li>Adds a <strong>Page 2 cost summary</strong> per scenario with the monthly cost broken into Principal &amp; interest vs Taxes/insurance/escrows, plus a closing-cost summary showing total closing costs, seller credit applied, net closing cost, down payment, and the final Cash (to)/from at closing.</li>
+          <li>Uses the browser&rsquo;s native &ldquo;Save as PDF&rdquo; print flow &mdash; pick <em>Save as PDF</em> in the print dialog to save, or send straight to your printer.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: DTI Max Purchase Price estimator ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

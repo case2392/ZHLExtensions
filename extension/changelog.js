@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.28.0",
+    headline: "New: ZHL Loan Comparison PDF — better-looking borrower comparison handout",
+    highlights: [
+      "Adds a 'ZHL Comparison PDF' button next to LOP's 'Generate PDF' on the Scenarios review page. Generates a borrower-facing comparison handout for every selected scenario via the browser's native Save as PDF flow.",
+      "Mirrors LOP's standard output with the requested tweaks: Seller credit is now its own row (not buried inside Cash to/from), Credit score and DTI are removed (the borrower doesn't need their qualifying numbers on a handout), and Estimated monthly cost (PITI) + Cash (to)/from are rendered bigger and bolder so they pop visually as the two anchors.",
+      "Adds a Page 2 detailed cost summary — per scenario, breaks the monthly cost into Principal & interest vs Taxes/insurance/escrows, and the closing-cost stack into total closing costs, seller credit applied, net closing cost, down payment, and the final Cash (to)/from at closing.",
+      "Uses chrome.storage's lo_name / lo_nmls / lo_phone / lo_email (same fields the 2-1 Buydown PDF uses) for the contact box."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.27.4",
     headline: "Max-PP estimator: holds down payment $ fixed + only updates after Run pricing",
     highlights: [

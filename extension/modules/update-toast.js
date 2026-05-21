@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.28.0": "New: ZHL Comparison PDF on the Scenarios page — seller credit broken out, bigger monthly + cash, page 2 cost summary.",
     "1.27.4": "Max-PP estimator: BIG MATH FIX — holds down payment $ fixed (not %) + pill stops shifting until Run pricing.",
     "1.27.3": "Max-PP estimator: decomposes taxes/HOI/HOA properly + warns when estimate crosses conforming limit into jumbo.",
     "1.27.2": "Max-PP pill now reads \"Est.\" with a ⚠ — confirm AUS approval at the new price before quoting.",
