@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.27.1",
+    headline: "Max-purchase-price pill: bumped up to a readable size",
+    highlights: [
+      "The Eligibility Details pill from v1.27.0 was rendering at 12px which made it hard to read at a glance. Bumped to 15px / heavier weight with more padding so it stands out next to the existing pills."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.27.0",
     headline: "New: max-purchase-price estimator on the Pricing & Scenarios page",
     highlights: [

@@ -200,16 +200,16 @@
     wrap.style.cssText = [
       'display:inline-flex',
       'align-items:center',
-      'gap:6px',
-      'padding:2px 10px',
-      'margin-left:8px',
+      'gap:8px',
+      'padding:6px 14px',
+      'margin-left:12px',
       'border-radius:999px',
       'background:#eef6ff',
       'border:1px solid #bfdbfe',
       'color:#1d4ed8',
-      'font-size:12px',
-      'font-weight:600',
-      'line-height:1.6',
+      'font-size:15px',
+      'font-weight:700',
+      'line-height:1.5',
       'white-space:nowrap'
     ].join(';');
     wrap.title = (estimate.basedOn
@@ -221,7 +221,7 @@
       + '\n\n' + ZHL_TIP;
     const label = document.createElement('span');
     label.textContent = 'Max ' + estimate.type + ':';
-    label.style.cssText = 'color:#1e3a8a;font-weight:500;';
+    label.style.cssText = 'color:#1e3a8a;font-weight:600;';
     const val = document.createElement('span');
     val.textContent = formatPP(estimate.maxPP) + ' @ ' + estimate.cap + '%';
     wrap.appendChild(label);
