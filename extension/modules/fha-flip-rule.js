@@ -62,69 +62,41 @@
   // ---- Subject-property address scrape ----------------------------------
 
   function readSubjectAddress() {
-    // Scope every lookup to the #SubjectProperty section. The Full
-    // Application page has multiple address inputs (one per borrower
-    // residence, plus this one for the subject property) that all
-    // share the same input names — without scoping, a plain
-    // document.querySelector('input[name="addressStreet"]') returns
-    // the borrower's address instead of the property's.
-    const subjectRoot = document.getElementById('SubjectProperty') ||
-                        document.querySelector('[data-cy="subject-property-section"]') ||
-                        null;
-    const root = subjectRoot || document;
+    // Subject Property fields only exist on the Loan and Property
+    // sub-page of the Full Application — their container has id
+    // "SubjectProperty". On every other LOP page (loan dashboard,
+    // pricing, etc.) the section is absent. Without that anchor we
+    // MUST NOT fall back to a document-wide scan — every page also
+    // has borrower-residence address inputs that share the same
+    // input names (addressStreet, addressCity, addressZIP, ...), so
+    // a fallback would silently return the borrower's address.
+    const root = document.getElementById('SubjectProperty');
+    if (!root) return '';
 
-    // Priority 1: the "Use existing address" select on the Subject
-    // property section. LOP populates this dropdown with the loan's
-    // property address as a non-selectable option even when the
-    // individual street/city/state inputs are empty. The first real
-    // option (after the "Select" placeholder) carries the full
-    // formatted address.
-    const existingSelect = root.querySelector('select[data-cy="select-existing-address"]');
-    if (existingSelect) {
-      for (const opt of existingSelect.options) {
-        const v = (opt.value || '').trim();
-        if (!v) continue;
-        if (/^select$/i.test(v)) continue;
-        if (v.length > 5 && /[A-Za-z]/.test(v) && /\d/.test(v)) return v;
-      }
-    }
-
-    // Priority 2: build from the individual address inputs in the
-    // Subject property section. Scoped to subjectRoot so we don't
-    // pick up the borrower's residence address by accident.
-    function readInput(name) {
+    // Read the live React value off each input/select in the
+    // Subject Property section. NOTE: we DO NOT read the
+    // "Use existing address" select's option list — LOP fills that
+    // dropdown with the borrower's existing addresses as suggested
+    // fill-ins, not with the subject property's address. Reading
+    // it (v1.26.6 behavior) was returning the borrower's mailing
+    // address for users who hadn't picked an option yet.
+    function readField(name) {
       const el = root.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
       return el ? (el.value || '').trim() : '';
     }
-    const street = readInput('addressStreet');
-    const unit = readInput('addressUnit');
-    const city = readInput('addressCity');
-    const state = readInput('addressState');
-    const zip = readInput('addressZIP');
+    const street = readField('addressStreet');
+    const unit = readField('addressUnit');
+    const city = readField('addressCity');
+    const state = readField('addressState');
+    const zip = readField('addressZIP');
     const built = [
       street + (unit ? ' ' + unit : ''),
       city,
       [state, zip].filter(Boolean).join(' ')
     ].filter(function (s) { return s && s.trim(); }).join(', ');
     if (built && built.length > 5 && /\d/.test(built)) {
-      console.log('[FHA Flip Rule] readSubjectAddress (from inputs): "' + built + '"');
+      console.log('[FHA Flip Rule] readSubjectAddress (from #SubjectProperty inputs): "' + built + '"');
       return built;
-    }
-
-    // Priority 3: legacy label-walk fallback (older LOP layouts).
-    const labels = ['Property address', 'Subject property', 'Subject address', 'Address'];
-    for (const label of labels) {
-      const els = document.querySelectorAll('span, dt, label, div');
-      for (const el of els) {
-        if ((el.textContent || '').trim() !== label) continue;
-        const cell = el.parentElement;
-        if (!cell) continue;
-        const candidate = cell.querySelector('p, dd, .value, span:not(:first-child)');
-        if (candidate) {
-          const t = (candidate.textContent || '').trim();
-          if (t && t.length > 5) return t;
-        }
-      }
     }
     return '';
   }
@@ -357,7 +329,11 @@
     // modal opens with an empty address input and the user types
     // directly into it (no separate window.prompt — that flow was
     // unreliable and made the modal feel like it "didn't open").
-    const initialAddress = persisted.address || readSubjectAddress() || '';
+    // Fresh detection wins (same reasoning as scan()): older cached
+    // values may have come from the borrower's residence and need to
+    // be overwritten once the user is on the Subject Property page.
+    const freshAddr = readSubjectAddress();
+    const initialAddress = freshAddr || persisted.address || '';
     console.log('[FHA Flip Rule] openPanel; initialAddress="' + initialAddress + '"');
 
     // Backdrop + panel.
@@ -667,8 +643,31 @@
     // pill is already populated when the user clicks it. This
     // happens silently — no panel is opened.
     const persisted = getLoanState();
-    const address = persisted.address || readSubjectAddress() || '';
-    if (address && !persisted.sellerDate && persisted.zillowAttemptedAddress !== address) {
+    // Fresh detection from #SubjectProperty wins over any cached
+    // value — older versions could cache the borrower's residence
+    // by mistake, so a confirmed Subject Property address must be
+    // able to overwrite it. If detection returns '' (because the
+    // Subject Property section isn't on the current page), keep
+    // whatever the user typed manually before.
+    const fresh = readSubjectAddress();
+    let address;
+    if (fresh) {
+      if (fresh !== persisted.address) {
+        // New / corrected address — drop any stale seller date and
+        // zillow-attempt marker so we re-fetch for this address.
+        stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, {
+          address: fresh,
+          sellerDate: undefined,
+          zillowAttemptedAddress: undefined
+        });
+        console.log('[FHA Flip Rule] subject address updated from "' + (persisted.address || '') + '" to "' + fresh + '"');
+      }
+      address = fresh;
+    } else {
+      address = persisted.address || '';
+    }
+    const cur = getLoanState();
+    if (address && !cur.sellerDate && cur.zillowAttemptedAddress !== address) {
       stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttemptedAddress: address, address: address });
       try {
         chrome.runtime.sendMessage({ type: 'FETCH_ZILLOW_LAST_SOLD', address: address }, function (resp) {

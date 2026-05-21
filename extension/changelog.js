@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.8",
+    headline: "FHA Flip Rule: stop picking up the borrower's residence as the subject address",
+    highlights: [
+      "The previous auto-detection was reading the 'Use existing address' dropdown on the Subject Property section, but that dropdown holds the BORROWER's existing addresses (offered as one-click fill-ins) — not the property's. Loans where the borrower hadn't yet selected an option got their mailing address used by mistake (e.g. '509 Glenwood Dr' for a property that was actually '1920 Baker Ct').",
+      "Also fixed: when the Subject Property section isn't on the current page (loan dashboard, pricing, etc.), the detector used to fall back to a document-wide scan and grab the FIRST 'addressStreet' input it found — which was always the borrower's residence. It now returns empty in that case so cached / manually-typed addresses survive.",
+      "When a fresh Subject Property address is detected and it differs from what was cached, the cache is now updated and the Zillow seller-date lookup re-runs. Earlier 'unknown — click to set' pills should auto-fix themselves the next time you visit the Loan and Property page."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.26.7",
     headline: "FHA Flip Rule: Zillow-lookup diagnostics now visible in the page console",
     highlights: [
