@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.28.1",
+    headline: "ZHL Comparison PDF: page 2 now has the full itemized closing-cost breakdown",
+    highlights: [
+      "Page 2 used to show only the closing-cost totals. Now it auto-opens LOP's \"Detailed cost summary\" popup for each selected scenario, scrapes the full itemized breakdown (Lender costs → Origination fee + total, Fees you cannot shop for → Appraisal/Credit report + total, Third-party costs → Settlement/Title + total, Taxes and other government fees, Prepaids, Initial escrow payment at closing, Other, Credits → Lender credit), and renders it on the PDF.",
+      "Cash-at-closing math (down payment, net closing cost, Cash to/from) lives in its own block on the left of each Page 2 card so the borrower can still see the bottom-line cash figure at a glance.",
+      "The button shows \"Reading 1 / N…\" progress while it scrapes each popup, and stays usable if a scenario's popup fails to open (it just falls back to the summary-only block for that one)."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.28.0",
     headline: "New: ZHL Loan Comparison PDF — better-looking borrower comparison handout",
     highlights: [

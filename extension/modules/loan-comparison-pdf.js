@@ -197,6 +197,236 @@
     return out;
   }
 
+  function findSelectedScenarioCards() {
+    // Returns the DOM elements (not parsed data) so we can drive
+    // each card's closing-costs popup individually below.
+    const out = [];
+    document.querySelectorAll(STYLED_CARD_SELECTOR).forEach(function (card) {
+      if (!isScenarioCard(card)) return;
+      if (!isCardSelected(card)) return;
+      out.push(card);
+    });
+    return out;
+  }
+
+  // ---- Closing-cost popup scraping ------------------------------
+  //
+  // Each scenario card has a "Total closing costs" row whose dollar
+  // amount is a button. Clicking it opens LOP's "Detailed cost
+  // summary" dialog, which we then scrape and close. We do this
+  // sequentially across selected scenarios (LOP renders one dialog
+  // at a time) before composing the PDF.
+
+  function findClosingCostsButton(card) {
+    // The "Total closing costs" span sits next to a Flex with a
+    // single button. Walk to the row container and pull that button.
+    const spans = card.querySelectorAll('span');
+    for (const sp of spans) {
+      if ((sp.textContent || '').replace(/\s+/g, ' ').trim() !== 'Total closing costs') continue;
+      const row = sp.parentElement;
+      if (!row) continue;
+      const btn = row.querySelector('button');
+      if (btn) return btn;
+    }
+    return null;
+  }
+
+  function findOpenDetailDialog() {
+    const dialogs = document.querySelectorAll('section[role="dialog"][aria-modal="true"]');
+    for (const d of dialogs) {
+      const h = d.querySelector('h4, h3, h2');
+      if (h && /Detailed cost summary/i.test(h.textContent || '')) return d;
+    }
+    return null;
+  }
+
+  function findDialogCloseButton(dialog) {
+    // Footer has a Close button; there's also an X icon button in
+    // the header. Prefer the footer button (more reliable in React
+    // dialog implementations).
+    const footer = dialog.querySelector('footer');
+    if (footer) {
+      const btn = footer.querySelector('button');
+      if (btn) return btn;
+    }
+    const buttons = dialog.querySelectorAll('button');
+    for (const b of buttons) {
+      const t = (b.textContent || '').trim();
+      if (/^Close$/i.test(t)) return b;
+    }
+    // Last resort: the visually-hidden "Close" inside the X button.
+    for (const b of buttons) {
+      const hidden = b.querySelector('.VisuallyHidden-c11n-8-111-2__sc-t8tewe-0, span');
+      if (hidden && /^Close$/i.test((hidden.textContent || '').trim())) return b;
+    }
+    return null;
+  }
+
+  function waitFor(predicate, timeoutMs) {
+    return new Promise(function (resolve) {
+      const t0 = Date.now();
+      const tick = function () {
+        let res = null;
+        try { res = predicate(); } catch (_) {}
+        if (res) return resolve(res);
+        if (Date.now() - t0 > timeoutMs) return resolve(null);
+        setTimeout(tick, 80);
+      };
+      tick();
+    });
+  }
+
+  // Pull the structured breakdown out of the open dialog. The
+  // dialog body is a tab panel that lays out:
+  //   Loan costs
+  //     Lender costs        →  items, then a Total row
+  //     Fees you cannot shop for  →  items, then Total
+  //     Third-party costs   →  items, then Total
+  //   Total loan costs  (grand total for Loan costs section)
+  //   Other costs
+  //     Taxes and other government fees  →  items, then Total
+  //     Prepaids            →  items, then Total
+  //     Initial escrow payment at closing  →  items, then Total
+  //     Other               →  items, then Total
+  //   Total other costs    (grand total for Other costs section)
+  //   Total loan and other costs  (sum across loan + other)
+  //   Credits              →  items (no Total)
+  //   Total closing costs  (final grand total = total loan + other - credits)
+  //
+  // We rely on text matching rather than minified class names so
+  // future LOP class-name churn doesn't break us.
+  const SECTION_NAMES = ['Loan costs', 'Other costs', 'Credits'];
+  const SUBSECTION_NAMES = [
+    'Lender costs', 'Fees you cannot shop for', 'Third-party costs',
+    'Taxes and other government fees', 'Prepaids',
+    'Initial escrow payment at closing', 'Other'
+  ];
+  const GRAND_TOTAL_LABELS = [
+    'Total loan costs', 'Total other costs',
+    'Total loan and other costs', 'Total closing costs'
+  ];
+
+  function scrapeClosingCostsDialog(dialog) {
+    const result = {
+      closingCorpId: '',
+      sections: [],
+      grandTotalLoanAndOther: NaN,
+      grandTotalClosingCosts: NaN
+    };
+    if (!dialog) return result;
+
+    // Closing-corp quote ID — appears in the dialog body.
+    const allSpans = Array.from(dialog.querySelectorAll('span'));
+    for (const sp of allSpans) {
+      const t = (sp.textContent || '').trim();
+      const m = /\*?Closing corp quote ID:\s*(\S+)/i.exec(t);
+      if (m) { result.closingCorpId = m[1]; break; }
+    }
+
+    const panel = dialog.querySelector('[role="tabpanel"]') || dialog;
+    const spans = Array.from(panel.querySelectorAll('span'))
+      .filter(function (sp) { return !sp.querySelector('span'); });  // leaves only
+
+    let currentSection = null;
+    let currentSubsection = null;
+
+    // Pseudo-section we lazily create when items appear without a
+    // named subsection (e.g. "Credits" lists items directly).
+    function ensureSubsection(name) {
+      if (!currentSection) return null;
+      if (!currentSubsection || currentSubsection.name !== name) {
+        currentSubsection = { name: name, items: [], total: NaN };
+        currentSection.subsections.push(currentSubsection);
+      }
+      return currentSubsection;
+    }
+
+    let i = 0;
+    while (i < spans.length) {
+      const text = (spans[i].textContent || '').replace(/\s+/g, ' ').trim();
+      const nextText = i + 1 < spans.length
+        ? (spans[i + 1].textContent || '').replace(/\s+/g, ' ').trim()
+        : '';
+
+      if (SECTION_NAMES.indexOf(text) !== -1) {
+        currentSection = { name: text, subsections: [], sectionTotal: null };
+        currentSubsection = null;
+        result.sections.push(currentSection);
+        i++;
+        continue;
+      }
+
+      if (SUBSECTION_NAMES.indexOf(text) !== -1 && currentSection) {
+        currentSubsection = { name: text, items: [], total: NaN };
+        currentSection.subsections.push(currentSubsection);
+        i++;
+        continue;
+      }
+
+      if (text === 'Total' && currentSubsection) {
+        currentSubsection.total = parseMoney(nextText);
+        i += 2;
+        continue;
+      }
+
+      if (GRAND_TOTAL_LABELS.indexOf(text) !== -1) {
+        const v = parseMoney(nextText);
+        if (text === 'Total loan and other costs') result.grandTotalLoanAndOther = v;
+        else if (text === 'Total closing costs') result.grandTotalClosingCosts = v;
+        else if (currentSection) {
+          currentSection.sectionTotal = { label: text, value: v };
+        }
+        i += 2;
+        continue;
+      }
+
+      // "% of loan amount" is a placeholder header with no value
+      // (LOP renders it as a label with an empty value span). Skip
+      // both spans together.
+      if (text === '% of loan amount') { i += 2; continue; }
+
+      // Treat anything else as a (label, value) item if the next
+      // span looks like a money amount.
+      if (nextText && /^-?\$?\(?[\d,]/.test(nextText) && currentSection) {
+        // For the Credits section, items live directly under the
+        // section with no named subsection — synthesize one.
+        const sub = currentSubsection || ensureSubsection('');
+        if (sub) sub.items.push({ label: text, value: parseMoney(nextText) });
+        i += 2;
+        continue;
+      }
+
+      // Unknown / decorative — skip.
+      i++;
+    }
+
+    return result;
+  }
+
+  async function scrapeClosingDetail(card) {
+    const closingBtn = findClosingCostsButton(card);
+    if (!closingBtn) return null;
+    // If a dialog is already open (from a previous failed close /
+    // user click), try to close it first so we open a fresh one for
+    // this card.
+    const existing = findOpenDetailDialog();
+    if (existing) {
+      const closeBtn = findDialogCloseButton(existing);
+      if (closeBtn) closeBtn.click();
+      await waitFor(function () { return !findOpenDetailDialog(); }, 1500);
+    }
+    closingBtn.click();
+    const dialog = await waitFor(findOpenDetailDialog, 5000);
+    if (!dialog) return null;
+    // Give React one more frame to finish rendering the body.
+    await new Promise(function (r) { setTimeout(r, 100); });
+    const detail = scrapeClosingCostsDialog(dialog);
+    const closeBtn = findDialogCloseButton(dialog);
+    if (closeBtn) closeBtn.click();
+    await waitFor(function () { return !findOpenDetailDialog(); }, 2000);
+    return detail;
+  }
+
   function findAnyScenarios() {
     const out = [];
     document.querySelectorAll(STYLED_CARD_SELECTOR).forEach(function (card) {
@@ -427,6 +657,65 @@
     // single "Taxes, insurance, & escrows" line — labeled as such so
     // it doesn't read as misleading detail. Closing-costs summary
     // shows total + seller credit + the upfront cash impact.
+    // Itemized closing-costs table — produced when the in-page
+    // "Detailed cost summary" popup was successfully scraped for
+    // this scenario. Falls back to a small summary block when not.
+    function itemizedClosingHtml(detail, s) {
+      if (!detail || !detail.sections || !detail.sections.length) {
+        const netClosing = (isFinite(s.closingCosts) ? s.closingCosts : 0) -
+          (isFinite(s.sellerCredit) ? s.sellerCredit : 0);
+        return (
+          '<table class="p2tbl">' +
+            '<tr><th>Total closing costs</th><td>' + fmtMoneyHtml(s.closingCosts) + '</td></tr>' +
+            '<tr><th>Seller credit</th><td>' +
+              (isFinite(s.sellerCredit) && s.sellerCredit > 0
+                ? '&minus;' + fmtMoneyHtml(s.sellerCredit)
+                : fmtMoneyHtml(s.sellerCredit)) +
+            '</td></tr>' +
+            '<tr><th>Net closing cost to borrower</th><td>' + fmtMoneyHtml(netClosing) + '</td></tr>' +
+            '<tr><th>Down payment</th><td>' + fmtMoneyHtml(s.downPaymentAmount) + '</td></tr>' +
+            '<tr class="total"><th>Cash (to) / from at closing</th><td>' + fmtMoneyHtml(s.cashToFrom) + '</td></tr>' +
+          '</table>' +
+          '<div class="p2note">Detailed cost breakdown not available — couldn\'t read LOP\'s "Detailed cost summary" popup for this scenario.</div>'
+        );
+      }
+      let html = '<table class="p2cc">';
+      detail.sections.forEach(function (sec) {
+        // Skip the empty "Other costs"-style holder if it has no
+        // subsections (defensive — shouldn't happen in practice).
+        if (!sec.subsections.length) return;
+        html += '<tr class="cc-section"><th colspan="2">' + escapeHtml(sec.name) + '</th></tr>';
+        sec.subsections.forEach(function (sub) {
+          if (sub.name) {
+            html += '<tr class="cc-subsection"><th colspan="2">' + escapeHtml(sub.name) + '</th></tr>';
+          }
+          sub.items.forEach(function (it) {
+            html += '<tr><th>' + escapeHtml(it.label) + '</th><td>' + fmtMoneyHtml(it.value) + '</td></tr>';
+          });
+          if (isFinite(sub.total)) {
+            html += '<tr class="cc-subtotal"><th>Total</th><td>' + fmtMoneyHtml(sub.total) + '</td></tr>';
+          }
+        });
+        if (sec.sectionTotal && isFinite(sec.sectionTotal.value)) {
+          html += '<tr class="cc-sectiontotal"><th>' + escapeHtml(sec.sectionTotal.label) +
+            '</th><td>' + fmtMoneyHtml(sec.sectionTotal.value) + '</td></tr>';
+        }
+      });
+      if (isFinite(detail.grandTotalLoanAndOther)) {
+        html += '<tr class="cc-grand"><th>Total loan and other costs</th><td>' +
+          fmtMoneyHtml(detail.grandTotalLoanAndOther) + '</td></tr>';
+      }
+      if (isFinite(detail.grandTotalClosingCosts)) {
+        html += '<tr class="cc-grandtotal"><th>Total closing costs</th><td>' +
+          fmtMoneyHtml(detail.grandTotalClosingCosts) + '</td></tr>';
+      }
+      html += '</table>';
+      if (detail.closingCorpId) {
+        html += '<div class="p2note">Closing corp quote ID: ' + escapeHtml(detail.closingCorpId) + '</div>';
+      }
+      return html;
+    }
+
     function p2Card(s) {
       const pi = isFinite(s.pi) ? s.pi : NaN;
       const piti = isFinite(s.piti) ? s.piti : NaN;
@@ -449,20 +738,16 @@
                 '<tr><th>Taxes, insurance &amp; escrows</th><td>' + fmtMoneyHtml(escrows) + '</td></tr>' +
                 '<tr class="total"><th>Estimated monthly cost (PITI)</th><td>' + fmtMoneyHtml(piti) + '</td></tr>' +
               '</table>' +
-            '</div>' +
-            '<div class="p2col">' +
-              '<h3>Closing cost summary</h3>' +
+              '<h3 style="margin-top: 12pt;">Cash at closing</h3>' +
               '<table class="p2tbl">' +
-                '<tr><th>Total closing costs</th><td>' + fmtMoneyHtml(s.closingCosts) + '</td></tr>' +
-                '<tr><th>Seller credit</th><td>' +
-                  (isFinite(s.sellerCredit) && s.sellerCredit > 0
-                    ? '&minus;' + fmtMoneyHtml(s.sellerCredit)
-                    : fmtMoneyHtml(s.sellerCredit)) +
-                '</td></tr>' +
-                '<tr><th>Net closing cost to borrower</th><td>' + fmtMoneyHtml(netClosing) + '</td></tr>' +
                 '<tr><th>Down payment</th><td>' + fmtMoneyHtml(s.downPaymentAmount) + '</td></tr>' +
+                '<tr><th>Net closing cost to borrower</th><td>' + fmtMoneyHtml(netClosing) + '</td></tr>' +
                 '<tr class="total"><th>Cash (to) / from at closing</th><td>' + fmtMoneyHtml(s.cashToFrom) + '</td></tr>' +
               '</table>' +
+            '</div>' +
+            '<div class="p2col">' +
+              '<h3>Itemized closing costs</h3>' +
+              itemizedClosingHtml(s.closingDetail, s) +
             '</div>' +
           '</div>' +
           '<div class="p2foot">' +
@@ -527,6 +812,17 @@
       'table.p2tbl th { text-align: left; padding: 3pt 0; font-size: 9.5pt; font-weight: 400; color: #374151; }' +
       'table.p2tbl td { text-align: right; padding: 3pt 0; font-size: 9.5pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
       'table.p2tbl tr.total th, table.p2tbl tr.total td { font-weight: 700; color: #006aff; border-top: 1pt solid #006aff; padding-top: 5pt; margin-top: 3pt; }' +
+      // Itemized closing-cost table (scraped from LOP popup)
+      'table.p2cc { width: 100%; border-collapse: collapse; }' +
+      'table.p2cc th { text-align: left; padding: 2.5pt 0; font-size: 8.5pt; font-weight: 400; color: #374151; }' +
+      'table.p2cc td { text-align: right; padding: 2.5pt 0; font-size: 8.5pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
+      'table.p2cc tr.cc-section th { background: #1f2937; color: #fff; font-weight: 700; font-size: 9pt; padding: 4pt 6pt; }' +
+      'table.p2cc tr.cc-subsection th { font-weight: 700; color: #1f2937; font-size: 8.5pt; padding-top: 5pt; padding-bottom: 2pt; border-bottom: 0.5pt solid #d1d5db; }' +
+      'table.p2cc tr.cc-subtotal th, table.p2cc tr.cc-subtotal td { font-weight: 700; color: #1f2937; border-top: 0.5pt solid #d1d5db; padding-top: 3pt; padding-bottom: 5pt; }' +
+      'table.p2cc tr.cc-sectiontotal th, table.p2cc tr.cc-sectiontotal td { font-weight: 700; color: #1f2937; background: #f3f4f6; padding: 4pt 6pt; }' +
+      'table.p2cc tr.cc-grand th, table.p2cc tr.cc-grand td { font-weight: 700; color: #1f2937; background: #f3f4f6; padding: 4pt 6pt; border-top: 1pt solid #d1d5db; }' +
+      'table.p2cc tr.cc-grandtotal th, table.p2cc tr.cc-grandtotal td { font-weight: 700; color: #006aff; background: #f5f9ff; padding: 5pt 6pt; border-top: 1.5pt solid #006aff; font-size: 10pt; }' +
+      '.p2note { margin-top: 6pt; font-size: 7.5pt; color: #6b7280; font-style: italic; }' +
       '.p2foot { margin-top: 8pt; font-size: 8.5pt; color: #6b7280; }' +
       '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
       '</style></head><body>' +
@@ -578,8 +874,42 @@
   async function onComparisonPdfClick() {
     const btn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
     if (btn && btn.disabled) return;
-    const scenarios = findSelectedScenarios();
-    if (!scenarios.length) return;
+    const cards = findSelectedScenarioCards();
+    if (!cards.length) return;
+
+    // While we open / close each card's closing-costs popup in
+    // sequence, disable the button and show progress so the user
+    // knows what's happening (and doesn't double-click).
+    const originalText = btn ? btn.textContent : '';
+    const originalBg = btn ? btn.style.background : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.style.background = '#94a3b8';
+      btn.style.borderColor = '#94a3b8';
+      btn.style.cursor = 'wait';
+    }
+
+    const scenarios = [];
+    for (let i = 0; i < cards.length; i++) {
+      if (btn) btn.textContent = 'Reading ' + (i + 1) + ' / ' + cards.length + '…';
+      const data = readScenario(cards[i]);
+      try {
+        data.closingDetail = await scrapeClosingDetail(cards[i]);
+      } catch (e) {
+        console.warn('[ZHL Loan Comparison PDF] closing-detail scrape failed for card', i + 1, e);
+        data.closingDetail = null;
+      }
+      scenarios.push(data);
+    }
+
+    if (btn) {
+      btn.textContent = originalText || 'ZHL Comparison PDF';
+      btn.style.background = originalBg || '#006aff';
+      btn.style.borderColor = '#006aff';
+      btn.style.cursor = 'pointer';
+      btn.disabled = false;
+    }
+
     const lo = await readLoProfile();
     const borrowerName = readBorrowerNames();
     const html = renderComparisonHtml(scenarios, lo, borrowerName);
