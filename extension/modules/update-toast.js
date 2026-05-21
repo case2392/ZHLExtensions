@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.27.3": "Max-PP estimator: decomposes taxes/HOI/HOA properly + warns when estimate crosses conforming limit into jumbo.",
     "1.27.2": "Max-PP pill now reads \"Est.\" with a ⚠ — confirm AUS approval at the new price before quoting.",
     "1.27.1": "Max-purchase-price pill: bumped up to a readable size.",
     "1.27.0": "New: max-purchase-price pill in Eligibility Details — back-solves to the DTI cap for each loan type.",

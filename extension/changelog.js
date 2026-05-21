@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.27.3",
+    headline: "Max-PP estimator: better math — taxes, HOI, HOA broken out separately + conforming-crossover warning",
+    highlights: [
+      "Previous versions treated PITI as a single ratio against PP, which scales taxes / HOI / HOA / Other all together — wrong for HOA and any fixed monthly costs. Now the estimator decomposes current PITI into P&I+MI (scales with loan amount), taxes (% of PP if entered as %, otherwise fixed), HOI (same), HOA (fixed), Other (fixed). Real PP estimate is more accurate, especially on loans with HOA or flat monthly costs.",
+      "Added a conforming-limit crossover warning: if the estimated max loan amount climbs past the 2025 baseline ($806,500), the pill turns amber and the tooltip explains that rates and MI factor reprice into high-balance / jumbo, so real PITI at that PP will likely be higher and the actual max LOWER than shown. Treat the number as an upper bound and re-run pricing to confirm.",
+      "Hover the pill to see the full breakdown: P&I+MI per month, taxes per month, insurance per month, plus the estimated loan amount at the suggested PP."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.27.2",
     headline: "Max-PP pill now reads \"Est.\" and shows a ⚠ — verify with AUS before quoting",
     highlights: [

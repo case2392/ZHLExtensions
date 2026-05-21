@@ -155,10 +155,58 @@
     return parseMoney(el.value);
   }
 
+  // Read the scenario form inputs that matter for the breakdown.
+  // We decompose PITI into the components that scale linearly with
+  // PP (P&I + MI, taxes-as-%, HOI-as-%) and the components that
+  // don't (HOA, other monthly, tax-as-flat-$, HOI-as-flat-$). A
+  // pure ratio extrapolation (the v1.27.0/.1/.2 math) overstates
+  // PITI growth when HOA or fixed monthly costs are non-zero, and
+  // it can also understate growth when crossing program tiers —
+  // but the bigger LO-visible accuracy win is decomposing taxes
+  // and insurance correctly.
+  function readPricingForm() {
+    const get = function (name) {
+      const el = document.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
+      return el ? el.value : '';
+    };
+    const dpPct = parseFloat(get('downPayments.0.downPaymentPercent'));
+    return {
+      purchasePrice: parseMoney(get('purchasePrice')),
+      downPaymentPct: isFinite(dpPct) ? dpPct : 0,
+      // Yearly taxes / HOI: LOP stores both an absolute dollar amount
+      // AND a percentage of PP. If the percentage is filled, that's
+      // the authoritative rate and the dollar amount scales with PP.
+      // If only the dollar amount is set, treat it as a fixed bill.
+      yearlyTaxesPct: parseFloat(get('taxesPercentage')) || 0,
+      yearlyTaxesAmount: parseMoney(get('taxesAmount')) || 0,
+      yearlyHoiPct: parseFloat(get('hoiPercentage')) || 0,
+      yearlyHoiAmount: parseMoney(get('hoiAmount')) || 0,
+      hoaMonthly: parseMoney(get('homeownersAssociationDues')) || 0,
+      otherMonthly: parseMoney(get('otherMonthlyPayment')) || 0
+    };
+  }
+
+  // 2025 conforming baseline. High-balance counties go up to
+  // $1,209,750 but the rate / MI hit happens at the baseline for
+  // most LOs. Used only to flag that the estimate crosses into
+  // jumbo / high-balance territory where rates and MI rebase.
+  const CONFORMING_LIMIT_2025 = 806500;
+
   function computeMaxes(rows, income, liab, currentPP) {
     if (!isFinite(income) || income <= 0) return [];
     if (!isFinite(liab)) liab = 0;
     if (!isFinite(currentPP) || currentPP <= 0) return [];
+
+    const form = readPricingForm();
+    const dpFrac = (form.downPaymentPct || 0) / 100;
+    const taxRate = (form.yearlyTaxesPct || 0) / 100;
+    const hoiRate = (form.yearlyHoiPct || 0) / 100;
+    const hoa = form.hoaMonthly || 0;
+    const other = form.otherMonthly || 0;
+    // If taxes / HOI are entered as a flat dollar (no % filled), they
+    // stay constant when PP changes.
+    const fixedTaxMonthly = taxRate > 0 ? 0 : (form.yearlyTaxesAmount / 12);
+    const fixedHoiMonthly = hoiRate > 0 ? 0 : (form.yearlyHoiAmount / 12);
 
     // Group by loan type, pick the row with the lowest PITI per
     // group (the most-generous product for max-PP purposes).
@@ -176,11 +224,65 @@
       const cap = DTI_CAPS[type];
       const maxTotal = income * (cap / 100);
       const maxPiti = maxTotal - liab;
-      if (maxPiti <= 0) { out.push({ type: type, cap: cap, maxPP: 0, reason: 'liabilities exceed cap' }); return; }
-      const pitiPerDollar = row.piti / currentPP;
-      if (!isFinite(pitiPerDollar) || pitiPerDollar <= 0) return;
-      const maxPP = Math.floor(maxPiti / pitiPerDollar / 1000) * 1000;
-      out.push({ type: type, cap: cap, maxPP: maxPP, basedOn: row.product, basedOnPiti: row.piti });
+      if (maxPiti <= 0) {
+        out.push({ type: type, cap: cap, maxPP: 0, reason: 'liabilities exceed cap' });
+        return;
+      }
+
+      // Decompose the current PITI into its components.
+      const currentMonthlyTax = taxRate > 0 ? (currentPP * taxRate / 12) : fixedTaxMonthly;
+      const currentMonthlyHoi = hoiRate > 0 ? (currentPP * hoiRate / 12) : fixedHoiMonthly;
+      const piPlusMi = row.piti - currentMonthlyTax - currentMonthlyHoi - hoa - other;
+      if (piPlusMi <= 0) return;
+
+      const currentLoan = currentPP * (1 - dpFrac);
+      if (currentLoan <= 0) return;
+      // P&I + MI scale together with loan amount at the same rate
+      // and MI factor — true as long as the loan stays inside the
+      // same product tier (conforming / high-balance / jumbo). We
+      // flag the tier crossing below.
+      const piMiPerLoanDollar = piPlusMi / currentLoan;
+
+      // newPiti(newPP) = piMiPerLoanDollar * (1 - dpFrac) * newPP
+      //                + (taxRate + hoiRate) / 12 * newPP
+      //                + fixedTaxMonthly + fixedHoiMonthly + hoa + other
+      //                = slope * newPP + intercept
+      const slope = piMiPerLoanDollar * (1 - dpFrac) + (taxRate + hoiRate) / 12;
+      const intercept = fixedTaxMonthly + fixedHoiMonthly + hoa + other;
+      if (slope <= 0) return;
+      let maxPP = (maxPiti - intercept) / slope;
+      if (!isFinite(maxPP) || maxPP <= 0) return;
+      maxPP = Math.floor(maxPP / 1000) * 1000;
+
+      // Tier-crossing flag: if the estimated max loan amount climbs
+      // past the conforming baseline, rates / MI typically reprice
+      // and a real re-run at this PP will land at a different (and
+      // usually higher) PITI than our linear projection assumes.
+      const estLoan = maxPP * (1 - dpFrac);
+      const currentLoanInTier = currentLoan;
+      const crossesConforming =
+        type === 'CONV' &&
+        currentLoanInTier <= CONFORMING_LIMIT_2025 &&
+        estLoan > CONFORMING_LIMIT_2025;
+
+      out.push({
+        type: type,
+        cap: cap,
+        maxPP: maxPP,
+        basedOn: row.product,
+        basedOnPiti: row.piti,
+        estLoan: estLoan,
+        crossesConforming: crossesConforming,
+        breakdown: {
+          piPlusMi: piPlusMi,
+          monthlyTax: currentMonthlyTax,
+          monthlyHoi: currentMonthlyHoi,
+          hoa: hoa,
+          other: other,
+          taxScales: taxRate > 0,
+          hoiScales: hoiRate > 0
+        }
+      });
     });
     return out;
   }
@@ -204,32 +306,62 @@
       'padding:6px 14px',
       'margin-left:12px',
       'border-radius:999px',
-      'background:#eef6ff',
-      'border:1px solid #bfdbfe',
-      'color:#1d4ed8',
+      'background:' + (estimate.crossesConforming ? '#fef3c7' : '#eef6ff'),
+      'border:1px solid ' + (estimate.crossesConforming ? '#fcd34d' : '#bfdbfe'),
+      'color:' + (estimate.crossesConforming ? '#92400e' : '#1d4ed8'),
       'font-size:15px',
       'font-weight:700',
       'line-height:1.5',
       'white-space:nowrap'
     ].join(';');
-    wrap.title = (estimate.basedOn
-      ? 'ESTIMATED max purchase price for ' + estimate.type +
-        ' at ' + estimate.cap + '% back-end DTI.\nBased on ' + estimate.basedOn +
-        ' (PITI $' + estimate.basedOnPiti.toLocaleString() + ').\n' +
-        'Linear extrapolation from current scenario.\n\n' +
-        '⚠ This is an estimate only. Confirm you have AUS approval ' +
-        '(DU / LPA) at the new purchase price before quoting it to the borrower.'
-      : 'Estimated max purchase price for ' + estimate.type + ' at ' + estimate.cap + '% DTI.')
-      + '\n\n' + ZHL_TIP;
+
+    // Tooltip: breakdown of how PITI was decomposed at the current
+    // PP, plus the standard "this is an estimate" warning. The
+    // breakdown helps an LO sanity-check the number without having
+    // to type the PP into the form and re-run pricing.
+    const b = estimate.breakdown || {};
+    const lines = [
+      'ESTIMATED max purchase price for ' + estimate.type +
+        ' at ' + estimate.cap + '% back-end DTI.',
+      'Based on ' + (estimate.basedOn || '(unknown product)') +
+        ' (current PITI $' + (estimate.basedOnPiti || 0).toLocaleString() + ').',
+      '',
+      'Breakdown of current PITI:',
+      '  P&I + MI:  $' + Math.round(b.piPlusMi || 0).toLocaleString() + '/mo' +
+        ' (scales with loan amount)',
+      '  Taxes:     $' + Math.round(b.monthlyTax || 0).toLocaleString() + '/mo' +
+        ' (' + (b.taxScales ? 'scales with PP' : 'fixed $') + ')',
+      '  Insurance: $' + Math.round(b.monthlyHoi || 0).toLocaleString() + '/mo' +
+        ' (' + (b.hoiScales ? 'scales with PP' : 'fixed $') + ')'
+    ];
+    if (b.hoa) lines.push('  HOA:       $' + Math.round(b.hoa).toLocaleString() + '/mo (fixed)');
+    if (b.other) lines.push('  Other:     $' + Math.round(b.other).toLocaleString() + '/mo (fixed)');
+    lines.push('');
+    lines.push('Estimated loan amount at this PP: $' + Math.round(estimate.estLoan || 0).toLocaleString());
+    if (estimate.crossesConforming) {
+      lines.push('');
+      lines.push('⚠ Estimated loan crosses the 2025 conforming baseline ($806,500).');
+      lines.push('  Rates and MI factor typically reprice into high-balance / jumbo,');
+      lines.push('  so the real PITI at this PP will likely be higher and the actual');
+      lines.push('  max purchase price LOWER than shown. Treat this as an upper bound.');
+    }
+    lines.push('');
+    lines.push('⚠ Estimate only. Confirm AUS approval (DU / LPA) at the new PP before quoting.');
+    lines.push('');
+    lines.push(ZHL_TIP);
+    wrap.title = lines.join('\n');
+
     const label = document.createElement('span');
     label.textContent = 'Est. max ' + estimate.type + ':';
-    label.style.cssText = 'color:#1e3a8a;font-weight:600;';
+    label.style.cssText = 'color:' + (estimate.crossesConforming ? '#78350f' : '#1e3a8a') + ';font-weight:600;';
     const val = document.createElement('span');
     val.textContent = formatPP(estimate.maxPP) + ' @ ' + estimate.cap + '%';
     const warn = document.createElement('span');
     warn.textContent = '⚠';
     warn.style.cssText = 'color:#b45309;font-weight:700;margin-left:2px;';
-    warn.title = 'Estimate only — confirm AUS approval (DU / LPA) at the new purchase price.';
+    warn.title = estimate.crossesConforming
+      ? 'Estimated loan crosses conforming limit — real PITI will likely be higher. Confirm AUS approval at the new price.'
+      : 'Estimate only — confirm AUS approval (DU / LPA) at the new purchase price.';
     wrap.appendChild(label);
     wrap.appendChild(val);
     wrap.appendChild(warn);
