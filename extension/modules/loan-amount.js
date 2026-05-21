@@ -23,19 +23,47 @@
     return cleaned === '' ? NaN : parseFloat(cleaned);
   };
 
+  // React-controlled inputs need TRUSTED input events to actually
+  // commit a programmatic write into the underlying React state.
+  // The synthetic events dispatched by setter+dispatchEvent have
+  // isTrusted=false, which the Constellation form library (LOP's
+  // form framework) ignores for dirty-state tracking — so the
+  // input.value updates visually but LOP's pricing engine keeps the
+  // old number. Mirrors the va-calc.js setReactInputValue pattern
+  // that fixed the same bug there.
+  //
+  // Path: focus → select existing text → execCommand('insertText')
+  // → real .blur(). insertText routes through the browser's input
+  // pipeline and produces trusted input/change events. The native
+  // setter is kept as a fallback for browsers where execCommand
+  // returns false (rare for Chrome but possible).
   const setReactValue = (el, value) => {
-    const proto =
-      el.tagName === 'TEXTAREA'
+    const v = String(value);
+    let viaExec = false;
+    try {
+      el.focus();
+      try { el.setSelectionRange(0, (el.value || '').length); }
+      catch (_) { try { el.select(); } catch (__) {} }
+      viaExec = document.execCommand && document.execCommand('insertText', false, v);
+    } catch (_) { viaExec = false; }
+    if (!viaExec || String(el.value) !== v) {
+      const proto = el.tagName === 'TEXTAREA'
         ? HTMLTextAreaElement.prototype
         : HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-    setter.call(el, value);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
+      const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+      if (desc && desc.set) desc.set.call(el, v);
+      else el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
   };
 
+  // Real .blur() (the DOM method, not a dispatched event) is what
+  // forces React to fire its onBlur handler and commit the field.
+  // A synthetic blur event with isTrusted=false often gets ignored.
   const fireCommit = (el) => {
     el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dispatchEvent(new Event('blur', { bubbles: true }));
+    try { el.blur(); } catch (_) {}
   };
 
   const $purchase = () => document.querySelector('input[name="purchasePrice"]');
@@ -57,7 +85,9 @@
     loan.value = fmtMoney(Math.max(0, +(p - d).toFixed(2)));
   };
 
-  const applyLoanEdit = () => {
+  const waitMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const applyLoanEdit = async () => {
     const loan = $loan();
     if (!loan) return;
     const p = parseNum($purchase()?.value);
@@ -83,48 +113,38 @@
     console.log('downAmt input name:', dAmt && dAmt.name, 'current value:', dAmt && dAmt.value);
     console.log('downPct input name:', dPct && dPct.name, 'current value:', dPct && dPct.value);
 
-    // Find any other inputs on the page that look like they hold a
-    // loan-related amount — LOP may keep a separate "loanAmount" /
-    // "baseLoanAmount" / "ltv" field that the scenario engine reads
-    // instead of (or in addition to) downPayments.0.downPayment.
-    const candidates = document.querySelectorAll(
-      'input[name*="loan" i], input[name*="ltv" i], input[name*="baseLoan" i]'
-    );
-    if (candidates.length) {
-      console.log('other loan-related inputs found on page:');
-      candidates.forEach(function (c) {
-        console.log('  name=' + c.name + ' value=' + c.value + ' tag=' + c.tagName + ' type=' + c.type);
-      });
-    } else {
-      console.log('no other loan-related inputs found.');
-    }
-
     suppressEcho = true;
     try {
+      // Write the DOLLAR amount first. LOP's React form has the
+      // dollar amount as the source of truth — writing it triggers
+      // LOP's own onChange handler which recomputes the percent
+      // internally. We give it 200ms to settle before writing the
+      // percent so the two writes don't race.
       if (dAmt) {
         setReactValue(dAmt, newDown.toFixed(2));
-        fireCommit(dAmt);
-        console.log('after write — downAmt value:', dAmt.value);
+        try { dAmt.blur(); } catch (_) {}
+        await waitMs(200);
+        console.log('after dAmt write+blur — value:', dAmt.value);
       }
+      // Then write the percent explicitly, in case LOP didn't
+      // recompute it. Same trusted-event pattern + real blur +
+      // settle.
       if (dPct) {
         setReactValue(dPct, newPct.toFixed(2));
-        fireCommit(dPct);
-        console.log('after write — downPct value:', dPct.value);
+        try { dPct.blur(); } catch (_) {}
+        await waitMs(200);
+        console.log('after dPct write+blur — value:', dPct.value);
       }
     } finally {
-      Promise.resolve().then(() => {
-        suppressEcho = false;
-      });
+      await waitMs(50);
+      suppressEcho = false;
     }
-    // Poll for 4 seconds so we can see whether LOP's React state
-    // reverts our writes (which would explain why the scenario reads
-    // the wrong values).
-    const startedAt = Date.now();
-    const tick = setInterval(function () {
-      const elapsed = Date.now() - startedAt;
-      console.log('[Loan Amount] +' + elapsed + 'ms downAmt=' + (dAmt && dAmt.value) + ' downPct=' + (dPct && dPct.value));
-      if (elapsed > 4000) clearInterval(tick);
-    }, 500);
+    // Verify the writes stuck. If LOP's React state reverted, the
+    // input value will revert too. This is the smoking-gun log for
+    // "did the down payment actually propagate to LOP's pricing
+    // engine state".
+    await waitMs(800);
+    console.log('[Loan Amount] +1s settled — downAmt=' + (dAmt && dAmt.value) + ' downPct=' + (dPct && dPct.value));
     console.groupEnd();
   };
 

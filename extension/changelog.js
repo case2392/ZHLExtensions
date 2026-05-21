@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.25.1",
+    headline: "Loan amount field: typing in it now actually updates LOP's pricing",
+    highlights: [
+      "When you typed in the Loan amount field (our injected one on the Pricing page), the down payment input visually updated but LOP's pricing engine kept using the old number — so the displayed scenarios showed a different loan amount and LTV than your inputs.",
+      "Same fix that worked for the VA Calc reverting in v1.10.13 and the Copy Addresses module: route writes through document.execCommand('insertText') so the events are trusted by LOP's form library, and call the real .blur() method (not a dispatched event) to commit the value. Writes the dollar amount first with a 200ms settle, then the percent, so the two don't race."
+    ],
+    sections: ["loan-amount"]
+  },
+  {
     version: "1.25.0",
     headline: "New: FHA 90-Day Flip Rule checker on the right rail",
     highlights: [
