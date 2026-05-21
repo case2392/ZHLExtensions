@@ -27,6 +27,7 @@ const FEATURE_KEYS = [
   "feature_taskBulkDelete",
   "feature_fhaBadges",
   "feature_fhaNprWarning",
+  "feature_fhaFlipRule",
   "feature_fhaManualEligible",
   "feature_copyAddresses",
   "feature_updateToast",

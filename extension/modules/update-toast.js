@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.25.0": "New: FHA 90-Day Flip Rule checker under Loan Details on the right rail.",
     "1.24.0": "Drag Gmail attachments straight into Slack — now works on slack.com.",
     "1.23.4": "Gmail compose fix: scrollbar no longer disappears when typing past the visible area.",
     "1.23.3": "FHA Analyzer fix: cash reserves now subtract cash-to-close from total assets.",

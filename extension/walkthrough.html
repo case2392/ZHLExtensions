@@ -357,6 +357,56 @@
       </div>
     </div>
 
+    <!-- FHA 90-Day Flip Rule -->
+    <div class="feature is-new" id="fha-flip-rule">
+      <div class="shot">
+        <svg viewBox="0 0 240 160" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .pulse-bar { animation: bar-pulse 3.6s ease-in-out infinite; }
+            @keyframes bar-pulse {
+              0%, 30% { fill: #fee2e2; stroke: #dc2626; }
+              45%, 70% { fill: #fef3c7; stroke: #f59e0b; }
+              85%, 100% { fill: #dcfce7; stroke: #16a34a; }
+            }
+            .pulse-text { animation: text-pulse 3.6s ease-in-out infinite; }
+            @keyframes text-pulse {
+              0%, 30% { fill: #7f1d1d; }
+              45%, 70% { fill: #78350f; }
+              85%, 100% { fill: #14532d; }
+            }
+            .day-counter { animation: count 3.6s ease-in-out infinite; }
+            @keyframes count {
+              0%, 30% { opacity: 1; }
+              45%, 70% { opacity: 1; }
+              85%, 100% { opacity: 1; }
+            }
+          </style>
+          <text x="10" y="16" font="600 11px Arial" fill="#0b5cab">FHA 90-Day Flip Rule</text>
+          <rect x="10" y="22" width="220" height="20" rx="3" fill="#fff" stroke="#d1d5db"/>
+          <text x="18" y="36" font="500 10px Arial" fill="#374151">Property: 1234 Zillow St</text>
+          <rect x="10" y="46" width="106" height="20" rx="3" fill="#fff" stroke="#d1d5db"/>
+          <text x="18" y="60" font="500 10px Arial" fill="#374151">Seller: 8/15/2025</text>
+          <rect x="124" y="46" width="106" height="20" rx="3" fill="#fff" stroke="#d1d5db"/>
+          <text x="132" y="60" font="500 10px Arial" fill="#374151">Contract: 5/20/2026</text>
+          <rect class="pulse-bar" x="10" y="76" width="220" height="60" rx="6" stroke-width="1.5"/>
+          <text class="pulse-text" x="120" y="98" font="700 12px Arial" text-anchor="middle">278 days</text>
+          <text class="pulse-text" x="120" y="115" font="600 10px Arial" text-anchor="middle">✓ Eligible — no flip restriction</text>
+          <text class="pulse-text" x="120" y="128" font="500 9px Arial" text-anchor="middle">tier &gt; 180 days</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>FHA 90-Day Property Flip Rule checker</h3>
+        <div class="where">Full application → right rail, under Loan Details (FHA loans only)</div>
+        <p>Computes the days between the seller's acquisition date and the contract date, then tells you which FHA flip tier the file falls under.</p>
+        <ul>
+          <li><strong>≤ 90 days</strong> &mdash; red &times;, NOT eligible for FHA insurance.</li>
+          <li><strong>91&ndash;180 days</strong> &mdash; amber, eligible but a second appraisal may be required if the resale price is &ge; 100% over the seller's purchase.</li>
+          <li><strong>&gt; 180 days</strong> &mdash; green &check;, no flip restriction.</li>
+          <li><strong>&#128270; Look up on Zillow</strong> button opens a new tab searched for the property so you can grab the prior sale date from the price-history table, then paste it back into the card.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- VA Calc -->
     <div class="feature" id="va-calc">
       <div class="shot"><img src="images/va-calc.svg" alt="VA residual income calc panel showing taxes, debts, PITI, and table requirement" /></div>

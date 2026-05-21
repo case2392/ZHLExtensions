@@ -475,6 +475,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: FHA 90-Day Flip Rule checker ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA 90-Day Flip Rule checker</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaFlipRule" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a small card under <strong>Loan Details</strong> on the right rail (FHA loans only) with inputs for the property address, the seller&rsquo;s purchase date, and the contract date.</li>
+          <li>One click on <strong>🔎 Look up on Zillow</strong> opens a new tab searched for the property so you can grab the seller&rsquo;s acquisition date from the price history.</li>
+          <li>Computes the days between dates and shows a color-coded result: <strong style="color:#16a34a;">&gt; 180 days</strong> clear, <strong style="color:#d97706;">91&ndash;180 days</strong> may require a second appraisal, <strong style="color:#dc2626;">&le; 90 days</strong> NOT eligible for FHA.</li>
+          <li>Your inputs persist while you&rsquo;re on the loan, so navigating around the application keeps the entered dates.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: FHA Manual Underwrite eligibility badge ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

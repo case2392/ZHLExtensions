@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.25.0",
+    headline: "New: FHA 90-Day Flip Rule checker on the right rail",
+    highlights: [
+      "On FHA loans only, a new card appears on the right rail under Loan Details with inputs for the property address, the seller's purchase date, and the contract date (defaults to today).",
+      "Computes days between dates and color-codes the result: ✓ green when > 180 days (no restriction), ⚠ amber when 91–180 days (second appraisal may be required if resale ≥ 100% over seller's purchase), ✗ red when ≤ 90 days (NOT eligible for FHA).",
+      "Has a 🔎 'Look up on Zillow' button that opens a new tab searched for the property so you can find the seller's acquisition date in the price-history table.",
+      "Your inputs persist while you're on the loan, so navigating around the application doesn't lose them."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.24.0",
     headline: "Drag Gmail attachments straight into Slack",
     highlights: [
