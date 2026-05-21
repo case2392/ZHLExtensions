@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.6",
+    headline: "FHA Flip Rule: Subject Property address now auto-detected on Full Application page",
+    highlights: [
+      "The Full Application page has multiple address sections (each borrower's residence plus the Subject Property), and they all use the same input names like 'addressStreet' and 'addressCity'. The auto-detection was grabbing the FIRST match — usually the borrower's residence — so the pill stayed 'unknown' even when the Subject Property had a real address typed in.",
+      "Now scoped to the #SubjectProperty container so it reads only the Subject Property inputs. The pill should auto-fill from Zillow as soon as the address is populated.",
+      "Also retired the per-loan 'already attempted Zillow' flag in favor of one keyed on the address itself. If the Subject Property address is later added or corrected, the Zillow lookup runs again instead of staying stuck on an earlier 'unknown' result."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.26.5",
     headline: "FHA Flip Rule: Zillow auto-fill now actually works (parser fix)",
     highlights: [

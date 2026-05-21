@@ -62,29 +62,38 @@
   // ---- Subject-property address scrape ----------------------------------
 
   function readSubjectAddress() {
+    // Scope every lookup to the #SubjectProperty section. The Full
+    // Application page has multiple address inputs (one per borrower
+    // residence, plus this one for the subject property) that all
+    // share the same input names — without scoping, a plain
+    // document.querySelector('input[name="addressStreet"]') returns
+    // the borrower's address instead of the property's.
+    const subjectRoot = document.getElementById('SubjectProperty') ||
+                        document.querySelector('[data-cy="subject-property-section"]') ||
+                        null;
+    const root = subjectRoot || document;
+
     // Priority 1: the "Use existing address" select on the Subject
     // property section. LOP populates this dropdown with the loan's
     // property address as a non-selectable option even when the
     // individual street/city/state inputs are empty. The first real
     // option (after the "Select" placeholder) carries the full
     // formatted address.
-    const existingSelect = document.querySelector('select[data-cy="select-existing-address"]');
+    const existingSelect = root.querySelector('select[data-cy="select-existing-address"]');
     if (existingSelect) {
       for (const opt of existingSelect.options) {
         const v = (opt.value || '').trim();
         if (!v) continue;
         if (/^select$/i.test(v)) continue;
-        // The value is the full "1707 Chatham Ridge Circle 108,
-        // Charlotte, NC 28273" formatted string we want.
         if (v.length > 5 && /[A-Za-z]/.test(v) && /\d/.test(v)) return v;
       }
     }
 
     // Priority 2: build from the individual address inputs in the
-    // Subject property section. Some loans have the street/city/state
-    // populated even when the existing-address dropdown is blank.
+    // Subject property section. Scoped to subjectRoot so we don't
+    // pick up the borrower's residence address by accident.
     function readInput(name) {
-      const el = document.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
+      const el = root.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
       return el ? (el.value || '').trim() : '';
     }
     const street = readInput('addressStreet');
@@ -97,7 +106,10 @@
       city,
       [state, zip].filter(Boolean).join(' ')
     ].filter(function (s) { return s && s.trim(); }).join(', ');
-    if (built && built.length > 5 && /\d/.test(built)) return built;
+    if (built && built.length > 5 && /\d/.test(built)) {
+      console.log('[FHA Flip Rule] readSubjectAddress (from inputs): "' + built + '"');
+      return built;
+    }
 
     // Priority 3: legacy label-walk fallback (older LOP layouts).
     const labels = ['Property address', 'Subject property', 'Subject address', 'Address'];
@@ -553,9 +565,13 @@
     rerender();
 
     // Auto-lookup if we have an address but no seller date and
-    // haven't tried yet this session.
-    if (addrInput.value.trim() && !persisted.sellerDate && !persisted.zillowAttempted) {
-      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttempted: true });
+    // haven't tried yet for THIS address. Keying the gate on the
+    // address (not the loan) means that if the Subject Property
+    // address is later populated or corrected, we'll try again
+    // instead of staying stuck on a stale "attempted" flag.
+    const addrNow = addrInput.value.trim();
+    if (addrNow && !persisted.sellerDate && persisted.zillowAttemptedAddress !== addrNow) {
+      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttemptedAddress: addrNow });
       setTimeout(function () { runZillowLookup(true); }, 80);
     }
 
@@ -652,8 +668,8 @@
     // happens silently — no panel is opened.
     const persisted = getLoanState();
     const address = persisted.address || readSubjectAddress() || '';
-    if (address && !persisted.sellerDate && !persisted.zillowAttempted) {
-      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttempted: true, address: address });
+    if (address && !persisted.sellerDate && persisted.zillowAttemptedAddress !== address) {
+      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttemptedAddress: address, address: address });
       try {
         chrome.runtime.sendMessage({ type: 'FETCH_ZILLOW_LAST_SOLD', address: address }, function (resp) {
           if (resp && resp.ok && resp.date) {
