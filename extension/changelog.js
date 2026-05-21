@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.2",
+    headline: "FHA Flip Rule: clicking the pill now reliably opens the popup",
+    highlights: [
+      "Clicking the pill when there was no address was silently doing nothing — the window.prompt() flow it was running first sometimes fails inside Chrome content scripts and blocked the modal from ever appearing.",
+      "Removed the prompt entirely. The popup now always opens directly on click and focuses the address input so you can type immediately if it's empty.",
+      "Added diagnostic console.log so future 'click does nothing' reports are debuggable (the LOP tab's console will show '[FHA Flip Rule] pill clicked → opening panel')."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.26.1",
     headline: "FHA Flip Rule: now a compact pill (click to open) + more Zillow parsing fallbacks",
     highlights: [

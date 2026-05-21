@@ -254,7 +254,20 @@
     pill.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      openPanel();
+      console.log('[FHA Flip Rule] pill clicked → opening panel');
+      try { openPanel(); }
+      catch (err) {
+        console.error('[FHA Flip Rule] openPanel threw:', err);
+        // Last-ditch fallback so the user can at least enter
+        // something if the modal blew up.
+        try {
+          const typed = window.prompt('FHA Flip Rule — enter the property address:');
+          if (typed && typed.trim()) {
+            stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { address: typed.trim() });
+            paintPill(pill);
+          }
+        } catch (_) {}
+      }
     });
     paintPill(pill);
     return pill;
@@ -319,17 +332,13 @@
     if (existing) existing.remove();
 
     const persisted = getLoanState();
-    let initialAddress = persisted.address || readSubjectAddress() || '';
-    if (!initialAddress && !persisted.promptedForAddress) {
-      try {
-        const typed = window.prompt(
-          'No subject property address on this loan yet.\n\nEnter the property address to check the FHA 90-Day Flip Rule:',
-          ''
-        );
-        if (typed && typed.trim()) initialAddress = typed.trim();
-      } catch (_) { /* prompt blocked — fall back to manual input */ }
-      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { promptedForAddress: true });
-    }
+    // Pre-fill the address from persisted state or by re-reading the
+    // Subject property section on each open. If both are empty, the
+    // modal opens with an empty address input and the user types
+    // directly into it (no separate window.prompt — that flow was
+    // unreliable and made the modal feel like it "didn't open").
+    const initialAddress = persisted.address || readSubjectAddress() || '';
+    console.log('[FHA Flip Rule] openPanel; initialAddress="' + initialAddress + '"');
 
     // Backdrop + panel.
     const backdrop = document.createElement('div');
@@ -542,7 +551,14 @@
       setTimeout(function () { runZillowLookup(true); }, 80);
     }
 
-    document.body.appendChild(backdrop);
+    (document.body || document.documentElement).appendChild(backdrop);
+    console.log('[FHA Flip Rule] panel appended to DOM');
+
+    // If the address is empty, focus the address input so the user
+    // can immediately type the property address.
+    if (!addrInput.value.trim()) {
+      try { addrInput.focus(); } catch (_) {}
+    }
   }
 
   function paintResult(box, result) {
