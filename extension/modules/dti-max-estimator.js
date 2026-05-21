@@ -170,8 +170,17 @@
       return el ? el.value : '';
     };
     const dpPct = parseFloat(get('downPayments.0.downPaymentPercent'));
+    const dpAmt = parseMoney(get('downPayments.0.downPayment'));
     return {
       purchasePrice: parseMoney(get('purchasePrice')),
+      // We hold DOWN PAYMENT DOLLARS fixed when extrapolating PP.
+      // That matches how LOs actually run scenarios — the borrower
+      // has a fixed amount of cash to put down, and the question is
+      // "how much house can they afford with that $X?". Holding DP%
+      // constant (v1.27.0-.3 behavior) would scale the down
+      // payment up linearly with PP, hiding the fact that the loan
+      // amount rises much faster when DP$ is held constant.
+      downPaymentAmount: isFinite(dpAmt) ? dpAmt : 0,
       downPaymentPct: isFinite(dpPct) ? dpPct : 0,
       // Yearly taxes / HOI: LOP stores both an absolute dollar amount
       // AND a percentage of PP. If the percentage is filled, that's
@@ -198,7 +207,7 @@
     if (!isFinite(currentPP) || currentPP <= 0) return [];
 
     const form = readPricingForm();
-    const dpFrac = (form.downPaymentPct || 0) / 100;
+    const dpAmount = form.downPaymentAmount || 0;
     const taxRate = (form.yearlyTaxesPct || 0) / 100;
     const hoiRate = (form.yearlyHoiPct || 0) / 100;
     const hoa = form.hoaMonthly || 0;
@@ -207,6 +216,7 @@
     // stay constant when PP changes.
     const fixedTaxMonthly = taxRate > 0 ? 0 : (form.yearlyTaxesAmount / 12);
     const fixedHoiMonthly = hoiRate > 0 ? 0 : (form.yearlyHoiAmount / 12);
+    const currentLtv = ((currentPP - dpAmount) / currentPP) * 100;
 
     // Group by loan type, pick the row with the lowest PITI per
     // group (the most-generous product for max-PP purposes).
@@ -235,7 +245,7 @@
       const piPlusMi = row.piti - currentMonthlyTax - currentMonthlyHoi - hoa - other;
       if (piPlusMi <= 0) return;
 
-      const currentLoan = currentPP * (1 - dpFrac);
+      const currentLoan = currentPP - dpAmount;
       if (currentLoan <= 0) return;
       // P&I + MI scale together with loan amount at the same rate
       // and MI factor — true as long as the loan stays inside the
@@ -243,27 +253,41 @@
       // flag the tier crossing below.
       const piMiPerLoanDollar = piPlusMi / currentLoan;
 
-      // newPiti(newPP) = piMiPerLoanDollar * (1 - dpFrac) * newPP
-      //                + (taxRate + hoiRate) / 12 * newPP
-      //                + fixedTaxMonthly + fixedHoiMonthly + hoa + other
-      //                = slope * newPP + intercept
-      const slope = piMiPerLoanDollar * (1 - dpFrac) + (taxRate + hoiRate) / 12;
-      const intercept = fixedTaxMonthly + fixedHoiMonthly + hoa + other;
+      // Hold DOWN PAYMENT DOLLARS fixed when projecting PP, so the
+      // loan grows by every dollar of PP increase. This matches how
+      // LOs run "how much house can the borrower afford" — the cash
+      // available for down payment is fixed; what flexes is PP.
+      //
+      // newLoan(newPP)    = newPP - dpAmount
+      // newPiPlusMi(newPP) = piMiPerLoanDollar * (newPP - dpAmount)
+      //                    = piMiPerLoanDollar * newPP - piMiPerLoanDollar * dpAmount
+      // newTax(newPP)     = (taxRate / 12) * newPP   (if taxRate > 0; else fixedTaxMonthly)
+      // newHoi(newPP)     = (hoiRate / 12) * newPP   (if hoiRate > 0; else fixedHoiMonthly)
+      // newPiti(newPP) = slope * newPP + intercept
+      //   slope     = piMiPerLoanDollar + (taxRate + hoiRate) / 12
+      //   intercept = -piMiPerLoanDollar * dpAmount + fixedTaxMonthly + fixedHoiMonthly + hoa + other
+      const slope = piMiPerLoanDollar + (taxRate + hoiRate) / 12;
+      const intercept = -piMiPerLoanDollar * dpAmount + fixedTaxMonthly + fixedHoiMonthly + hoa + other;
       if (slope <= 0) return;
       let maxPP = (maxPiti - intercept) / slope;
       if (!isFinite(maxPP) || maxPP <= 0) return;
       maxPP = Math.floor(maxPP / 1000) * 1000;
 
-      // Tier-crossing flag: if the estimated max loan amount climbs
-      // past the conforming baseline, rates / MI typically reprice
-      // and a real re-run at this PP will land at a different (and
-      // usually higher) PITI than our linear projection assumes.
-      const estLoan = maxPP * (1 - dpFrac);
-      const currentLoanInTier = currentLoan;
+      // Tier-crossing flags. Linear extrapolation can't know that
+      // crossing 80% LTV adds PMI (where it was previously absent),
+      // or that crossing the conforming baseline reprices the loan
+      // into high-balance / jumbo. Surface both so the LO knows
+      // when to treat the estimate as an upper bound.
+      const estLoan = maxPP - dpAmount;
+      const estLtv = (estLoan / maxPP) * 100;
       const crossesConforming =
         type === 'CONV' &&
-        currentLoanInTier <= CONFORMING_LIMIT_2025 &&
+        currentLoan <= CONFORMING_LIMIT_2025 &&
         estLoan > CONFORMING_LIMIT_2025;
+      const crossesPmi =
+        type === 'CONV' &&
+        currentLtv <= 80 &&
+        estLtv > 80;
 
       out.push({
         type: type,
@@ -272,7 +296,9 @@
         basedOn: row.product,
         basedOnPiti: row.piti,
         estLoan: estLoan,
+        estLtv: estLtv,
         crossesConforming: crossesConforming,
+        crossesPmi: crossesPmi,
         breakdown: {
           piPlusMi: piPlusMi,
           monthlyTax: currentMonthlyTax,
@@ -280,7 +306,9 @@
           hoa: hoa,
           other: other,
           taxScales: taxRate > 0,
-          hoiScales: hoiRate > 0
+          hoiScales: hoiRate > 0,
+          dpAmount: dpAmount,
+          currentLtv: currentLtv
         }
       });
     });
@@ -299,6 +327,7 @@
   function buildPill(estimate) {
     const wrap = document.createElement('div');
     wrap.setAttribute(PILL_ATTR, estimate.type);
+    const flagged = estimate.crossesConforming || estimate.crossesPmi;
     wrap.style.cssText = [
       'display:inline-flex',
       'align-items:center',
@@ -306,9 +335,9 @@
       'padding:6px 14px',
       'margin-left:12px',
       'border-radius:999px',
-      'background:' + (estimate.crossesConforming ? '#fef3c7' : '#eef6ff'),
-      'border:1px solid ' + (estimate.crossesConforming ? '#fcd34d' : '#bfdbfe'),
-      'color:' + (estimate.crossesConforming ? '#92400e' : '#1d4ed8'),
+      'background:' + (flagged ? '#fef3c7' : '#eef6ff'),
+      'border:1px solid ' + (flagged ? '#fcd34d' : '#bfdbfe'),
+      'color:' + (flagged ? '#92400e' : '#1d4ed8'),
       'font-size:15px',
       'font-weight:700',
       'line-height:1.5',
@@ -326,6 +355,9 @@
       'Based on ' + (estimate.basedOn || '(unknown product)') +
         ' (current PITI $' + (estimate.basedOnPiti || 0).toLocaleString() + ').',
       '',
+      'Assumes down payment stays at $' + Math.round(b.dpAmount || 0).toLocaleString() +
+        ' (current LTV ' + (b.currentLtv || 0).toFixed(1) + '%).',
+      '',
       'Breakdown of current PITI:',
       '  P&I + MI:  $' + Math.round(b.piPlusMi || 0).toLocaleString() + '/mo' +
         ' (scales with loan amount)',
@@ -337,7 +369,14 @@
     if (b.hoa) lines.push('  HOA:       $' + Math.round(b.hoa).toLocaleString() + '/mo (fixed)');
     if (b.other) lines.push('  Other:     $' + Math.round(b.other).toLocaleString() + '/mo (fixed)');
     lines.push('');
-    lines.push('Estimated loan amount at this PP: $' + Math.round(estimate.estLoan || 0).toLocaleString());
+    lines.push('Estimated loan at this PP: $' + Math.round(estimate.estLoan || 0).toLocaleString() +
+      ' (LTV ' + (estimate.estLtv || 0).toFixed(1) + '%)');
+    if (estimate.crossesPmi) {
+      lines.push('');
+      lines.push('⚠ Estimated LTV crosses 80%. PMI will kick in at the new PP and');
+      lines.push('  the rate sheet may reprice. Real PITI will be higher and the');
+      lines.push('  actual max purchase price LOWER than shown. Treat as upper bound.');
+    }
     if (estimate.crossesConforming) {
       lines.push('');
       lines.push('⚠ Estimated loan crosses the 2025 conforming baseline ($806,500).');
@@ -353,15 +392,17 @@
 
     const label = document.createElement('span');
     label.textContent = 'Est. max ' + estimate.type + ':';
-    label.style.cssText = 'color:' + (estimate.crossesConforming ? '#78350f' : '#1e3a8a') + ';font-weight:600;';
+    label.style.cssText = 'color:' + (flagged ? '#78350f' : '#1e3a8a') + ';font-weight:600;';
     const val = document.createElement('span');
     val.textContent = formatPP(estimate.maxPP) + ' @ ' + estimate.cap + '%';
     const warn = document.createElement('span');
     warn.textContent = '⚠';
     warn.style.cssText = 'color:#b45309;font-weight:700;margin-left:2px;';
-    warn.title = estimate.crossesConforming
-      ? 'Estimated loan crosses conforming limit — real PITI will likely be higher. Confirm AUS approval at the new price.'
-      : 'Estimate only — confirm AUS approval (DU / LPA) at the new purchase price.';
+    warn.title = estimate.crossesPmi
+      ? 'Estimated LTV crosses 80% — PMI will kick in and real PITI will be higher. Confirm AUS approval at the new price.'
+      : (estimate.crossesConforming
+        ? 'Estimated loan crosses conforming limit — real PITI will likely be higher. Confirm AUS approval at the new price.'
+        : 'Estimate only — confirm AUS approval (DU / LPA) at the new purchase price.');
     wrap.appendChild(label);
     wrap.appendChild(val);
     wrap.appendChild(warn);
@@ -379,6 +420,30 @@
 
   // ---- Scan loop ------------------------------------------------
 
+  // Latch on the pricing-results signature. The pill should only
+  // re-derive its number when the LO clicks "Run pricing" and the
+  // result rows actually change — not when they're mid-edit on the
+  // scenario form (PP, DP, taxes). If we recompute on every form
+  // edit, an LO who types a new PP to test the estimate watches the
+  // pill shift in real time and the number stops being a stable
+  // reference. Holding the value until the next pricing run avoids
+  // that. Re-renders are still allowed (DOM may have been wiped by
+  // a LOP re-render), but the *value* stays put.
+  let lastPricingSignature = null;
+  let lastEstimates = [];
+
+  function pricingSignature(rows, income, liab) {
+    // Include income / liabilities so we re-derive if the loan-level
+    // numbers change (e.g. user updates declared income or pays off
+    // a debt and reloads). The form-level PP / DP / taxes are
+    // intentionally excluded — those should only matter when the
+    // user re-runs pricing.
+    const rowKey = rows.map(function (r) {
+      return r.product + ':' + r.piti + ':' + r.dtiBack;
+    }).join('|');
+    return rowKey + '#i=' + income + '#l=' + liab;
+  }
+
   function scan() {
     // Only meaningful on the pricing/scenarios sub-page.
     if (!/\/loan-officer-portal\//.test(location.pathname)) return;
@@ -388,11 +453,21 @@
     if (!rows.length) {
       // Pricing not run yet — clear any stale pills.
       document.querySelectorAll('[' + PILL_ATTR + ']').forEach(function (el) { el.remove(); });
+      lastPricingSignature = null;
+      lastEstimates = [];
       return;
     }
-    const pp = readCurrentPurchasePrice();
-    const estimates = computeMaxes(rows, elig.income, elig.liabilities, pp);
-    renderPills(estimates, elig.row);
+    const sig = pricingSignature(rows, elig.income, elig.liabilities);
+    if (sig !== lastPricingSignature) {
+      // Pricing-results rows OR income/liabilities just changed —
+      // the LO ran pricing (or reloaded). Recompute and latch.
+      const pp = readCurrentPurchasePrice();
+      lastEstimates = computeMaxes(rows, elig.income, elig.liabilities, pp);
+      lastPricingSignature = sig;
+    }
+    // Re-render (the pill DOM may have been stripped by a LOP
+    // re-render even when the value hasn't changed).
+    renderPills(lastEstimates, elig.row);
   }
 
   let scheduled = false;

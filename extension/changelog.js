@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.27.4",
+    headline: "Max-PP estimator: holds down payment $ fixed + only updates after Run pricing",
+    highlights: [
+      "BIG MATH FIX: previous versions assumed the down payment PERCENTAGE stayed constant when extrapolating PP. But when an LO actually types a higher PP into LOP keeping the same dollar down payment, the loan amount grows MUCH faster (the borrower's $300k stays $300k, the loan goes from $300k to $621k, etc.) and PITI / DTI climb way past the linear projection. Now the estimator holds down-payment DOLLARS fixed, which matches what LOs actually do when shopping max price for a borrower with a fixed amount saved.",
+      "Added PMI-crossover warning: if the current scenario is below 80% LTV (no PMI) but the estimated max PP would cross 80%, the pill turns amber and warns that PMI will kick in, real PITI will be higher, and the actual max will be lower.",
+      "STALE-PRICING FIX: the pill no longer recomputes when you edit the scenario form. Previously, typing a new PP / DP / tax rate would re-derive the estimate before you clicked Run pricing — the number you were trying to test against shifted in real time. Now the pill latches to the last pricing-results rows and only updates after Run pricing returns new numbers (or your loan-level income / liabilities change)."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.27.3",
     headline: "Max-PP estimator: better math — taxes, HOI, HOA broken out separately + conforming-crossover warning",
     highlights: [
