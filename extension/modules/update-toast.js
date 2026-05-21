@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.27.0": "New: max-purchase-price pill in Eligibility Details — back-solves to the DTI cap for each loan type.",
     "1.26.8": "FHA Flip Rule: stop reading the borrower's residence as the subject property address.",
     "1.26.7": "FHA Flip Rule: lookup-failure diagnostics now visible in the page console.",
     "1.26.6": "FHA Flip Rule: Subject Property address now auto-detected on the Full Application page.",

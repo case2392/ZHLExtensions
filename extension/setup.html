@@ -475,6 +475,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: DTI Max Purchase Price estimator ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Max purchase price estimator</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_dtiMaxEstimator" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>On the <strong>Pricing &amp; Scenarios</strong> page, adds a pill in the Eligibility Details row showing the estimated max purchase price that would push back-end DTI to its program cap: <strong>Conv 49.99%</strong>, <strong>FHA 56.99%</strong>, <strong>VA 60%</strong>.</li>
+          <li>If a scenario priced multiple loan types, shows one pill per type side-by-side.</li>
+          <li>Reads the current scenario&rsquo;s PITI and back-end DTI, plus monthly income and liabilities from the top of the page, then back-solves the price assuming taxes / HOI / MI scale linearly with PP (accurate to within 1&ndash;2%).</li>
+          <li>Hover the pill for the math behind it.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: FHA 90-Day Flip Rule checker ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

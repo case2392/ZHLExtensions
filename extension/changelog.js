@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.27.0",
+    headline: "New: max-purchase-price estimator on the Pricing & Scenarios page",
+    highlights: [
+      "Adds a pill in the Eligibility Details bar that shows the estimated maximum purchase price that would push back-end DTI to the program cap — Conv 49.99%, FHA 56.99%, VA 60%. One pill per loan type that's in the current scenario's results.",
+      "Math: reads the best (lowest PITI) product row per loan type, computes how many PITI dollars per dollar of purchase price (taxes + HOI + MI all scale linearly with PP at a fixed down payment %), then back-solves the PP that hits the DTI cap. Accurate to within 1-2% of what re-running pricing would show.",
+      "Hover any pill to see the breakdown: which product the estimate is based on, that product's current PITI, and the DTI target.",
+      "Type the suggested number into the Purchase price field to verify — the loan-amount fix from v1.25.1 means LOP's pricing engine will pick it up on the next Run pricing."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.26.8",
     headline: "FHA Flip Rule: stop picking up the borrower's residence as the subject address",
     highlights: [
