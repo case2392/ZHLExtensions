@@ -238,7 +238,12 @@
     const pill = document.createElement('button');
     pill.id = PILL_ID;
     pill.type = 'button';
+    pill.tabIndex = 0;
     pill.title = 'FHA 90-Day Flip Rule — click for details.\n\n' + ZHL_TIP;
+    // pointer-events:auto + relative positioning + z-index together
+    // make sure no inherited CSS on an LOP ancestor can suppress
+    // clicks on the pill and that the pill stacks above any same-
+    // parent siblings that might overlap.
     pill.style.cssText = [
       'display: inline-flex',
       'align-items: center',
@@ -249,8 +254,24 @@
       'border: 1px solid transparent',
       'font: 600 12px/1.2 Arial,Helvetica,sans-serif',
       'cursor: pointer',
-      'box-sizing: border-box'
+      'box-sizing: border-box',
+      'pointer-events: auto',
+      'position: relative',
+      'z-index: 10'
     ].join(';');
+    // Per-element click handler in addition to the document-level
+    // delegation below. If LOP's React strips this one, the
+    // document handler still works; if React stops propagation
+    // before document, this one still fires.
+    function pillClick(e) {
+      console.log('[FHA Flip Rule] direct pill ' + e.type + ' handler');
+      e.preventDefault();
+      e.stopPropagation();
+      try { openPanel(); }
+      catch (err) { console.error('[FHA Flip Rule] openPanel threw:', err); }
+    }
+    pill.addEventListener('click', pillClick);
+    pill.addEventListener('mousedown', pillClick);
     // No per-pill click handler here — the document-level
     // delegation below (installed once on module load) catches the
     // click in capture phase. That survives LOP's React
@@ -673,12 +694,12 @@
   // React synthetic-event delegate higher up the tree gets a
   // chance to stop propagation. Installed exactly once for the
   // lifetime of the content script.
-  document.addEventListener('click', function (e) {
+  function handlePillEvent(e) {
     const t = e.target;
-    if (!t || !t.closest) return;
+    if (!t || !t.closest) return false;
     const pill = t.closest('#' + PILL_ID);
-    if (!pill) return;
-    console.log('[FHA Flip Rule] document-delegated click on pill → opening panel');
+    if (!pill) return false;
+    console.log('[FHA Flip Rule] document-delegated ' + e.type + ' on pill → opening panel');
     e.preventDefault();
     e.stopPropagation();
     try { openPanel(); }
@@ -693,7 +714,60 @@
         }
       } catch (_) {}
     }
-  }, true);
+    return true;
+  }
+  // Listen for multiple event types in capture phase. If the click
+  // event is being consumed somewhere before reaching us, the
+  // mousedown or pointerdown might still get through.
+  document.addEventListener('click', handlePillEvent, true);
+  document.addEventListener('mousedown', handlePillEvent, true);
+  document.addEventListener('pointerdown', handlePillEvent, true);
+
+  // Diagnostic: log when ANY mouse event happens on or under the
+  // pill. If the user reports "click does nothing" and none of
+  // these log, the pill is not actually receiving pointer events
+  // (covered by an overlay, pointer-events:none from an ancestor,
+  // or in a different stacking context than we think).
+  ['mouseover', 'mousedown', 'pointerdown', 'click'].forEach(function (et) {
+    document.addEventListener(et, function (e) {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const pill = t.closest('#' + PILL_ID);
+      if (!pill) return;
+      // Only log mouseover once per second to avoid spam.
+      if (et === 'mouseover') {
+        if (window.__zhlFlipPillLastOver && Date.now() - window.__zhlFlipPillLastOver < 1000) return;
+        window.__zhlFlipPillLastOver = Date.now();
+      }
+      console.log('[FHA Flip Rule DEBUG] ' + et + ' reached document for pill area; target=' +
+        (t.tagName || '?') + (t.id ? '#' + t.id : '') +
+        (t.className ? '.' + String(t.className).split(' ').join('.') : ''));
+    }, true);
+  });
+
+  // Periodic sanity check: if the pill is in the DOM, log its
+  // bounding rect + computed pointer-events / display so we can
+  // see if it's actually visible and clickable. Runs once 3s after
+  // load, then every 30s thereafter.
+  function pillDiagnostic() {
+    const pill = document.getElementById(PILL_ID);
+    if (!pill) {
+      console.log('[FHA Flip Rule DEBUG] periodic check: NO PILL in DOM');
+      return;
+    }
+    const r = pill.getBoundingClientRect();
+    const cs = window.getComputedStyle(pill);
+    console.log('[FHA Flip Rule DEBUG] pill state:',
+      'rect=', Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height),
+      'display=' + cs.display,
+      'visibility=' + cs.visibility,
+      'pointer-events=' + cs.pointerEvents,
+      'z-index=' + cs.zIndex,
+      'parent=' + (pill.parentElement && pill.parentElement.tagName) +
+        (pill.parentElement && pill.parentElement.className ? '.' + String(pill.parentElement.className).split(' ').slice(0, 2).join('.') : ''));
+  }
+  setTimeout(pillDiagnostic, 3000);
+  setInterval(pillDiagnostic, 30000);
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
