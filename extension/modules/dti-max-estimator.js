@@ -213,19 +213,26 @@
       'white-space:nowrap'
     ].join(';');
     wrap.title = (estimate.basedOn
-      ? 'Estimated max purchase price for ' + estimate.type +
+      ? 'ESTIMATED max purchase price for ' + estimate.type +
         ' at ' + estimate.cap + '% back-end DTI.\nBased on ' + estimate.basedOn +
         ' (PITI $' + estimate.basedOnPiti.toLocaleString() + ').\n' +
-        'Linear extrapolation from current scenario.'
+        'Linear extrapolation from current scenario.\n\n' +
+        '⚠ This is an estimate only. Confirm you have AUS approval ' +
+        '(DU / LPA) at the new purchase price before quoting it to the borrower.'
       : 'Estimated max purchase price for ' + estimate.type + ' at ' + estimate.cap + '% DTI.')
       + '\n\n' + ZHL_TIP;
     const label = document.createElement('span');
-    label.textContent = 'Max ' + estimate.type + ':';
+    label.textContent = 'Est. max ' + estimate.type + ':';
     label.style.cssText = 'color:#1e3a8a;font-weight:600;';
     const val = document.createElement('span');
     val.textContent = formatPP(estimate.maxPP) + ' @ ' + estimate.cap + '%';
+    const warn = document.createElement('span');
+    warn.textContent = '⚠';
+    warn.style.cssText = 'color:#b45309;font-weight:700;margin-left:2px;';
+    warn.title = 'Estimate only — confirm AUS approval (DU / LPA) at the new purchase price.';
     wrap.appendChild(label);
     wrap.appendChild(val);
+    wrap.appendChild(warn);
     return wrap;
   }
 

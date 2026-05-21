@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.27.2",
+    headline: "Max-PP pill now reads \"Est.\" and shows a ⚠ — verify with AUS before quoting",
+    highlights: [
+      "Renamed to \"Est. max Conv / FHA / VA\" so it's obviously an estimate, not a quote.",
+      "Added a ⚠ warning glyph after the dollar amount. Hovering surfaces the full message: this is an estimate only — confirm you have AUS approval (DU / LPA) at the new purchase price before quoting it to the borrower."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.27.1",
     headline: "Max-purchase-price pill: bumped up to a readable size",
     highlights: [
