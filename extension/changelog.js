@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.1",
+    headline: "FHA Flip Rule: now a compact pill (click to open) + more Zillow parsing fallbacks",
+    highlights: [
+      "Replaced the bulky card with a small pill under Loan Details, matching the FHA Manual Eligible pill style. The pill is color-coded: green clear, amber 91–180 days, red NOT eligible, gray unknown.",
+      "Click the pill (any state) to open a popup with the address, dates, and rule-tier reference — same inputs the bulky card had, just on demand.",
+      "Zillow parser now tries more patterns: escaped-JSON sale dates, 'Last sold for ...' text, dateSold / soldDate / lastSoldDate fields, and a few more shapes the previous code missed. Logs the response length and a snippet around 'Sold' to the SW console when nothing matched, so future misses are easier to debug.",
+      "Background auto-lookup happens silently on first mount — the pill is already accurate by the time you click it."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.26.0",
     headline: "FHA Flip Rule card now auto-reads the address + auto-pulls last sold date from Zillow",
     highlights: [

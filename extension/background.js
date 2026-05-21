@@ -415,6 +415,8 @@ async function fetchZillowLastSold(addressRaw) {
   const url = "https://www.zillow.com/homes/" + encodeURIComponent(address) + "_rb/";
 
   let html;
+  let finalUrl = url;
+  let httpStatus = 0;
   try {
     const res = await fetch(url, {
       // Don't send our extension's identity to Zillow; their bot
@@ -426,19 +428,26 @@ async function fetchZillowLastSold(addressRaw) {
       },
       redirect: "follow"
     });
+    httpStatus = res.status;
+    finalUrl = res.url || url;
     if (!res.ok) {
-      return { ok: false, error: "Zillow returned HTTP " + res.status, url };
+      return { ok: false, error: "Zillow returned HTTP " + res.status, url, finalUrl };
     }
     html = await res.text();
   } catch (e) {
     return { ok: false, error: "fetch failed: " + (e && e.message || e), url };
   }
 
+  console.log("[Zillow lookup] addr=" + address +
+    " status=" + httpStatus +
+    " finalUrl=" + finalUrl +
+    " htmlLen=" + html.length);
+
   // Detect captcha / login wall — Zillow shows a "Press & hold" or
   // "Please verify you are a human" page when bot-blocking. Bail
   // early so the user knows to enter the date manually.
   if (/Press &amp; Hold to confirm|press and hold|please verify|are you a human/i.test(html)) {
-    return { ok: false, error: "Zillow showed a captcha / verification page — try again later or enter the date manually", url, blocked: true };
+    return { ok: false, error: "Zillow showed a captcha / verification page — try again later or enter the date manually", url, finalUrl, blocked: true, htmlLen: html.length };
   }
 
   // Strategy 1: __NEXT_DATA__ JSON. Newer Zillow pages embed the
@@ -467,21 +476,52 @@ async function fetchZillowLastSold(addressRaw) {
   }
 
   // Strategy 3: regex over the raw HTML for any "Sold on" / "Last
-  // sold" pattern. Less precise but works on simpler listing-card
-  // markup.
+  // sold" / "Sold date" pattern. Less precise but works on simpler
+  // listing-card markup.
   const regexes = [
+    // JSON in script blobs
     /"event"\s*:\s*"Sold"[^}]*?"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"/,
     /"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"[^}]*?"event"\s*:\s*"Sold"/,
+    /"event"\s*:\s*"Sold"[^}]*?"time"\s*:\s*"(\d{4}-\d{2}-\d{2})/,
+    // Escaped JSON inside double-encoded payloads
+    /\\"event\\"\s*:\s*\\"Sold\\"[^}]*?\\"date\\"\s*:\s*\\"(\d{4}-\d{2}-\d{2})\\"/,
+    /\\"date\\"\s*:\s*\\"(\d{4}-\d{2}-\d{2})\\"[^}]*?\\"event\\"\s*:\s*\\"Sold\\"/,
+    // Visible markup
     /Sold\s+(?:on\s+)?(\d{1,2}\/\d{1,2}\/\d{4})/i,
+    /(\d{1,2}\/\d{1,2}\/\d{4})[^<]*?<[^>]*>[^<]*Sold/i,
     /Last\s+sold(?:\s+for[^.]*?)?\s+on\s+(\d{1,2}\/\d{1,2}\/\d{4})/i,
-    /datePublished[^>]*?>(\d{4}-\d{2}-\d{2})</i
+    /Last\s+sold[^<]*?(\d{4}-\d{2}-\d{2})/i,
+    /datePublished[^>]*?>(\d{4}-\d{2}-\d{2})</i,
+    // dateSold / soldDate fields anywhere in the page
+    /"(?:dateSold|soldDate|lastSoldDate)"\s*:\s*"?(\d{4}-\d{2}-\d{2})/i,
+    /"(?:dateSold|soldDate|lastSoldDate)"\s*:\s*"?(\d{1,2}\/\d{1,2}\/\d{4})/i
   ];
   for (const re of regexes) {
     const m = html.match(re);
-    if (m && m[1]) return { ok: true, date: m[1], source: "zillow:regex", url };
+    if (m && m[1]) {
+      console.log("[Zillow lookup] matched regex " + re + " → " + m[1]);
+      return { ok: true, date: m[1], source: "zillow:regex", url, finalUrl };
+    }
   }
 
-  return { ok: false, error: "no sale date found in Zillow response", url };
+  // Diagnostic snippet — if Zillow returned a search results page or
+  // a listing without price history we want to know what we got
+  // back. Search for the word "Sold" so we can see what context it
+  // appears in (or whether it's missing entirely).
+  const soldIdx = html.indexOf("Sold");
+  const snippet = soldIdx >= 0
+    ? html.slice(Math.max(0, soldIdx - 80), Math.min(html.length, soldIdx + 160))
+    : html.slice(0, 240);
+  console.log("[Zillow lookup] no parse hit. snippet around 'Sold':", snippet);
+
+  return {
+    ok: false,
+    error: "no sale date found in Zillow response",
+    url,
+    finalUrl,
+    htmlLen: html.length,
+    snippet: snippet
+  };
 }
 
 // Walk an arbitrary object tree looking for a Sold event with a date.

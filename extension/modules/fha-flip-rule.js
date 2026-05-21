@@ -29,6 +29,8 @@
   console.log('[FHA Flip Rule v' + VERSION + '] loaded');
 
   const CARD_ID = 'zhl-fha-flip-rule';
+  const PILL_ID = 'zhl-fha-flip-pill';
+  const PANEL_ID = 'zhl-fha-flip-panel';
   const ZHL_TIP = 'Built by Justin Case. Karma appreciated 💛';
 
   // Persist user input across re-renders of the right rail (LOP
@@ -214,44 +216,109 @@
     };
   }
 
-  // ---- Card rendering ---------------------------------------------------
+  // ---- Compact pill ------------------------------------------------------
+  //
+  // Lives under the Loan Details heading on the right rail and shows
+  // the current FHA flip-rule status as a small color-coded pill.
+  // Clicking it (any state) opens the full panel with inputs and the
+  // detailed result. Mirrors the FHA Manual Eligible pill pattern
+  // from fha-manual-eligible.js.
 
-  function buildCard() {
-    const persisted = stateByLoan[loanKey()] || {};
+  function getLoanState() {
+    return stateByLoan[loanKey()] || {};
+  }
+  function currentResult() {
+    const s = getLoanState();
+    const seller = parseLocalDate(s.sellerDate || '');
+    const contract = parseLocalDate(s.contractDate || todayLocalDateString());
+    return evaluateFlipRule(seller, contract);
+  }
 
-    const wrap = document.createElement('div');
-    wrap.id = CARD_ID;
-    wrap.style.cssText = [
-      'margin-top: 14px',
-      'padding: 12px 14px',
-      'background: #ffffff',
-      'border: 1px solid #d1d5db',
-      'border-left: 4px solid #0b5cab',
-      'border-radius: 8px',
-      'font: 12.5px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif',
-      'color: #1f2937'
+  function buildPill() {
+    const pill = document.createElement('button');
+    pill.id = PILL_ID;
+    pill.type = 'button';
+    pill.title = 'FHA 90-Day Flip Rule — click for details.\n\n' + ZHL_TIP;
+    pill.style.cssText = [
+      'display: inline-flex',
+      'align-items: center',
+      'gap: 6px',
+      'margin: 8px 0 12px',
+      'padding: 6px 10px',
+      'border-radius: 6px',
+      'border: 1px solid transparent',
+      'font: 600 12px/1.2 Arial,Helvetica,sans-serif',
+      'cursor: pointer',
+      'box-sizing: border-box'
     ].join(';');
+    pill.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      openPanel();
+    });
+    paintPill(pill);
+    return pill;
+  }
 
-    const h = document.createElement('div');
-    h.style.cssText = 'font:700 13px/1.2 Arial,sans-serif;color:#0b5cab;margin-bottom:8px;';
-    h.textContent = 'FHA 90-Day Flip Rule';
-    h.title = 'HUD 4000.1 II.A.1.b.iv.A — FHA is not eligible to insure a mortgage when the contract of sale is within 90 days of the seller\'s acquisition date.\n\n' + ZHL_TIP;
-    wrap.appendChild(h);
-
-    function row(label) {
-      const r = document.createElement('div');
-      r.style.cssText = 'margin-bottom:8px;';
-      const lbl = document.createElement('div');
-      lbl.textContent = label;
-      lbl.style.cssText = 'font:600 11px/1.2 Arial,sans-serif;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;';
-      r.appendChild(lbl);
-      return r;
+  function paintPill(pill) {
+    if (!pill) return;
+    const result = currentResult();
+    pill.innerHTML = '';
+    const icon = document.createElement('span');
+    icon.style.cssText = [
+      'display: inline-flex',
+      'align-items: center',
+      'justify-content: center',
+      'width: 16px', 'height: 16px',
+      'border-radius: 50%',
+      'font: 700 11px/1 Arial,sans-serif',
+      'color: #fff',
+      'flex: 0 0 auto'
+    ].join(';');
+    const label = document.createElement('span');
+    let bg, border, fg;
+    if (!result) {
+      icon.textContent = '?';
+      icon.style.background = '#6b7280';
+      label.textContent = 'FHA Flip Rule: unknown — click to set';
+      bg = '#f3f4f6'; border = '#d1d5db'; fg = '#374151';
+    } else if (result.color === 'green') {
+      icon.textContent = '✓';
+      icon.style.background = '#16a34a';
+      label.textContent = 'FHA Flip Rule: clear (' + result.days + ' days, > 180)';
+      bg = '#dcfce7'; border = '#16a34a'; fg = '#14532d';
+    } else if (result.color === 'amber') {
+      icon.textContent = '⚠';
+      icon.style.background = '#f59e0b';
+      label.textContent = 'FHA Flip Rule: 91–180 days · may need 2nd appraisal';
+      bg = '#fef3c7'; border = '#f59e0b'; fg = '#78350f';
+    } else {
+      icon.textContent = '✗';
+      icon.style.background = '#dc2626';
+      label.textContent = result.tier === 'invalid'
+        ? 'FHA Flip Rule: dates invalid — click to fix'
+        : 'FHA Flip Rule: NOT ELIGIBLE (' + result.days + ' days)';
+      bg = '#fee2e2'; border = '#dc2626'; fg = '#7f1d1d';
     }
+    pill.style.background = bg;
+    pill.style.borderColor = border;
+    pill.style.color = fg;
+    pill.appendChild(icon);
+    pill.appendChild(label);
+  }
 
-    // Property address — auto-read from LOP's Subject property
-    // section. If nothing's there yet, prompt the user the FIRST
-    // time the card mounts on this loan; thereafter we let them
-    // type into the input directly.
+  // ---- Modal panel -------------------------------------------------------
+  //
+  // Opened by clicking the pill. Contains the property-address input,
+  // the Zillow auto-fill button, the seller/contract date inputs, and
+  // the full result card. Centered floating dialog with a backdrop.
+
+  function openPanel() {
+    // Close any existing instance first so re-opens refresh data.
+    const existing = document.getElementById(PANEL_ID);
+    if (existing) existing.remove();
+
+    const persisted = getLoanState();
     let initialAddress = persisted.address || readSubjectAddress() || '';
     if (!initialAddress && !persisted.promptedForAddress) {
       try {
@@ -261,40 +328,167 @@
         );
         if (typed && typed.trim()) initialAddress = typed.trim();
       } catch (_) { /* prompt blocked — fall back to manual input */ }
-      // Remember we asked so we don't keep popping the prompt on
-      // every panel re-render.
       stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { promptedForAddress: true });
     }
 
+    // Backdrop + panel.
+    const backdrop = document.createElement('div');
+    backdrop.id = PANEL_ID;
+    backdrop.style.cssText = [
+      'position: fixed', 'inset: 0',
+      'background: rgba(15,23,42,0.45)',
+      'z-index: 2147483647',
+      'display: flex', 'align-items: center', 'justify-content: center',
+      'padding: 24px'
+    ].join(';');
+    backdrop.addEventListener('click', function (e) {
+      if (e.target === backdrop) backdrop.remove();
+    });
+
+    const panel = document.createElement('div');
+    panel.style.cssText = [
+      'background: #fff',
+      'width: 480px', 'max-width: 92vw',
+      'max-height: 86vh', 'overflow-y: auto',
+      'border-radius: 12px',
+      'box-shadow: 0 20px 60px rgba(0,0,0,.25)',
+      'font: 13px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif',
+      'color: #1f2937'
+    ].join(';');
+    backdrop.appendChild(panel);
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;gap:10px;padding:16px 20px 10px;border-bottom:1px solid #e5e7eb;';
+    const title = document.createElement('h3');
+    title.textContent = 'FHA 90-Day Property Flip Rule';
+    title.style.cssText = 'margin:0;font-size:16px;color:#0b5cab;flex:1;';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.title = 'Close';
+    closeBtn.style.cssText = 'background:transparent;border:none;font:400 22px/1 sans-serif;color:#6b7280;cursor:pointer;padding:0 6px;';
+    closeBtn.addEventListener('click', function () { backdrop.remove(); });
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    panel.appendChild(header);
+
+    const body = document.createElement('div');
+    body.style.cssText = 'padding:14px 20px 18px;';
+    panel.appendChild(body);
+
+    function row(label) {
+      const r = document.createElement('div');
+      r.style.cssText = 'margin-bottom:10px;';
+      const lbl = document.createElement('div');
+      lbl.textContent = label;
+      lbl.style.cssText = 'font:600 11px/1.2 Arial,sans-serif;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;';
+      r.appendChild(lbl);
+      return r;
+    }
+
+    // Property address
     const addrRow = row('Property address');
     const addrInput = document.createElement('input');
     addrInput.type = 'text';
     addrInput.placeholder = '123 Main St, City, ST 12345';
     addrInput.value = initialAddress;
-    addrInput.style.cssText = 'width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;box-sizing:border-box;';
+    addrInput.style.cssText = 'width:100%;padding:7px 9px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;box-sizing:border-box;';
     addrInput.addEventListener('input', function () { saveState({ address: addrInput.value }); });
     addrRow.appendChild(addrInput);
-    wrap.appendChild(addrRow);
+    body.appendChild(addrRow);
 
-    // Lookup row: a button that triggers the SW's Zillow scrape and
-    // a status indicator that reports the outcome.
+    // Lookup row
     const lookupRow = document.createElement('div');
-    lookupRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:-2px 0 8px;';
+    lookupRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:-4px 0 12px;flex-wrap:wrap;';
     const lookupBtn = document.createElement('button');
     lookupBtn.type = 'button';
     lookupBtn.textContent = '🔎 Auto-fill from Zillow';
-    lookupBtn.title = 'Fetches Zillow\'s listing for this address and fills the Seller\'s purchase date from the price history.';
-    lookupBtn.style.cssText = 'padding:5px 10px;background:#0b5cab;color:#fff;border:1px solid #0b5cab;border-radius:4px;font:600 11.5px/1.2 Arial,sans-serif;cursor:pointer;';
+    lookupBtn.style.cssText = 'padding:6px 12px;background:#0b5cab;color:#fff;border:1px solid #0b5cab;border-radius:4px;font:600 12px/1.2 Arial,sans-serif;cursor:pointer;';
     const lookupStatus = document.createElement('span');
-    lookupStatus.style.cssText = 'font:11.5px/1.3 Arial,sans-serif;color:#6b7280;flex:1;';
+    lookupStatus.style.cssText = 'font:12px/1.3 Arial,sans-serif;color:#6b7280;flex:1;min-width:0;';
+    const manualLink = document.createElement('a');
+    manualLink.href = '#';
+    manualLink.textContent = 'or open Zillow manually →';
+    manualLink.style.cssText = 'font:11.5px/1.2 Arial,sans-serif;color:#0b5cab;text-decoration:underline;cursor:pointer;';
+    manualLink.addEventListener('click', function (e) {
+      e.preventDefault();
+      const q = encodeURIComponent(addrInput.value.trim());
+      if (!q) return;
+      const url = 'https://www.zillow.com/homes/' + q + '_rb/';
+      try { chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: url }); }
+      catch (_) { try { window.open(url, '_blank'); } catch (__) {} }
+    });
     lookupRow.appendChild(lookupBtn);
     lookupRow.appendChild(lookupStatus);
-    wrap.appendChild(lookupRow);
+    lookupRow.appendChild(manualLink);
+    body.appendChild(lookupRow);
+
+    // Dates side-by-side
+    const datesGrid = document.createElement('div');
+    datesGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px;';
+    const sellerRow = row('Seller\'s purchase date');
+    const sellerInput = document.createElement('input');
+    sellerInput.type = 'date';
+    sellerInput.value = persisted.sellerDate || '';
+    sellerInput.style.cssText = 'width:100%;padding:7px 9px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;box-sizing:border-box;';
+    sellerInput.addEventListener('input', function () { saveState({ sellerDate: sellerInput.value }); rerender(); });
+    sellerRow.appendChild(sellerInput);
+    datesGrid.appendChild(sellerRow);
+
+    const contractRow = row('Contract date');
+    const contractInput = document.createElement('input');
+    contractInput.type = 'date';
+    contractInput.value = persisted.contractDate || todayLocalDateString();
+    contractInput.style.cssText = 'width:100%;padding:7px 9px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;box-sizing:border-box;';
+    contractInput.addEventListener('input', function () { saveState({ contractDate: contractInput.value }); rerender(); });
+    contractRow.appendChild(contractInput);
+    datesGrid.appendChild(contractRow);
+    body.appendChild(datesGrid);
+
+    // Result placeholder
+    const resultBox = document.createElement('div');
+    resultBox.style.cssText = 'margin-top:12px;';
+    body.appendChild(resultBox);
+
+    // Footer
+    const foot = document.createElement('div');
+    foot.style.cssText = 'margin-top:14px;padding-top:10px;border-top:1px dashed #e5e7eb;font-size:11px;color:#6b7280;text-align:center;';
+    foot.innerHTML = 'HUD 4000.1 II.A.1.b.iv.A · Built by <strong>Justin Case</strong> · <a href="https://zallwall.zillowgroup.com/justinca" target="_blank" rel="noopener" data-zhl-karma-link="fha-flip-rule" style="color:#0b5cab;font-weight:600;text-decoration:underline;">💛 Drop me karma</a>';
+    foot.querySelector('a').addEventListener('click', function (e) {
+      e.preventDefault();
+      const url = 'https://zallwall.zillowgroup.com/justinca';
+      try {
+        chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: url });
+        chrome.runtime.sendMessage({ type: 'TRACK', event: 'karma_link_clicked', props: { source: 'fha-flip-rule' } });
+      } catch (_) {
+        try { window.open(url, '_blank'); } catch (__) {}
+      }
+    });
+    body.appendChild(foot);
+
+    function rerender() {
+      const s = parseLocalDate(sellerInput.value);
+      const c = parseLocalDate(contractInput.value);
+      paintResult(resultBox, evaluateFlipRule(s, c));
+      // Also update the pill, since changes in the panel should
+      // immediately reflect in the right-rail summary.
+      paintPill(document.getElementById(PILL_ID));
+    }
+    function saveState(patch) {
+      stateByLoan[loanKey()] = Object.assign(
+        stateByLoan[loanKey()] || {},
+        { address: addrInput.value, sellerDate: sellerInput.value, contractDate: contractInput.value },
+        patch
+      );
+    }
 
     async function runZillowLookup(silent) {
       const addr = addrInput.value.trim();
       if (!addr) {
-        if (!silent) lookupStatus.textContent = 'Enter an address first.';
+        if (!silent) {
+          lookupStatus.textContent = 'Enter an address first.';
+          lookupStatus.style.color = '#b45309';
+        }
         return;
       }
       lookupBtn.disabled = true;
@@ -324,10 +518,13 @@
           }
         } else {
           const reason = (resp && resp.blocked)
-            ? 'Zillow blocked the request (captcha). Try the manual link below.'
+            ? 'Zillow blocked the request (captcha). Use the manual link →'
             : ((resp && resp.error) || 'no result');
           lookupStatus.textContent = '⚠ ' + reason;
           lookupStatus.style.color = '#b45309';
+          if (resp && resp.snippet) {
+            console.log('[FHA Flip Rule] Zillow response snippet around "Sold":', resp.snippet);
+          }
         }
       } finally {
         lookupBtn.disabled = false;
@@ -335,108 +532,29 @@
     }
     lookupBtn.addEventListener('click', function () { runZillowLookup(false); });
 
-    // Fallback manual link (opens Zillow in a new tab) for when the
-    // auto-scrape gets blocked. Same href the original card had.
-    const manualLink = document.createElement('a');
-    manualLink.href = '#';
-    manualLink.textContent = 'or open Zillow manually';
-    manualLink.style.cssText = 'font:11px/1.2 Arial,sans-serif;color:#0b5cab;text-decoration:underline;cursor:pointer;display:inline-block;margin:-4px 0 8px;';
-    manualLink.addEventListener('click', function (e) {
-      e.preventDefault();
-      const q = encodeURIComponent(addrInput.value.trim());
-      if (!q) return;
-      const url = 'https://www.zillow.com/homes/' + q + '_rb/';
-      try {
-        chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: url });
-      } catch (_) {
-        try { window.open(url, '_blank'); } catch (__) {}
-      }
-    });
-    wrap.appendChild(manualLink);
-
-    // Seller's purchase date
-    const sellerRow = row('Seller\'s purchase date');
-    const sellerInput = document.createElement('input');
-    sellerInput.type = 'date';
-    sellerInput.value = persisted.sellerDate || '';
-    sellerInput.style.cssText = 'width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;box-sizing:border-box;';
-    sellerInput.addEventListener('input', function () { saveState({ sellerDate: sellerInput.value }); rerender(); });
-    sellerRow.appendChild(sellerInput);
-    wrap.appendChild(sellerRow);
-
-    // Contract date (defaults to today)
-    const contractRow = row('Contract date');
-    const contractInput = document.createElement('input');
-    contractInput.type = 'date';
-    contractInput.value = persisted.contractDate || todayLocalDateString();
-    contractInput.style.cssText = 'width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;box-sizing:border-box;';
-    contractInput.addEventListener('input', function () { saveState({ contractDate: contractInput.value }); rerender(); });
-    contractRow.appendChild(contractInput);
-    wrap.appendChild(contractRow);
-
-    // Result placeholder
-    const resultBox = document.createElement('div');
-    resultBox.style.cssText = 'margin-top:10px;';
-    wrap.appendChild(resultBox);
-
-    // Karma footer
-    const foot = document.createElement('div');
-    foot.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px dashed #e5e7eb;font-size:10.5px;color:#6b7280;text-align:center;';
-    foot.innerHTML = 'Built by <strong>Justin Case</strong> · <a href="https://zallwall.zillowgroup.com/justinca" target="_blank" rel="noopener" data-zhl-karma-link="fha-flip-rule" style="color:#0b5cab;font-weight:600;text-decoration:underline;">💛 Drop me karma</a>';
-    foot.querySelector('a').addEventListener('click', function (e) {
-      e.preventDefault();
-      const url = 'https://zallwall.zillowgroup.com/justinca';
-      try {
-        chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: url });
-        chrome.runtime.sendMessage({ type: 'TRACK', event: 'karma_link_clicked', props: { source: 'fha-flip-rule' } });
-      } catch (_) {
-        try { window.open(url, '_blank'); } catch (__) {}
-      }
-    });
-    wrap.appendChild(foot);
-
-    function rerender() {
-      const s = parseLocalDate(sellerInput.value);
-      const c = parseLocalDate(contractInput.value);
-      paintResult(resultBox, evaluateFlipRule(s, c));
-    }
-    function saveState(patch) {
-      stateByLoan[loanKey()] = Object.assign(
-        stateByLoan[loanKey()] || {},
-        { address: addrInput.value, sellerDate: sellerInput.value, contractDate: contractInput.value },
-        patch
-      );
-    }
-
-    // Initial paint if data is already there
+    // Initial paint
     rerender();
 
-    // Auto-trigger the Zillow lookup the FIRST time the card mounts
-    // on this loan when we have an address but no seller date yet.
-    // Skip if the user already has a date stored (avoid wasted calls
-    // on re-mounts when LOP re-renders the right rail).
+    // Auto-lookup if we have an address but no seller date and
+    // haven't tried yet this session.
     if (addrInput.value.trim() && !persisted.sellerDate && !persisted.zillowAttempted) {
       stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttempted: true });
-      // Defer slightly so the card paints before the network call.
-      setTimeout(function () { runZillowLookup(true); }, 100);
+      setTimeout(function () { runZillowLookup(true); }, 80);
     }
 
-    return wrap;
+    document.body.appendChild(backdrop);
   }
 
   function paintResult(box, result) {
     box.innerHTML = '';
     if (!result) {
-      // No data yet — show a quick reference of the rule tiers so
-      // the card has something useful even before the user enters
-      // dates.
       const ref = document.createElement('div');
-      ref.style.cssText = 'background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;font-size:11.5px;color:#374151;line-height:1.5;';
+      ref.style.cssText = 'background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-size:12px;color:#374151;line-height:1.6;';
       ref.innerHTML =
-        '<div style="font-weight:600;margin-bottom:4px;">Rule tiers</div>' +
-        '<div>≤ 90 days: <strong style="color:#dc2626;">NOT eligible</strong></div>' +
-        '<div>91–180 days: <strong style="color:#d97706;">eligible, may need 2nd appraisal</strong></div>' +
-        '<div>&gt; 180 days: <strong style="color:#16a34a;">no flip restriction</strong></div>';
+        '<div style="font-weight:700;margin-bottom:6px;">Rule tiers</div>' +
+        '<div>≤ 90 days: <strong style="color:#dc2626;">NOT eligible</strong> for FHA insurance.</div>' +
+        '<div>91–180 days: <strong style="color:#d97706;">eligible</strong>, second appraisal may be required if resale ≥ 100% over seller\'s purchase.</div>' +
+        '<div>&gt; 180 days: <strong style="color:#16a34a;">no flip restriction</strong>.</div>';
       box.appendChild(ref);
       return;
     }
@@ -447,17 +565,17 @@
     };
     const c = colorMap[result.color] || colorMap.amber;
     const card = document.createElement('div');
-    card.style.cssText = 'background:' + c.bg + ';border:1px solid ' + c.border + ';color:' + c.fg + ';border-radius:6px;padding:10px 12px;';
+    card.style.cssText = 'background:' + c.bg + ';border:1px solid ' + c.border + ';color:' + c.fg + ';border-radius:6px;padding:12px 14px;';
     const t = document.createElement('div');
-    t.style.cssText = 'font-weight:700;font-size:13px;margin-bottom:4px;';
+    t.style.cssText = 'font-weight:700;font-size:14px;margin-bottom:5px;';
     t.textContent = result.status + '  ' + result.title;
     card.appendChild(t);
     const d = document.createElement('div');
-    d.style.cssText = 'font-size:12px;line-height:1.45;';
+    d.style.cssText = 'font-size:12.5px;line-height:1.5;';
     d.textContent = result.detail;
     card.appendChild(d);
     const days = document.createElement('div');
-    days.style.cssText = 'font-size:11px;margin-top:6px;opacity:.8;';
+    days.style.cssText = 'font-size:11.5px;margin-top:7px;opacity:.8;';
     days.textContent = result.days + ' days · tier ' + result.tier;
     card.appendChild(days);
     box.appendChild(card);
@@ -468,23 +586,63 @@
   function scan() {
     const productName = readProductName();
     const fha = isFhaProduct(productName);
-    const existing = document.getElementById(CARD_ID);
+    const existingPill = document.getElementById(PILL_ID);
+    const existingPanel = document.getElementById(PANEL_ID);
+    // Stale card-id node from older versions of this module — clean up.
+    const staleCard = document.getElementById(CARD_ID);
+    if (staleCard) staleCard.remove();
+
     if (!fha) {
-      if (existing) existing.remove();
+      if (existingPill) existingPill.remove();
+      if (existingPanel) existingPanel.remove();
       return;
     }
-    if (existing) return; // already injected; the card manages its own state
+    if (existingPill) {
+      // Keep the pill's color/text in sync with the latest state on
+      // every scan tick — covers the case where the user closes the
+      // panel after editing dates, or where Zillow auto-fill
+      // populates the seller date asynchronously.
+      paintPill(existingPill);
+      return;
+    }
     const host = findLoanDetailsHost();
     if (!host) return;
-    const card = buildCard();
-    // Insert after the loan details container (sibling), so we end
-    // up directly below it on the right rail.
-    if (host.parentElement) {
-      host.parentElement.insertBefore(card, host.nextSibling);
-    } else {
-      host.appendChild(card);
+    const pill = buildPill();
+    // Insert at the very top of the Loan Details container, right
+    // after the heading. Same placement pattern as the FHA Manual
+    // Eligible pill on the Credit section.
+    const heading = Array.from(host.querySelectorAll('h6, h5, h4, h3')).find(function (h) {
+      return (h.textContent || '').trim() === 'Loan Details';
+    });
+    if (heading) heading.insertAdjacentElement('afterend', pill);
+    else host.insertBefore(pill, host.firstChild);
+    console.log('[FHA Flip Rule] pill injected on ' + productName);
+
+    // First-time auto-lookup: if we have an address but no seller
+    // date yet, kick off the Zillow scrape in the background so the
+    // pill is already populated when the user clicks it. This
+    // happens silently — no panel is opened.
+    const persisted = getLoanState();
+    const address = persisted.address || readSubjectAddress() || '';
+    if (address && !persisted.sellerDate && !persisted.zillowAttempted) {
+      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttempted: true, address: address });
+      try {
+        chrome.runtime.sendMessage({ type: 'FETCH_ZILLOW_LAST_SOLD', address: address }, function (resp) {
+          if (resp && resp.ok && resp.date) {
+            const iso = toIsoDate(resp.date);
+            if (iso) {
+              stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { sellerDate: iso });
+              paintPill(document.getElementById(PILL_ID));
+              console.log('[FHA Flip Rule] auto-filled seller date ' + iso + ' from Zillow');
+            }
+          } else {
+            console.log('[FHA Flip Rule] background Zillow lookup failed:', resp && resp.error);
+          }
+        });
+      } catch (e) {
+        console.warn('[FHA Flip Rule] sendMessage threw:', e);
+      }
     }
-    console.log('[FHA Flip Rule] card injected on ' + productName);
   }
 
   let scheduled = false;
