@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.0",
+    headline: "FHA Flip Rule card now auto-reads the address + auto-pulls last sold date from Zillow",
+    highlights: [
+      "Auto-detects the subject property address from LOP's Subject property section: reads the 'Use existing address' dropdown's options first, then falls back to the individual Street / City / State / Zip inputs.",
+      "If neither is populated, the card prompts you for the address the first time it mounts on a loan.",
+      "Once an address is loaded, the card automatically fetches Zillow's listing through the service worker, parses the seller's most recent sale date out of the price history, and fills the Seller's purchase date for you.",
+      "A small status line shows ✓ when Zillow returned the date, ⚠ when it didn't (captcha, bot-block, or address not found on Zillow). A fallback 'or open Zillow manually' link is always available."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.25.1",
     headline: "Loan amount field: typing in it now actually updates LOP's pricing",
     highlights: [

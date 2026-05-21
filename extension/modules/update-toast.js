@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.26.0": "FHA Flip Rule card now auto-reads the address and auto-fills last sold date from Zillow.",
     "1.25.1": "Loan amount field fix — typing now actually updates LOP's pricing engine.",
     "1.25.0": "New: FHA 90-Day Flip Rule checker under Loan Details on the right rail.",
     "1.24.0": "Drag Gmail attachments straight into Slack — now works on slack.com.",

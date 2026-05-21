@@ -397,6 +397,129 @@ async function fetchSalesforceLoProfile() {
 }
 
 // -------------------------------------------------------------------------
+// Zillow last-sold lookup for the FHA 90-Day Flip Rule analyzer.
+// Fetches Zillow's search page for the given address and tries
+// multiple parsing strategies to extract the seller's most recent
+// sale date. Falls back gracefully when Zillow returns a captcha /
+// login wall (which they do on aggressive bot detection).
+// -------------------------------------------------------------------------
+
+async function fetchZillowLastSold(addressRaw) {
+  const address = String(addressRaw || "").trim();
+  if (!address) return { ok: false, error: "no address provided" };
+
+  // Zillow's search-by-address URL. The _rb suffix tells Zillow this
+  // is an address lookup vs. a city/region search. Encoding the
+  // whole address as a single path segment matches what their own
+  // search box produces.
+  const url = "https://www.zillow.com/homes/" + encodeURIComponent(address) + "_rb/";
+
+  let html;
+  try {
+    const res = await fetch(url, {
+      // Don't send our extension's identity to Zillow; their bot
+      // heuristics are friendlier to anonymous-looking requests.
+      credentials: "omit",
+      headers: {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
+        "Accept-Language": "en-US,en;q=0.9"
+      },
+      redirect: "follow"
+    });
+    if (!res.ok) {
+      return { ok: false, error: "Zillow returned HTTP " + res.status, url };
+    }
+    html = await res.text();
+  } catch (e) {
+    return { ok: false, error: "fetch failed: " + (e && e.message || e), url };
+  }
+
+  // Detect captcha / login wall — Zillow shows a "Press & hold" or
+  // "Please verify you are a human" page when bot-blocking. Bail
+  // early so the user knows to enter the date manually.
+  if (/Press &amp; Hold to confirm|press and hold|please verify|are you a human/i.test(html)) {
+    return { ok: false, error: "Zillow showed a captcha / verification page — try again later or enter the date manually", url, blocked: true };
+  }
+
+  // Strategy 1: __NEXT_DATA__ JSON. Newer Zillow pages embed the
+  // full property data here.
+  const nextMatch = html.match(/<script[^>]+id=\"__NEXT_DATA__\"[^>]*>([\s\S]*?)<\/script>/);
+  if (nextMatch) {
+    try {
+      const data = JSON.parse(nextMatch[1]);
+      const found = findSoldDateInObject(data);
+      if (found) return { ok: true, date: found, source: "zillow:__NEXT_DATA__", url };
+    } catch (_) { /* fall through */ }
+  }
+
+  // Strategy 2: gdpClientCache JSON blob (older Zillow listing
+  // pages).
+  const cacheMatch = html.match(/"gdpClientCache"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (cacheMatch) {
+    try {
+      // The JSON inside gdpClientCache is double-escaped — decode
+      // the string first, then JSON.parse the result.
+      const inner = JSON.parse('"' + cacheMatch[1] + '"');
+      const data = JSON.parse(inner);
+      const found = findSoldDateInObject(data);
+      if (found) return { ok: true, date: found, source: "zillow:gdpClientCache", url };
+    } catch (_) { /* fall through */ }
+  }
+
+  // Strategy 3: regex over the raw HTML for any "Sold on" / "Last
+  // sold" pattern. Less precise but works on simpler listing-card
+  // markup.
+  const regexes = [
+    /"event"\s*:\s*"Sold"[^}]*?"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"/,
+    /"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"[^}]*?"event"\s*:\s*"Sold"/,
+    /Sold\s+(?:on\s+)?(\d{1,2}\/\d{1,2}\/\d{4})/i,
+    /Last\s+sold(?:\s+for[^.]*?)?\s+on\s+(\d{1,2}\/\d{1,2}\/\d{4})/i,
+    /datePublished[^>]*?>(\d{4}-\d{2}-\d{2})</i
+  ];
+  for (const re of regexes) {
+    const m = html.match(re);
+    if (m && m[1]) return { ok: true, date: m[1], source: "zillow:regex", url };
+  }
+
+  return { ok: false, error: "no sale date found in Zillow response", url };
+}
+
+// Walk an arbitrary object tree looking for a Sold event with a date.
+// Zillow's JSON nests priceHistory at varying paths between major
+// page rewrites; a recursive walk is more robust than hard-coded
+// dotted paths.
+function findSoldDateInObject(root) {
+  const seen = new WeakSet();
+  let best = null;
+  function walk(obj) {
+    if (!obj || typeof obj !== "object") return;
+    if (seen.has(obj)) return;
+    seen.add(obj);
+    if (Array.isArray(obj)) {
+      for (const v of obj) walk(v);
+      return;
+    }
+    // Direct hit: { event: "Sold", date: "2025-08-15" }
+    if (obj.event && /sold/i.test(String(obj.event)) && obj.date) {
+      const d = String(obj.date);
+      if (!best || d > best) best = d; // pick most-recent sale
+    }
+    // priceHistory: [{ event, date, price }]
+    if (Array.isArray(obj.priceHistory)) {
+      for (const ev of obj.priceHistory) {
+        if (ev && /sold/i.test(String(ev.event || "")) && ev.date) {
+          const d = String(ev.date);
+          if (!best || d > best) best = d;
+        }
+      }
+    }
+    for (const k of Object.keys(obj)) walk(obj[k]);
+  }
+  walk(root);
+  return best;
+}
+
+// -------------------------------------------------------------------------
 // Telemetry — sends usage events to a Google Apps Script web app (admin
 // dashboard). Configured ONCE: deploy apps-script/Code.gs as a web app,
 // paste the deployment URL into TELEMETRY_ENDPOINT below, and bump the
@@ -574,6 +697,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
     );
     return true;
+  }
+  if (msg && msg.type === "FETCH_ZILLOW_LAST_SOLD") {
+    // FHA 90-Day Flip Rule helper. Takes an address, fetches the
+    // Zillow listing search URL, and parses the seller's most recent
+    // sale date out of the response so the analyzer card can auto-
+    // fill its "Seller's purchase date" input. Best effort — Zillow
+    // sometimes returns a captcha / login wall instead of the actual
+    // page, in which case we return ok:false and the user falls
+    // back to typing the date in manually.
+    fetchZillowLastSold(String(msg.address || "")).then(
+      (result) => sendResponse(result),
+      (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
+    );
+    return true; // async
   }
   if (msg && msg.type === "OPEN_TAB") {
     // Content scripts on some pages have window.open() blocked by

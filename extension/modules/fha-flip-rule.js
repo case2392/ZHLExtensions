@@ -60,7 +60,44 @@
   // ---- Subject-property address scrape ----------------------------------
 
   function readSubjectAddress() {
-    // Try the obvious label first.
+    // Priority 1: the "Use existing address" select on the Subject
+    // property section. LOP populates this dropdown with the loan's
+    // property address as a non-selectable option even when the
+    // individual street/city/state inputs are empty. The first real
+    // option (after the "Select" placeholder) carries the full
+    // formatted address.
+    const existingSelect = document.querySelector('select[data-cy="select-existing-address"]');
+    if (existingSelect) {
+      for (const opt of existingSelect.options) {
+        const v = (opt.value || '').trim();
+        if (!v) continue;
+        if (/^select$/i.test(v)) continue;
+        // The value is the full "1707 Chatham Ridge Circle 108,
+        // Charlotte, NC 28273" formatted string we want.
+        if (v.length > 5 && /[A-Za-z]/.test(v) && /\d/.test(v)) return v;
+      }
+    }
+
+    // Priority 2: build from the individual address inputs in the
+    // Subject property section. Some loans have the street/city/state
+    // populated even when the existing-address dropdown is blank.
+    function readInput(name) {
+      const el = document.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
+      return el ? (el.value || '').trim() : '';
+    }
+    const street = readInput('addressStreet');
+    const unit = readInput('addressUnit');
+    const city = readInput('addressCity');
+    const state = readInput('addressState');
+    const zip = readInput('addressZIP');
+    const built = [
+      street + (unit ? ' ' + unit : ''),
+      city,
+      [state, zip].filter(Boolean).join(' ')
+    ].filter(function (s) { return s && s.trim(); }).join(', ');
+    if (built && built.length > 5 && /\d/.test(built)) return built;
+
+    // Priority 3: legacy label-walk fallback (older LOP layouts).
     const labels = ['Property address', 'Subject property', 'Subject address', 'Address'];
     for (const label of labels) {
       const els = document.querySelectorAll('span, dt, label, div');
@@ -111,6 +148,21 @@
     if (!a || !b) return null;
     return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
   }
+  // Normalize Zillow's various date shapes to YYYY-MM-DD so it can
+  // be assigned directly to <input type="date">.
+  function toIsoDate(raw) {
+    if (!raw) return '';
+    const s = String(raw).trim();
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+    if (m) return m[1] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[3]).padStart(2, '0');
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+    if (m) return m[3] + '-' + String(m[1]).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0');
+    // ISO timestamp like "2025-08-15T00:00:00Z"
+    m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+    if (m) return m[1];
+    return '';
+  }
+
   function todayLocalDateString() {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -196,26 +248,100 @@
       return r;
     }
 
-    // Property address
+    // Property address — auto-read from LOP's Subject property
+    // section. If nothing's there yet, prompt the user the FIRST
+    // time the card mounts on this loan; thereafter we let them
+    // type into the input directly.
+    let initialAddress = persisted.address || readSubjectAddress() || '';
+    if (!initialAddress && !persisted.promptedForAddress) {
+      try {
+        const typed = window.prompt(
+          'No subject property address on this loan yet.\n\nEnter the property address to check the FHA 90-Day Flip Rule:',
+          ''
+        );
+        if (typed && typed.trim()) initialAddress = typed.trim();
+      } catch (_) { /* prompt blocked — fall back to manual input */ }
+      // Remember we asked so we don't keep popping the prompt on
+      // every panel re-render.
+      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { promptedForAddress: true });
+    }
+
     const addrRow = row('Property address');
     const addrInput = document.createElement('input');
     addrInput.type = 'text';
     addrInput.placeholder = '123 Main St, City, ST 12345';
-    addrInput.value = persisted.address || readSubjectAddress() || '';
+    addrInput.value = initialAddress;
     addrInput.style.cssText = 'width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;box-sizing:border-box;';
     addrInput.addEventListener('input', function () { saveState({ address: addrInput.value }); });
     addrRow.appendChild(addrInput);
     wrap.appendChild(addrRow);
 
-    // Zillow open + paste helper
-    const linkRow = document.createElement('div');
-    linkRow.style.cssText = 'margin:-4px 0 8px;';
-    const zlink = document.createElement('button');
-    zlink.type = 'button';
-    zlink.textContent = '🔎 Look up on Zillow';
-    zlink.title = 'Opens Zillow searched for this address in a new tab. Find the "Date sold" row in Price History, then paste it into the field below.';
-    zlink.style.cssText = 'background:transparent;border:none;color:#0b5cab;font:600 11.5px/1.2 Arial,sans-serif;cursor:pointer;padding:2px 0;text-decoration:underline;';
-    zlink.addEventListener('click', function (e) {
+    // Lookup row: a button that triggers the SW's Zillow scrape and
+    // a status indicator that reports the outcome.
+    const lookupRow = document.createElement('div');
+    lookupRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:-2px 0 8px;';
+    const lookupBtn = document.createElement('button');
+    lookupBtn.type = 'button';
+    lookupBtn.textContent = '🔎 Auto-fill from Zillow';
+    lookupBtn.title = 'Fetches Zillow\'s listing for this address and fills the Seller\'s purchase date from the price history.';
+    lookupBtn.style.cssText = 'padding:5px 10px;background:#0b5cab;color:#fff;border:1px solid #0b5cab;border-radius:4px;font:600 11.5px/1.2 Arial,sans-serif;cursor:pointer;';
+    const lookupStatus = document.createElement('span');
+    lookupStatus.style.cssText = 'font:11.5px/1.3 Arial,sans-serif;color:#6b7280;flex:1;';
+    lookupRow.appendChild(lookupBtn);
+    lookupRow.appendChild(lookupStatus);
+    wrap.appendChild(lookupRow);
+
+    async function runZillowLookup(silent) {
+      const addr = addrInput.value.trim();
+      if (!addr) {
+        if (!silent) lookupStatus.textContent = 'Enter an address first.';
+        return;
+      }
+      lookupBtn.disabled = true;
+      lookupStatus.textContent = 'Looking up on Zillow…';
+      lookupStatus.style.color = '#6b7280';
+      try {
+        const resp = await new Promise(function (resolve) {
+          try {
+            chrome.runtime.sendMessage({ type: 'FETCH_ZILLOW_LAST_SOLD', address: addr }, function (r) {
+              const lastErr = chrome.runtime && chrome.runtime.lastError;
+              if (lastErr) resolve({ ok: false, error: lastErr.message });
+              else resolve(r || { ok: false, error: 'no response' });
+            });
+          } catch (e) { resolve({ ok: false, error: String(e && e.message || e) }); }
+        });
+        if (resp && resp.ok && resp.date) {
+          const iso = toIsoDate(resp.date);
+          if (iso) {
+            sellerInput.value = iso;
+            saveState({ sellerDate: iso });
+            rerender();
+            lookupStatus.textContent = '✓ Last sold ' + iso + ' (Zillow)';
+            lookupStatus.style.color = '#15803d';
+          } else {
+            lookupStatus.textContent = '⚠ Got "' + resp.date + '" from Zillow but couldn\'t parse — enter manually.';
+            lookupStatus.style.color = '#b45309';
+          }
+        } else {
+          const reason = (resp && resp.blocked)
+            ? 'Zillow blocked the request (captcha). Try the manual link below.'
+            : ((resp && resp.error) || 'no result');
+          lookupStatus.textContent = '⚠ ' + reason;
+          lookupStatus.style.color = '#b45309';
+        }
+      } finally {
+        lookupBtn.disabled = false;
+      }
+    }
+    lookupBtn.addEventListener('click', function () { runZillowLookup(false); });
+
+    // Fallback manual link (opens Zillow in a new tab) for when the
+    // auto-scrape gets blocked. Same href the original card had.
+    const manualLink = document.createElement('a');
+    manualLink.href = '#';
+    manualLink.textContent = 'or open Zillow manually';
+    manualLink.style.cssText = 'font:11px/1.2 Arial,sans-serif;color:#0b5cab;text-decoration:underline;cursor:pointer;display:inline-block;margin:-4px 0 8px;';
+    manualLink.addEventListener('click', function (e) {
       e.preventDefault();
       const q = encodeURIComponent(addrInput.value.trim());
       if (!q) return;
@@ -226,8 +352,7 @@
         try { window.open(url, '_blank'); } catch (__) {}
       }
     });
-    linkRow.appendChild(zlink);
-    wrap.appendChild(linkRow);
+    wrap.appendChild(manualLink);
 
     // Seller's purchase date
     const sellerRow = row('Seller\'s purchase date');
@@ -285,6 +410,16 @@
 
     // Initial paint if data is already there
     rerender();
+
+    // Auto-trigger the Zillow lookup the FIRST time the card mounts
+    // on this loan when we have an address but no seller date yet.
+    // Skip if the user already has a date stored (avoid wasted calls
+    // on re-mounts when LOP re-renders the right rail).
+    if (addrInput.value.trim() && !persisted.sellerDate && !persisted.zillowAttempted) {
+      stateByLoan[loanKey()] = Object.assign(stateByLoan[loanKey()] || {}, { zillowAttempted: true });
+      // Defer slightly so the card paints before the network call.
+      setTimeout(function () { runZillowLookup(true); }, 100);
+    }
 
     return wrap;
   }
