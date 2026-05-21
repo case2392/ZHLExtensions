@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.26.5",
+    headline: "FHA Flip Rule: Zillow auto-fill now actually works (parser fix)",
+    highlights: [
+      "Zillow's price-history field is named dateSoldString, not dateSold — my regex was looking for the wrong field name and missing every match. Added dateSoldString (plus escaped-JSON variants) so the seller's last sale date now auto-fills from Zillow on most properties.",
+      "Cleaned up the diagnostic mouse-event logging from v1.26.4 now that the underlying click issue is resolved."
+    ],
+    sections: ["fha-flip-rule"]
+  },
+  {
     version: "1.26.3",
     headline: "FHA Flip Rule: pill click now works even when LOP re-renders the section",
     highlights: [

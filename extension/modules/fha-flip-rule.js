@@ -723,51 +723,6 @@
   document.addEventListener('mousedown', handlePillEvent, true);
   document.addEventListener('pointerdown', handlePillEvent, true);
 
-  // Diagnostic: log when ANY mouse event happens on or under the
-  // pill. If the user reports "click does nothing" and none of
-  // these log, the pill is not actually receiving pointer events
-  // (covered by an overlay, pointer-events:none from an ancestor,
-  // or in a different stacking context than we think).
-  ['mouseover', 'mousedown', 'pointerdown', 'click'].forEach(function (et) {
-    document.addEventListener(et, function (e) {
-      const t = e.target;
-      if (!t || !t.closest) return;
-      const pill = t.closest('#' + PILL_ID);
-      if (!pill) return;
-      // Only log mouseover once per second to avoid spam.
-      if (et === 'mouseover') {
-        if (window.__zhlFlipPillLastOver && Date.now() - window.__zhlFlipPillLastOver < 1000) return;
-        window.__zhlFlipPillLastOver = Date.now();
-      }
-      console.log('[FHA Flip Rule DEBUG] ' + et + ' reached document for pill area; target=' +
-        (t.tagName || '?') + (t.id ? '#' + t.id : '') +
-        (t.className ? '.' + String(t.className).split(' ').join('.') : ''));
-    }, true);
-  });
-
-  // Periodic sanity check: if the pill is in the DOM, log its
-  // bounding rect + computed pointer-events / display so we can
-  // see if it's actually visible and clickable. Runs once 3s after
-  // load, then every 30s thereafter.
-  function pillDiagnostic() {
-    const pill = document.getElementById(PILL_ID);
-    if (!pill) {
-      console.log('[FHA Flip Rule DEBUG] periodic check: NO PILL in DOM');
-      return;
-    }
-    const r = pill.getBoundingClientRect();
-    const cs = window.getComputedStyle(pill);
-    console.log('[FHA Flip Rule DEBUG] pill state:',
-      'rect=', Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height),
-      'display=' + cs.display,
-      'visibility=' + cs.visibility,
-      'pointer-events=' + cs.pointerEvents,
-      'z-index=' + cs.zIndex,
-      'parent=' + (pill.parentElement && pill.parentElement.tagName) +
-        (pill.parentElement && pill.parentElement.className ? '.' + String(pill.parentElement.className).split(' ').slice(0, 2).join('.') : ''));
-  }
-  setTimeout(pillDiagnostic, 3000);
-  setInterval(pillDiagnostic, 30000);
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {

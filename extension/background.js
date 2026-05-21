@@ -492,9 +492,14 @@ async function fetchZillowLastSold(addressRaw) {
     /Last\s+sold(?:\s+for[^.]*?)?\s+on\s+(\d{1,2}\/\d{1,2}\/\d{4})/i,
     /Last\s+sold[^<]*?(\d{4}-\d{2}-\d{2})/i,
     /datePublished[^>]*?>(\d{4}-\d{2}-\d{2})</i,
-    // dateSold / soldDate fields anywhere in the page
-    /"(?:dateSold|soldDate|lastSoldDate)"\s*:\s*"?(\d{4}-\d{2}-\d{2})/i,
-    /"(?:dateSold|soldDate|lastSoldDate)"\s*:\s*"?(\d{1,2}\/\d{1,2}\/\d{4})/i
+    // dateSold / soldDate / dateSoldString fields anywhere in the
+    // page (Zillow's actual current field is dateSoldString — the
+    // others are kept for older / cached page variants).
+    /"(?:dateSoldString|dateSold|soldDate|lastSoldDate)"\s*:\s*"?(\d{4}-\d{2}-\d{2})/i,
+    /"(?:dateSoldString|dateSold|soldDate|lastSoldDate)"\s*:\s*"?(\d{1,2}\/\d{1,2}\/\d{4})/i,
+    // Escaped-JSON variants (nested-JSON-as-string blobs)
+    /\\"(?:dateSoldString|dateSold|soldDate|lastSoldDate)\\"\s*:\s*\\?"?(\d{4}-\d{2}-\d{2})/i,
+    /\\"(?:dateSoldString|dateSold|soldDate|lastSoldDate)\\"\s*:\s*\\?"?(\d{1,2}\/\d{1,2}\/\d{4})/i
   ];
   for (const re of regexes) {
     const m = html.match(re);
