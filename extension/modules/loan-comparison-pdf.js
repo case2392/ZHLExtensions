@@ -679,37 +679,70 @@
           '<div class="p2note">Detailed cost breakdown not available — couldn\'t read LOP\'s "Detailed cost summary" popup for this scenario.</div>'
         );
       }
-      let html = '<table class="p2cc">';
-      detail.sections.forEach(function (sec) {
-        // Skip the empty "Other costs"-style holder if it has no
-        // subsections (defensive — shouldn't happen in practice).
-        if (!sec.subsections.length) return;
-        html += '<tr class="cc-section"><th colspan="2">' + escapeHtml(sec.name) + '</th></tr>';
+      // Two-column layout: Loan costs on the left, Other costs on
+      // the right (both with their own section grand total at the
+      // bottom). Credits + the two roll-up totals run full-width
+      // below. This halves the vertical real-estate the itemized
+      // table needs so a typical scenario fits on one page.
+      function renderSectionTable(sec, includeSectionTotal) {
+        if (!sec || !sec.subsections.length) return '';
+        let h = '<table class="p2cc">';
+        h += '<tr class="cc-section"><th colspan="2">' + escapeHtml(sec.name) + '</th></tr>';
         sec.subsections.forEach(function (sub) {
           if (sub.name) {
-            html += '<tr class="cc-subsection"><th colspan="2">' + escapeHtml(sub.name) + '</th></tr>';
+            h += '<tr class="cc-subsection"><th colspan="2">' + escapeHtml(sub.name) + '</th></tr>';
           }
           sub.items.forEach(function (it) {
-            html += '<tr><th>' + escapeHtml(it.label) + '</th><td>' + fmtMoneyHtml(it.value) + '</td></tr>';
+            h += '<tr><th>' + escapeHtml(it.label) + '</th><td>' + fmtMoneyHtml(it.value) + '</td></tr>';
           });
           if (isFinite(sub.total)) {
-            html += '<tr class="cc-subtotal"><th>Total</th><td>' + fmtMoneyHtml(sub.total) + '</td></tr>';
+            h += '<tr class="cc-subtotal"><th>Total</th><td>' + fmtMoneyHtml(sub.total) + '</td></tr>';
           }
         });
-        if (sec.sectionTotal && isFinite(sec.sectionTotal.value)) {
-          html += '<tr class="cc-sectiontotal"><th>' + escapeHtml(sec.sectionTotal.label) +
+        if (includeSectionTotal && sec.sectionTotal && isFinite(sec.sectionTotal.value)) {
+          h += '<tr class="cc-sectiontotal"><th>' + escapeHtml(sec.sectionTotal.label) +
             '</th><td>' + fmtMoneyHtml(sec.sectionTotal.value) + '</td></tr>';
         }
-      });
+        h += '</table>';
+        return h;
+      }
+      const loanCostsSec = detail.sections.find(function (sec) { return sec.name === 'Loan costs'; });
+      const otherCostsSec = detail.sections.find(function (sec) { return sec.name === 'Other costs'; });
+      const creditsSec = detail.sections.find(function (sec) { return sec.name === 'Credits'; });
+
+      let html = '<div class="p2cc-grid">';
+      html += '<div class="p2cc-col">' + renderSectionTable(loanCostsSec, true) + '</div>';
+      html += '<div class="p2cc-col">' + renderSectionTable(otherCostsSec, true) + '</div>';
+      html += '</div>';
+
+      // Footer table: Credits + grand totals at full width.
+      let footHtml = '<table class="p2cc p2cc-footer">';
+      let hasFoot = false;
+      if (creditsSec && creditsSec.subsections.length) {
+        footHtml += '<tr class="cc-section"><th colspan="2">' + escapeHtml(creditsSec.name) + '</th></tr>';
+        creditsSec.subsections.forEach(function (sub) {
+          if (sub.name) {
+            footHtml += '<tr class="cc-subsection"><th colspan="2">' + escapeHtml(sub.name) + '</th></tr>';
+          }
+          sub.items.forEach(function (it) {
+            footHtml += '<tr><th>' + escapeHtml(it.label) + '</th><td>' + fmtMoneyHtml(it.value) + '</td></tr>';
+          });
+        });
+        hasFoot = true;
+      }
       if (isFinite(detail.grandTotalLoanAndOther)) {
-        html += '<tr class="cc-grand"><th>Total loan and other costs</th><td>' +
+        footHtml += '<tr class="cc-grand"><th>Total loan and other costs</th><td>' +
           fmtMoneyHtml(detail.grandTotalLoanAndOther) + '</td></tr>';
+        hasFoot = true;
       }
       if (isFinite(detail.grandTotalClosingCosts)) {
-        html += '<tr class="cc-grandtotal"><th>Total closing costs</th><td>' +
+        footHtml += '<tr class="cc-grandtotal"><th>Total closing costs</th><td>' +
           fmtMoneyHtml(detail.grandTotalClosingCosts) + '</td></tr>';
+        hasFoot = true;
       }
-      html += '</table>';
+      footHtml += '</table>';
+      if (hasFoot) html += footHtml;
+
       if (detail.closingCorpId) {
         html += '<div class="p2note">Closing corp quote ID: ' + escapeHtml(detail.closingCorpId) + '</div>';
       }
@@ -819,44 +852,54 @@
       // tables are allowed to spill into a continuation page so we
       // don't trigger a phantom blank between scenarios when a
       // card can't fit on one page.
-      '.p2card { page-break-before: always; }' +
-      '.p2card-hdr { padding-bottom: 8pt; border-bottom: 1.5pt solid #006aff; margin-bottom: 10pt; }' +
-      '.p2card-hdr .p2card-eyebrow { color: #006aff; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5pt; text-transform: uppercase; margin-bottom: 4pt; }' +
-      '.p2card h2 { margin: 0; font-size: 17pt; color: #1f2937; font-weight: 700; }' +
-      '.p2card .p2sub { color: #6b7280; font-size: 9.5pt; margin-top: 3pt; }' +
+      // Each scenario page is tuned to fit on a single letter page.
+      // To stay within ~9.9in of vertical space, we (a) use a
+      // tighter top margin via a smaller .p2card body padding,
+      // (b) use a compact masthead, and (c) split the itemized
+      // closing-cost table into two side-by-side columns so the
+      // ~30 rows take ~half the vertical space.
+      '.p2card { page-break-before: always; padding-top: 4pt; }' +
+      '.p2card-hdr { padding-bottom: 5pt; border-bottom: 1.5pt solid #006aff; margin-bottom: 8pt; }' +
+      '.p2card-hdr .p2card-eyebrow { color: #006aff; font-size: 8pt; font-weight: 600; letter-spacing: 0.5pt; text-transform: uppercase; margin-bottom: 2pt; }' +
+      '.p2card h2 { margin: 0; font-size: 14pt; color: #1f2937; font-weight: 700; }' +
+      '.p2card .p2sub { color: #6b7280; font-size: 9pt; margin-top: 2pt; }' +
       // Top block: monthly + cash side-by-side
-      '.p2top { display: flex; gap: 18pt; margin-bottom: 14pt; }' +
+      '.p2top { display: flex; gap: 18pt; margin-bottom: 10pt; }' +
       '.p2top-col { flex: 1; }' +
-      '.p2top-col h3 { margin: 0 0 4pt; font-size: 10pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #d1d5db; padding-bottom: 3pt; }' +
+      '.p2top-col h3 { margin: 0 0 3pt; font-size: 9.5pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #d1d5db; padding-bottom: 2pt; }' +
       // Small two-row tables (monthly + cash)
       'table.p2tbl { width: 100%; border-collapse: collapse; }' +
-      'table.p2tbl th { text-align: left; padding: 3pt 0; font-size: 9.5pt; font-weight: 400; color: #374151; }' +
-      'table.p2tbl td { text-align: right; padding: 3pt 0; font-size: 9.5pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
-      'table.p2tbl tr.total th, table.p2tbl tr.total td { font-weight: 700; color: #006aff; border-top: 1pt solid #006aff; padding-top: 5pt; }' +
+      'table.p2tbl th { text-align: left; padding: 2pt 0; font-size: 9pt; font-weight: 400; color: #374151; }' +
+      'table.p2tbl td { text-align: right; padding: 2pt 0; font-size: 9pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
+      'table.p2tbl tr.total th, table.p2tbl tr.total td { font-weight: 700; color: #006aff; border-top: 1pt solid #006aff; padding-top: 3pt; }' +
       // Itemized closing-cost heading
-      'h3.p2cc-hdr { margin: 0 0 6pt; font-size: 11pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #006aff; padding-bottom: 4pt; }' +
+      'h3.p2cc-hdr { margin: 0 0 5pt; font-size: 10.5pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #006aff; padding-bottom: 3pt; }' +
+      // Two-column layout for the itemized table
+      '.p2cc-grid { display: flex; gap: 14pt; align-items: flex-start; margin-bottom: 6pt; }' +
+      '.p2cc-col { flex: 1; min-width: 0; }' +
       // Itemized closing-cost table — ZHL blue scheme to match
       // page 1, NOT the black-block look of LOP's raw popup
       'table.p2cc { width: 100%; border-collapse: collapse; }' +
-      'table.p2cc th { text-align: left; padding: 3pt 8pt; font-size: 9pt; font-weight: 400; color: #1f2937; }' +
-      'table.p2cc td { text-align: right; padding: 3pt 8pt; font-size: 9pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
+      'table.p2cc th { text-align: left; padding: 1.5pt 6pt; font-size: 8pt; font-weight: 400; color: #1f2937; line-height: 1.25; }' +
+      'table.p2cc td { text-align: right; padding: 1.5pt 6pt; font-size: 8pt; font-variant-numeric: tabular-nums; color: #1f2937; line-height: 1.25; }' +
       // Section header (Loan costs / Other costs / Credits) —
-      // ZHL blue background, white text. Matches the brand.
-      'table.p2cc tr.cc-section th { background: #006aff !important; color: #fff !important; font-weight: 700; font-size: 10pt; padding: 6pt 8pt; letter-spacing: 0.3pt; }' +
-      // Subsection header (Lender costs, Prepaids, etc.) — bold
-      // dark text with a soft blue underline
-      'table.p2cc tr.cc-subsection th { font-weight: 700; color: #1e3a8a; font-size: 9.5pt; padding-top: 8pt; padding-bottom: 3pt; border-bottom: 0.5pt solid #bfdbfe; }' +
+      // ZHL blue background, white text.
+      'table.p2cc tr.cc-section th { background: #006aff !important; color: #fff !important; font-weight: 700; font-size: 9pt; padding: 3.5pt 6pt; letter-spacing: 0.3pt; }' +
+      // Subsection header (Lender costs, Prepaids, etc.)
+      'table.p2cc tr.cc-subsection th { font-weight: 700; color: #1e3a8a; font-size: 8.5pt; padding-top: 4pt; padding-bottom: 1.5pt; border-bottom: 0.5pt solid #bfdbfe; }' +
       // Subsection total — bold with a hairline divider above
-      'table.p2cc tr.cc-subtotal th, table.p2cc tr.cc-subtotal td { font-weight: 700; color: #1f2937; border-top: 0.5pt solid #d1d5db; padding-top: 4pt; padding-bottom: 6pt; }' +
+      'table.p2cc tr.cc-subtotal th, table.p2cc tr.cc-subtotal td { font-weight: 700; color: #1f2937; border-top: 0.5pt solid #d1d5db; padding-top: 2pt; padding-bottom: 3pt; }' +
       // Section grand total (Total loan costs, Total other costs)
-      // — light blue tint to telegraph "this rolls up"
-      'table.p2cc tr.cc-sectiontotal th, table.p2cc tr.cc-sectiontotal td { font-weight: 700; color: #1f2937; background: #eef6ff !important; padding: 5pt 8pt; border-top: 1pt solid #bfdbfe; }' +
-      // Total loan and other costs — slightly stronger
-      'table.p2cc tr.cc-grand th, table.p2cc tr.cc-grand td { font-weight: 700; color: #1f2937; background: #eef6ff !important; padding: 5pt 8pt; border-top: 1pt solid #bfdbfe; }' +
+      'table.p2cc tr.cc-sectiontotal th, table.p2cc tr.cc-sectiontotal td { font-weight: 700; color: #1f2937; background: #eef6ff !important; padding: 3pt 6pt; border-top: 1pt solid #bfdbfe; }' +
+      // Total loan and other costs
+      'table.p2cc tr.cc-grand th, table.p2cc tr.cc-grand td { font-weight: 700; color: #1f2937; background: #eef6ff !important; padding: 3pt 6pt; border-top: 1pt solid #bfdbfe; }' +
       // Final Total closing costs — the headline number, ZHL blue
-      'table.p2cc tr.cc-grandtotal th, table.p2cc tr.cc-grandtotal td { font-weight: 700; color: #006aff; background: #f5f9ff !important; padding: 7pt 8pt; border-top: 1.5pt solid #006aff; border-bottom: 1.5pt solid #006aff; font-size: 11pt; }' +
-      '.p2note { margin-top: 6pt; font-size: 7.5pt; color: #6b7280; font-style: italic; }' +
-      '.p2foot { margin-top: 10pt; padding-top: 6pt; border-top: 0.5pt solid #e5e7eb; font-size: 8.5pt; color: #6b7280; }' +
+      'table.p2cc tr.cc-grandtotal th, table.p2cc tr.cc-grandtotal td { font-weight: 700; color: #006aff; background: #f5f9ff !important; padding: 4.5pt 6pt; border-top: 1.5pt solid #006aff; border-bottom: 1.5pt solid #006aff; font-size: 10pt; }' +
+      // Footer table (Credits + grand totals) sits below the
+      // two-column grid at full width
+      'table.p2cc-footer { margin-top: 6pt; }' +
+      '.p2note { margin-top: 4pt; font-size: 7pt; color: #6b7280; font-style: italic; }' +
+      '.p2foot { margin-top: 6pt; padding-top: 4pt; border-top: 0.5pt solid #e5e7eb; font-size: 8pt; color: #6b7280; }' +
       '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
       '</style></head><body>' +
       // Page 1

@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.28.3": "ZHL Comparison PDF: itemized closing costs in two columns — each scenario now fits on a single page.",
     "1.28.2": "ZHL Comparison PDF: no more blank pages, itemized costs restyled in ZHL blue to match page 1.",
     "1.28.1": "ZHL Comparison PDF: page 2 now includes the full itemized closing-cost breakdown for every scenario.",
     "1.28.0": "New: ZHL Comparison PDF on the Scenarios page — seller credit broken out, bigger monthly + cash, page 2 cost summary.",

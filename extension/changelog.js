@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.28.3",
+    headline: "ZHL Comparison PDF: each scenario now fits on a single page",
+    highlights: [
+      "Split the itemized closing-costs table into a two-column layout: Loan costs on the left, Other costs on the right, with Credits and the grand totals running full-width below. That halves the vertical space the itemized table needs.",
+      "Tightened the per-scenario masthead (eyebrow + product name + summary line) and reduced row padding / font sizes across the page to compact spacing. A typical scenario now lays out cleanly on one letter-sized page instead of spilling onto a continuation."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.28.2",
     headline: "ZHL Comparison PDF: no more blank pages + itemized costs match the rest of the design",
     highlights: [
