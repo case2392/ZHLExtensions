@@ -716,7 +716,15 @@
       return html;
     }
 
-    function p2Card(s) {
+    // One page per scenario. Each page has the same masthead so a
+    // borrower flipping through can always tell which scenario
+    // they're on. Monthly cost + cash at closing sit side-by-side
+    // in a compact two-column block at the top, then the full
+    // itemized closing-costs table runs at full width below. No
+    // page-break-inside: avoid — long itemized tables are allowed
+    // to flow into a continuation page rather than triggering a
+    // ghost blank page.
+    function p2Page(s, idx, total) {
       const pi = isFinite(s.pi) ? s.pi : NaN;
       const piti = isFinite(s.piti) ? s.piti : NaN;
       const escrows = (isFinite(pi) && isFinite(piti)) ? Math.max(0, piti - pi) : NaN;
@@ -724,32 +732,38 @@
         (isFinite(s.sellerCredit) ? s.sellerCredit : 0);
       return (
         '<section class="p2card">' +
-          '<h2>' + escapeHtml(s.title) + '</h2>' +
-          '<div class="p2sub">Purchase price ' + fmtMoneyHtml(s.purchasePrice) +
-            ' · Loan ' + fmtMoneyHtml(s.loanAmount) +
-            ' · Rate ' + fmtPctHtml(s.interestRate) +
-            ' · APR ' + fmtPctHtml(s.apr) +
-          '</div>' +
-          '<div class="p2grid">' +
-            '<div class="p2col">' +
+          '<header class="p2card-hdr">' +
+            '<div class="p2card-eyebrow">' +
+              'Loan Comparison · Detailed cost summary' +
+              (total > 1 ? ' &nbsp;·&nbsp; Scenario ' + (idx + 1) + ' of ' + total : '') +
+            '</div>' +
+            '<h2>' + escapeHtml(s.title) + '</h2>' +
+            '<div class="p2sub">Purchase price ' + fmtMoneyHtml(s.purchasePrice) +
+              ' · Loan ' + fmtMoneyHtml(s.loanAmount) +
+              ' · Rate ' + fmtPctHtml(s.interestRate) +
+              ' · APR ' + fmtPctHtml(s.apr) +
+            '</div>' +
+          '</header>' +
+          '<div class="p2top">' +
+            '<div class="p2top-col">' +
               '<h3>Monthly cost breakdown</h3>' +
               '<table class="p2tbl">' +
                 '<tr><th>Principal &amp; interest</th><td>' + fmtMoneyHtml(pi) + '</td></tr>' +
                 '<tr><th>Taxes, insurance &amp; escrows</th><td>' + fmtMoneyHtml(escrows) + '</td></tr>' +
                 '<tr class="total"><th>Estimated monthly cost (PITI)</th><td>' + fmtMoneyHtml(piti) + '</td></tr>' +
               '</table>' +
-              '<h3 style="margin-top: 12pt;">Cash at closing</h3>' +
+            '</div>' +
+            '<div class="p2top-col">' +
+              '<h3>Cash at closing</h3>' +
               '<table class="p2tbl">' +
                 '<tr><th>Down payment</th><td>' + fmtMoneyHtml(s.downPaymentAmount) + '</td></tr>' +
                 '<tr><th>Net closing cost to borrower</th><td>' + fmtMoneyHtml(netClosing) + '</td></tr>' +
                 '<tr class="total"><th>Cash (to) / from at closing</th><td>' + fmtMoneyHtml(s.cashToFrom) + '</td></tr>' +
               '</table>' +
             '</div>' +
-            '<div class="p2col">' +
-              '<h3>Itemized closing costs</h3>' +
-              itemizedClosingHtml(s.closingDetail, s) +
-            '</div>' +
           '</div>' +
+          '<h3 class="p2cc-hdr">Itemized closing costs</h3>' +
+          itemizedClosingHtml(s.closingDetail, s) +
           '<div class="p2foot">' +
             'Points: ' + (isFinite(s.pointsPct) ? s.pointsPct.toFixed(3) + '%' : '&mdash;') +
               (isFinite(s.pointsDollar) ? ' (' + fmtMoneyHtml(s.pointsDollar) + ')' : '') +
@@ -759,7 +773,7 @@
         '</section>'
       );
     }
-    const page2Cards = scenarios.map(p2Card).join('');
+    const page2Cards = scenarios.map(function (s, i) { return p2Page(s, i, scenarios.length); }).join('');
 
     const borrowerLine = borrowerName
       ? '<div class="borrower">' + escapeHtml(borrowerName) + '</div>'
@@ -797,33 +811,52 @@
       '.lo-box .lo-tagline { font-size: 9pt; color: #1f2937; font-weight: 600; margin-top: 6pt; }' +
       // Compliance footer
       '.compliance { margin-top: 14pt; font-size: 7.5pt; color: #6b7280; line-height: 1.4; }' +
-      // Page 2 styling
-      '.page-break { page-break-before: always; }' +
-      '.p2-hdr { margin-top: 0; padding-bottom: 8pt; border-bottom: 1.5pt solid #006aff; }' +
-      '.p2-hdr h1 { margin: 0; font-size: 16pt; color: #1f2937; font-weight: 700; }' +
-      '.p2-hdr .sub { color: #6b7280; font-size: 9.5pt; margin-top: 2pt; }' +
-      '.p2card { margin-top: 14pt; border: 1pt solid #e5e7eb; border-radius: 4pt; padding: 10pt 14pt; page-break-inside: avoid; }' +
-      '.p2card h2 { margin: 0; font-size: 12pt; color: #006aff; font-weight: 700; }' +
-      '.p2card .p2sub { color: #6b7280; font-size: 9pt; margin-top: 2pt; margin-bottom: 8pt; }' +
-      '.p2grid { display: flex; gap: 18pt; }' +
-      '.p2col { flex: 1; }' +
-      '.p2col h3 { margin: 0 0 4pt; font-size: 10pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #d1d5db; padding-bottom: 3pt; }' +
+      // Page 2+ : one full page per scenario.
+      //
+      // page-break-before: always on every .p2card sends each
+      // scenario to a fresh page. We deliberately do NOT set
+      // page-break-inside: avoid — long itemized closing-cost
+      // tables are allowed to spill into a continuation page so we
+      // don't trigger a phantom blank between scenarios when a
+      // card can't fit on one page.
+      '.p2card { page-break-before: always; }' +
+      '.p2card-hdr { padding-bottom: 8pt; border-bottom: 1.5pt solid #006aff; margin-bottom: 10pt; }' +
+      '.p2card-hdr .p2card-eyebrow { color: #006aff; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5pt; text-transform: uppercase; margin-bottom: 4pt; }' +
+      '.p2card h2 { margin: 0; font-size: 17pt; color: #1f2937; font-weight: 700; }' +
+      '.p2card .p2sub { color: #6b7280; font-size: 9.5pt; margin-top: 3pt; }' +
+      // Top block: monthly + cash side-by-side
+      '.p2top { display: flex; gap: 18pt; margin-bottom: 14pt; }' +
+      '.p2top-col { flex: 1; }' +
+      '.p2top-col h3 { margin: 0 0 4pt; font-size: 10pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #d1d5db; padding-bottom: 3pt; }' +
+      // Small two-row tables (monthly + cash)
       'table.p2tbl { width: 100%; border-collapse: collapse; }' +
       'table.p2tbl th { text-align: left; padding: 3pt 0; font-size: 9.5pt; font-weight: 400; color: #374151; }' +
       'table.p2tbl td { text-align: right; padding: 3pt 0; font-size: 9.5pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
-      'table.p2tbl tr.total th, table.p2tbl tr.total td { font-weight: 700; color: #006aff; border-top: 1pt solid #006aff; padding-top: 5pt; margin-top: 3pt; }' +
-      // Itemized closing-cost table (scraped from LOP popup)
+      'table.p2tbl tr.total th, table.p2tbl tr.total td { font-weight: 700; color: #006aff; border-top: 1pt solid #006aff; padding-top: 5pt; }' +
+      // Itemized closing-cost heading
+      'h3.p2cc-hdr { margin: 0 0 6pt; font-size: 11pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #006aff; padding-bottom: 4pt; }' +
+      // Itemized closing-cost table — ZHL blue scheme to match
+      // page 1, NOT the black-block look of LOP's raw popup
       'table.p2cc { width: 100%; border-collapse: collapse; }' +
-      'table.p2cc th { text-align: left; padding: 2.5pt 0; font-size: 8.5pt; font-weight: 400; color: #374151; }' +
-      'table.p2cc td { text-align: right; padding: 2.5pt 0; font-size: 8.5pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
-      'table.p2cc tr.cc-section th { background: #1f2937; color: #fff; font-weight: 700; font-size: 9pt; padding: 4pt 6pt; }' +
-      'table.p2cc tr.cc-subsection th { font-weight: 700; color: #1f2937; font-size: 8.5pt; padding-top: 5pt; padding-bottom: 2pt; border-bottom: 0.5pt solid #d1d5db; }' +
-      'table.p2cc tr.cc-subtotal th, table.p2cc tr.cc-subtotal td { font-weight: 700; color: #1f2937; border-top: 0.5pt solid #d1d5db; padding-top: 3pt; padding-bottom: 5pt; }' +
-      'table.p2cc tr.cc-sectiontotal th, table.p2cc tr.cc-sectiontotal td { font-weight: 700; color: #1f2937; background: #f3f4f6; padding: 4pt 6pt; }' +
-      'table.p2cc tr.cc-grand th, table.p2cc tr.cc-grand td { font-weight: 700; color: #1f2937; background: #f3f4f6; padding: 4pt 6pt; border-top: 1pt solid #d1d5db; }' +
-      'table.p2cc tr.cc-grandtotal th, table.p2cc tr.cc-grandtotal td { font-weight: 700; color: #006aff; background: #f5f9ff; padding: 5pt 6pt; border-top: 1.5pt solid #006aff; font-size: 10pt; }' +
+      'table.p2cc th { text-align: left; padding: 3pt 8pt; font-size: 9pt; font-weight: 400; color: #1f2937; }' +
+      'table.p2cc td { text-align: right; padding: 3pt 8pt; font-size: 9pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
+      // Section header (Loan costs / Other costs / Credits) —
+      // ZHL blue background, white text. Matches the brand.
+      'table.p2cc tr.cc-section th { background: #006aff !important; color: #fff !important; font-weight: 700; font-size: 10pt; padding: 6pt 8pt; letter-spacing: 0.3pt; }' +
+      // Subsection header (Lender costs, Prepaids, etc.) — bold
+      // dark text with a soft blue underline
+      'table.p2cc tr.cc-subsection th { font-weight: 700; color: #1e3a8a; font-size: 9.5pt; padding-top: 8pt; padding-bottom: 3pt; border-bottom: 0.5pt solid #bfdbfe; }' +
+      // Subsection total — bold with a hairline divider above
+      'table.p2cc tr.cc-subtotal th, table.p2cc tr.cc-subtotal td { font-weight: 700; color: #1f2937; border-top: 0.5pt solid #d1d5db; padding-top: 4pt; padding-bottom: 6pt; }' +
+      // Section grand total (Total loan costs, Total other costs)
+      // — light blue tint to telegraph "this rolls up"
+      'table.p2cc tr.cc-sectiontotal th, table.p2cc tr.cc-sectiontotal td { font-weight: 700; color: #1f2937; background: #eef6ff !important; padding: 5pt 8pt; border-top: 1pt solid #bfdbfe; }' +
+      // Total loan and other costs — slightly stronger
+      'table.p2cc tr.cc-grand th, table.p2cc tr.cc-grand td { font-weight: 700; color: #1f2937; background: #eef6ff !important; padding: 5pt 8pt; border-top: 1pt solid #bfdbfe; }' +
+      // Final Total closing costs — the headline number, ZHL blue
+      'table.p2cc tr.cc-grandtotal th, table.p2cc tr.cc-grandtotal td { font-weight: 700; color: #006aff; background: #f5f9ff !important; padding: 7pt 8pt; border-top: 1.5pt solid #006aff; border-bottom: 1.5pt solid #006aff; font-size: 11pt; }' +
       '.p2note { margin-top: 6pt; font-size: 7.5pt; color: #6b7280; font-style: italic; }' +
-      '.p2foot { margin-top: 8pt; font-size: 8.5pt; color: #6b7280; }' +
+      '.p2foot { margin-top: 10pt; padding-top: 6pt; border-top: 0.5pt solid #e5e7eb; font-size: 8.5pt; color: #6b7280; }' +
       '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
       '</style></head><body>' +
       // Page 1
@@ -843,17 +876,12 @@
         'This worksheet is for illustration only — final pricing, rate, and closing costs are subject to credit approval and underwriting review. Not a commitment to lend. ' +
         'Zillow Home Loans, LLC. NMLS # 10287.' +
       '</div>' +
-      // Page 2
-      '<div class="page-break"></div>' +
-      '<header class="p2-hdr">' +
-        '<h1>Detailed cost summary</h1>' +
-        '<div class="sub">' + (borrowerName ? escapeHtml(borrowerName) + ' &nbsp;·&nbsp; ' : '') + 'Issued ' + escapeHtml(dateStr) + '</div>' +
-      '</header>' +
+      // Page 2 onward: one full page per scenario. Each .p2card
+      // carries its own page-break-before: always so we don't need
+      // an explicit page-break element here, AND we don't render
+      // a separate (blank-looking) intro page anymore — the
+      // per-card masthead carries the same context.
       page2Cards +
-      '<div class="compliance">' +
-        'Monthly cost detail is based on the saved scenario as last priced. Taxes, insurance, and escrow amounts ' +
-        'are estimates and will be finalized at underwriting. Not a commitment to lend.' +
-      '</div>' +
       '</body></html>';
   }
 

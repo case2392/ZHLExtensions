@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.28.2",
+    headline: "ZHL Comparison PDF: no more blank pages + itemized costs match the rest of the design",
+    highlights: [
+      "Blank-page fix: dropped the standalone 'Detailed cost summary' intro page (which was rendering empty), and removed the page-break-inside: avoid rule that was pushing each scenario's card to a fresh page and leaving phantom blank pages between scenarios. Each scenario now starts on its own page (page-break-before: always) and is allowed to flow naturally onto a continuation page if the itemized table is long.",
+      "Per-scenario masthead — each scenario page now has its own header: 'LOAN COMPARISON · DETAILED COST SUMMARY · Scenario X of N', then the product name in large dark text, then a summary line. Borrower flipping through always knows which scenario they're on.",
+      "Itemized closing costs restyled with ZHL blue scheme to match page 1 — section headers (Loan costs, Other costs, Credits) are now ZHL blue on white instead of the black-block look that felt copy-pasted from LOP. Subsection underlines, section grand totals, and the final 'Total closing costs' all use the same blue/light-blue palette as page 1's PITI and Cash to/from rows."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.28.1",
     headline: "ZHL Comparison PDF: page 2 now has the full itemized closing-cost breakdown",
     highlights: [
