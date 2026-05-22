@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.40.0",
+    headline: "Pricing Exception Workflow: new 'Reason / description' step on the unlocked path — included in every email so the RM can approve without coming back.",
+    highlights: [
+      "After the PE amount calc step, the unlocked path now drops into a new 'Reason / description for this PE' step before the < 2.5 pts question. Single textarea, free-form, required by the manager on every unlocked PE submission (not just > 2.5 pts requests).",
+      "The text feeds into the email — under 2.5 pts shows a standalone 'Reason for PE request' section in both the plain-text body and the formatted HTML version. > 2.5 pts: the answer pre-fills the big-25 form's 'Main reason for PE' question (which already appears in the justification section of the email), so no double-entry.",
+      "Locked path is unchanged — pre-submission checklist + size + (optional > 2.5) justifications, no separate reason step."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.39.5",
     headline: "Pricing Exception Workflow BUG FIX: the Closing Costs popup auto-fill now actually closes the popup again.",
     highlights: [

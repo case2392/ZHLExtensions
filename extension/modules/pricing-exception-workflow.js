@@ -733,8 +733,29 @@
           btnPrimary('Continue', 'zhl-pe-continue') +
           btnSecondary('Edit numbers', 'zhl-pe-edit') +
         '</div>';
-      body.querySelector('#zhl-pe-continue').addEventListener('click', function () { goTo('points-check'); });
+      body.querySelector('#zhl-pe-continue').addEventListener('click', function () { goTo('U-reason'); });
       body.querySelector('#zhl-pe-edit').addEventListener('click', goBack);
+    },
+
+    // --------- unlocked-only: reason / description ----------------------
+    // RM wants a description on every unlocked PE request (not just
+    // > 2.5 pts). Writes to s.reason so if the request later turns out
+    // to be > 2.5 pts, the big-25 form's "Main reason" textarea
+    // pre-fills with whatever was typed here.
+    'U-reason': function (body) {
+      const s = workflowState;
+      const ta = 'padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;width:100%;box-sizing:border-box;min-height:110px;resize:vertical;';
+      body.innerHTML =
+        '<h4 style="margin:0 0 8px;font-size:15px;color:#111827;">Reason / description for this PE</h4>' +
+        '<p style="margin:0 0 12px;color:#6b7280;font-size:12px;">Briefly describe why this PE is needed. This goes on the email to the RM — be specific so they can approve without coming back to ask.</p>' +
+        '<textarea id="pe-u-reason" placeholder="e.g. Borrower brought a competing LE from Rocket with a 0.25% lower rate at similar Box A. Need 1.2 pts to match." style="' + ta + '">' + escapeHtml(s.reason || '') + '</textarea>' +
+        '<div style="display:flex;gap:8px;margin-top:14px;">' +
+          btnPrimary('Continue', 'zhl-pe-reason-continue') +
+        '</div>';
+      body.querySelector('#zhl-pe-reason-continue').addEventListener('click', function () {
+        s.reason = (body.querySelector('#pe-u-reason').value || '').trim();
+        goTo('points-check');
+      });
     },
 
     // --------- shared: < 2.5 pts? ---------------------------------------
@@ -1027,6 +1048,14 @@
       'PE request size:     ' + sizeLabel(s),
       ''
     ];
+    // Reason / description — always included on the unlocked path. If we're
+    // over 2.5 pts, the big-25 section's #1 question already includes it,
+    // so we suppress the standalone section here to avoid duplication.
+    if (!s.isOver25 && (s.reason || '').trim()) {
+      lines.push('Reason for PE request:');
+      lines.push('  ' + s.reason.trim());
+      lines.push('');
+    }
     if (s.isOver25) lines.push.apply(lines, big25SectionPlain(s));
     lines.push('Attached: ZHL pricing summary, comp pricing summary, comp LE.');
     lines.push('');
@@ -1047,6 +1076,10 @@
         ' <span style="color:#6b7280;">(' + escapeHtml(formatPctDisplay(s.pePoints)) + ')</span><br>' +
         '<strong>PE request size:</strong> ' + escapeHtml(sizeLabel(s)) +
       '</p>' +
+      (!s.isOver25 && (s.reason || '').trim()
+        ? htmlSectionHeading('Reason for PE request') +
+          '<p style="margin:0 0 14px;color:#374151;line-height:1.5;white-space:pre-wrap;">' + escapeHtml((s.reason || '').trim()) + '</p>'
+        : '') +
       (s.isOver25 ? big25SectionHtml(s) : '') +
       '<p style="margin:18px 0 0;color:#6b7280;font-size:12px;font-style:italic;">Attached: ZHL pricing summary, comp pricing summary, comp LE.</p>' +
       '<p style="margin-top:14px;">Thanks.</p>'
