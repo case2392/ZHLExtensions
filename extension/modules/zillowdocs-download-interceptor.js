@@ -25,9 +25,7 @@
     if (!/^https?:\/\//i.test(url)) {
       try { url = new URL(url, location.href).href; } catch (_) { return; }
     }
-    // Stash on <html> so the content script (which runs at document_idle,
-    // after the fetch has likely completed) can pick it up even if it
-    // missed the live postMessage.
+    try { console.log('[ZHL Interceptor] PDF URL announced:', url); } catch (_) {}
     try {
       var el = document.documentElement;
       if (el && !el.getAttribute('data-zhl-pdf-url')) {
@@ -50,6 +48,7 @@
       p.then(function (res) {
         if (!res || !res.ok) return;
         var ct = (res.headers && res.headers.get('content-type')) || '';
+        try { console.log('[ZHL Interceptor] fetch saw', res.status, ct, '←', url.slice(0, 200)); } catch (_) {}
         if (/pdf|octet-stream/i.test(ct)) announcePdfUrl(url);
       }).catch(function () {});
     }

@@ -94,7 +94,16 @@
     });
   }
 
+  // Forward diagnostic info to background so the user can see all of it
+  // in one place (the service worker console). The zillowdocs tab opens
+  // and closes too fast to inspect its own console.
+  function diag(label, payload) {
+    console.log('[ZHL Doc Downloader][diag]', label, payload);
+    try { chrome.runtime.sendMessage({ type: 'ZHL_BULK_DOWNLOAD_DIAG', label: label, payload: payload, doc: location.href.slice(0, 200) }); } catch (_) {}
+  }
+
   async function run(armed) {
+    diag('run starting', { docName: armed.docName, taskName: armed.taskName, url: location.href.slice(0, 200) });
     const pdfUrl = await waitForPdfUrl(PDF_WAIT_MS);
 
     let rawName = (armed.docName || 'document').trim();
@@ -102,17 +111,16 @@
     const filename = sanitizeFilename(rawName);
 
     if (pdfUrl) {
-      console.log('[ZHL Doc Downloader] PDF URL captured during viewer load:', pdfUrl.slice(0, 120));
-      console.log('[ZHL Doc Downloader] Sending to background as', filename);
+      diag('PDF URL captured during viewer load', { pdfUrl: pdfUrl, filename: filename });
       const resp = await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_URL', url: pdfUrl, filename: filename });
-      console.log('[ZHL Doc Downloader] Background response:', resp);
+      diag('background URL response', resp);
       await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_TAB_DONE', result: { ok: !!(resp && resp.ok), via: 'fetch-url' } });
       return;
     }
 
     // Fallback: no PDF URL came in during viewer load. Try clicking the
     // Download button and let the anchor intercepts do their thing.
-    console.warn('[ZHL Doc Downloader] No PDF URL captured in', PDF_WAIT_MS, 'ms. Falling back to button click.');
+    diag('No PDF URL during viewer load, falling back to button click', { waitedMs: PDF_WAIT_MS });
     await fallbackButtonClick(armed, filename);
   }
 
@@ -155,15 +163,18 @@
     // or a delayed PDF URL fires.
     document.documentElement.setAttribute('data-zhl-bulk-armed', '1');
     const captured = waitForPdfUrl(6000);
+    diag('clicking Download button', { btnTag: btn.tagName, btnTextContent: (btn.textContent || '').slice(0, 60) });
     clickWithMouseEvents(btn);
     const url = await captured;
     if (url) {
-      console.log('[ZHL Doc Downloader] PDF URL captured after click:', url.slice(0, 120));
+      diag('PDF URL captured after click', { url: url, filename: filename });
       const resp = await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_URL', url: url, filename: filename });
+      diag('background URL response', resp);
       await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_TAB_DONE', result: { ok: !!(resp && resp.ok), via: 'fetch-url-after-click' } });
       return;
     }
     // Couldn't get a URL. The native download likely already started.
+    diag('No PDF URL captured after click — native download in progress', {});
     await new Promise(function (r) { setTimeout(r, 1500); });
     await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_TAB_DONE', result: { ok: true, via: 'native-fallback' } });
   }

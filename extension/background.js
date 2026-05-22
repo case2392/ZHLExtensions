@@ -55,22 +55,33 @@ let _bulkDlRuleTimer = null;
 
 async function enableDispositionStripping() {
   try {
+    // Match ANY URL with `<all_urls>` style — the PDF might be served from a
+    // CDN (e.g. *.amazonaws.com, *.cloudfront.net) rather than zillowdocs.com.
+    // Scoping to all URLs is fine during a bulk-download run because the rule
+    // only strips Content-Disposition, which never has a legitimate use case
+    // for our own chrome.downloads.download() call (that API ignores the
+    // header anyway and uses the filename we pass).
     await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [BULK_DL_HEADER_RULE_ID],
-      addRules: [{
-        id: BULK_DL_HEADER_RULE_ID,
-        priority: 1,
-        condition: {
-          urlFilter: "||zillowdocs.com",
-          resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "other", "media"]
-        },
-        action: {
-          type: "modifyHeaders",
-          responseHeaders: [{ header: "content-disposition", operation: "remove" }]
+      removeRuleIds: [BULK_DL_HEADER_RULE_ID, BULK_DL_HEADER_RULE_ID + 1],
+      addRules: [
+        {
+          id: BULK_DL_HEADER_RULE_ID,
+          priority: 1,
+          condition: {
+            urlFilter: "*",
+            resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "other", "media", "image", "object"]
+          },
+          action: {
+            type: "modifyHeaders",
+            responseHeaders: [
+              { header: "content-disposition", operation: "remove" }
+            ]
+          }
         }
-      }]
+      ]
     });
-    console.log("[ZHL Bulk DL] Content-Disposition stripping ENABLED");
+    const active = await chrome.declarativeNetRequest.getDynamicRules();
+    console.log("[ZHL Bulk DL] Content-Disposition stripping ENABLED. Active rules:", active.length, active.map(r => ({ id: r.id, urlFilter: r.condition && r.condition.urlFilter })));
   } catch (e) {
     console.warn("[ZHL Bulk DL] enable rule failed:", e && e.message || e);
   }
@@ -79,7 +90,7 @@ async function enableDispositionStripping() {
 async function disableDispositionStripping() {
   try {
     await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [BULK_DL_HEADER_RULE_ID]
+      removeRuleIds: [BULK_DL_HEADER_RULE_ID, BULK_DL_HEADER_RULE_ID + 1]
     });
     console.log("[ZHL Bulk DL] Content-Disposition stripping DISABLED");
   } catch (e) {
@@ -88,9 +99,10 @@ async function disableDispositionStripping() {
 }
 
 // Idempotent — call on every OPEN. Enables the rule if not active and
-// resets a 30 s auto-disable timer.
-function armDispositionStripping() {
-  if (!_bulkDlRuleTimer) enableDispositionStripping();
+// resets a 30 s auto-disable timer. Returns a promise so callers can wait
+// for the rule to actually be in place before opening the tab.
+async function armDispositionStripping() {
+  await enableDispositionStripping();
   if (_bulkDlRuleTimer) clearTimeout(_bulkDlRuleTimer);
   _bulkDlRuleTimer = setTimeout(() => {
     _bulkDlRuleTimer = null;
@@ -100,6 +112,42 @@ function armDispositionStripping() {
 
 // Safety: clear any stale rule from a previous session on startup.
 disableDispositionStripping();
+
+// -------------------------------------------------------------------------
+// DIAGNOSTIC: log every download Chrome creates so we can see what the
+// viewer's native download is doing during a bulk-download run. Open the
+// service worker console (chrome://extensions → Inspect views: service
+// worker) to see these.
+// -------------------------------------------------------------------------
+try {
+  chrome.downloads.onCreated.addListener((item) => {
+    console.log("[ZHL Bulk DL][diag] downloads.onCreated:", {
+      id: item.id,
+      url: (item.url || "").slice(0, 200),
+      finalUrl: (item.finalUrl || "").slice(0, 200),
+      filename: item.filename,
+      mime: item.mime,
+      referrer: (item.referrer || "").slice(0, 200),
+      byExtensionId: item.byExtensionId,
+      state: item.state,
+      danger: item.danger,
+      startTime: item.startTime
+    });
+  });
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    console.log("[ZHL Bulk DL][diag] downloads.onDeterminingFilename:", {
+      id: item.id,
+      url: (item.url || "").slice(0, 200),
+      filename: item.filename,
+      mime: item.mime,
+      referrer: (item.referrer || "").slice(0, 200),
+      byExtensionId: item.byExtensionId
+    });
+    suggest(); // accept Chrome's default
+  });
+} catch (e) {
+  console.warn("[ZHL Bulk DL][diag] could not attach download listeners:", e);
+}
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   // Seed any unset feature flags to true so a fresh install ships with all
@@ -796,22 +844,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // that content script reports back (or times out / errors).
   // Sequential — the operator-side awaits one OPEN at a time.
   if (msg && msg.type === "ZHL_BULK_DOWNLOAD_OPEN") {
-    armDispositionStripping(); // strip Content-Disposition during the run
     const url = String(msg.url || "");
     if (!url || !/^https:\/\/(?:www\.)?zillowdocs\.com\/embed\/editor/.test(url)) {
       sendResponse({ ok: false, reason: "bad or non-zillowdocs URL" });
       return false;
     }
-    // Stash armed flag BEFORE creating the tab so the content
-    // script sees it on its very first read.
-    chrome.storage.local.set({
-      zhlBulkDownloadArmed: {
-        url: url,
-        docName: String(msg.docName || ""),
-        taskName: String(msg.taskName || ""),
-        armedAt: Date.now()
-      }
-    }, () => {
+    console.log("[ZHL Bulk DL] OPEN received for:", String(msg.docName || ""), "(task:", String(msg.taskName || ""), ")");
+    // CRITICAL: enable the DNR rule BEFORE creating the tab — otherwise
+    // the viewer's fetch can complete before the rule is in place.
+    (async () => {
+      await armDispositionStripping();
+      await new Promise((r) => chrome.storage.local.set({
+        zhlBulkDownloadArmed: {
+          url: url,
+          docName: String(msg.docName || ""),
+          taskName: String(msg.taskName || ""),
+          armedAt: Date.now()
+        }
+      }, r));
       chrome.tabs.create({ url: url, active: false }, (tab) => {
         if (chrome.runtime.lastError || !tab || tab.id == null) {
           const err = chrome.runtime.lastError && chrome.runtime.lastError.message || "tabs.create failed";
@@ -851,12 +901,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: false, reason: "timed out waiting for Download click" });
         }, TIMEOUT_MS);
       });
-    });
+    })();
     return true; // async
   }
   if (msg && msg.type === "ZHL_BULK_DOWNLOAD_TAB_DONE") {
     // Just an ack — the OPEN handler above already wired its own
     // onMessage listener for the actual completion bookkeeping.
+    sendResponse({ ok: true });
+    return false;
+  }
+  // Diagnostic forwarder — content scripts in the zillowdocs tab call
+  // this to print log lines into the service worker console (the tab
+  // opens and closes too fast to inspect its own DevTools).
+  if (msg && msg.type === "ZHL_BULK_DOWNLOAD_DIAG") {
+    const tabId = sender && sender.tab && sender.tab.id;
+    console.log("[ZHL Bulk DL][diag][tab " + tabId + "] " + String(msg.label || ""), msg.payload);
     sendResponse({ ok: true });
     return false;
   }
@@ -874,6 +933,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const url      = String(msg.url      || "");
     const filename = String(msg.filename || "document.pdf");
     if (!url) { sendResponse({ ok: false, reason: "no url" }); return false; }
+    console.log("[ZHL Bulk DL][diag] About to chrome.downloads.download URL:", url.slice(0, 200), "as", filename);
     chrome.downloads.download({
       url            : url,
       filename       : filename,

@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.6",
+    headline: "Bulk-download diagnostics + DNR rule fixes — open the service worker console (chrome://extensions → Inspect views: service worker) and re-run to see what's happening.",
+    highlights: [
+      "Three changes that should help: (a) DNR rule now matches ALL URLs (not just zillowdocs.com) in case the PDF is served from a CDN like S3 / CloudFront. (b) The rule is now properly awaited before opening the background tab — fixes a possible timing race where the viewer's fetch completed before the rule was active. (c) Comprehensive diagnostic logging in the service worker console: every download Chrome detects (URL, MIME, referrer, filename), every onDeterminingFilename event, the active DNR rules at OPEN time, and per-tab content-script logs forwarded from the bulk-download tab.",
+      "If Save As still appears: open chrome://extensions, find ZHL Productivity Pack, click 'Inspect views: service worker', re-run the bulk download, and copy/paste the full console output. The [ZHL Bulk DL][diag] lines will tell us exactly what URL the viewer is downloading from and whether the DNR rule matched."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.5",
     headline: "Bulk-download BUG FIX: Save As dialog truly gone — Content-Disposition header is stripped server-side during the run so Chrome never treats responses as attachments.",
     highlights: [
