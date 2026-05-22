@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.37.2": "Bulk-download: files now save automatically to Downloads — no 'Save As' dialog on each file.",
     "1.37.1": "Bulk-download BUG FIX: was collecting 0 documents every time — task rows are collapsed by default, so links weren't in the DOM yet. Now expands each row, grabs links, then collapses it again.",
     "1.37.0": "NEW Bulk-download completed-task documents — one click opens each Zillow Docs link in a background tab, auto-clicks Download, and closes. Sequential, with progress.",
     "1.36.6": "Copy LOP file: 'leave Justin karma' on the success modal is now a clickable link to my Zall Wall (was plain text in v1.36.5).",

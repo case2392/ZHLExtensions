@@ -3,16 +3,22 @@
 // Runs on https://www.zillowdocs.com/embed/editor* alongside the
 // credit-report-reader.js content script. We're triggered when the
 // task-bulk-download.js operator-side flow opens this URL in a
-// background tab with an armed-flag in chrome.storage. We wait for
-// the viewer's Download button to render, click it (full mouse-event
-// sequence so React's onClick handler fires), wait briefly for the
-// download to start, then signal back to background.js — which
-// closes our tab and resolves the outer flow's promise.
+// background tab with an armed-flag in chrome.storage.
 //
 // ARMED-FLAG GATE: same pattern as credit-report-reader.js. We only
 // auto-click Download when the bulk-download flow armed us within
 // the last 5 minutes. If the user opens a doc manually, this script
 // stands down so the user can read / print / download it themselves.
+//
+// SILENT DOWNLOAD PATH:
+// zillowdocs-download-interceptor.js (MAIN world) intercepts the
+// viewer's programmatic anchor.click() and posts the blob URL back
+// here. We fetch the blob, base64-encode it, and ask background.js
+// to call chrome.downloads.download({ saveAs: false }) — so the file
+// lands in the default Downloads folder with no "where do you want to
+// save?" dialog. If the intercept doesn't fire within 8 s we fall back
+// to the original click-and-wait path (file downloads normally but may
+// show the dialog depending on Chrome settings).
 (function () {
   'use strict';
 
@@ -20,6 +26,7 @@
 
   const ARM_WINDOW_MS = 5 * 60 * 1000;
   const ARMED_KEY = 'zhlBulkDownloadArmed';
+  const INTERCEPT_TIMEOUT_MS = 8000;
 
   chrome.storage.local.get([ARMED_KEY], function (data) {
     const armed = data && data[ARMED_KEY];
@@ -28,10 +35,9 @@
       console.log('[ZHL Doc Downloader] Not armed (user opened this manually). Standing down.');
       return;
     }
-    // Clear the flag immediately so subsequent manual opens don't
-    // get auto-downloaded.
     try { chrome.storage.local.remove([ARMED_KEY]); } catch (_) {}
-    console.log('[ZHL Doc Downloader] Armed by Task Bulk Download flow (age ' + age + 'ms, target ' + (armed.url || '').slice(0, 80) + '…). Starting capture.');
+    console.log('[ZHL Doc Downloader] Armed (age ' + age + 'ms, target ' +
+      (armed.url || '').slice(0, 80) + '…). Starting capture.');
     startDownload(armed);
   });
 
@@ -46,15 +52,9 @@
   }
 
   function findDownloadButton() {
-    // The Download button is a <button> with text "Download" and a
-    // <title>Download</title> in its inner SVG. Class names are
-    // minified and rotate, so text-matching is the durable approach.
     const buttons = document.querySelectorAll('button');
     for (const b of buttons) {
       if (b.disabled) continue;
-      // Prefer the button whose SVG <title> says Download — that's
-      // the icon button at the top right of the viewer. Fall back
-      // to text match if the title scheme changes.
       const svgTitle = b.querySelector('svg title');
       if (svgTitle && /^\s*download\s*$/i.test(svgTitle.textContent || '')) return b;
     }
@@ -66,8 +66,26 @@
     return null;
   }
 
+  // Convert a Blob to { base64, mimeType } using FileReader.
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        const result = reader.result || '';
+        const comma = result.indexOf(',');
+        resolve({
+          base64: comma >= 0 ? result.slice(comma + 1) : result,
+          mimeType: blob.type || 'application/pdf'
+        });
+      };
+      reader.onerror = function () { reject(reader.error); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
   async function startDownload(armed) {
-    const MAX_ATTEMPTS = 60;  // 60 × 500ms = 30s
+    // Poll for the Download button (up to 30 s).
+    const MAX_ATTEMPTS = 60;
     let attempts = 0;
     let downloadBtn = null;
     while (attempts < MAX_ATTEMPTS) {
@@ -86,19 +104,100 @@
       } catch (_) {}
       return;
     }
-    console.log('[ZHL Doc Downloader] Found Download button after', attempts, 'attempts. Clicking.');
+    console.log('[ZHL Doc Downloader] Found Download button after', attempts, 'attempts.');
+
+    // Arm the MAIN-world interceptor by setting a DOM attribute — the
+    // interceptor checks this before swallowing any anchor click.
+    document.documentElement.setAttribute('data-zhl-bulk-armed', '1');
+
+    // Listen for the interceptor's postMessage (blob URL captured).
+    let interceptResolve = null;
+    const interceptPromise = new Promise(function (resolve) { interceptResolve = resolve; });
+    function onWindowMessage(e) {
+      if (e.data && e.data.__zhlDl === true) {
+        window.removeEventListener('message', onWindowMessage);
+        resolve(e.data);
+      }
+    }
+    // Keep a reference so we can clean up if timeout fires first.
+    function resolve(v) {
+      window.removeEventListener('message', onWindowMessage);
+      if (interceptResolve) { interceptResolve(v); interceptResolve = null; }
+    }
+    window.addEventListener('message', onWindowMessage);
+
+    console.log('[ZHL Doc Downloader] Clicking Download button.');
     clickWithMouseEvents(downloadBtn);
-    // Give the download a moment to start before we ask the
-    // background to close us. Without this beat, closing the tab
-    // can interrupt the in-flight Blob fetch the viewer triggers.
-    await new Promise(function (r) { setTimeout(r, 1500); });
+
+    // Wait up to INTERCEPT_TIMEOUT_MS for the blob intercept.
+    const interceptTimeout = new Promise(function (r) {
+      setTimeout(function () { r(null); }, INTERCEPT_TIMEOUT_MS);
+    });
+    const intercepted = await Promise.race([interceptPromise, interceptTimeout]);
+    resolve(null); // clean up listener if timeout won
+
+    if (intercepted && intercepted.url) {
+      console.log('[ZHL Doc Downloader] Blob intercepted:', intercepted.url.slice(0, 60),
+        'name:', intercepted.name || '(none)');
+      try {
+        const response = await fetch(intercepted.url);
+        if (!response.ok) throw new Error('fetch blob failed: ' + response.status);
+        const blob = await response.blob();
+        const { base64, mimeType } = await blobToBase64(blob);
+
+        // Derive filename: prefer what the viewer set, fall back to docName.
+        let filename = (intercepted.name || '').trim() || (armed.docName || 'document');
+        if (!/\.[a-z0-9]{2,5}$/i.test(filename)) filename += '.pdf';
+
+        console.log('[ZHL Doc Downloader] Sending', blob.size, 'bytes to background for silent download.');
+        await new Promise(function (resolve) {
+          try {
+            chrome.runtime.sendMessage({
+              type: 'ZHL_BULK_DOWNLOAD_DATA',
+              base64: base64,
+              mimeType: mimeType,
+              filename: filename
+            }, function (resp) {
+              if (chrome.runtime.lastError) {
+                console.warn('[ZHL Doc Downloader] sendMessage ZHL_BULK_DOWNLOAD_DATA error:',
+                  chrome.runtime.lastError.message);
+              } else {
+                console.log('[ZHL Doc Downloader] background download result:', resp);
+              }
+              resolve();
+            });
+          } catch (e) {
+            console.warn('[ZHL Doc Downloader] sendMessage threw:', e);
+            resolve();
+          }
+        });
+      } catch (e) {
+        console.warn('[ZHL Doc Downloader] blob fetch/encode failed, falling back to native download:', e);
+        // Blob is gone — the original native download already didn't happen
+        // (we swallowed the click). Nothing left to do but report the error.
+        try {
+          chrome.runtime.sendMessage({
+            type: 'ZHL_BULK_DOWNLOAD_TAB_DONE',
+            result: { ok: false, reason: 'blob fetch failed: ' + (e && e.message || e) }
+          });
+        } catch (_) {}
+        return;
+      }
+    } else {
+      // Interceptor didn't fire — viewer may use a non-blob download
+      // mechanism. The native download already started; just wait for it.
+      console.log('[ZHL Doc Downloader] No blob intercept within ' + INTERCEPT_TIMEOUT_MS + ' ms. ' +
+        'Native download should be in progress.');
+      await new Promise(function (r) { setTimeout(r, 1500); });
+    }
+
     try {
       chrome.runtime.sendMessage({
         type: 'ZHL_BULK_DOWNLOAD_TAB_DONE',
         result: { ok: true, attempts: attempts }
       });
     } catch (e) {
-      console.warn('[ZHL Doc Downloader] sendMessage failed:', e);
+      console.warn('[ZHL Doc Downloader] sendMessage DONE failed:', e);
     }
   }
 })();

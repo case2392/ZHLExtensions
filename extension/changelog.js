@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.2",
+    headline: "Bulk-download: files now save automatically — no 'Save As' dialog.",
+    highlights: [
+      "The browser's 'Ask where to save each file before downloading' dialog no longer appears during a bulk download. A MAIN-world interceptor hooks into the Zillow Docs viewer's programmatic anchor.click() download pattern, captures the PDF blob, and routes it through chrome.downloads (saveAs: false) so every file lands silently in your default Downloads folder. Manual opens of Zillow Docs documents are unaffected — the interceptor only fires when the bulk-download flow is active."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.1",
     headline: "Bulk-download BUG FIX: document links now collected correctly by expanding each task row before scanning.",
     highlights: [

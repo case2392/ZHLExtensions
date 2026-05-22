@@ -794,6 +794,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true });
     return false;
   }
+  // ZHL Task Bulk Download — silent save path.
+  // The zillowdocs-bulk-download.js content script intercepted the
+  // viewer's blob download, base64-encoded it, and sent it here.
+  // We call chrome.downloads.download({ saveAs: false }) so the file
+  // lands in the default Downloads folder without the "where do you
+  // want to save?" dialog.
+  if (msg && msg.type === "ZHL_BULK_DOWNLOAD_DATA") {
+    const base64 = String(msg.base64 || "");
+    const mimeType = String(msg.mimeType || "application/pdf");
+    const filename = String(msg.filename || "document.pdf");
+    if (!base64) { sendResponse({ ok: false, reason: "empty base64" }); return false; }
+    const dataUrl = "data:" + mimeType + ";base64," + base64;
+    chrome.downloads.download({ url: dataUrl, filename: filename, saveAs: false }, function (downloadId) {
+      if (chrome.runtime.lastError) {
+        console.warn("[ZHL Bulk DL] chrome.downloads.download failed:", chrome.runtime.lastError.message);
+        sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
+      } else {
+        console.log("[ZHL Bulk DL] silent download started, id:", downloadId, "file:", filename);
+        sendResponse({ ok: true, downloadId: downloadId });
+      }
+    });
+    return true; // async
+  }
   if (msg && msg.type === "GMAIL_DRAG_START") {
     activeGmailDrag = {
       name: String(msg.name || "attachment"),
