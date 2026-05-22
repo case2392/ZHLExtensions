@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.30.0",
+    headline: "Copy LOP file: auto-reissue credit on paste + every table's rows captured as reference data",
+    highlights: [
+      "NEW: credit reissue. On Stage, if the source loan has a clickable Hard or Soft button on the right-rail Credit card, the extension clicks it (preferring Hard) to pop open the credit report in a new tab and prompts you to paste the reference ID (e.g. CoreLogic-117747122510000). The 'CoreLogic-' prefix and any trailing whitespace are stripped automatically. On Paste, after every basic-info field has been written (DOB, SSN, address, email, phone — which Reissue needs to match), the extension drives Choose action → Reissue credit report → fills the reference ID → clicks Reissue. New credit pull comes back on its own.",
+      "Tables: stage now scrapes the FULL row content of every Full Application table (addresses, employment, other income, assets, gifts/grants, real estate). The stage and paste summary modals include a 'View staged row data' expander so you can see every captured row as a reference while you add them on the destination. Liabilities are skipped on purpose since the reissued credit pull will populate them.",
+      "Note: actually driving LOP's '+ Add address' / '+ Add employment' / etc. inline forms still isn't automated — each form has its own field-by-field structure that I need the DOM for to wire per type. The summary calls this out explicitly and gives you the source row data inline. Send me the inline-form DOMs (one per table) and I'll add the auto-fill in the next iteration."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.29.2",
     headline: "Copy LOP file: bar now lives inline in the subnav (next to Premier Agent)",
     highlights: [

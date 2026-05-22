@@ -26,6 +26,8 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.30.0": "Copy LOP file: NEW auto-reissue credit on paste + full row data captured for every Full App table.",
+    "1.29.3": "Copy LOP file: full row data now captured for tables (addresses, employment, income, assets, gifts, real estate). Auto-fill of the + Add forms is the next step.",
     "1.29.2": "Copy LOP file: bar now lives inline in the subnav, right after the Premier Agent tab.",
     "1.29.1": "Copy LOP file: bar moved to top, Loan & Property skipped, cascading fields (Decl A1/A2/A3) fix, picker shows borrower names.",
     "1.29.0": "New: Copy LOP file — stage every Full App field on the source loan, paste it into a new file. Co-borrower aware.",

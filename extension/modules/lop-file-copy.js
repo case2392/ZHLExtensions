@@ -252,43 +252,100 @@
 
   // ---- Table awareness ------------------------------------------
 
-  // We surface table row counts so the LO knows what they still
-  // need to enter manually after pasting.
-  const TABLE_LABELS = {
-    'Table for addresses': 'addresses',
-    'Table for employments': 'employments',
-    'Table for other incomes': 'other-income entries',
-    'Table for assets or credits': 'assets / credits',
-    'Table for gifts or grants': 'gifts or grants',
-    'Table for liabilities': 'liabilities',
-    'Table for real estates': 'real-estate records'
+  // For each table type we scrape the visible-row data (label per
+  // column) into a structured form so the stage carries every
+  // row's information forward, not just a count. Liabilities are
+  // intentionally excluded — those flow in from the credit pull
+  // on the destination loan, so copying them over would create
+  // duplicates.
+  //
+  // Each entry: aria-label of the table + array of column headers
+  // we want to capture (matched to th text). Rows where every
+  // column we asked for is empty are dropped (totals/footers).
+  const TABLE_SCHEMAS = {
+    addresses: {
+      ariaLabel: 'Table for addresses',
+      friendly: 'addresses',
+      columns: ['Type', 'Address', 'Housing', 'Move in', 'Move out', 'Rent / mo']
+    },
+    employments: {
+      ariaLabel: 'Table for employments',
+      friendly: 'employments',
+      columns: ['Type', 'Employer', 'Start Date', 'End Date', 'Income / yr', 'Income / mo', 'Source']
+    },
+    otherIncomes: {
+      ariaLabel: 'Table for other incomes',
+      friendly: 'other-income entries',
+      columns: ['Income source', 'Other description', 'End Date', 'Frequency', 'Income / yr', 'Income / mo', 'Source']
+    },
+    assets: {
+      ariaLabel: 'Table for assets or credits',
+      friendly: 'assets / credits',
+      columns: ['Borrower(s)', 'Type', 'Financial institution', 'Account No. / Nickname', 'Amount', 'Source']
+    },
+    gifts: {
+      ariaLabel: 'Table for gifts or grants',
+      friendly: 'gifts or grants',
+      columns: ['Borrower', 'Type', 'Source', 'Other description', 'Amount']
+    },
+    realEstate: {
+      ariaLabel: 'Table for real estates',
+      friendly: 'real-estate records',
+      columns: ['Borrower(s)', 'Address', 'Mortgage / HELOC', 'Status', 'Intended', 'Property value', 'Net rental income']
+    }
   };
 
-  function readTableCounts(root) {
+  function readTableRows(table, wantedColumns) {
+    // Map header text → column index so we read cells by header
+    // name instead of by raw td position (LOP often pads with
+    // empty leading cells for the expand-icon column).
+    const thead = table.querySelector('thead');
+    const headerCells = thead ? Array.from(thead.querySelectorAll('th')) : [];
+    const headerIdx = {};
+    headerCells.forEach(function (th, i) {
+      const t = (th.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t) headerIdx[t] = i;
+    });
+    const rows = [];
+    table.querySelectorAll('tbody tr').forEach(function (tr) {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length <= 1) return;  // empty-state placeholder uses one colspan td
+      const row = {};
+      let anyValue = false;
+      wantedColumns.forEach(function (col) {
+        const idx = headerIdx[col];
+        if (idx == null) return;
+        const cell = tds[idx];
+        if (!cell) return;
+        // Pull the leaf-most text; trim and collapse whitespace.
+        const txt = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+        if (txt) anyValue = true;
+        row[col] = txt;
+      });
+      if (anyValue) rows.push(row);
+    });
+    // The last row of many LOP tables is a totals/summary footer
+    // with only the $ cell populated. Drop it heuristically: if
+    // the last row has no Type / Borrower(s) / Income source value
+    // (i.e. the identifying first non-money column is empty) but
+    // does have a $ cell, treat it as a totals footer.
+    if (rows.length) {
+      const identifyingCols = ['Type', 'Income source', 'Borrower(s)', 'Borrower', 'Address'];
+      const last = rows[rows.length - 1];
+      const hasIdentifier = identifyingCols.some(function (c) { return last[c]; });
+      if (!hasIdentifier) rows.pop();
+    }
+    return rows;
+  }
+
+  function readTableData(root) {
     root = root || document;
     const out = {};
-    Object.keys(TABLE_LABELS).forEach(function (sel) {
-      const t = root.querySelector('table[aria-label="' + sel + '"]');
+    Object.keys(TABLE_SCHEMAS).forEach(function (key) {
+      const schema = TABLE_SCHEMAS[key];
+      const t = root.querySelector('table[aria-label="' + schema.ariaLabel + '"]');
       if (!t) return;
-      // Count tbody rows that look like real data (not the empty
-      // "No X added" placeholder, which uses colspan).
-      const rows = t.querySelectorAll('tbody tr');
-      let n = 0;
-      rows.forEach(function (tr) {
-        const tds = tr.querySelectorAll('td');
-        if (tds.length <= 1) return;  // placeholder rows have one colspan td
-        // The last row of each table is usually a "totals" footer
-        // with most cells empty. Skip rows where the first non-empty
-        // visible cell looks empty (no expand icon, no name).
-        const txt = (tr.textContent || '').replace(/\s+/g, '').trim();
-        if (!txt) return;
-        n++;
-      });
-      // Subtract the totals row if present — heuristic: tables that
-      // have a $ summary line typically include it as the last row.
-      // We can't always tell, so just report the raw count and let
-      // the LO eyeball it.
-      out[TABLE_LABELS[sel]] = n;
+      out[key] = readTableRows(t, schema.columns);
     });
     return out;
   }
@@ -328,8 +385,129 @@
       capturedAt: Date.now(),
       url: location.pathname,
       fields: fields,
-      tableCounts: readTableCounts(document)
+      tableData: readTableData(document)
     };
+  }
+
+  // ---- Credit reissue ------------------------------------------
+  //
+  // LOP's right-rail Credit card has two score rows ("Hard" and
+  // "Soft"). Each row's label becomes a CLICKABLE BUTTON only
+  // when that pull type was actually run on this loan; otherwise
+  // the label is just a span. Clicking the button opens a new tab
+  // with the credit report whose top header carries a reference
+  // ID we can replay via Choose action → Reissue credit report
+  // on a new loan.
+  //
+  // We can't auto-read across the new tab without a CoreLogic
+  // host_permission (and a content script there) — so for v1 we
+  // click the button to open the report, then prompt the user to
+  // paste the reference ID. On paste, we drive Choose action →
+  // Reissue credit report → fill ID → Reissue automatically.
+
+  function findCreditButton() {
+    // Prefer Hard (a hard pull is the strong evidence of a full
+    // credit report). Fall back to Soft if Hard isn't clickable.
+    for (const wanted of ['Hard', 'Soft']) {
+      const buttons = document.querySelectorAll('button');
+      for (const btn of buttons) {
+        if ((btn.textContent || '').replace(/\s+/g, ' ').trim() !== wanted) continue;
+        // Filter out unrelated buttons by sanity-checking that
+        // the button is inside a Credit-card region (some other
+        // page button could have the same text). The Credit card
+        // sits next to the Choose action button on the right rail.
+        let p = btn.parentElement;
+        for (let i = 0; i < 8 && p; i++) {
+          if (p.querySelector('[data-cy="credit-actions-buttons"]')) {
+            return { type: wanted, button: btn };
+          }
+          p = p.parentElement;
+        }
+      }
+    }
+    return null;
+  }
+
+  function cleanCreditReferenceId(raw) {
+    if (!raw) return '';
+    // Strip "CoreLogic-" prefix (case-insensitive) and any
+    // surrounding whitespace; also tolerate the value being
+    // pasted with the prefix in the middle (defensive).
+    return String(raw).replace(/^CoreLogic[-\s]*/i, '').replace(/\s+/g, '').trim();
+  }
+
+  function captureCreditReferenceFromUser(creditButtonInfo) {
+    return new Promise(function (resolve) {
+      // Open the credit report in a new tab so the user can grab
+      // the reference ID. .click() on the actual button preserves
+      // any window.open / target=_blank wiring LOP uses.
+      try { creditButtonInfo.button.click(); } catch (_) {}
+      showModal(
+        '<h3 style="margin:0 0 8px;font-size:16px;color:#1e3a8a;">Capture credit reference ID</h3>' +
+        '<p style="margin:0 0 8px;color:#374151;font-size:13px;">' +
+          'Clicked the <strong>' + escapeHtml(creditButtonInfo.type) + '</strong> credit button — a new tab ' +
+          'should have opened with the credit report. ' +
+          'Copy the reference ID from the top of that tab (looks like <code>CoreLogic-117747122510000</code>) ' +
+          'and paste it below. You can close the report tab once you\'ve copied it.' +
+        '</p>' +
+        '<input id="zhl-credit-ref-input" type="text" placeholder="CoreLogic-XXXXXXXXX (or just the number)" ' +
+          'style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:4px;font:13px monospace;box-sizing:border-box;margin-bottom:6px;">' +
+        '<p style="margin:4px 0 0;color:#6b7280;font-size:11px;font-style:italic;">' +
+          'The <code>CoreLogic-</code> prefix and any trailing spaces are stripped automatically.' +
+        '</p>' +
+        '<div style="text-align:right;margin-top:14px;">' +
+          '<button id="zhl-credit-ref-skip" style="background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;margin-right:8px;">Skip credit reissue</button>' +
+          '<button id="zhl-credit-ref-save" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">Save reference ID</button>' +
+        '</div>',
+        function (p) {
+          const input = p.querySelector('#zhl-credit-ref-input');
+          input.focus();
+          function save() {
+            const cleaned = cleanCreditReferenceId(input.value);
+            removeModal();
+            resolve({ refId: cleaned, pullType: creditButtonInfo.type });
+          }
+          p.querySelector('#zhl-credit-ref-save').addEventListener('click', save);
+          p.querySelector('#zhl-credit-ref-skip').addEventListener('click', function () {
+            removeModal();
+            resolve(null);
+          });
+          input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); save(); }
+          });
+        }
+      );
+    });
+  }
+
+  // Paste side: drive Choose action → Reissue credit report →
+  // fill reference ID → click Reissue. Returns { ok, reason }.
+  async function runCreditReissue(refId) {
+    if (!refId) return { ok: false, reason: 'No reference ID was staged.' };
+    try {
+      const actionBtn = document.querySelector('[data-cy="credit-actions-buttons"]');
+      if (!actionBtn) return { ok: false, reason: 'Choose action button not found on the right rail.' };
+      actionBtn.click();
+      await new Promise(function (r) { setTimeout(r, 200); });
+
+      const reissueItem = document.querySelector('[data-cy="reissue-credit-button"]');
+      if (!reissueItem) return { ok: false, reason: '"Reissue credit report" menu item not found.' };
+      reissueItem.click();
+      await new Promise(function (r) { setTimeout(r, 400); });
+
+      const input = document.querySelector('input[name="reissue.referenceId"]');
+      if (!input) return { ok: false, reason: 'Reference ID input not found in the dialog.' };
+      setReactInputValue(input, refId);
+      try { input.blur(); } catch (_) {}
+      await new Promise(function (r) { setTimeout(r, 250); });
+
+      const reissueBtn = document.querySelector('[data-cy="run-credit"]');
+      if (!reissueBtn) return { ok: false, reason: 'Reissue button not found in the dialog.' };
+      reissueBtn.click();
+      return { ok: true, refId: refId };
+    } catch (e) {
+      return { ok: false, reason: String(e && e.message || e) };
+    }
   }
 
   function loadStages() {
@@ -460,13 +638,25 @@
     const borrowerMismatch = (srcBorrowers !== destBorrowers)
       ? { source: srcBorrowers, destination: destBorrowers }
       : null;
+
+    // Credit reissue is the LAST step — by now DOB, SSN, address,
+    // email, and phone have all been written, which are the inputs
+    // CoreLogic needs to match the staged reference. Give the form
+    // one more beat to settle before we open the reissue dialog.
+    let creditResult = null;
+    if (stage.creditReferenceId) {
+      await new Promise(function (r) { setTimeout(r, 600); });
+      creditResult = await runCreditReissue(stage.creditReferenceId);
+    }
+
     return {
       wrote: totalWrote,
       skippedLocked: lastResult.skippedLocked,
       noMatch: lastResult.noMatch,
       skippedEmpty: lastResult.skippedEmpty,
       passes: passes,
-      borrowerMismatch: borrowerMismatch
+      borrowerMismatch: borrowerMismatch,
+      creditResult: creditResult
     };
   }
 
@@ -599,22 +789,37 @@
         function (p) { p.querySelector('#zhl-modal-close').addEventListener('click', removeModal); });
       return;
     }
+    // Optional credit-reference capture. If the source loan has a
+    // clickable Hard or Soft credit button on the right rail, open
+    // the credit report in a new tab and prompt the user for the
+    // reference ID. They paste it in our modal; we strip the
+    // "CoreLogic-" prefix and trailing whitespace and save it on
+    // the stage so the paste side can drive a Reissue.
+    const creditBtn = findCreditButton();
+    if (creditBtn) {
+      const captured = await captureCreditReferenceFromUser(creditBtn);
+      if (captured && captured.refId) {
+        stage.creditReferenceId = captured.refId;
+        stage.creditPullType = captured.pullType;
+      }
+    }
     await persistStage(stage);
-    const tcLines = Object.keys(stage.tableCounts)
-      .filter(function (k) { return stage.tableCounts[k] > 0; })
-      .map(function (k) { return '<li>' + escapeHtml(String(stage.tableCounts[k])) + ' ' + escapeHtml(k) + '</li>'; })
-      .join('');
     const stageHeaderName = namesFromStage(stage) || stage.sourceBorrowerName || '';
+    const tableSummary = tableDataSummaryHtml(stage.tableData);
+    const creditLine = stage.creditReferenceId
+      ? '<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:8px 10px;margin:10px 0;color:#065f46;font-size:12px;">' +
+        '<strong>✓ Credit reference captured</strong> &mdash; <code>' + escapeHtml(stage.creditReferenceId) + '</code>' +
+        ' (' + escapeHtml(stage.creditPullType || 'pull') + '). Will auto-reissue on paste.' +
+      '</div>'
+      : '';
     showModal(
       '<h3 style="margin:0 0 8px;font-size:16px;color:#1e3a8a;">✓ Staged ' + stage.fields.length + ' fields</h3>' +
       '<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">From <strong>' +
         escapeHtml(stageHeaderName || stage.sourceLoanId || '(unknown)') + '</strong>' +
         (stageHeaderName ? ' &nbsp;<span style="color:#9ca3af;">loan ' + escapeHtml(stage.sourceLoanId) + '</span>' : '') +
       '</p>' +
-      (tcLines
-        ? '<div style="margin-top:12px;"><strong>Table data (manual entry required when pasting):</strong>' +
-          '<ul style="margin:6px 0 0 18px;padding:0;color:#374151;">' + tcLines + '</ul></div>'
-        : '') +
+      creditLine +
+      tableSummary +
       '<p style="margin-top:14px;color:#374151;font-size:13px;">Now open the destination loan, navigate to Full Application, and click <strong>Paste from staged</strong>.</p>' +
       '<div style="text-align:right;margin-top:14px;"><button id="zhl-modal-close" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button></div>',
       function (p) { p.querySelector('#zhl-modal-close').addEventListener('click', removeModal); }
@@ -634,9 +839,10 @@
     const safeStages = stages.filter(function (s) { return s.sourceLoanId !== currentLoan; });
     const useStages = safeStages.length ? safeStages : stages;
     const optionsHtml = useStages.map(function (s, i) {
-      const tcSummary = Object.keys(s.tableCounts || {})
-        .filter(function (k) { return s.tableCounts[k] > 0; })
-        .map(function (k) { return s.tableCounts[k] + ' ' + k.replace(/ entries$| records$/, ''); })
+      const td = s.tableData || {};
+      const tcSummary = Object.keys(td)
+        .filter(function (k) { return Array.isArray(td[k]) && td[k].length; })
+        .map(function (k) { return td[k].length + ' ' + (TABLE_SCHEMAS[k] ? TABLE_SCHEMAS[k].friendly : k); })
         .join(' · ');
       // Prefer the names derived from captured first/last fields
       // over whatever was scanned off the page at stage time —
@@ -678,11 +884,8 @@
   }
 
   function showSummary(stage, result) {
-    const tcLines = Object.keys(stage.tableCounts || {})
-      .filter(function (k) { return stage.tableCounts[k] > 0; })
-      .map(function (k) { return '<li>' + escapeHtml(String(stage.tableCounts[k])) + ' ' + escapeHtml(k) + '</li>'; })
-      .join('');
     const headerName = namesFromStage(stage) || stage.sourceBorrowerName || '';
+    const tableSummaryHtml = tableDataSummaryHtml(stage.tableData);
     showModal(
       '<h3 style="margin:0 0 8px;font-size:16px;color:#15803d;">Pasted ' + result.wrote + ' fields</h3>' +
       '<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">From <strong>' +
@@ -709,20 +912,69 @@
           '<em>Coborrower with [name]</em>) then re-paste to fill the second column.' +
         '</div>'
         : '') +
+      (result.creditResult
+        ? (result.creditResult.ok
+          ? '<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:10px;margin:10px 0;color:#065f46;font-size:13px;">' +
+            '<strong>✓ Credit reissue triggered</strong> &mdash; opened Choose action &rarr; Reissue credit report, ' +
+            'filled reference ID <code>' + escapeHtml(result.creditResult.refId) + '</code>, and clicked Reissue. ' +
+            'Watch the right rail for the new pull to come back.' +
+          '</div>'
+          : '<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;margin:10px 0;color:#991b1b;font-size:13px;">' +
+            '<strong>⚠ Credit reissue failed</strong> &mdash; ' + escapeHtml(result.creditResult.reason || 'unknown reason') +
+            '. You can run it manually: <em>Choose action &rarr; Reissue credit report</em>, paste reference ID ' +
+            (stage.creditReferenceId ? '<code>' + escapeHtml(stage.creditReferenceId) + '</code>' : '(staged value)') +
+            ', then click Reissue.' +
+          '</div>')
+        : '') +
       '<div style="background:#eef6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;margin:10px 0;color:#1e3a8a;font-size:12px;">' +
         '<strong>Multi-pair applications:</strong> if the source loan had more than one borrower-pair tab ' +
         '(<strong>+</strong> &rarr; <em>New application</em>), only the currently-visible tab gets staged. ' +
         'Switch to each source tab and click <em>Stage</em> again &mdash; each stage replaces the previous one ' +
         'for that loan, so paste one tab\'s worth at a time before moving on.' +
       '</div>' +
-      (tcLines
-        ? '<div style="margin-top:12px;"><strong>Manual entry needed (tables don\'t auto-paste in this version):</strong>' +
-          '<ul style="margin:6px 0 0 18px;padding:0;color:#374151;">' + tcLines + '</ul></div>'
-        : '') +
+      '<div style="margin-top:12px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:10px;color:#9a3412;font-size:12px;">' +
+        '<strong>Tables still need manual entry in this version</strong> &mdash; addresses, employment, ' +
+        'other income, assets, gifts/grants, and real estate require LOP\'s own ' +
+        '<em>+ Add</em> button flow that this module can\'t drive yet (each form has its own field structure ' +
+        'that I need to wire up per type). Liabilities will fill automatically from the credit pull.' +
+        ' Use the captured row data below as your reference while you add each row.' +
+      '</div>' +
+      tableSummaryHtml +
       '<p style="margin-top:14px;color:#374151;font-size:12px;font-style:italic;">Tip: scroll the page to verify the fields look right. If a section didn\'t fill, it\'s either locked on this loan or wasn\'t expanded on the source when you staged.</p>' +
       '<div style="text-align:right;margin-top:14px;"><button id="zhl-modal-close" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button></div>',
       function (p) { p.querySelector('#zhl-modal-close').addEventListener('click', removeModal); }
     );
+  }
+
+  function tableDataSummaryHtml(tableData) {
+    // Render captured rows so the LO can see exactly what came
+    // from the source, with full per-row detail collapsed under
+    // a small "View rows" toggle per table.
+    if (!tableData) return '';
+    const entries = Object.keys(tableData).filter(function (k) {
+      return Array.isArray(tableData[k]) && tableData[k].length;
+    });
+    if (!entries.length) return '';
+    let html = '<details style="margin-top:8px;"><summary style="cursor:pointer;color:#1e3a8a;font-weight:600;">' +
+      'View staged row data (' + entries.map(function (k) {
+        return tableData[k].length + ' ' + TABLE_SCHEMAS[k].friendly;
+      }).join(' · ') +
+      ')</summary>' +
+      '<div style="margin-top:6px;font-size:11px;color:#374151;max-height:240px;overflow:auto;background:#f9fafb;border-radius:4px;padding:8px;">';
+    entries.forEach(function (k) {
+      const rows = tableData[k];
+      html += '<div style="margin-bottom:8px;"><strong>' + escapeHtml(TABLE_SCHEMAS[k].friendly) + ' (' + rows.length + '):</strong>';
+      html += '<ul style="margin:4px 0 0 16px;padding:0;list-style:disc;">';
+      rows.forEach(function (row) {
+        const parts = TABLE_SCHEMAS[k].columns
+          .map(function (col) { return row[col] ? col + ': ' + row[col] : null; })
+          .filter(Boolean);
+        html += '<li>' + escapeHtml(parts.join(' · ')) + '</li>';
+      });
+      html += '</ul></div>';
+    });
+    html += '</div></details>';
+    return html;
   }
 
   function escapeHtml(s) {
