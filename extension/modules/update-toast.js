@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.38.1": "Net Proceeds calc now auto-detects Mortgage/HELOC liens from LOP's Liabilities table and pre-fills them as checkboxes — no more manual lookup.",
     "1.38.0": "NEW Net Proceeds from Sale calculator — click '🏠 Net proceeds calc' in the Assets section to estimate seller proceeds after fees and payoffs.",
     "1.37.10": "Bulk-download: ~10x faster — skipped the 20s wait per file (Zillow Docs never pre-fetches) and now runs 4 downloads in parallel.",
     "1.37.9": "Bulk-download: NEW 'Save to folder' path that bypasses Chrome's Save As dialog entirely — pick a folder once and every PDF saves silently. Works with the PromptForDownloadLocation enterprise policy.",

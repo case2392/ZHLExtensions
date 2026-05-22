@@ -20,7 +20,12 @@
   const BUTTON_ID   = 'zhl-net-proceeds-btn';
   const MODAL_ID    = 'zhl-net-proceeds-modal';
   const STORAGE_KEY = 'zhlNetProceedsValues';
-  const DEFAULTS    = { salePrice: 0, listingPct: 3, buyerPct: 3, closingCosts: 0, payoffs: 0, other: 0 };
+  const DEFAULTS    = {
+    salePrice: 0, listingPct: 3, buyerPct: 3, closingCosts: 0,
+    payoffsManual: 0,    // user-typed "Additional" payoff amount
+    uncheckedLiens: [],  // lien IDs (type|accountNo) the user has unchecked
+    other: 0
+  };
 
   // ---- formatting / parsing helpers ---------------------------------------
   function parseNum(s) {
@@ -46,26 +51,94 @@
   }
 
   // ---- compute ------------------------------------------------------------
+  // values.lienPayoffs is the sum of currently-checked detected liens.
+  // values.payoffsManual is the user-typed "Additional" amount.
   function compute(values) {
     const sale       = parseNum(values.salePrice);
     const listingFee = sale * (parseNum(values.listingPct) / 100);
     const buyerFee   = sale * (parseNum(values.buyerPct) / 100);
     const closing    = parseNum(values.closingCosts);
-    const payoffs    = parseNum(values.payoffs);
+    const lienSum    = parseNum(values.lienPayoffs);
+    const manual     = parseNum(values.payoffsManual);
+    const payoffs    = lienSum + manual;
     const other      = parseNum(values.other);
     const net        = sale - listingFee - buyerFee - closing - payoffs - other;
-    return { sale, listingFee, buyerFee, closing, payoffs, other, net };
+    return { sale, listingFee, buyerFee, closing, lienSum, manual, payoffs, other, net };
   }
 
   function loadValues() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return Object.assign({}, DEFAULTS, JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // Migration: pre-v1.38.1 used a single `payoffs` field; now
+        // we split it into checked-lien sums + a manual "Additional"
+        // input persisted as `payoffsManual`.
+        if (parsed.payoffsManual == null && parsed.payoffs != null) {
+          parsed.payoffsManual = parsed.payoffs;
+          delete parsed.payoffs;
+        }
+        if (!Array.isArray(parsed.uncheckedLiens)) parsed.uncheckedLiens = [];
+        return Object.assign({}, DEFAULTS, parsed);
+      }
     } catch (_) {}
     return Object.assign({}, DEFAULTS);
   }
   function saveValues(v) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch (_) {}
+  }
+
+  // ---- liabilities scan ---------------------------------------------------
+  // Read mortgage / HELOC rows out of LOP's Liabilities table so we can
+  // offer them as pre-filled checkboxes instead of making the user retype
+  // payoff balances.
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+  // Strip the StyledTag badge ("E" / "P" appended to some payee names)
+  // before reading textContent.
+  function extractCleanText(cell) {
+    if (!cell) return '';
+    const clone = cell.cloneNode(true);
+    clone.querySelectorAll('button, [class*="StyledTag"]').forEach(function (el) { el.remove(); });
+    return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+  function scanLiabilities() {
+    const table = document.querySelector('table[aria-label="Table for liabilities"]');
+    if (!table) return [];
+    const rows = table.querySelectorAll('tbody > tr');
+    const seen = new Set();
+    const out = [];
+    rows.forEach(function (tr) {
+      const cells = tr.querySelectorAll(':scope > td');
+      // Skip the totals row (no account type cell content).
+      if (cells.length < 6) return;
+      // cells[0]=chevron, [1]=borrower, [2]=type, [3]=payee, [4]=accountNo,
+      // [5]=unpaid balance, [6]=mo. payment, [7]=info button.
+      const type = extractCleanText(cells[2]);
+      if (!/^(mortgage(\s+loan)?|second\s*mortgage|heloc|home\s+equity)/i.test(type)) return;
+      const payee = extractCleanText(cells[3]);
+      const accountNo = extractCleanText(cells[4]);
+      if (!payee && !accountNo) return;
+      const balanceStr = extractCleanText(cells[5]);
+      const balance = parseNum(balanceStr);
+      if (!balance || balance <= 0) return;
+      const id = type + '|' + accountNo + '|' + payee;
+      if (seen.has(id)) return;
+      seen.add(id);
+      out.push({
+        id: id,
+        type: type,
+        payee: payee,
+        accountNo: accountNo,
+        accountLast4: (accountNo || '').slice(-4),
+        balance: balance
+      });
+    });
+    return out;
   }
 
   // ---- button injection ---------------------------------------------------
@@ -114,6 +187,7 @@
   function openModal() {
     closeModal();
     const data = loadValues();
+    const liens = scanLiabilities();
 
     const overlay = document.createElement('div');
     overlay.id = MODAL_ID;
@@ -194,14 +268,41 @@
             '</td>' +
             '<td id="np-closing-amt" style="' + amtCellStyle + 'color:#b91c1c;">-$0.00</td>' +
           '</tr>' +
-          // Payoffs
+          // Payoffs — header row + per-lien checkbox sub-rows + Additional input
           '<tr>' +
             '<td style="' + labelStyle + '">Mortgage / Loans / HELOC Payoffs</td>' +
+            '<td style="' + rowStyle + '"></td>' +
+            '<td id="np-payoffs-amt" style="' + amtCellStyle + 'color:#b91c1c;font-weight:600;">-$0.00</td>' +
+          '</tr>' +
+          liens.map(function (lien) {
+            const checked = (data.uncheckedLiens || []).indexOf(lien.id) === -1;
+            return '<tr>' +
+              '<td colspan="3" style="padding:4px 4px 4px 28px;border-bottom:1px solid #f3f4f6;font-size:12px;">' +
+                '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">' +
+                  '<input type="checkbox" class="np-lien-cb" ' +
+                    'data-lien-id="' + escapeAttr(lien.id) + '" ' +
+                    'data-balance="' + lien.balance + '" ' +
+                    (checked ? 'checked' : '') + ' style="margin:0;cursor:pointer;width:14px;height:14px;" />' +
+                  '<span style="flex:1;color:#374151;">' +
+                    '<span style="font-weight:600;color:#0b5cab;">' + escapeHtml(lien.type) + '</span>' +
+                    ' — ' + escapeHtml(lien.payee) +
+                    (lien.accountLast4 ? ' — <span style="color:#9ca3af;">…' + escapeHtml(lien.accountLast4) + '</span>' : '') +
+                  '</span>' +
+                  '<span style="color:#b91c1c;font-weight:600;">' + formatMoney(lien.balance) + '</span>' +
+                '</label>' +
+              '</td>' +
+            '</tr>';
+          }).join('') +
+          // Additional manual input — for any payoff not in the detected list
+          '<tr>' +
+            '<td style="padding:6px 4px 6px 28px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:12px;">' +
+              (liens.length > 0 ? 'Additional (not listed above)' : 'Manual payoff amount') +
+            '</td>' +
             '<td style="' + inputCellStyle + '">' +
               '<span style="color:#6b7280;margin-right:4px;">$</span>' +
-              '<input id="np-payoffs" type="text" inputmode="decimal" value="' + formatGroup(data.payoffs) + '" style="' + moneyInputStyle + '" />' +
+              '<input id="np-payoffs-manual" type="text" inputmode="decimal" value="' + formatGroup(data.payoffsManual) + '" style="' + moneyInputStyle + '" />' +
             '</td>' +
-            '<td id="np-payoffs-amt" style="' + amtCellStyle + 'color:#b91c1c;">-$0.00</td>' +
+            '<td id="np-payoffs-manual-amt" style="padding:6px 4px;border-bottom:1px solid #f3f4f6;text-align:right;width:135px;color:#b91c1c;font-size:11px;">-$0.00</td>' +
           '</tr>' +
           // Other
           '<tr>' +
@@ -232,26 +333,37 @@
     document.body.appendChild(overlay);
 
     // -------- wire up inputs ----------
-    const saleInput    = panel.querySelector('#np-sale');
-    const listingInput = panel.querySelector('#np-listing-pct');
-    const buyerInput   = panel.querySelector('#np-buyer-pct');
-    const closingInput = panel.querySelector('#np-closing');
-    const payoffsInput = panel.querySelector('#np-payoffs');
-    const otherInput   = panel.querySelector('#np-other');
-    const netCell      = panel.querySelector('#np-net');
+    const saleInput          = panel.querySelector('#np-sale');
+    const listingInput       = panel.querySelector('#np-listing-pct');
+    const buyerInput         = panel.querySelector('#np-buyer-pct');
+    const closingInput       = panel.querySelector('#np-closing');
+    const payoffsManualInput = panel.querySelector('#np-payoffs-manual');
+    const otherInput         = panel.querySelector('#np-other');
+    const netCell            = panel.querySelector('#np-net');
 
     // Track whether user has touched closing manually — if not, keep
     // it auto-synced to 1% of sale price as they type.
     let userTouchedClosing = parseNum(data.closingCosts) > 0;
 
     function readValues() {
+      let lienSum = 0;
+      const unchecked = [];
+      panel.querySelectorAll('.np-lien-cb').forEach(function (cb) {
+        if (cb.checked) {
+          lienSum += parseFloat(cb.dataset.balance) || 0;
+        } else {
+          unchecked.push(cb.dataset.lienId);
+        }
+      });
       return {
-        salePrice:    parseNum(saleInput.value),
-        listingPct:   parseNum(listingInput.value),
-        buyerPct:     parseNum(buyerInput.value),
-        closingCosts: parseNum(closingInput.value),
-        payoffs:      parseNum(payoffsInput.value),
-        other:        parseNum(otherInput.value)
+        salePrice:       parseNum(saleInput.value),
+        listingPct:      parseNum(listingInput.value),
+        buyerPct:        parseNum(buyerInput.value),
+        closingCosts:    parseNum(closingInput.value),
+        lienPayoffs:     lienSum,
+        payoffsManual:   parseNum(payoffsManualInput.value),
+        uncheckedLiens:  unchecked,
+        other:           parseNum(otherInput.value)
       };
     }
     function update() {
@@ -262,10 +374,21 @@
       panel.querySelector('#np-buyer-amt').textContent   = c.buyerFee   === 0 ? '-$0.00' : '-' + formatMoney(c.buyerFee);
       panel.querySelector('#np-closing-amt').textContent = c.closing    === 0 ? '-$0.00' : '-' + formatMoney(c.closing);
       panel.querySelector('#np-payoffs-amt').textContent = c.payoffs    === 0 ? '-$0.00' : '-' + formatMoney(c.payoffs);
+      const manualAmtCell = panel.querySelector('#np-payoffs-manual-amt');
+      if (manualAmtCell) manualAmtCell.textContent = c.manual === 0 ? '' : '-' + formatMoney(c.manual);
       panel.querySelector('#np-other-amt').textContent   = c.other      === 0 ? '-$0.00' : '-' + formatMoney(c.other);
       netCell.textContent = formatMoney(c.net);
       netCell.style.color = c.net >= 0 ? '#15803d' : '#b91c1c';
-      saveValues(v);
+      // Persist (excludes computed lienPayoffs — that's derived from checkbox state)
+      saveValues({
+        salePrice: v.salePrice,
+        listingPct: v.listingPct,
+        buyerPct: v.buyerPct,
+        closingCosts: v.closingCosts,
+        payoffsManual: v.payoffsManual,
+        uncheckedLiens: v.uncheckedLiens,
+        other: v.other
+      });
     }
 
     saleInput.addEventListener('input', function () {
@@ -276,12 +399,15 @@
       update();
     });
     closingInput.addEventListener('input', function () { userTouchedClosing = true; update(); });
-    [listingInput, buyerInput, payoffsInput, otherInput].forEach(function (el) {
+    [listingInput, buyerInput, payoffsManualInput, otherInput].forEach(function (el) {
       el.addEventListener('input', update);
+    });
+    panel.querySelectorAll('.np-lien-cb').forEach(function (cb) {
+      cb.addEventListener('change', update);
     });
 
     // Blur formats the money fields with grouping (1,234,567)
-    [saleInput, closingInput, payoffsInput, otherInput].forEach(function (el) {
+    [saleInput, closingInput, payoffsManualInput, otherInput].forEach(function (el) {
       el.addEventListener('blur', function () {
         const n = parseNum(el.value);
         el.value = n > 0 ? formatGroup(n) : '';
@@ -307,12 +433,26 @@
         'Sale price:             ' + formatMoney(c.sale),
         'Listing agent fee:      -' + formatMoney(c.listingFee) + '  (' + formatPct(v.listingPct) + '%)',
         'Buyer\'s agent fee:      -' + formatMoney(c.buyerFee) + '  (' + formatPct(v.buyerPct) + '%)',
-        'Closing costs (est.):   -' + formatMoney(c.closing),
-        'Mortgage/HELOC payoffs: -' + formatMoney(c.payoffs),
-        'Other:                  -' + formatMoney(c.other),
-        '-----------------------------',
-        'NET PROCEEDS:           ' + formatMoney(c.net)
+        'Closing costs (est.):   -' + formatMoney(c.closing)
       ];
+      // Per-lien breakdown of the payoffs
+      panel.querySelectorAll('.np-lien-cb').forEach(function (cb) {
+        if (!cb.checked) return;
+        const row = cb.closest('label');
+        const txt = row ? (row.querySelector('span').textContent || '').replace(/\s+/g, ' ').trim() : '';
+        const bal = parseFloat(cb.dataset.balance) || 0;
+        lines.push('  ' + txt + ':');
+        lines.push('                          -' + formatMoney(bal));
+      });
+      if (c.manual > 0) {
+        lines.push('  Additional payoffs:     -' + formatMoney(c.manual));
+      }
+      if (c.payoffs > 0) {
+        lines.push('Total payoffs:          -' + formatMoney(c.payoffs));
+      }
+      lines.push('Other:                  -' + formatMoney(c.other));
+      lines.push('-----------------------------');
+      lines.push('NET PROCEEDS:           ' + formatMoney(c.net));
       const text = lines.join('\n');
       const btn = panel.querySelector('#np-copy');
       const orig = btn.textContent;

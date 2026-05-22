@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.38.1",
+    headline: "Net Proceeds calc: auto-detects Mortgage / HELOC liens from LOP's Liabilities table and lists them as pre-filled checkboxes.",
+    highlights: [
+      "When you open the 🏠 Net proceeds calc, it now scans the Liabilities table for rows with account type Mortgage / Second Mortgage / HELOC and renders each one as a checkbox inside the Mortgage/Loans/HELOC Payoffs section — pre-filled with the payee, last 4 of the account, and the unpaid balance. All detected liens default to checked; uncheck any that shouldn't apply to the sale (e.g. a lien on a different property).",
+      "Total payoffs = sum of checked balances + the new Additional input (for anything not in the table). Uncheck state persists in localStorage keyed by account number, so re-opening the modal restores what you had.",
+      "Copy summary now itemizes each checked lien (Mortgage — JPMCB — …4586 — -$211,087.00) so the breakdown you paste matches what's on screen."
+    ],
+    sections: ["net-proceeds-calc"]
+  },
+  {
     version: "1.38.0",
     headline: "NEW Net Proceeds from Sale calculator — one click on the Assets section opens a modal that estimates seller proceeds after fees and payoffs.",
     highlights: [
