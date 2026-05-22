@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.40.2",
+    headline: "PE Workflow: rate-lock status now in the subject ([LOCKED] / [NOT LOCKED]) and as a colored banner at the top of the email body.",
+    highlights: [
+      "Subject prefixed with [LOCKED] or [NOT LOCKED] — so the RM can sort/triage their inbox at a glance. Full subject example: '[NOT LOCKED] PE Request for Mark Malone (ZG001260248246) vs Rocket — >2.5 pts'.",
+      "Plain-text body opens with 'Rate is currently LOCKED.' or 'Rate is NOT LOCKED.' as the first sentence after the greeting.",
+      "HTML body shows a prominent colored banner at the top — green for locked, red for not locked — so it's impossible to miss when the RM reads the email in Gmail."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.40.1",
     headline: "Pricing Exception Workflow: Open in Gmail now AUTO-PASTES the formatted body — no Ctrl+V needed.",
     highlights: [

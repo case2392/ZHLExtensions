@@ -972,6 +972,14 @@
   function loanIdForEmail(s) { return (s.zgNumber || s.loanId || '(loan id)').trim(); }
   function sizeLabel(s) { return s.isOver25 ? '2.5 points or over' : 'under 2.5 points'; }
   function compLabel(s)     { return (s.compLender || '').trim() || 'Competitor'; }
+  // Rate-lock status surfaced in the subject and as the first sentence of
+  // the email body. RM asked for this to be obvious — locked vs unlocked
+  // changes the whole approval workflow on their end.
+  function lockedTag(s)        { return s.locked === true ? '[LOCKED]' : '[NOT LOCKED]'; }
+  function lockedSentence(s)   { return s.locked === true ? 'Rate is currently LOCKED.' : 'Rate is NOT LOCKED.'; }
+  function lockedColor(s)      { return s.locked === true ? '#15803d' : '#b91c1c'; }
+  function lockedBg(s)         { return s.locked === true ? '#dcfce7' : '#fee2e2'; }
+  function lockedBorderColor(s){ return s.locked === true ? '#86efac' : '#fca5a5'; }
 
   // Build a complete email — returns { subject, body, html }.
   // body  = plain text (used by Open-in-Gmail compose URL, and as the
@@ -991,6 +999,8 @@
     // ----- plain text -----
     const lines = [
       'Hi,',
+      '',
+      lockedSentence(s),
       '',
       heading,
       '',
@@ -1012,6 +1022,7 @@
     lines.push('Thanks.');
     // ----- html -----
     const html = wrapHtml(
+      htmlLockBanner(s) +
       htmlHeader(heading, id, s.loanLink) +
       '<p style="margin:14px 0 8px;">' + escapeHtml(id) + ' is ready for PE request.</p>' +
       '<p style="margin:14px 0 6px;font-weight:600;color:' + COLORS.accent + ';">Pre-submission checklist (all complete):</p>' +
@@ -1026,7 +1037,7 @@
       '<p style="margin-top:18px;">Thanks.</p>'
     );
     return {
-      subject: 'PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + (s.isOver25 ? ' — >2.5 pts' : ''),
+      subject: lockedTag(s) + ' PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + (s.isOver25 ? ' — >2.5 pts' : ''),
       body: lines.join('\n'),
       html: html
     };
@@ -1038,6 +1049,8 @@
     // ----- plain text -----
     const lines = [
       'Hi,',
+      '',
+      lockedSentence(s),
       '',
       heading,
       '',
@@ -1079,6 +1092,7 @@
     lines.push('Thanks.');
     // ----- html -----
     const html = wrapHtml(
+      htmlLockBanner(s) +
       htmlHeader(heading, id, s.loanLink) +
       htmlSectionHeading('Loan scenario') +
       htmlKvTable([
@@ -1103,7 +1117,7 @@
     );
     const compForSubject = (s.compLender || '').trim() ? ' vs ' + (s.compLender || '').trim() : '';
     return {
-      subject: 'PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + compForSubject + (s.isOver25 ? ' — >2.5 pts' : ''),
+      subject: lockedTag(s) + ' PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + compForSubject + (s.isOver25 ? ' — >2.5 pts' : ''),
       body: lines.join('\n'),
       html: html
     };
@@ -1150,6 +1164,15 @@
     return '<div style="font:14px Arial,Helvetica,sans-serif;color:#1f2937;line-height:1.5;">' +
       '<p style="margin:0 0 10px;">Hi,</p>' +
       inner +
+    '</div>';
+  }
+  // Big colored banner at the very top of the HTML email so the RM
+  // sees LOCKED vs NOT LOCKED at a glance.
+  function htmlLockBanner(s) {
+    return '<div style="margin:0 0 16px;padding:10px 14px;border:1px solid ' +
+        lockedBorderColor(s) + ';background:' + lockedBg(s) + ';border-radius:6px;' +
+        'color:' + lockedColor(s) + ';font-weight:700;font-size:14px;">' +
+      escapeHtml(lockedSentence(s)) +
     '</div>';
   }
   function htmlHeader(heading, id, link) {

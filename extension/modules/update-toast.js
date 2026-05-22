@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.40.2": "PE Workflow: rate-lock status now obvious in the email — [LOCKED] / [NOT LOCKED] in the subject, plus a colored banner at the top of the body.",
     "1.40.1": "Pricing Exception Workflow: Open in Gmail now AUTO-PASTES the formatted body — no Ctrl+V needed.",
     "1.40.0": "Pricing Exception Workflow: NEW 'Reason / description' step on the unlocked path — included on every email so the RM can approve without coming back.",
     "1.39.5": "Pricing Exception Workflow BUG FIX: the Closing Costs popup auto-fill now actually closes the popup again (the close button detector wasn't matching LOP's 'Close' text button).",
