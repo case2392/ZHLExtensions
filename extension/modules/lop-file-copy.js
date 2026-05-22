@@ -1825,78 +1825,120 @@
 
   // Multi-select combobox driver for Borrower(s) fields that
   // accept multiple borrowers (e.g. Real Estate). The dropdown
-  // contains an [role="option"] for each borrower, each holding
-  // a checkbox and a label. Simply clicking the option wrapper
-  // doesn't reliably commit the chip — LOP wants the checkbox
-  // input itself toggled. Strategy: open the listbox once, locate
-  // each wanted name's row, toggle the checkbox to checked if it
-  // isn't already, then click outside to close.
+  // contains a [role="option"] for each borrower, each holding
+  // a checkbox + label. Different LOP versions wire the click
+  // handler differently — sometimes the checkbox commits, other
+  // times the label, other times the option wrapper. We try
+  // each in turn and VERIFY the chip actually appears in the
+  // combobox wrapper before declaring success.
   async function selectMultiBorrowerCombobox(input, wantNames) {
     if (!input || !wantNames || !wantNames.length) return { ok: false, reason: 'no names' };
-    input.focus();
-    try { input.click(); } catch (_) {}
-    await wait(180);
-    if (input.getAttribute('aria-expanded') !== 'true') {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-      await wait(200);
+    // The chips render inside the combobox's wrapper as
+    // <span class="StyledTag…">Name<button>X</button></span>.
+    const wrap = input.closest('[class*="StyledComboboxInput"]') || input.parentElement;
+    function chipsInWrap() {
+      if (!wrap) return [];
+      return Array.from(wrap.querySelectorAll('[class*="StyledTag"]'))
+        .map(function (c) {
+          // Strip the close button text so just the name remains
+          const clone = c.cloneNode(true);
+          clone.querySelectorAll('button').forEach(function (b) { b.remove(); });
+          return (clone.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        });
     }
-    // Find the listbox (portaled out of the form by c11n).
-    let listbox = null;
-    const lbs = document.querySelectorAll('[role="listbox"]');
-    for (const lb of lbs) {
-      if (lb.offsetHeight === 0 && lb.offsetWidth === 0) continue;
-      listbox = lb;
-      break;
+    function hasChip(want) {
+      return chipsInWrap().some(function (c) {
+        return c && (c === want || c.indexOf(want) !== -1 || want.indexOf(c) !== -1);
+      });
     }
-    if (!listbox) {
-      console.warn('[Copy LOP][multi-borrower] no visible listbox after opening combobox');
-      return { ok: false, reason: 'listbox not visible' };
+    async function openListbox() {
+      try { input.focus(); } catch (_) {}
+      clickWithMouseEvents(input);
+      await wait(220);
+      if (input.getAttribute('aria-expanded') !== 'true') {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+        await wait(220);
+      }
+    }
+    function findOptionForName(want) {
+      const lbs = document.querySelectorAll('[role="listbox"]');
+      for (const lb of lbs) {
+        if (lb.offsetHeight === 0 && lb.offsetWidth === 0) continue;
+        const options = lb.querySelectorAll('[role="option"]');
+        for (const opt of options) {
+          const t = (opt.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          if (t === want || t.indexOf(want) === 0 || want.indexOf(t) === 0) return opt;
+        }
+        // Fallback: a <label> in the listbox whose text matches
+        const labels = lb.querySelectorAll('label');
+        for (const lbl of labels) {
+          const t = (lbl.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          if (t === want || t.indexOf(want) === 0 || want.indexOf(t) === 0) {
+            return lbl.closest('[role="option"]') || lbl.parentElement;
+          }
+        }
+      }
+      return null;
     }
     const matched = [];
     const missed = [];
     for (const name of wantNames) {
       const want = String(name).replace(/\s+/g, ' ').trim().toLowerCase();
-      const options = listbox.querySelectorAll('[role="option"]');
-      let hit = null;
-      for (const opt of options) {
-        const t = (opt.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-        if (t === want || t.indexOf(want) === 0 || want.indexOf(t) === 0) { hit = opt; break; }
-      }
+      if (hasChip(want)) { matched.push(name); continue; }
+
+      await openListbox();
+      const hit = findOptionForName(want);
       if (!hit) {
-        // Fallback: a <label> in the listbox whose text matches
-        const labels = listbox.querySelectorAll('label');
-        for (const lbl of labels) {
-          const t = (lbl.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-          if (t === want || t.indexOf(want) === 0 || want.indexOf(t) === 0) {
-            hit = lbl.closest('[role="option"]') || lbl.parentElement;
-            break;
-          }
-        }
+        console.warn('[Copy LOP][multi-borrower] no option for', name);
+        missed.push(name);
+        continue;
       }
-      if (!hit) { missed.push(name); continue; }
+
+      // Try checkbox → label → option wrapper, verifying chip each time
       const checkbox = hit.querySelector('input[type="checkbox"]');
+      const label = hit.querySelector('label');
+      let committed = false;
+
       if (checkbox) {
-        if (!checkbox.checked) {
-          // Click the checkbox directly (LOP's React handler
-          // listens on the input, not the wrapper).
-          clickWithMouseEvents(checkbox);
-          await wait(150);
-        }
-      } else {
-        // No checkbox visible — fall back to clicking the option
-        // wrapper.
-        clickWithMouseEvents(hit);
-        await wait(150);
+        clickWithMouseEvents(checkbox);
+        await wait(220);
+        committed = hasChip(want);
       }
-      matched.push(name);
+      if (!committed && label) {
+        clickWithMouseEvents(label);
+        await wait(220);
+        committed = hasChip(want);
+      }
+      if (!committed) {
+        clickWithMouseEvents(hit);
+        await wait(220);
+        committed = hasChip(want);
+      }
+      // Final salvage: type the name and press Enter
+      if (!committed) {
+        try {
+          input.focus();
+          setReactInputValue(input, name);
+          await wait(200);
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+          await wait(220);
+          committed = hasChip(want);
+        } catch (_) {}
+      }
+
+      if (committed) matched.push(name);
+      else {
+        console.warn('[Copy LOP][multi-borrower] chip never committed for', name,
+          '— tried checkbox/label/wrapper/type+Enter');
+        missed.push(name);
+      }
     }
     // Close the listbox so subsequent form fields don't get
-    // blocked by the popper. Pressing Escape on the input closes
-    // it without losing the chips.
+    // blocked by the popper.
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     try { input.blur(); } catch (_) {}
-    await wait(120);
+    await wait(150);
     return { ok: missed.length === 0, matched: matched, missed: missed };
   }
 
@@ -2205,13 +2247,24 @@
     writeInput(form, 'city', addr.city);
     writeSelect(form, 'state', addr.state);
     writeInput(form, 'zipCode', addr.zip);
-    await wait(120);
+    // Dismiss the Google-Places autocomplete popper that the
+    // streetAddress input pops open (it overlaps the form and
+    // can block Save).
+    const streetInput = form.querySelector('input[name="streetAddress"]');
+    if (streetInput) { try { streetInput.blur(); } catch (_) {} }
+    document.body.click();
+    await wait(150);
 
     // Form-only fields (Property type, Current occupancy,
     // PendingSale date, willBePaidPriorToClosing) come from the
     // source-side scrapeRealEstateFromSource() pass that opens
     // each row's edit form. Match by address.
     const details = findRealEstateDetails(stage, row);
+    if (!details) {
+      console.warn('[Copy LOP][real estate] no source-side details for',
+        row['Address'], '— stage.realEstateDetails has',
+        (stage.realEstateDetails || []).length, 'entries');
+    }
     if (details) {
       if (details.propertyType) writeSelect(form, 'propertyType', details.propertyType);
       if (details.currentOccupancy) writeSelect(form, 'currentOccupancy', details.currentOccupancy);
@@ -2406,6 +2459,15 @@
     console.log('Destination loan ID:', loanIdFromUrl());
     console.log('Destination borrower count:', countCurrentBorrowerSections(),
       'vs source:', countBorrowerSections(stage.fields));
+    console.log('Stage extras — realEstateDetails:',
+      (stage.realEstateDetails || []).length, 'entries; liabilityEdits:',
+      (stage.liabilityEdits || []).length, 'entries.');
+    if (!(stage.realEstateDetails || []).length &&
+        stage.tableData && (stage.tableData.realEstate || []).length) {
+      console.warn('[Copy LOP] Stage has Real Estate rows but no realEstateDetails — ' +
+        're-stage the source loan (with this extension version loaded) to capture ' +
+        'Property type / Current occupancy / Pending-sale date from the source form.');
+    }
 
     // STEP 0: if the source has more borrowers than the destination,
     // click the "+" tab and add the missing co-borrower(s) BEFORE we
@@ -3026,6 +3088,20 @@
           html += '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px;color:#92400e;font-size:12px;">' +
             '<strong>Rows that need finishing manually:</strong><ul style="margin:6px 0 0 18px;padding:0;">' +
             failures.join('') + '</ul></div>';
+        }
+        // Hint when the stage carried Real Estate rows but NO
+        // realEstateDetails — that means the source-side form
+        // scrape didn't run (or the user staged with an older
+        // version). They need to re-stage.
+        const reAttempted = tr.realEstate && tr.realEstate.attempted;
+        const reHasDetails = (stage.realEstateDetails || []).length > 0;
+        if (reAttempted && !reHasDetails) {
+          html += '<div style="margin-top:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;color:#991b1b;font-size:12px;">' +
+            '<strong>⚠ Real Estate form-only fields weren\'t captured at stage time.</strong> ' +
+            'Property type, Current occupancy, and Pending-sale date all live in the source form, ' +
+            'not the source table. Re-open the source loan tab and click <em>Stage</em> again ' +
+            '(with this extension version) — staging opens each Real Estate row to capture them.' +
+            '</div>';
         }
         html += tableSummaryHtml;
         return html;

@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.34.3",
+    headline: "Copy LOP file: Borrower multi-select now verifies the chip + tells you when to re-stage for Real Estate.",
+    highlights: [
+      "BUG: Real Estate Borrower(s) chip wasn't committing despite our helper claiming success. The multi-select listbox renders an option-row with a checkbox + label, and LOP's React handler is wired to different elements across forms. The picker now tries checkbox → label → option wrapper → type-and-Enter in sequence and VERIFIES each attempt by checking if the chip actually appeared in the combobox wrapper before moving on, so a false-positive log line can't sneak past again.",
+      "Real Estate paste also blurs the streetAddress input and clicks the body after writing the address fields, so the Google-Places autocomplete popper that the address input opens doesn't overlap the form (could visually block Save).",
+      "If the stage was captured with an older extension version (or before the source-side form scrape worked), the summary now shows a red banner explaining that Property type / Current occupancy / Pending-sale date came back empty because the source-form scrape didn't run — and tells the LO to re-stage from the source loan tab with this version loaded.",
+      "Paste-from-stage now logs realEstateDetails / liabilityEdits counts up front so it's obvious whether the stage carries form-only data."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.34.2",
     headline: "Copy LOP file BUG FIX: Real Estate row now saves on the destination — borrower multi-select + source form scrape fixes.",
     highlights: [
