@@ -7,9 +7,12 @@
 // background script, which stores it for the Copy LOP file feature
 // to pick up — then closes this tab automatically.
 //
-// We're a small standalone script (no chrome.storage gate here)
-// because the feature gate lives in the source LOP tab; if the
-// LOP-side feature is disabled, the storage value just sits unread.
+// ARMED-FLAG GATE: we only run when the Copy LOP file feature
+// armed us via chrome.storage just before clicking Hard/Soft. That
+// way, when the user opens a credit report MANUALLY (outside our
+// Stage flow), this script stands down and never closes their tab.
+// Without this gate v1.31.0/.1 was eating every credit-report tab
+// the user opened.
 //
 // The report sometimes renders the ID asynchronously, so we poll
 // for up to ~30 seconds before giving up and leaving the user to
@@ -19,6 +22,25 @@
 
   console.log('[ZHL Credit Reader] loaded on', location.href);
 
+  // Bail unless we were armed within the last 60 seconds by the
+  // Copy LOP file Stage flow.
+  const ARM_WINDOW_MS = 60 * 1000;
+  chrome.storage.local.get(['zhlCreditCaptureArmed'], function (data) {
+    const armed = data && data.zhlCreditCaptureArmed;
+    const age = armed && armed.armedAt ? Date.now() - armed.armedAt : Infinity;
+    if (!armed || age > ARM_WINDOW_MS) {
+      console.log('[ZHL Credit Reader] Not armed (user opened this manually). Standing down.');
+      return;
+    }
+    // Clear the flag immediately so a second tab opened by the
+    // user within the window doesn't also get auto-closed.
+    try { chrome.storage.local.remove(['zhlCreditCaptureArmed']); } catch (_) {}
+    console.log('[ZHL Credit Reader] Armed by Copy LOP Stage flow (age ' + age + 'ms). Starting capture.');
+    startCapture();
+  });
+
+
+  function startCapture() {
   function findCoreLogicRefId() {
     // Walk all leaf elements looking for one whose text matches
     // "CoreLogic-DIGITS". The known DOM is
@@ -60,4 +82,5 @@
       console.log('[ZHL Credit Reader] Gave up after', attempts, 'attempts; user will paste manually.');
     }
   }, 500);
+  }  // end startCapture
 })();

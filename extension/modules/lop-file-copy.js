@@ -500,13 +500,21 @@
 
   function captureCreditReferenceFromUser(creditButtonInfo) {
     return new Promise(function (resolve) {
-      // Open the credit report in a new tab. The credit-report-reader
-      // content script will run on that tab, find the CoreLogic-XXX
-      // header, and stash it in chrome.storage.local. We poll for
-      // that value and auto-fill — but keep the manual-paste fallback
-      // visible at the bottom of the modal in case the auto-read
-      // misses (page render delay, layout change, etc.).
-      try { creditButtonInfo.button.click(); } catch (_) {}
+      // Arm the credit-report-reader content script BEFORE clicking
+      // Hard/Soft so it only auto-closes tabs we opened. Without
+      // this gate, every credit-report tab the LO opens manually
+      // would get auto-closed too. The flag is checked on the
+      // reader's load and consumed within ~60s; the reader also
+      // clears it as soon as it picks it up.
+      try {
+        chrome.storage.local.set({
+          zhlCreditCaptureArmed: { armedAt: Date.now() }
+        }, function () {
+          try { creditButtonInfo.button.click(); } catch (_) {}
+        });
+      } catch (_) {
+        try { creditButtonInfo.button.click(); } catch (__) {}
+      }
 
       // Start the auto-capture race.
       const autoP = waitForAutoCapturedCreditRef(30000);
@@ -1842,6 +1850,11 @@
             '<strong>✓ Credit reissue triggered</strong> &mdash; opened Choose action &rarr; Reissue credit report, ' +
             'filled reference ID <code>' + escapeHtml(result.creditResult.refId) + '</code>, and clicked Reissue. ' +
             'Watch the right rail for the new pull to come back.' +
+            '<div style="margin-top:6px;font-size:11px;color:#15803d;font-style:italic;">' +
+              'If CoreLogic returns <strong>CR02 Reference Number Not Found</strong>: that means CoreLogic rejected the ref ' +
+              '(either it expired &mdash; refs usually live a few days &mdash; or the borrower SSN/DOB on this loan doesn\'t ' +
+              'match the original pull). Fall back to <em>Choose action &rarr; Pull credit report</em> for a fresh pull.' +
+            '</div>' +
           '</div>'
           : '<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;margin:10px 0;color:#991b1b;font-size:13px;">' +
             '<strong>⚠ Credit reissue failed</strong> &mdash; ' + escapeHtml(result.creditResult.reason || 'unknown reason') +

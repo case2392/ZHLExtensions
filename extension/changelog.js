@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.31.2",
+    headline: "Copy LOP file: stop auto-closing credit-report tabs the user opens manually + CR02 error context",
+    highlights: [
+      "BUG: v1.31.0/.1 was auto-closing EVERY credit-report tab you opened, including manual ones unrelated to the Stage flow. Fixed with an armed-flag gate: the Stage button sets chrome.storage.zhlCreditCaptureArmed right before clicking Hard/Soft, and the credit-report-reader content script only fires if it sees that flag set within the last 60 seconds. Tabs you open manually (typing the URL, clicking a link, anything outside the Stage flow) are now left alone. The flag is consumed on first read so a second tab opened within the same window isn't auto-closed.",
+      "Added context for CoreLogic's CR02 'Reference Number Not Found' error in the summary modal. The reissue API call worked perfectly (right buttons clicked, right ID typed) — but CoreLogic rejects the ref if it expired (refs typically live a few days) or if the borrower's SSN/DOB on the destination doesn't exactly match what was on file for the original pull. The modal now explains that and points to <em>Choose action → Pull credit report</em> as the fallback."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.31.1",
     headline: "Copy LOP file: save before credit reissue + asset/real-estate borrower picker + employment income subtable wait",
     highlights: [
