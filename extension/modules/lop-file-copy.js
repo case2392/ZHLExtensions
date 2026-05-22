@@ -1457,6 +1457,11 @@
     const fillResult = await fillPricingForm(form, stage);
     console.log('[Copy LOP][pricing] form fill result:', fillResult);
 
+    // Step 4.5: dismiss the ZIP autocomplete + date picker
+    // poppers that the form opens during fill. Run pricing
+    // bounces with "Failed to run pricing" when these are open.
+    await dismissPricingFormPoppers(form);
+
     // Step 5: click Run pricing
     const runBtn = Array.from(document.querySelectorAll('button')).find(function (b) {
       return /^run\s*pricing$/i.test((b.textContent || '').trim());
@@ -1570,73 +1575,68 @@
   }
 
   // Look at the right-rail Credit card and return one entry
-  // per borrower with their visible Soft / Hard scores.
-  // Returns e.g. [{name: 'Mark Malone', scores: ['763','739','770']}, ...]
+  // per borrower with their visible Hard (and Soft when pulled)
+  // scores. LOP names each borrower's container with
+  // [data-cy="<Borrower Name>"] and each score grid with
+  // [data-cy="Hard"] / [data-cy="Soft"]; the 3-digit FICO spans
+  // are direct children of those grids. We rely on these
+  // data-cy attributes for a clean targeted read instead of the
+  // earlier text-slicing heuristic (which broke when borrower
+  // names appeared in tooltips or label text elsewhere on the
+  // page).
   function readPerBorrowerCreditScores() {
     const result = [];
-    // Find the "Credit" heading. It's a div with a Heading-styled
-    // h5/h6 whose text is exactly "Credit".
-    const headings = Array.from(document.querySelectorAll('h5, h6, h4, h3'));
-    const creditHeading = headings.find(function (h) {
-      return /^credit$/i.test((h.textContent || '').replace(/\s+/g, ' ').trim());
-    });
-    if (!creditHeading) return result;
-    // Walk up to a container that holds the borrower rows.
-    let card = creditHeading.parentElement;
-    for (let i = 0; i < 8 && card; i++) {
-      // Look for any descendant with text matching one of our
-      // borrower names — if we find at least one, this is the
-      // right card.
-      const looksRight = card.textContent && /soft|hard/i.test(card.textContent);
-      if (looksRight && card.querySelectorAll('div').length > 4) break;
-      card = card.parentElement;
-    }
-    if (!card) return result;
-    // Within the card, every borrower's section is a sub-block
-    // that starts with their name. Use the destination's known
-    // borrower names to anchor.
     const expected = expectedBorrowerNamesForCredit();
     expected.forEach(function (name) {
-      // Find an element inside the card whose text starts with
-      // the borrower's name AND is followed by Soft/Hard rows.
-      const all = Array.from(card.querySelectorAll('*'));
-      const anchor = all.find(function (n) {
-        // Only consider leaf-ish text nodes
-        if (n.children.length > 1) return false;
-        const t = (n.textContent || '').replace(/\s+/g, ' ').trim();
-        return t === name;
-      });
-      if (!anchor) {
-        result.push({ name: name, scores: [] });
+      // Primary: data-cy="<Borrower Name>" container
+      let container = document.querySelector('[data-cy="' + cssEscape(name) + '"]');
+      if (!container) {
+        // Fallback: case-insensitive scan of [data-cy] attributes
+        const all = document.querySelectorAll('[data-cy]');
+        const target = name.toLowerCase();
+        for (const el of all) {
+          if ((el.getAttribute('data-cy') || '').toLowerCase() === target) {
+            container = el; break;
+          }
+        }
+      }
+      if (!container) {
+        result.push({ name: name, scores: [], hard: [], soft: [] });
         return;
       }
-      // Look at the next ~12 siblings/descendants for 3-digit
-      // numbers that are plausible FICO (300-850).
-      const scores = [];
-      let scanRoot = anchor.parentElement || anchor;
-      // Walk up to a slightly bigger container to capture the
-      // Soft/Hard sub-rows that sit AFTER the name line.
-      for (let i = 0; i < 3 && scanRoot.parentElement; i++) {
-        scanRoot = scanRoot.parentElement;
+      function readGrid(typeCy) {
+        const grid = container.querySelector('[data-cy="' + typeCy + '"]');
+        if (!grid) return [];
+        // The grid has a "Hard"/"Soft" label cell then three score
+        // spans. Pull all 3-digit FICO-shaped strings from direct
+        // descendants — skip dashes ("-") that show before a pull.
+        const spans = grid.querySelectorAll('span');
+        const out = [];
+        spans.forEach(function (sp) {
+          const t = (sp.textContent || '').replace(/\s+/g, '').trim();
+          if (/^[3-8]\d{2}$/.test(t)) out.push(t);
+        });
+        return out;
       }
-      const txt = (scanRoot.textContent || '').replace(/\s+/g, ' ');
-      // Pull the slice that starts AT the borrower's name so we
-      // don't count the prior borrower's scores.
-      const slice = txt.slice(txt.indexOf(name));
-      // Stop the slice at the next borrower's name (if any) to
-      // avoid double-counting.
-      let stop = slice.length;
-      expected.forEach(function (other) {
-        if (other === name) return;
-        const i = slice.indexOf(other, name.length);
-        if (i !== -1 && i < stop) stop = i;
+      const hard = readGrid('Hard');
+      const soft = readGrid('Soft');
+      result.push({
+        name: name,
+        scores: hard.concat(soft),
+        hard: hard,
+        soft: soft
       });
-      const localSlice = slice.slice(0, stop);
-      const nums = localSlice.match(/\b([3-8]\d{2})\b/g) || [];
-      nums.forEach(function (n) { scores.push(n); });
-      result.push({ name: name, scores: scores });
     });
     return result;
+  }
+
+  function cssEscape(s) {
+    // Minimal CSS attribute-selector escape for borrower names.
+    // Borrower names can contain ', " or other special chars.
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+      return window.CSS.escape(s);
+    }
+    return String(s).replace(/(["'\\])/g, '\\$1');
   }
 
   async function navigateToPricingTab() {
@@ -1769,6 +1769,53 @@
     if (s == null) return '';
     const m = String(s).match(/(\d{5})/);
     return m ? m[1] : '';
+  }
+
+  // After writing into LOP's pricing form, the ZIP combobox
+  // shows a Google-Places-style autocomplete popper and the
+  // est-closing-date input opens a calendar popper. Both sit on
+  // top of the form and cause Run pricing to bounce with
+  // "Failed to run pricing. Please check the form for errors
+  // and try again." (the popper intercepts the form's submit
+  // validation). Close them with Escape + blur + a body click
+  // before clicking Run pricing.
+  async function dismissPricingFormPoppers(form) {
+    console.group('[Copy LOP][pricing] dismissPricingFormPoppers');
+    const targets = [];
+    const zipInput = form.querySelector('input[name="propertyZIP"]');
+    const dateInput = form.querySelector('input[name="estClosingDate"]');
+    if (zipInput) targets.push({ el: zipInput, name: 'propertyZIP' });
+    if (dateInput) targets.push({ el: dateInput, name: 'estClosingDate' });
+    for (const t of targets) {
+      try {
+        console.log('Dismissing popper on', t.name);
+        t.el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        t.el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true, cancelable: true }));
+        await wait(80);
+        try { t.el.blur(); } catch (_) {}
+        await wait(80);
+      } catch (e) {
+        console.warn('Popper dismiss threw for', t.name, e);
+      }
+    }
+    // One final body-click catches any other open portaled
+    // popper (custom dropdowns, tooltips, etc.) — but only
+    // outside the form so it doesn't accidentally close fields
+    // mid-update. Click an empty area of the eligibility panel
+    // (the right rail), or fall back to the document body.
+    try {
+      const safe = document.querySelector('[class*="Eligibility"]') ||
+                   document.querySelector('h1, h2') ||
+                   document.body;
+      if (safe && safe !== form && !form.contains(safe)) {
+        console.log('Body-click on neutral area:', safe.tagName);
+        clickWithMouseEvents(safe);
+      }
+    } catch (e) {
+      console.warn('Body-click for popper dismiss threw', e);
+    }
+    await wait(150);
+    console.groupEnd();
   }
   function parseLockDays(s) {
     if (!s) return '';

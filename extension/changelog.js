@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.36.2",
+    headline: "Copy LOP file BUG FIXES: per-borrower credit detect now reads LOP's data-cy grids + popper dismiss before Run pricing.",
+    highlights: [
+      "BUG: waitForCreditToLand was finding the borrower NAMES (entries with scores: []) but failing to read the actual scores because the text-slicing heuristic walked up too far in the DOM and the slice ran into other UI text. Rewrote to use LOP's stable data-cy attributes directly: each borrower's container is [data-cy=\"<Borrower Name>\"] with [data-cy=\"Hard\"] and [data-cy=\"Soft\"] sub-grids whose 3-digit score spans are direct children. Now returns separate hard / soft arrays per borrower so the polling log shows what was actually read.",
+      "BUG: Run pricing was still bouncing with 'Failed to run pricing. Please check the form for errors and try again.' because the ZIP combobox's Google-Places autocomplete popper and the est-closing-date calendar popper were still open over the form when we clicked Run pricing. Added dismissPricingFormPoppers() that fires Escape + blur on each, then clicks a neutral area outside the form to close any remaining portaled poppers. Runs after fillPricingForm and before the Run pricing click."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.36.1",
     headline: "Copy LOP file BUG FIXES: pricing ZIP gets stripped to 5 digits + credit wait now requires a score for every borrower.",
     highlights: [
