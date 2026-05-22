@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.7",
+    headline: "Bulk-download Save As dialog — actually fixed this time via onDeterminingFilename + conflictAction override.",
+    highlights: [
+      "v1.37.6 diagnostics revealed the real problem: when Chrome's 'Ask where to save each file before downloading' preference is enabled, chrome.downloads.download({ saveAs: false }) DOES NOT bypass it — saveAs:false only respects the preference, doesn't override. And the DNR Content-Disposition strip rule we added in v1.37.5 doesn't apply to extension-initiated download requests (it only applies to page fetches), so Chrome's download manager still sees Content-Disposition: attachment on our request and triggers the dialog.",
+      "The fix: track every bulk-download id we initiate, and in the downloads.onDeterminingFilename listener call suggest({ filename, conflictAction: 'uniquify' }) for those ids. Passing conflictAction explicitly there bypasses the user's prompt-each-time preference (this is documented Chrome behavior — conflictAction in suggest() takes precedence). Side benefit: our filename parameter is now respected even when the server returns a different Content-Disposition filename."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.6",
     headline: "Bulk-download diagnostics + DNR rule fixes — open the service worker console (chrome://extensions → Inspect views: service worker) and re-run to see what's happening.",
     highlights: [

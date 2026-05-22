@@ -114,14 +114,19 @@ async function armDispositionStripping() {
 disableDispositionStripping();
 
 // -------------------------------------------------------------------------
-// DIAGNOSTIC: log every download Chrome creates so we can see what the
-// viewer's native download is doing during a bulk-download run. Open the
-// service worker console (chrome://extensions → Inspect views: service
-// worker) to see these.
+// Track our bulk-download downloads so onDeterminingFilename can override
+// Chrome's default filename + conflictAction. This is the critical fix:
+// passing { filename, conflictAction } to suggest() bypasses Chrome's
+// "Ask where to save each file before downloading" preference — which
+// chrome.downloads.download({ saveAs:false }) alone does NOT bypass when
+// the response carries Content-Disposition (Chrome ignores our DNR
+// modifyHeaders rule for extension-initiated download requests).
 // -------------------------------------------------------------------------
+const _bulkDownloadIds = new Map(); // downloadId → { filename }
+
 try {
   chrome.downloads.onCreated.addListener((item) => {
-    console.log("[ZHL Bulk DL][diag] downloads.onCreated:", {
+    console.log("[ZHL Bulk DL][diag] downloads.onCreated:", JSON.stringify({
       id: item.id,
       url: (item.url || "").slice(0, 200),
       finalUrl: (item.finalUrl || "").slice(0, 200),
@@ -131,19 +136,30 @@ try {
       byExtensionId: item.byExtensionId,
       state: item.state,
       danger: item.danger,
-      startTime: item.startTime
-    });
+      paused: item.paused,
+      canResume: item.canResume,
+      totalBytes: item.totalBytes
+    }));
   });
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-    console.log("[ZHL Bulk DL][diag] downloads.onDeterminingFilename:", {
+    const ours = _bulkDownloadIds.get(item.id);
+    console.log("[ZHL Bulk DL][diag] downloads.onDeterminingFilename:", JSON.stringify({
       id: item.id,
-      url: (item.url || "").slice(0, 200),
-      filename: item.filename,
+      isOurs: !!ours,
+      ourFilename: ours && ours.filename,
+      chromeFilename: item.filename,
       mime: item.mime,
-      referrer: (item.referrer || "").slice(0, 200),
       byExtensionId: item.byExtensionId
-    });
-    suggest(); // accept Chrome's default
+    }));
+    if (ours) {
+      // CRITICAL: passing conflictAction here bypasses the "Ask where to
+      // save" user preference. With just suggest({filename}) Chrome still
+      // shows Save As when the user has the prompt-each-time pref enabled.
+      _bulkDownloadIds.delete(item.id);
+      suggest({ filename: ours.filename, conflictAction: "uniquify" });
+    } else {
+      suggest(); // accept Chrome's default for non-bulk downloads
+    }
   });
 } catch (e) {
   console.warn("[ZHL Bulk DL][diag] could not attach download listeners:", e);
@@ -944,6 +960,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         console.warn("[ZHL Bulk DL] URL download failed:", chrome.runtime.lastError.message);
         sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
       } else {
+        // Register so onDeterminingFilename can override the prompt + filename.
+        _bulkDownloadIds.set(downloadId, { filename: filename });
         console.log("[ZHL Bulk DL] URL download started, id:", downloadId, "file:", filename);
         sendResponse({ ok: true, downloadId: downloadId });
       }
@@ -968,6 +986,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         console.warn("[ZHL Bulk DL] data URL download failed:", chrome.runtime.lastError.message);
         sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
       } else {
+        _bulkDownloadIds.set(downloadId, { filename: filename });
         console.log("[ZHL Bulk DL] data URL download started, id:", downloadId, "file:", filename);
         sendResponse({ ok: true, downloadId: downloadId });
       }
