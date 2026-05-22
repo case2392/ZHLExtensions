@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.32.0",
+    headline: "Copy LOP file: one click handles EVERY borrower (per-borrower tables + soft credit pull + pre-credit verification)",
+    highlights: [
+      "Per-borrower tables now copy correctly. Bug: when a pair had a co-borrower, the scraper was only reading the Primary's Addresses/Employment/Other-income tables (the co-borrower's tables sit inside their own data-cy=\"address-section-1\" / employments-section-1 / other-incomes-section-1 containers). Each captured row is now tagged with its borrower index, and paste drives the matching borrower section's Add button. One Stage click captures every borrower, one Paste click writes every borrower.",
+      "Soft credit gets a fresh pull instead of trying to reissue. Bug from v1.31.1's run: CoreLogic rejects reissue for soft credit (CR02 Reference Number Not Found). Fix: stage now branches on pull type — if source had a Hard pull we capture the reference ID and reissue on paste; if source had Soft we just remember the type and on paste drive Choose action → Pull credit report → click Pull credit (which defaults to Soft). No ref ID modal during stage for soft pulls — saves a click.",
+      "Pre-credit verification check. Credit won't fire until every borrower in the source's personal-info-sections has matching first / last / DOB / SSN populated on the destination AND has at least one address row in their address-section. Specific issues are reported per borrower so you know exactly what's missing (e.g. \"Sarah Malone: ssn not populated on destination; no address added\"). The credit click is skipped (not failed) when borrowers aren't ready."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.31.2",
     headline: "Copy LOP file: stop auto-closing credit-report tabs the user opens manually + CR02 error context",
     highlights: [

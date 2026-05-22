@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.32.0": "Copy LOP file: ONE click covers every borrower — per-borrower tables, soft credit gets fresh pull, pre-credit verify.",
     "1.31.2": "Copy LOP file BUG FIX: credit-report tabs you open manually are no longer auto-closed + CR02 error context added.",
     "1.31.1": "Copy LOP file: save before credit reissue + asset borrower picker now drives the combobox + employment income subtable wait.",
     "1.31.0": "Copy LOP file: NEW auto-reads CoreLogic ref ID + auto-adds rows for Addresses, Employment, Income, Assets, Gifts, Real Estate.",

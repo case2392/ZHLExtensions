@@ -259,39 +259,52 @@
   // on the destination loan, so copying them over would create
   // duplicates.
   //
-  // Each entry: aria-label of the table + array of column headers
-  // we want to capture (matched to th text). Rows where every
-  // column we asked for is empty are dropped (totals/footers).
+  // perBorrower: when true, the table is rendered once per
+  // borrower (Addresses, Employment, Other income each live inside
+  // their own data-cy="<sectionType>-<borrowerIdx>" container).
+  // The scraper iterates each instance and tags rows with their
+  // borrower index so paste can drive the matching Add button.
+  // When false, there's a single table for the whole pair
+  // (Assets, Gifts, Real estate all share the borrower column).
   const TABLE_SCHEMAS = {
     addresses: {
       ariaLabel: 'Table for addresses',
       friendly: 'addresses',
-      columns: ['Type', 'Address', 'Housing', 'Move in', 'Move out', 'Rent / mo']
+      columns: ['Type', 'Address', 'Housing', 'Move in', 'Move out', 'Rent / mo'],
+      perBorrower: true,
+      sectionType: 'address-section'
     },
     employments: {
       ariaLabel: 'Table for employments',
       friendly: 'employments',
-      columns: ['Type', 'Employer', 'Start Date', 'End Date', 'Income / yr', 'Income / mo', 'Source']
+      columns: ['Type', 'Employer', 'Start Date', 'End Date', 'Income / yr', 'Income / mo', 'Source'],
+      perBorrower: true,
+      sectionType: 'employments-section'
     },
     otherIncomes: {
       ariaLabel: 'Table for other incomes',
       friendly: 'other-income entries',
-      columns: ['Income source', 'Other description', 'End Date', 'Frequency', 'Income / yr', 'Income / mo', 'Source']
+      columns: ['Income source', 'Other description', 'End Date', 'Frequency', 'Income / yr', 'Income / mo', 'Source'],
+      perBorrower: true,
+      sectionType: 'other-incomes-section'
     },
     assets: {
       ariaLabel: 'Table for assets or credits',
       friendly: 'assets / credits',
-      columns: ['Borrower(s)', 'Type', 'Financial institution', 'Account No. / Nickname', 'Amount', 'Source']
+      columns: ['Borrower(s)', 'Type', 'Financial institution', 'Account No. / Nickname', 'Amount', 'Source'],
+      perBorrower: false
     },
     gifts: {
       ariaLabel: 'Table for gifts or grants',
       friendly: 'gifts or grants',
-      columns: ['Borrower', 'Type', 'Source', 'Other description', 'Amount']
+      columns: ['Borrower', 'Type', 'Source', 'Other description', 'Amount'],
+      perBorrower: false
     },
     realEstate: {
       ariaLabel: 'Table for real estates',
       friendly: 'real-estate records',
-      columns: ['Borrower(s)', 'Address', 'Mortgage / HELOC', 'Status', 'Intended', 'Property value', 'Net rental income']
+      columns: ['Borrower(s)', 'Address', 'Mortgage / HELOC', 'Status', 'Intended', 'Property value', 'Net rental income'],
+      perBorrower: false
     }
   };
 
@@ -338,16 +351,60 @@
     return rows;
   }
 
+  // For per-borrower tables, walk each data-cy="<sectionType>-N"
+  // container and capture that section's table, tagging every
+  // captured row with its borrower index (__borrowerIndex). Paste
+  // uses that to drive the right Add button. For shared tables
+  // (assets, gifts, real estate), there's one global table and
+  // rows carry the borrower column inline.
   function readTableData(root) {
     root = root || document;
     const out = {};
     Object.keys(TABLE_SCHEMAS).forEach(function (key) {
       const schema = TABLE_SCHEMAS[key];
-      const t = root.querySelector('table[aria-label="' + schema.ariaLabel + '"]');
-      if (!t) return;
-      out[key] = readTableRows(t, schema.columns);
+      const allRows = [];
+      if (schema.perBorrower) {
+        const sections = root.querySelectorAll('[data-cy^="' + schema.sectionType + '-"]');
+        sections.forEach(function (sec) {
+          const cy = sec.getAttribute('data-cy') || '';
+          // Extract the trailing index — "address-section-0" → "0"
+          const idx = cy.substring(schema.sectionType.length + 1);
+          const table = sec.querySelector('table[aria-label="' + schema.ariaLabel + '"]');
+          if (!table) return;
+          const rows = readTableRows(table, schema.columns);
+          rows.forEach(function (r) { r.__borrowerIndex = idx; });
+          allRows.push.apply(allRows, rows);
+        });
+      } else {
+        // Shared table — read all instances at document level. In
+        // practice there should be exactly one, but iterate to be
+        // safe against future LOP layout changes.
+        const tables = root.querySelectorAll('table[aria-label="' + schema.ariaLabel + '"]');
+        tables.forEach(function (table) {
+          const rows = readTableRows(table, schema.columns);
+          allRows.push.apply(allRows, rows);
+        });
+      }
+      out[key] = allRows;
     });
     return out;
+  }
+
+  // Resolve the right table on the destination for a given staged
+  // row. For per-borrower tables, scope to the matching
+  // address-section-N / employments-section-N / other-incomes-section-N.
+  // For shared tables, fall back to the document-level query.
+  function findScopedTable(schemaKey, borrowerIdx) {
+    const schema = TABLE_SCHEMAS[schemaKey];
+    if (!schema) return null;
+    if (schema.perBorrower && borrowerIdx != null) {
+      const section = document.querySelector('[data-cy="' + schema.sectionType + '-' + borrowerIdx + '"]');
+      if (section) {
+        const t = section.querySelector('table[aria-label="' + schema.ariaLabel + '"]');
+        if (t) return t;
+      }
+    }
+    return document.querySelector('table[aria-label="' + schema.ariaLabel + '"]');
   }
 
   // ---- Stage --------------------------------------------------
@@ -629,10 +686,12 @@
 
   // Paste side: drive Choose action → Reissue credit report →
   // fill reference ID → click Reissue. Returns { ok, reason }.
-  async function runCreditReissue(refId) {
+  // Used for HARD credit pulls — reissue replays an existing
+  // CoreLogic report by reference ID.
+  async function runHardReissue(refId) {
     if (!refId) return { ok: false, reason: 'No reference ID was staged.' };
     try {
-      console.log('[Copy LOP] Step 1: looking for [data-cy="credit-actions-buttons"]');
+      console.log('[Copy LOP] Hard reissue Step 1: looking for [data-cy="credit-actions-buttons"]');
       const actionBtn = document.querySelector('[data-cy="credit-actions-buttons"]');
       if (!actionBtn) return { ok: false, reason: 'Choose action button not found on the right rail.' };
       console.log('[Copy LOP] Step 1: clicking Choose action', actionBtn);
@@ -659,11 +718,126 @@
       if (!reissueBtn) return { ok: false, reason: 'Reissue button not found in the dialog.' };
       console.log('[Copy LOP] Step 4: clicking Reissue');
       reissueBtn.click();
-      return { ok: true, refId: refId };
+      return { ok: true, action: 'hard-reissue', refId: refId };
     } catch (e) {
-      console.error('[Copy LOP] runCreditReissue threw:', e);
+      console.error('[Copy LOP] runHardReissue threw:', e);
       return { ok: false, reason: String(e && e.message || e) };
     }
+  }
+
+  // Paste side: drive Choose action → Pull credit report →
+  // click Pull credit. Used for SOFT pulls — reissue doesn't work
+  // for soft credit (CoreLogic rejects with CR02), so we do a
+  // fresh pull. The Pull-type select in the dialog defaults to
+  // Soft so we don't need to touch it.
+  async function runSoftPull() {
+    try {
+      console.log('[Copy LOP] Soft pull Step 1: looking for [data-cy="credit-actions-buttons"]');
+      const actionBtn = document.querySelector('[data-cy="credit-actions-buttons"]');
+      if (!actionBtn) return { ok: false, reason: 'Choose action button not found on the right rail.' };
+      console.log('[Copy LOP] Soft pull Step 1: clicking Choose action', actionBtn);
+      actionBtn.click();
+      await new Promise(function (r) { setTimeout(r, 200); });
+
+      console.log('[Copy LOP] Soft pull Step 2: looking for [data-cy="pull-credit-button"]');
+      const pullItem = document.querySelector('[data-cy="pull-credit-button"]');
+      if (!pullItem) return { ok: false, reason: '"Pull credit report" menu item not found.' };
+      console.log('[Copy LOP] Soft pull Step 2: clicking Pull credit report', pullItem);
+      pullItem.click();
+      await new Promise(function (r) { setTimeout(r, 400); });
+
+      // The Pull credit dialog opens with Pull type defaulted to
+      // Soft and the borrower pair pre-selected. We trust the
+      // default and just click the Pull credit submit button.
+      console.log('[Copy LOP] Soft pull Step 3: looking for [data-cy="run-credit"] (Pull credit button)');
+      const runBtn = document.querySelector('[data-cy="run-credit"]');
+      if (!runBtn) return { ok: false, reason: 'Pull credit button not found in the dialog.' };
+      console.log('[Copy LOP] Soft pull Step 3: clicking Pull credit');
+      runBtn.click();
+      return { ok: true, action: 'soft-pull' };
+    } catch (e) {
+      console.error('[Copy LOP] runSoftPull threw:', e);
+      return { ok: false, reason: String(e && e.message || e) };
+    }
+  }
+
+  // Dispatch the appropriate credit action based on what was
+  // captured at stage time.
+  async function runCreditAction(stage) {
+    const pullType = stage.creditPullType;
+    if (pullType === 'Hard' && stage.creditReferenceId) {
+      return runHardReissue(stage.creditReferenceId);
+    }
+    if (pullType === 'Soft') {
+      return runSoftPull();
+    }
+    return { ok: false, reason: 'No credit action staged (need pullType=Hard with refId, or pullType=Soft).' };
+  }
+
+  // Confirm every borrower the source had (one section per index)
+  // is ready for credit on the destination:
+  //   - personal-info-section has first / last / DOB / SSN populated
+  //   - address-section has at least one address row
+  // Both are required before LOP will let the credit pull run
+  // (CoreLogic needs every applicant identified with an address).
+  // Returns a per-borrower issue list so the summary surfaces
+  // specifics.
+  function verifyReadyForCredit(stage) {
+    // Group source field values by personal-info-section index so
+    // we know which borrowers the source had AND can label them
+    // by name in the issue list.
+    const srcSections = {};
+    (stage.fields || []).forEach(function (rec) {
+      if (!rec.scope || rec.scope.type !== 'personal-info-section') return;
+      const k = rec.scope.index;
+      if (!srcSections[k]) srcSections[k] = {};
+      srcSections[k][rec.name] = rec.value;
+    });
+    const issues = [];
+    const requiredPersonal = ['first', 'last', 'dob', 'ssn'];
+    Object.keys(srcSections).sort().forEach(function (idx) {
+      const src = srcSections[idx];
+      const borrowerName = ((src.first || '') + ' ' + (src.last || '')).trim() ||
+                           ('Borrower ' + (parseInt(idx, 10) + 1));
+
+      // 1. Personal-info section
+      const destSec = document.querySelector('[data-cy="personal-info-section-' + idx + '"]');
+      if (!destSec) {
+        issues.push(borrowerName + ': section missing on destination (add the borrower first)');
+        return;  // can't check addresses either if the section is missing
+      }
+      requiredPersonal.forEach(function (field) {
+        const srcVal = (src[field] || '').trim();
+        if (!srcVal) return;  // source didn't have it — nothing to copy
+        const destInput = destSec.querySelector('input[name="' + field + '"]');
+        const destVal = destInput ? (destInput.value || '').trim() : '';
+        if (!destVal) {
+          issues.push(borrowerName + ': ' + field + ' not populated on destination');
+        }
+      });
+
+      // 2. Address section — needs at least one address row.
+      // The address-section-N container holds the addresses table;
+      // we count real data rows (not the placeholder or the
+      // inline edit form).
+      const addrSec = document.querySelector('[data-cy="address-section-' + idx + '"]');
+      if (!addrSec) {
+        issues.push(borrowerName + ': no address section on destination');
+      } else {
+        const tbody = addrSec.querySelector('table[aria-label="Table for addresses"] tbody');
+        const dataRows = tbody ? Array.from(tbody.querySelectorAll('tr')).filter(function (tr) {
+          if (tr.getAttribute('data-cy') === 'add-entity-container') return false;
+          const tds = tr.querySelectorAll('td');
+          if (tds.length <= 1) return false;
+          const txt = (tr.textContent || '').replace(/\s+/g, '').trim();
+          return !!txt;
+        }) : [];
+        if (!dataRows.length) {
+          issues.push(borrowerName + ': no address added (credit needs at least one)');
+        }
+      }
+    });
+    return { ok: issues.length === 0, issues: issues };
   }
 
   function loadStages() {
@@ -992,7 +1166,7 @@
   // --- Per-table drivers ---
 
   async function pasteAddressRow(row) {
-    const table = findTable('Table for addresses');
+    const table = findScopedTable('addresses', row.__borrowerIndex);
     if (!table) return { ok: false, reason: 'table not found' };
     const addBtn = findAddButtonForTable(table);
     if (!addBtn) return { ok: false, reason: 'Add button not found' };
@@ -1043,7 +1217,7 @@
   }
 
   async function pasteOtherIncomeRow(row) {
-    const table = findTable('Table for other incomes');
+    const table = findScopedTable('otherIncomes', row.__borrowerIndex);
     if (!table) return { ok: false, reason: 'table not found' };
     const addBtn = findAddButtonForTable(table);
     if (!addBtn || addBtn.disabled) return { ok: false, reason: 'Add button not available' };
@@ -1106,7 +1280,7 @@
   }
 
   async function pasteEmploymentRow(row) {
-    const table = findTable('Table for employments');
+    const table = findScopedTable('employments', row.__borrowerIndex);
     if (!table) return { ok: false, reason: 'table not found' };
     const addBtn = findAddButtonForTable(table);
     if (!addBtn || addBtn.disabled) return { ok: false, reason: 'Add button not available' };
@@ -1476,19 +1650,35 @@
     }
 
     let creditResult = null;
-    if (stage.creditReferenceId) {
-      console.group('[Copy LOP] Credit reissue');
-      console.log('Reference ID:', stage.creditReferenceId, '(pull type:', stage.creditPullType || '?', ')');
-      updateProgress(
-        'Reissuing credit…',
-        'Opening Choose action → Reissue credit report, filling reference ID ' + stage.creditReferenceId + ', and clicking Reissue.'
-      );
-      await new Promise(function (r) { setTimeout(r, 600); });
-      creditResult = await runCreditReissue(stage.creditReferenceId);
+    if (stage.creditPullType) {
+      console.group('[Copy LOP] Credit action: ' + stage.creditPullType);
+      // Verify every borrower in the source's personal-info-sections
+      // has matching first/last/DOB/SSN on the destination —
+      // running credit before all borrowers are populated fails
+      // (CoreLogic needs every applicant identified).
+      const verify = verifyReadyForCredit(stage);
+      if (!verify.ok) {
+        console.warn('[Copy LOP] Skipping credit — borrowers not fully ready:', verify.issues);
+        creditResult = {
+          ok: false,
+          reason: 'Skipped — borrower info incomplete: ' + verify.issues.join('; ') +
+                  '. Finish each borrower\'s required fields then run credit manually.'
+        };
+      } else {
+        const actionLabel = stage.creditPullType === 'Hard'
+          ? 'Reissuing hard credit…'
+          : 'Pulling soft credit…';
+        const actionDesc = stage.creditPullType === 'Hard'
+          ? 'Opening Choose action → Reissue credit report, filling reference ID ' + (stage.creditReferenceId || '?') + ', and clicking Reissue.'
+          : 'Opening Choose action → Pull credit report, leaving Pull type as default (Soft), and clicking Pull credit.';
+        updateProgress(actionLabel, actionDesc);
+        await new Promise(function (r) { setTimeout(r, 600); });
+        creditResult = await runCreditAction(stage);
+      }
       console.log('Result:', creditResult);
       console.groupEnd();
     } else {
-      console.log('[Copy LOP] No credit reference staged — skipping reissue.');
+      console.log('[Copy LOP] No credit action staged — skipping.');
     }
 
     hideProgress();
@@ -1726,11 +1916,24 @@
     const creditBtn = findCreditButton();
     console.log('[Copy LOP] Credit button detection:', creditBtn ? creditBtn.type + ' (clickable)' : 'none clickable');
     if (creditBtn) {
-      const captured = await captureCreditReferenceFromUser(creditBtn);
-      console.log('[Copy LOP] Credit capture result:', captured);
-      if (captured && captured.refId) {
-        stage.creditReferenceId = captured.refId;
-        stage.creditPullType = captured.pullType;
+      if (creditBtn.type === 'Hard') {
+        // Hard pull → open the report, capture the reference ID
+        // for a Reissue on the destination.
+        const captured = await captureCreditReferenceFromUser(creditBtn);
+        console.log('[Copy LOP] Credit capture result:', captured);
+        if (captured && captured.refId) {
+          stage.creditReferenceId = captured.refId;
+          stage.creditPullType = 'Hard';
+        }
+      } else if (creditBtn.type === 'Soft') {
+        // Soft pull → no reference ID needed (Reissue doesn't
+        // work for soft credit; CoreLogic rejects with CR02).
+        // We just remember the pull type and on paste we'll do
+        // a fresh soft pull via Choose action → Pull credit
+        // report (which defaults to Soft).
+        stage.creditPullType = 'Soft';
+        stage.creditReferenceId = null;
+        console.log('[Copy LOP] Soft pull detected — will do fresh soft pull on paste (no ref ID needed).');
       }
     }
     showProgress('Saving staged data…', 'Writing the captured fields + table rows to local storage.');
