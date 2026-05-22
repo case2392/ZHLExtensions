@@ -511,27 +511,56 @@
     return out;
   }
 
-  // Source-side: open each liability row's edit form to grab the
-  // form-only fields (Property linkage, Payoff, Exclude + Reason)
-  // that aren't visible in the liabilities table. These get
-  // re-applied on the destination AFTER the credit pull populates
-  // the dest liabilities. Match by accountIdentifier.
+  // Read the E (Exclude) / P (Payoff) tags that LOP shows
+  // inline next to the Company/Payee cell in the liabilities
+  // table. Lets us skip opening rows that don't carry any
+  // editable state (most non-mortgage liabilities).
+  function readLiabilityRowTags(row) {
+    const tds = row.querySelectorAll('td');
+    const companyCell = tds[3];
+    const out = { exclude: false, payoff: false };
+    if (!companyCell) return out;
+    companyCell.querySelectorAll('button').forEach(function (btn) {
+      const t = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t === 'E') out.exclude = true;
+      else if (t === 'P') out.payoff = true;
+    });
+    return out;
+  }
+
+  // Source-side: open each liability row's edit form ONLY when
+  // the row carries something we need to copy — an "E" / "P" tag
+  // (Exclude / Payoff state) or a Mortgage / HELOC account type
+  // (likely linked to a Real Estate property). Non-mortgage rows
+  // with no tags are skipped to keep stage fast; they have
+  // nothing for us to capture beyond what the credit pull will
+  // already give the destination.
   async function scrapeLiabilitiesFromSource() {
     const table = document.querySelector('table[aria-label="Table for liabilities"]');
     if (!table) return [];
     const tbody = table.querySelector('tbody');
     if (!tbody) return [];
-    const rows = Array.from(tbody.children).filter(function (tr) {
+    const allRows = Array.from(tbody.children).filter(function (tr) {
       const tds = tr.querySelectorAll('td');
       if (tds.length <= 1) return false;
       if (tr.getAttribute('data-cy') === 'add-entity-container') return false;
-      // Account # is column 4 (0=icon, 1=borrower, 2=type, 3=company, 4=acct#)
       const acctText = tds[4] ? (tds[4].textContent || '').trim() : '';
       return !!acctText;
     });
+    // Filter to rows that actually have something to capture.
+    const targetRows = allRows.filter(function (tr) {
+      const tds = tr.querySelectorAll('td');
+      const accountType = tds[2] ? (tds[2].textContent || '').trim().toLowerCase() : '';
+      if (/mortgage|heloc|home\s*equity/.test(accountType)) return true;
+      const tags = readLiabilityRowTags(tr);
+      return tags.exclude || tags.payoff;
+    });
+    console.log('[Copy LOP][liabilities] ' + allRows.length + ' total rows, ' +
+      targetRows.length + ' need opening (others have no E/P tag and aren\'t mortgages).');
     const out = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    for (let i = 0; i < targetRows.length; i++) {
+      const row = targetRows[i];
+      const visibleTags = readLiabilityRowTags(row);
       const captured = await expandRowAndReadForm(row,
         'input[name="creditor"], input[name="accountIdentifier"]',
         function (formRoot) {
@@ -562,7 +591,21 @@
             realEstateAddress: realEstateAddress
           };
         });
-      if (captured) out.push(captured);
+      if (captured) {
+        // Sanity-check: the table's E/P tags should agree with
+        // what the form said. Log a warning if they don't (could
+        // mean the row's tag rendering changed or the form open
+        // captured stale state).
+        if (visibleTags.exclude !== captured.exclude) {
+          console.warn('[Copy LOP][liability] exclude mismatch for', captured.accountIdentifier,
+            '— tag says', visibleTags.exclude, 'form says', captured.exclude);
+        }
+        if (visibleTags.payoff !== captured.payoff) {
+          console.warn('[Copy LOP][liability] payoff mismatch for', captured.accountIdentifier,
+            '— tag says', visibleTags.payoff, 'form says', captured.payoff);
+        }
+        out.push(captured);
+      }
     }
     return out;
   }

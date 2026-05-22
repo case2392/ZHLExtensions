@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.33.1",
+    headline: "Copy LOP file: liability stage skips rows with no E/P tag and no mortgage type — much faster on big files",
+    highlights: [
+      "Stage now reads LOP's inline E (Exclude) and P (Payoff) tags from the Company/Payee column and only opens rows that actually need opening: Mortgages and HELOCs (likely tied to a Real Estate Property) plus anything with an E or P tag. A file with 10 plain credit cards no longer opens 10 forms on stage; it opens only what carries editable state.",
+      "Added sanity-check logs that warn if the row's visible E/P tags disagree with what the form returned for payoff / exclude (could flag a future LOP DOM change before it breaks anything)."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.33.0",
     headline: "Copy LOP file: source-side form scrape for Real Estate + Liabilities, with auto-applied Property/Payoff/Exclude on the destination",
     highlights: [

@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.33.1": "Copy LOP file: liability stage only opens rows that need it — much faster on files with lots of credit cards.",
     "1.33.0": "Copy LOP file: NEW source-side form scrape for Real Estate + Liabilities — Property type / Payoff / Exclude+Reason / Property link all copy automatically.",
     "1.32.1": "Copy LOP file: real-estate financial-status defaults to With liabilities when source has a mortgage + clearer failure reason.",
     "1.32.0": "Copy LOP file: ONE click covers every borrower — per-borrower tables, soft credit gets fresh pull, pre-credit verify.",
