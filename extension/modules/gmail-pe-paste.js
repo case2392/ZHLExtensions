@@ -1,81 +1,122 @@
 // ZHL Productivity Pack — Gmail PE auto-paste
 //
 // Companion to pricing-exception-workflow.js. When the LO clicks
-// "Open in Gmail + copy body" on operator.zillowhomeloans.com, the
-// operator-side handler stashes the formatted HTML email body in
-// chrome.storage.local under zhlPePendingPaste, then opens a new
-// Gmail compose URL. This script runs on the Gmail tab, detects the
-// pending paste (within a 30 s TTL), finds Gmail's contenteditable
-// body element, and replaces its content with the HTML — so the LO
-// sees the nicely-formatted version (table + bold headers + clickable
-// LOP link) without having to manually Ctrl+V.
+// "Open in Gmail" on the operator side, the operator-side handler stashes
+// the formatted HTML email body in chrome.storage.local under
+// zhlPePendingPaste. This script runs on the Gmail tab, sees the pending
+// entry (TTL 30 s), finds Gmail's contenteditable body, and replaces its
+// content with the formatted HTML — so the LO sees the same nicely-
+// formatted version that "Copy body" produces, without having to Ctrl+V.
 //
-// Single-use: storage is cleared before the paste fires so a second
-// Gmail tab can't accidentally pick up the same payload.
+// Single-use: storage is cleared before the paste fires so a second Gmail
+// tab can't accidentally pick up the same payload.
 (function () {
   'use strict';
 
+  console.log('[ZHL PE Auto-paste] loaded on', location.href);
+
   const STORAGE_KEY = 'zhlPePendingPaste';
   const TTL_MS      = 30 * 1000;
+  const POLL_MS     = 100;
+  const POLL_LIMIT  = 100; // ~10 s total polling for the compose body
 
+  // Multiple fallback strategies for finding Gmail's compose body, because
+  // Gmail keeps changing the markup. Returns the first hit, in priority
+  // order:
+  //   1. aria-label including "message body" / "body" / "email body"
+  //   2. Gmail-specific div[g_editable=true] / div.editable[contenteditable]
+  //   3. The largest contenteditable on the page (size threshold prevents
+  //      matching recipient chip inputs / subject line)
   function findComposeBody() {
-    // Gmail's compose body is a div[contenteditable=true] with an
-    // aria-label like "Message Body". Several other contenteditable
-    // fields exist on the page (subject, recipients chip input) — we
-    // pick the one whose aria-label calls out body / message.
     const all = document.querySelectorAll('div[contenteditable="true"]');
+    // 1. aria-label match
     for (const el of all) {
       const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-      if (aria.indexOf('message body') >= 0 || aria === 'body') return el;
-    }
-    // Fallback: any contenteditable inside the compose dialog that is
-    // larger than the recipients/subject inputs.
-    const compose = document.querySelector('div[role="dialog"][aria-label*="ompose" i]');
-    if (compose) {
-      const eds = compose.querySelectorAll('div[contenteditable="true"]');
-      for (const el of eds) {
-        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-        if (aria.indexOf('body') >= 0) return el;
+      if (aria.indexOf('message body') >= 0 ||
+          aria === 'body' ||
+          aria.indexOf('email body') >= 0 ||
+          aria.indexOf('compose body') >= 0) {
+        return el;
       }
     }
-    return null;
+    // 2. Gmail-specific attribute / class
+    const gmailSpecific = document.querySelector(
+      'div[g_editable="true"], div.editable[contenteditable="true"]'
+    );
+    if (gmailSpecific) return gmailSpecific;
+    // 3. Largest contenteditable above a size threshold
+    let largest = null;
+    let largestArea = 0;
+    for (const el of all) {
+      try {
+        const rect = el.getBoundingClientRect();
+        const area = rect.width * rect.height;
+        // Filter out small fields (recipient chip inputs ~30px tall,
+        // subject line ~30px tall). The body is typically 200+ px tall.
+        if (area > 8000 && area > largestArea) {
+          largestArea = area;
+          largest = el;
+        }
+      } catch (_) {}
+    }
+    return largest;
+  }
+
+  function placeCaretAtEnd(el) {
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (_) {}
   }
 
   function pasteIntoCompose(html) {
     let attempts = 0;
+    let pasted = false;
     const interval = setInterval(function () {
       attempts++;
       const target = findComposeBody();
-      if (target) {
+      if (target && !pasted) {
         clearInterval(interval);
+        pasted = true;
         try {
-          target.innerHTML = html;
-          // Notify Gmail's editor so it picks up the change and re-renders
-          // the From/Send button states (otherwise Send might stay disabled).
-          target.dispatchEvent(new InputEvent('input',  { bubbles: true, cancelable: true, inputType: 'insertFromPaste' }));
-          target.dispatchEvent(new Event('change', { bubbles: true }));
           target.focus();
-          // Move the caret to the end so the user can keep typing after
-          // the HTML block if they want to add a personal note.
+          // Select all existing content so insertHTML / innerHTML replaces
+          // the URL-filled plain text body (which Gmail loads from &body=).
           try {
             const range = document.createRange();
             range.selectNodeContents(target);
-            range.collapse(false);
             const sel = window.getSelection();
             sel.removeAllRanges();
             sel.addRange(range);
           } catch (_) {}
-          console.log('[ZHL PE Auto-paste] pasted formatted body into Gmail compose');
+          // Prefer execCommand because some Gmail builds intercept paste
+          // through it and run their sanitizer; falls back to innerHTML.
+          let ok = false;
+          try { ok = document.execCommand('insertHTML', false, html); } catch (_) {}
+          if (!ok) {
+            try { target.innerHTML = html; ok = true; } catch (_) {}
+          }
+          // Notify Gmail's editor so Send button enables and draft saves.
+          try {
+            target.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertFromPaste' }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+          } catch (_) {}
+          placeCaretAtEnd(target);
+          console.log('[ZHL PE Auto-paste] pasted formatted body (attempt ' + attempts + ', via ' + (ok ? 'execCommand/innerHTML' : 'unknown') + ')');
         } catch (e) {
           console.warn('[ZHL PE Auto-paste] paste failed:', e);
         }
         return;
       }
-      if (attempts > 80) { // ~8 s
+      if (attempts > POLL_LIMIT) {
         clearInterval(interval);
-        console.warn('[ZHL PE Auto-paste] Gave up — compose body not found within 8 s.');
+        console.warn('[ZHL PE Auto-paste] gave up — compose body not found within ' + (POLL_LIMIT * POLL_MS / 1000) + ' s. Clipboard fallback still works (Ctrl+V).');
       }
-    }, 100);
+    }, POLL_MS);
   }
 
   function checkAndPaste() {
@@ -86,10 +127,13 @@
         const age = Date.now() - (pending.ts || 0);
         if (age > TTL_MS) {
           try { chrome.storage.local.remove([STORAGE_KEY]); } catch (_) {}
+          console.log('[ZHL PE Auto-paste] pending paste expired (age=' + age + ' ms)');
           return;
         }
-        // Clear first to prevent multi-tab races
+        // Single-use: clear before pasting so concurrent Gmail tabs can't
+        // both pick up the same payload.
         chrome.storage.local.remove([STORAGE_KEY], function () {
+          console.log('[ZHL PE Auto-paste] pending paste found (age=' + age + ' ms), running…');
           pasteIntoCompose(pending.html);
         });
       });
@@ -98,22 +142,17 @@
     }
   }
 
-  function isComposeUrl() {
-    const href = location.href || '';
-    return /[?&]view=cm\b/.test(href) || /[?&]compose=/.test(href);
-  }
+  // No URL gate. Gmail redirects the operator-side URL (strips view=cm,
+  // adds /u/0/, etc.), so gating on view=cm was missing all real PE
+  // submissions. The 30 s TTL + single-use clear keeps this safe.
+  setTimeout(checkAndPaste, 300);
 
-  // On initial load, if this looks like a compose URL, queue the paste.
-  if (isComposeUrl()) {
-    setTimeout(checkAndPaste, 300);
-  }
-
-  // Re-trigger on subsequent URL changes (Gmail SPA navigations).
+  // Re-check on SPA URL changes (e.g. user navigates from inbox to compose).
   let lastUrl = location.href;
   setInterval(function () {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      if (isComposeUrl()) setTimeout(checkAndPaste, 300);
+      setTimeout(checkAndPaste, 300);
     }
   }, 500);
 })();

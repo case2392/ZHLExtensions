@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.40.3",
+    headline: "Pricing Exception Workflow: 'Open in Gmail' auto-paste now actually fires — was being gated on a URL param Gmail strips.",
+    highlights: [
+      "v1.40.1's auto-paste content script only ran on URLs containing view=cm, but when the operator opens https://mail.google.com/mail/?view=cm&fs=1&… Gmail redirects to https://mail.google.com/mail/u/0/?fs=1&… and drops view=cm — so the gate failed and the script never ran. Result: LO saw the plain-text body filled from the URL's &body= param instead of the formatted version. Removed the URL gate entirely; 30 s TTL + single-use storage clear keep the paste safe.",
+      "Broadened the compose-body selector with three fallback strategies: aria-label match → Gmail-specific [g_editable=true] / .editable[contenteditable] → largest contenteditable above an area threshold (filters out recipient/subject inputs). Last strategy survives future markup changes.",
+      "Switched paste to document.execCommand('insertHTML') first (so Gmail's editor sanitizer runs), with innerHTML as fallback. Selection is set to span the existing content so the inserted HTML REPLACES what Gmail loaded from &body=, not appends to it.",
+      "Added console logging at every step for debug visibility — open mail.google.com's devtools console and you'll see '[ZHL PE Auto-paste] pending paste found … pasted formatted body …'."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.40.2",
     headline: "PE Workflow: rate-lock status now in the subject ([LOCKED] / [NOT LOCKED]) and as a colored banner at the top of the email body.",
     highlights: [
