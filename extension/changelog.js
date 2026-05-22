@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.34.2",
+    headline: "Copy LOP file BUG FIX: Real Estate row now saves on the destination — borrower multi-select + source form scrape fixes.",
+    highlights: [
+      "BUG: Real Estate row was failing to save with Property type / Current occupancy / Pending sale date / Intended occupancy / Financial status all blank. Root cause was twofold. First, the source-side form scrape was bailing silently when the LO had a Real Estate row already expanded for inspection — our chevron click TOGGLED it closed and then waitForCondition couldn't find the form. Second, the destination's Borrower(s) multi-select combobox reported success (option was found) but never committed the chip because the option wrapper click didn't toggle the underlying checkbox.",
+      "expandRowAndReadForm now detects a pre-expanded row and reads it in-place without re-clicking (and leaves it open if the LO had it open). Plus the chevron click uses the full mousedown→mouseup→click sequence so React's row-expand handler picks it up.",
+      "New selectMultiBorrowerCombobox helper opens the listbox once, finds each wanted name's row, and clicks the embedded checkbox directly so the chip actually commits. Used by Real Estate Borrower(s).",
+      "Real Estate paste now ALSO sets the Existing address dropdown when the borrower has a saved address that matches the property address — picking that option lets LOP auto-fill the address fields and clears the 'Address is required' validation.",
+      "Source-side scrape lowered its gate from > 1 row to >= 1 actual-content row, added per-row capture logging, and added a fallback select-value reader for readonly source forms where React's value didn't reflect through select.value."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.34.1",
     headline: "Copy LOP file BUG FIX: Add-a-new-borrower dialog detector is now permissive — auto-add co-borrower no longer falsely aborts.",
     highlights: [

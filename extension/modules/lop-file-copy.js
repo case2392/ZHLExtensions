@@ -415,12 +415,29 @@
   // Current occupancy, Property link on liabilities, etc.) that
   // aren't visible in the table cells.
   async function expandRowAndReadForm(row, formFieldSelector, fieldReader) {
-    // Click the chevron in the first td (or the row itself) to
-    // expand. The expanded form lives in the NEXT tr — a single
-    // td with colspan that contains the form fields.
-    const chev = row.querySelector('td:first-child svg');
-    const trigger = chev ? chev.parentElement : row;
-    try { trigger.click(); } catch (_) { try { row.click(); } catch (__) {} }
+    // First: if the row is ALREADY expanded (the LO had it open
+    // for inspection before staging), the form is the next
+    // sibling and we should read it in-place. Clicking the
+    // chevron here would CLOSE it.
+    let alreadyOpen = false;
+    {
+      const next = row.nextElementSibling;
+      if (next) {
+        const tds = next.querySelectorAll('td');
+        if (tds.length === 1 && next.querySelector(formFieldSelector)) {
+          alreadyOpen = true;
+        }
+      }
+    }
+    if (!alreadyOpen) {
+      // Click the chevron in the first td (or the row itself) to
+      // expand. Use full mouse-event sequence so React's onClick
+      // handler picks it up even through styled wrappers.
+      const chev = row.querySelector('td:first-child svg');
+      const trigger = chev ? chev.parentElement : row;
+      try { clickWithMouseEvents(trigger); }
+      catch (_) { try { clickWithMouseEvents(row); } catch (__) {} }
+    }
     // Wait for the form row to appear and to contain the marker
     // input/select that proves the form is mounted.
     const formRoot = await waitForCondition(function () {
@@ -432,25 +449,31 @@
       return next.querySelector(formFieldSelector) ? next : null;
     }, 3000);
     if (!formRoot) {
-      // Couldn't open; bail.
+      console.warn('[Copy LOP] expandRowAndReadForm: form did not open for row',
+        row.querySelector('td:nth-child(4)')?.textContent || row);
       return null;
     }
     // Tiny settle so React hydrates the form's initial values.
     await wait(150);
     let captured = null;
     try { captured = fieldReader(formRoot); } catch (e) { console.warn('[Copy LOP] form read threw', e); }
-    // Collapse the form. Re-clicking the trigger toggles it
-    // shut. Some LOP rows respond better to a Cancel click than
-    // a re-click on the chevron, so try Cancel first.
-    const cancelBtn = Array.from(formRoot.querySelectorAll('button'))
-      .find(function (b) { return (b.textContent || '').trim() === 'Cancel'; });
-    if (cancelBtn) cancelBtn.click();
-    else { try { trigger.click(); } catch (_) {} }
-    await waitForCondition(function () {
-      const next = row.nextElementSibling;
-      return !next || !next.querySelector(formFieldSelector);
-    }, 2000);
-    await wait(120);
+    // Only collapse if we opened it (don't toggle off a row the
+    // user had open).
+    if (!alreadyOpen) {
+      const cancelBtn = Array.from(formRoot.querySelectorAll('button'))
+        .find(function (b) { return (b.textContent || '').trim() === 'Cancel'; });
+      if (cancelBtn) cancelBtn.click();
+      else {
+        const chev = row.querySelector('td:first-child svg');
+        const trigger = chev ? chev.parentElement : row;
+        try { clickWithMouseEvents(trigger); } catch (_) {}
+      }
+      await waitForCondition(function () {
+        const next = row.nextElementSibling;
+        return !next || !next.querySelector(formFieldSelector);
+      }, 2000);
+      await wait(120);
+    }
     return captured;
   }
 
@@ -484,13 +507,36 @@
         function (formRoot) {
           function v(name) {
             const el = formRoot.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
-            return el ? (el.value || '').trim() : '';
+            if (!el) return '';
+            // Selects on a readonly source-side form sometimes
+            // come back with .value === '' because LOP marks every
+            // option as disabled and React hasn't reflected a
+            // selected attribute. Walk options for one that's
+            // actually selected (via .selected property), then
+            // fall back to .value.
+            if (el.tagName === 'SELECT') {
+              const val = el.value || '';
+              if (val) return val.trim();
+              for (const opt of el.options) {
+                if (opt.selected && opt.value) return (opt.value || '').trim();
+              }
+              if (el.selectedOptions && el.selectedOptions.length && el.selectedOptions[0].value) {
+                return el.selectedOptions[0].value.trim();
+              }
+              // Last resort: look for the option whose textContent
+              // matches what LOP visibly displays. Native selects
+              // expose the displayed text via the option's text,
+              // but if React doesn't sync .value at all, there's
+              // nothing visible to anchor on — leave blank.
+              return '';
+            }
+            return (el.value || '').trim();
           }
           function checked(name) {
             const el = formRoot.querySelector('input[type="checkbox"][name="' + name + '"]');
             return !!(el && el.checked);
           }
-          return {
+          const result = {
             displayAddress: displayAddress,
             propertyType: v('propertyType'),
             currentOccupancy: v('currentOccupancy'),
@@ -505,8 +551,11 @@
             insurance: v('insurance'),
             hoaDues: v('hoaDues')
           };
+          console.log('[Copy LOP][RE scrape]', displayAddress, '→', result);
+          return result;
         });
       if (captured) out.push(captured);
+      else console.warn('[Copy LOP][RE scrape] could not open row for', displayAddress);
     }
     return out;
   }
@@ -780,24 +829,41 @@
 
     // Open each row of Real Estate / Liabilities to capture
     // form-only fields the table doesn't show. These take a few
-    // seconds each so we surface progress.
+    // seconds each so we surface progress. Run when we have any
+    // real estate rows or more than just the placeholder
+    // liability row — we lower the gate to >= 1 actual-content row
+    // (tbody includes a placeholder row even when empty).
     let realEstateDetails = [];
     let liabilityEdits = [];
     const reTable = document.querySelector('table[aria-label="Table for real estates"]');
     const liabTable = document.querySelector('table[aria-label="Table for liabilities"]');
-    const reCount = reTable ? reTable.querySelectorAll('tbody tr').length : 0;
-    const liabCount = liabTable ? liabTable.querySelectorAll('tbody tr').length : 0;
-    if (reCount > 1 || liabCount > 1) {
+    function countContentRows(table) {
+      if (!table) return 0;
+      const rows = table.querySelectorAll('tbody tr');
+      let n = 0;
+      rows.forEach(function (tr) {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length <= 1) return;
+        if (!(tr.textContent || '').trim()) return;
+        if (tr.getAttribute('data-cy') === 'add-entity-container') return;
+        n++;
+      });
+      return n;
+    }
+    const reCount = countContentRows(reTable);
+    const liabCount = countContentRows(liabTable);
+    console.log('[Copy LOP] Per-row scrape gate — RE content rows:', reCount, 'Liab content rows:', liabCount);
+    if (reCount >= 1 || liabCount >= 1) {
       showProgress('Reading per-row details…', 'Opening each Real Estate / Liability row to capture fields that LOP only shows in the form.');
       try {
         updateProgress('Reading Real Estate rows…', 'Opening each row to capture Property type / Current occupancy / Pending-sale date.');
         realEstateDetails = await scrapeRealEstateFromSource();
-        console.log('[Copy LOP] Real estate details captured:', realEstateDetails);
+        console.log('[Copy LOP] Real estate details captured:', realEstateDetails.length, 'entries', realEstateDetails);
       } catch (e) { console.warn('[Copy LOP] real estate scrape failed', e); }
       try {
         updateProgress('Reading Liability rows…', 'Opening each row to capture Payoff / Exclude+Reason / Property link.');
         liabilityEdits = await scrapeLiabilitiesFromSource();
-        console.log('[Copy LOP] Liability edits captured:', liabilityEdits);
+        console.log('[Copy LOP] Liability edits captured:', liabilityEdits.length, 'entries', liabilityEdits);
       } catch (e) { console.warn('[Copy LOP] liability scrape failed', e); }
       hideProgress();
     }
@@ -1757,6 +1823,83 @@
     return false;
   }
 
+  // Multi-select combobox driver for Borrower(s) fields that
+  // accept multiple borrowers (e.g. Real Estate). The dropdown
+  // contains an [role="option"] for each borrower, each holding
+  // a checkbox and a label. Simply clicking the option wrapper
+  // doesn't reliably commit the chip — LOP wants the checkbox
+  // input itself toggled. Strategy: open the listbox once, locate
+  // each wanted name's row, toggle the checkbox to checked if it
+  // isn't already, then click outside to close.
+  async function selectMultiBorrowerCombobox(input, wantNames) {
+    if (!input || !wantNames || !wantNames.length) return { ok: false, reason: 'no names' };
+    input.focus();
+    try { input.click(); } catch (_) {}
+    await wait(180);
+    if (input.getAttribute('aria-expanded') !== 'true') {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+      await wait(200);
+    }
+    // Find the listbox (portaled out of the form by c11n).
+    let listbox = null;
+    const lbs = document.querySelectorAll('[role="listbox"]');
+    for (const lb of lbs) {
+      if (lb.offsetHeight === 0 && lb.offsetWidth === 0) continue;
+      listbox = lb;
+      break;
+    }
+    if (!listbox) {
+      console.warn('[Copy LOP][multi-borrower] no visible listbox after opening combobox');
+      return { ok: false, reason: 'listbox not visible' };
+    }
+    const matched = [];
+    const missed = [];
+    for (const name of wantNames) {
+      const want = String(name).replace(/\s+/g, ' ').trim().toLowerCase();
+      const options = listbox.querySelectorAll('[role="option"]');
+      let hit = null;
+      for (const opt of options) {
+        const t = (opt.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        if (t === want || t.indexOf(want) === 0 || want.indexOf(t) === 0) { hit = opt; break; }
+      }
+      if (!hit) {
+        // Fallback: a <label> in the listbox whose text matches
+        const labels = listbox.querySelectorAll('label');
+        for (const lbl of labels) {
+          const t = (lbl.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          if (t === want || t.indexOf(want) === 0 || want.indexOf(t) === 0) {
+            hit = lbl.closest('[role="option"]') || lbl.parentElement;
+            break;
+          }
+        }
+      }
+      if (!hit) { missed.push(name); continue; }
+      const checkbox = hit.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        if (!checkbox.checked) {
+          // Click the checkbox directly (LOP's React handler
+          // listens on the input, not the wrapper).
+          clickWithMouseEvents(checkbox);
+          await wait(150);
+        }
+      } else {
+        // No checkbox visible — fall back to clicking the option
+        // wrapper.
+        clickWithMouseEvents(hit);
+        await wait(150);
+      }
+      matched.push(name);
+    }
+    // Close the listbox so subsequent form fields don't get
+    // blocked by the popper. Pressing Escape on the input closes
+    // it without losing the chips.
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    try { input.blur(); } catch (_) {}
+    await wait(120);
+    return { ok: missed.length === 0, matched: matched, missed: missed };
+  }
+
   // Resolve a borrower name from the source ("Sekou Swaray") to a
   // borrower-id value present on the destination form. The Gifts
   // form has a plain <select name="borrowerId"> whose options carry
@@ -2021,17 +2164,41 @@
     if (!form) return { ok: false, reason: 'Add form did not appear' };
     await wait(150);
 
-    // Borrower(s) is a multi-select combobox (named "borrowerIDs"
-    // on this form — note the caps D).
+    // Borrower(s) is a MULTI-SELECT combobox (named "borrowerIDs"
+    // on this form). The dropdown shows a checkbox next to each
+    // borrower name. Picking via the single-select combobox helper
+    // returns true but doesn't always commit the chip (LOP's
+    // multi-select wants the underlying checkbox toggled, not the
+    // option div clicked). Use a dedicated picker that opens the
+    // listbox once and clicks each name's checkbox by label match.
     const borrowerInput = form.querySelector('input[name="borrowerIDs"]');
     if (borrowerInput && row['Borrower(s)']) {
-      const names = String(row['Borrower(s)']).split(/\s*(?:&|and|,)\s*/).filter(Boolean);
-      for (const name of names) {
-        const ok = await selectComboboxOption(borrowerInput, name);
-        console.log('[Copy LOP][real estate] select borrower', name, '→', ok);
-        await wait(120);
+      const wantNames = String(row['Borrower(s)']).split(/\s*(?:&|and|,)\s*/).filter(Boolean);
+      const result = await selectMultiBorrowerCombobox(borrowerInput, wantNames);
+      console.log('[Copy LOP][real estate] select borrowers', wantNames, '→', result);
+    }
+    // Existing address dropdown — when the borrower's saved
+    // addresses match this property's address, picking the
+    // matching option auto-fills Country/Address/City/State/Zip
+    // (and clears the "Address is required" red text). The select
+    // options carry the full one-line address as the value.
+    const existingSel = form.querySelector('select[name="existingAddresses"]');
+    if (existingSel) {
+      const want = String(row['Address'] || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      let matchVal = '';
+      for (const opt of existingSel.options) {
+        const ov = (opt.value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        if (ov && (ov === want || ov.indexOf(want) === 0 || want.indexOf(ov) === 0)) {
+          matchVal = opt.value;
+          break;
+        }
+      }
+      if (matchVal) {
+        writeSelect(form, 'existingAddresses', matchVal);
+        await wait(150);
       }
     }
+
     writeSelect(form, 'country', 'US');
     const addr = parseAddressLine(row['Address']);
     writeInput(form, 'streetAddress', addr.street);
