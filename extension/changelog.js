@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.39.5",
+    headline: "Pricing Exception Workflow BUG FIX: the Closing Costs popup auto-fill now actually closes the popup again.",
+    highlights: [
+      "v1.39.3 introduced the auto-fill that opens LOP's 'Detailed cost summary' popup to scrape Box A + lender credits, but the close-button detector only matched aria-label='close' / 'dismiss' and literal × / X chars — none of which describe LOP's actual button, which is a visible text button labeled 'Close' at the bottom-right. So the popup opened, got scraped, and was left on screen for the user to dismiss.",
+      "Fixed by widening the matcher to also accept (a) any aria-label containing 'close' / 'dismiss', (b) a <VisuallyHidden>Close</VisuallyHidden> child span (LOP's accessibility pattern for icon-only X buttons), and (c) a plain visible text button whose label is 'Close'.",
+      "Also switched the click from bare .click() to the full mousedown→mouseup→click MouseEvent sequence, since some React handlers ignore programmatic .click(). Same pattern we use everywhere else for synthetic LOP clicks.",
+      "Replaced the CSS-injection hide with an inline-style hide on the topmost fixed-positioned ancestor of the dialog. CSS injection was getting beaten by LOP's stacking; inline visibility:hidden + opacity:0 with !important is more reliable. Original style attribute is restored on cleanup."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.39.4",
     headline: "Net Proceeds calc: button now sits to the LEFT of LOP's 'Add asset or credit' button (was on the far right).",
     highlights: [

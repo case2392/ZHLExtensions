@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.39.5": "Pricing Exception Workflow BUG FIX: the Closing Costs popup auto-fill now actually closes the popup again (the close button detector wasn't matching LOP's 'Close' text button).",
     "1.39.4": "Net Proceeds calc button now sits to the left of 'Add asset or credit' (was on the far right).",
     "1.39.3": "Pricing Exception Workflow: Open in Gmail now opens AND copies the formatted email (just Ctrl+V in Gmail body), RM email is sticky, comp form auto-fills nearly everything from LOP (including ZHL Box A from the Closing Costs popup), and new Competitor lender name field.",
     "1.39.2": "Pricing Exception Workflow: new header 'PE request for <Borrowers> by <LO>', auto-detects ZG# and LO name, and Copy body now copies a formatted HTML version that pastes nicely into Gmail.",

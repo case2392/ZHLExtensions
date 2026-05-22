@@ -210,40 +210,87 @@
 
   function findCloseButton(dialog) {
     if (!dialog) return null;
-    // Walk up to the dialog root to find the close button
+    // Walk up to the dialog root to find the close button. We match four
+    // patterns LOP uses across components:
+    //   1. aria-label containing "close" or "dismiss" (icon-only X button)
+    //   2. a VisuallyHidden child <span>Close</span> (LOP's a11y pattern
+    //      where the icon button has a screen-reader-only label inside)
+    //   3. a visible text button with label "Close" (the blue button at
+    //      the bottom-right of the Detailed cost summary popup)
+    //   4. literal × / X / ✕ characters as fallback
     let root = dialog;
-    for (let i = 0; i < 6 && root; i++) {
+    for (let i = 0; i < 8 && root; i++) {
       const cands = root.querySelectorAll('button');
       for (const b of cands) {
         const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-        const t = (b.textContent || '').trim();
-        if (aria === 'close' || aria === 'dismiss' || t === '×' || t === 'X' || t === '✕') return b;
+        if (/\b(close|dismiss)\b/.test(aria)) return b;
+        const vh = b.querySelector('[class*="VisuallyHidden"]');
+        if (vh && /^\s*close\s*$/i.test(vh.textContent || '')) return b;
+        const t = (b.textContent || '').replace(/\s+/g, ' ').trim();
+        if (/^close$/i.test(t)) return b;
+        if (t === '×' || t === 'X' || t === '✕') return b;
       }
       root = root.parentElement;
     }
     return null;
   }
 
+  // Walk up until we hit an ancestor with position:fixed. That's typically
+  // the topmost modal container (overlay + backdrop) — hiding it via inline
+  // style is more reliable than CSS-injection rules vs LOP's own stacking.
+  function findFixedAncestor(el) {
+    let n = el;
+    while (n && n !== document.body && n !== document.documentElement) {
+      try {
+        const cs = window.getComputedStyle(n);
+        if (cs && cs.position === 'fixed') return n;
+      } catch (_) {}
+      n = n.parentElement;
+    }
+    return null;
+  }
+  function clickWithMouseEvents(el) {
+    try {
+      ['mousedown', 'mouseup', 'click'].forEach(function (type) {
+        el.dispatchEvent(new MouseEvent(type, {
+          bubbles: true, cancelable: true, view: window, button: 0
+        }));
+      });
+    } catch (_) {
+      try { el.click(); } catch (_) {}
+    }
+  }
+
   // Returns a Promise resolving to { boxA, lenderCredits } (zeros on failure).
   function extractClosingCostsViaPopup() {
     return new Promise(function (resolve) {
-      const btn = findClosingCostsButton();
-      if (!btn) { resolve({ boxA: 0, lenderCredits: 0 }); return; }
+      const trigger = findClosingCostsButton();
+      if (!trigger) { resolve({ boxA: 0, lenderCredits: 0 }); return; }
 
-      // Hide LOP dialogs so the popup doesn't flash on screen. We also pin
-      // a 4 s safety timeout so we never leave LOP's UI invisible.
-      const style = document.createElement('style');
-      style.id = 'zhl-pe-hide-dialog';
-      style.textContent =
+      // Belt: CSS injection covers the case where the dialog renders before
+      // our polling sees it. Suspenders: inline visibility on the fixed
+      // ancestor once we find the dialog (more reliable vs LOP's stacking).
+      const styleEl = document.createElement('style');
+      styleEl.id = 'zhl-pe-hide-dialog';
+      styleEl.textContent =
         '[role="dialog"]:not([id^="zhl-"]), ' +
         '[class*="DialogBody"]:not([id^="zhl-"]), ' +
-        '[class*="DialogOverlay"]:not([id^="zhl-"]) { ' +
-          'visibility:hidden !important; opacity:0 !important; pointer-events:none !important; ' +
+        '[class*="DialogOverlay"]:not([id^="zhl-"]), ' +
+        '[class*="ModalOverlay"]:not([id^="zhl-"]), ' +
+        '[class*="Backdrop"]:not([id^="zhl-"]) { ' +
+          'visibility:hidden !important; opacity:0 !important; ' +
         '}';
-      document.head.appendChild(style);
-      function unhide() { try { style.remove(); } catch (_) {} }
+      document.head.appendChild(styleEl);
+      let hiddenInline = null;
+      function cleanup() {
+        try { styleEl.remove(); } catch (_) {}
+        if (hiddenInline) {
+          try { hiddenInline.el.style.cssText = hiddenInline.prev; } catch (_) {}
+          hiddenInline = null;
+        }
+      }
 
-      try { btn.click(); } catch (_) { unhide(); resolve({ boxA: 0, lenderCredits: 0 }); return; }
+      clickWithMouseEvents(trigger);
 
       const start = Date.now();
       const poll = setInterval(function () {
@@ -251,19 +298,37 @@
           .find(function (d) { return /lender\s*costs/i.test(d.textContent || ''); });
         if (dialog) {
           clearInterval(poll);
+          // Scrape BEFORE we hide / close so neither styling nor a slow
+          // close transition can race the read.
           const values = scrapeClosingCostsDialog(dialog);
+          // Hide via inline style on the topmost fixed ancestor — beats
+          // LOP's specificity and any animations.
+          const fixedRoot = findFixedAncestor(dialog);
+          if (fixedRoot) {
+            hiddenInline = { el: fixedRoot, prev: fixedRoot.getAttribute('style') || '' };
+            fixedRoot.style.setProperty('visibility', 'hidden', 'important');
+            fixedRoot.style.setProperty('opacity', '0', 'important');
+          }
+          // Find and click the Close button via full mouse events (some
+          // React click handlers ignore a bare .click()).
           const closeBtn = findCloseButton(dialog);
-          if (closeBtn) { try { closeBtn.click(); } catch (_) {} }
-          else { try { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); } catch (_) {} }
-          setTimeout(function () { unhide(); resolve(values); }, 50);
+          if (closeBtn) {
+            clickWithMouseEvents(closeBtn);
+          } else {
+            try { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); } catch (_) {}
+          }
+          // Give LOP a moment to remove the dialog from the DOM, then
+          // clean up our styles. We use a slight delay because LOP's
+          // close-then-unmount sequence can take ~200ms.
+          setTimeout(function () { cleanup(); resolve(values); }, 250);
           return;
         }
         if (Date.now() - start > 4000) {
           clearInterval(poll);
-          unhide();
+          cleanup();
           resolve({ boxA: 0, lenderCredits: 0 });
         }
-      }, 100);
+      }, 80);
     });
   }
 
