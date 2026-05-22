@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.3",
+    headline: "Bulk-download BUG FIX: files now save with correct names — no more UUID.tmp; Save As dialog fully eliminated.",
+    highlights: [
+      "BUG 1 (UUID.tmp files): chrome.downloads with a data URL doesn't apply the specified filename on Windows — files land as random UUID.tmp. Fixed by adding a fetch interceptor in MAIN world that captures the original HTTPS PDF URL before the viewer creates a blob. chrome.downloads now downloads the HTTPS URL directly, which saves with the correct name on all platforms.",
+      "BUG 2 (Save As dialog still appearing): the Zillow Docs viewer triggers the download via a.dispatchEvent(new MouseEvent('click')) on an off-DOM anchor, which doesn't bubble to document and doesn't go through HTMLAnchorElement.prototype.click — so neither of v1.37.2's intercepts caught it. Fixed by also overriding EventTarget.prototype.dispatchEvent to intercept MouseEvent click dispatches directly on anchor elements.",
+      "Added conflictAction: 'uniquify' to all chrome.downloads calls so duplicate filenames get a counter suffix instead of any dialog."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.2",
     headline: "Bulk-download: files now save automatically — no 'Save As' dialog.",
     highlights: [

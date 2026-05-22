@@ -800,22 +800,53 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // We call chrome.downloads.download({ saveAs: false }) so the file
   // lands in the default Downloads folder without the "where do you
   // want to save?" dialog.
+  // Preferred silent-download path: content script captured the original
+  // HTTPS PDF URL from the fetch interceptor. chrome.downloads with an
+  // HTTPS URL correctly saves the file with the specified filename on all
+  // platforms (avoids the Windows UUID.tmp issue with data URLs).
+  if (msg && msg.type === "ZHL_BULK_DOWNLOAD_URL") {
+    const url      = String(msg.url      || "");
+    const filename = String(msg.filename || "document.pdf");
+    if (!url) { sendResponse({ ok: false, reason: "no url" }); return false; }
+    chrome.downloads.download({
+      url            : url,
+      filename       : filename,
+      saveAs         : false,
+      conflictAction : "uniquify"
+    }, function (downloadId) {
+      if (chrome.runtime.lastError) {
+        console.warn("[ZHL Bulk DL] URL download failed:", chrome.runtime.lastError.message);
+        sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
+      } else {
+        console.log("[ZHL Bulk DL] URL download started, id:", downloadId, "file:", filename);
+        sendResponse({ ok: true, downloadId: downloadId });
+      }
+    });
+    return true;
+  }
+  // Fallback silent-download path: data URL built from base64-encoded blob.
+  // Used when no HTTPS URL was captured (chunked fetch, non-standard patterns).
   if (msg && msg.type === "ZHL_BULK_DOWNLOAD_DATA") {
-    const base64 = String(msg.base64 || "");
+    const base64   = String(msg.base64   || "");
     const mimeType = String(msg.mimeType || "application/pdf");
     const filename = String(msg.filename || "document.pdf");
     if (!base64) { sendResponse({ ok: false, reason: "empty base64" }); return false; }
     const dataUrl = "data:" + mimeType + ";base64," + base64;
-    chrome.downloads.download({ url: dataUrl, filename: filename, saveAs: false }, function (downloadId) {
+    chrome.downloads.download({
+      url            : dataUrl,
+      filename       : filename,
+      saveAs         : false,
+      conflictAction : "uniquify"
+    }, function (downloadId) {
       if (chrome.runtime.lastError) {
-        console.warn("[ZHL Bulk DL] chrome.downloads.download failed:", chrome.runtime.lastError.message);
+        console.warn("[ZHL Bulk DL] data URL download failed:", chrome.runtime.lastError.message);
         sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
       } else {
-        console.log("[ZHL Bulk DL] silent download started, id:", downloadId, "file:", filename);
+        console.log("[ZHL Bulk DL] data URL download started, id:", downloadId, "file:", filename);
         sendResponse({ ok: true, downloadId: downloadId });
       }
     });
-    return true; // async
+    return true;
   }
   if (msg && msg.type === "GMAIL_DRAG_START") {
     activeGmailDrag = {
