@@ -104,6 +104,186 @@
     return '';
   }
 
+  // Walk LOP's "Loan Details" right-rail card and return a { label: value }
+  // map. Each row is a <div> with a <span> label and a <p> value (sometimes
+  // wrapped in a <button>). Lets us pre-fill purchase price / loan amount /
+  // rate / loan type into the unlocked-path comp pricing form.
+  function extractLoanDetails() {
+    const out = {};
+    try {
+      const headings = document.querySelectorAll('h6, h5, h4');
+      let host = null;
+      for (const h of headings) {
+        if (/^\s*loan\s*details\s*$/i.test((h.textContent || '').replace(/\s+/g, ' '))) {
+          // Walk up to a container that holds the grid of rows.
+          let p = h.parentElement;
+          for (let i = 0; i < 5 && p; i++) {
+            if (p.querySelector('[class*="Grid"]')) { host = p; break; }
+            p = p.parentElement;
+          }
+          if (!host) host = h.parentElement && h.parentElement.parentElement;
+          break;
+        }
+      }
+      if (!host) return out;
+      const rows = host.querySelectorAll('div');
+      for (const row of rows) {
+        const span = row.querySelector(':scope > span');
+        const valueEl = row.querySelector(':scope > p, :scope > button > p');
+        if (!span || !valueEl) continue;
+        const label = (span.textContent || '').trim();
+        const value = (valueEl.textContent || '').trim();
+        if (label && value && !out[label]) out[label] = value;
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  // ---- Closing-costs popup scrape -----------------------------------------
+  // LOP's Loan Details card has a "Total closing costs" link that opens a
+  // "Detailed cost summary" dialog. Inside, the "Lender costs" section's
+  // Total = LE Section A (Box A) — discount points + origination fee — and
+  // the "Credits" section's "Lender credit" is the lender credit value.
+  // We click the link, wait for the dialog, scrape, then close it. To
+  // avoid a visible flash we inject CSS that hides any LOP dialog while
+  // the scrape runs.
+  function findClosingCostsButton() {
+    try {
+      const headings = document.querySelectorAll('h6');
+      let host = null;
+      for (const h of headings) {
+        if (/^\s*loan\s*details\s*$/i.test((h.textContent || '').replace(/\s+/g, ' '))) {
+          host = h.closest('div').parentElement;
+          let p = h.parentElement;
+          for (let i = 0; i < 6 && p; i++) {
+            if (p.querySelectorAll('button').length > 0) { host = p; break; }
+            p = p.parentElement;
+          }
+          break;
+        }
+      }
+      if (!host) return null;
+      const rows = host.querySelectorAll('div');
+      for (const row of rows) {
+        const span = row.querySelector(':scope > span');
+        if (!span) continue;
+        const t = (span.textContent || '').replace(/\s+/g, ' ').trim();
+        if (/^total\s*closing\s*costs$/i.test(t)) {
+          return row.querySelector('button');
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function scrapeClosingCostsDialog(dialog) {
+    const out = { boxA: 0, lenderCredits: 0 };
+    try {
+      // We walk through the rows; track which section we're in by header
+      // text. The Lender costs section's Total row is Box A. The Credits
+      // section's "Lender credit" row is the lender credit.
+      const all = dialog.querySelectorAll('span');
+      const arr = [];
+      for (const s of all) arr.push((s.textContent || '').replace(/\s+/g, ' ').trim());
+      let section = null;
+      for (let i = 0; i < arr.length; i++) {
+        const t = arr[i];
+        if (/^lender\s*costs$/i.test(t))                                  { section = 'lender_costs'; continue; }
+        if (/^fees\s+you\s+cannot\s+shop\s+for$/i.test(t))                { section = 'other_loan';   continue; }
+        if (/^third[-\s]?party\s+costs$/i.test(t))                        { section = 'other_loan';   continue; }
+        if (/^other\s+costs$/i.test(t))                                   { section = 'other';        continue; }
+        if (/^taxes\s+and\s+other\s+government\s+fees$/i.test(t))         { section = 'taxes';        continue; }
+        if (/^prepaids$/i.test(t))                                        { section = 'prepaids';     continue; }
+        if (/^initial\s+escrow\s+payment\s+at\s+closing$/i.test(t))       { section = 'escrow';       continue; }
+        if (/^credits$/i.test(t))                                         { section = 'credits';      continue; }
+        if (section === 'lender_costs' && /^total$/i.test(t)) {
+          out.boxA = parseNum(arr[i + 1] || '');
+          section = null;
+        }
+        if (section === 'credits' && /^lender\s*credit$/i.test(t)) {
+          out.lenderCredits = Math.abs(parseNum(arr[i + 1] || ''));
+        }
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  function findCloseButton(dialog) {
+    if (!dialog) return null;
+    // Walk up to the dialog root to find the close button
+    let root = dialog;
+    for (let i = 0; i < 6 && root; i++) {
+      const cands = root.querySelectorAll('button');
+      for (const b of cands) {
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+        const t = (b.textContent || '').trim();
+        if (aria === 'close' || aria === 'dismiss' || t === '×' || t === 'X' || t === '✕') return b;
+      }
+      root = root.parentElement;
+    }
+    return null;
+  }
+
+  // Returns a Promise resolving to { boxA, lenderCredits } (zeros on failure).
+  function extractClosingCostsViaPopup() {
+    return new Promise(function (resolve) {
+      const btn = findClosingCostsButton();
+      if (!btn) { resolve({ boxA: 0, lenderCredits: 0 }); return; }
+
+      // Hide LOP dialogs so the popup doesn't flash on screen. We also pin
+      // a 4 s safety timeout so we never leave LOP's UI invisible.
+      const style = document.createElement('style');
+      style.id = 'zhl-pe-hide-dialog';
+      style.textContent =
+        '[role="dialog"]:not([id^="zhl-"]), ' +
+        '[class*="DialogBody"]:not([id^="zhl-"]), ' +
+        '[class*="DialogOverlay"]:not([id^="zhl-"]) { ' +
+          'visibility:hidden !important; opacity:0 !important; pointer-events:none !important; ' +
+        '}';
+      document.head.appendChild(style);
+      function unhide() { try { style.remove(); } catch (_) {} }
+
+      try { btn.click(); } catch (_) { unhide(); resolve({ boxA: 0, lenderCredits: 0 }); return; }
+
+      const start = Date.now();
+      const poll = setInterval(function () {
+        const dialog = Array.from(document.querySelectorAll('[role="dialog"], [class*="DialogBody"]'))
+          .find(function (d) { return /lender\s*costs/i.test(d.textContent || ''); });
+        if (dialog) {
+          clearInterval(poll);
+          const values = scrapeClosingCostsDialog(dialog);
+          const closeBtn = findCloseButton(dialog);
+          if (closeBtn) { try { closeBtn.click(); } catch (_) {} }
+          else { try { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); } catch (_) {} }
+          setTimeout(function () { unhide(); resolve(values); }, 50);
+          return;
+        }
+        if (Date.now() - start > 4000) {
+          clearInterval(poll);
+          unhide();
+          resolve({ boxA: 0, lenderCredits: 0 });
+        }
+      }, 100);
+    });
+  }
+
+  // Map LOP's "Product name" (e.g. "Conf Home Poss 30 Yr Fixed", "FHA 30 Yr
+  // Fixed", "VA 30 Yr ARM 5/6") onto the form's Loan type + FRM/ARM selects.
+  function deriveLoanTypeFromProduct(productName) {
+    const p = (productName || '').toLowerCase();
+    if (!p) return { loanType: 'Conventional', armOrFrm: 'FRM' };
+    let loanType = 'Conventional';
+    if (/\bfha\b/.test(p))         loanType = 'FHA';
+    else if (/\bva\b/.test(p))     loanType = 'VA';
+    else if (/\busda\b/.test(p))   loanType = 'USDA';
+    else if (/\bjumbo\b/.test(p))  loanType = 'Jumbo';
+    else if (/\bconf?\b|\bconv\b|\bconventional\b|home\s*poss|home\s*ready/.test(p)) loanType = 'Conventional';
+    const armOrFrm = /\barm\b|\d+\/\d+/.test(p) ? 'ARM'
+                    : /\bfixed\b|\bfrm\b/.test(p) ? 'FRM'
+                    : 'FRM';
+    return { loanType: loanType, armOrFrm: armOrFrm };
+  }
+
   // ---- button injection ---------------------------------------------------
   function findToolbarHost() {
     // Strategy 1: look for the "Paste from staged" button and use its parent.
@@ -157,6 +337,8 @@
 
   function defaultState() {
     const names = extractBorrowerNames();
+    const details = extractLoanDetails();
+    const productMap = deriveLoanTypeFromProduct(details['Product name'] || '');
     return {
       step: 'start',
       history: [],
@@ -167,14 +349,16 @@
       loanId: extractLoanIdFromUrl(),
       loanLink: location.href,
       zgNumber: extractZgNumberFromDom(),
-      // unlocked-path comp details
-      purchasePrice: 0,
-      loanAmount:    0,
-      loanType:      'Conventional',
-      armOrFrm:      'FRM',
-      zhlRate:       0,
+      // unlocked-path comp details — pre-filled from LOP's Loan Details
+      // right-rail card when available.
+      purchasePrice: parseNum(details['Purchase price']),
+      loanAmount:    parseNum(details['Total loan amt.'] || details['Base loan amt.']),
+      loanType:      productMap.loanType,
+      armOrFrm:      productMap.armOrFrm,
+      zhlRate:       parseNum(details['Interest Rate']),
       zhlBoxA:       0,
       zhlCredits:    0,
+      compLender:    '',
       compRate:      0,
       compBoxA:      0,
       compCredits:   0,
@@ -380,9 +564,13 @@
           '<select id="' + name + '" style="' + inputStyle + '">' + options + '</select></div>';
       }
       const s = workflowState;
+      const autofilled = s.purchasePrice > 0 || s.loanAmount > 0 || s.zhlRate > 0;
       body.innerHTML =
         '<h4 style="margin:0 0 8px;font-size:15px;color:#111827;">Enter ZHL + competitor pricing</h4>' +
-        '<p style="margin:0 0 14px;color:#6b7280;font-size:12px;">Used to compute the PE amount. Net cost = Box A charges − Lender credits. PE $ = (ZHL net cost − Comp net cost).</p>' +
+        '<p style="margin:0 0 14px;color:#6b7280;font-size:12px;">' +
+          (autofilled ? '<span style="color:#15803d;font-weight:600;">✓ Auto-filled from LOP&rsquo;s Loan Details card</span> — verify and complete the Box A / lender-credits fields. ' : '') +
+          'Net cost = Box A charges − Lender credits. PE $ = (ZHL net cost − Comp net cost).' +
+        '</p>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
           '<div>' + field('pe-purchase', 'Purchase price', s.purchasePrice || '') + field('pe-loan-amt', 'Loan amount', s.loanAmount || '') + '</div>' +
           '<div>' + select('pe-loan-type', 'Loan type', s.loanType, ['Conventional','FHA','VA','USDA','Jumbo']) +
@@ -397,6 +585,9 @@
           '</div>' +
           '<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:10px;">' +
             '<div style="font-weight:700;color:#b45309;margin-bottom:6px;font-size:12px;">Competitor</div>' +
+            '<div style="' + fieldWrap + '"><label style="' + labelStyle + '">Competitor lender name</label>' +
+              '<input id="pe-comp-lender" type="text" value="' + escapeHtml(s.compLender || '') +
+              '" placeholder="e.g. Rocket, Better.com, local CU" style="' + inputStyle + '" /></div>' +
             field('pe-comp-rate',    'Interest rate %',         s.compRate    || '') +
             field('pe-comp-boxa',    'Total Box A charges ($)', s.compBoxA    || '') +
             field('pe-comp-credits', 'Lender + other credits ($)', s.compCredits || '') +
@@ -415,16 +606,45 @@
         s.zhlRate       = parseNum(body.querySelector('#pe-zhl-rate').value);
         s.zhlBoxA       = parseNum(body.querySelector('#pe-zhl-boxa').value);
         s.zhlCredits    = parseNum(body.querySelector('#pe-zhl-credits').value);
+        s.compLender    = (body.querySelector('#pe-comp-lender').value || '').trim();
         s.compRate      = parseNum(body.querySelector('#pe-comp-rate').value);
         s.compBoxA      = parseNum(body.querySelector('#pe-comp-boxa').value);
         s.compCredits   = parseNum(body.querySelector('#pe-comp-credits').value);
-        // PE math:
         const zhlNet  = s.zhlBoxA  - s.zhlCredits;
         const compNet = s.compBoxA - s.compCredits;
         s.peDollars = zhlNet - compNet;
         s.pePoints  = s.loanAmount > 0 ? (s.peDollars / s.loanAmount) * 100 : 0;
         goTo('U-pe-result');
       });
+
+      // Auto-fill ZHL Box A + lender credits from LOP's "Total closing
+      // costs" popup if they're still empty. Opens/closes the popup
+      // invisibly via injected CSS so the LO doesn't see a flash.
+      if (!s.zhlBoxA && !s.zhlCredits) {
+        const boxaInput = body.querySelector('#pe-zhl-boxa');
+        const credInput = body.querySelector('#pe-zhl-credits');
+        if (boxaInput && credInput) {
+          boxaInput.placeholder    = 'Auto-filling from LOP…';
+          credInput.placeholder    = 'Auto-filling from LOP…';
+          extractClosingCostsViaPopup().then(function (vals) {
+            if (vals && vals.boxA > 0) {
+              s.zhlBoxA = vals.boxA;
+              boxaInput.value = String(vals.boxA);
+            } else {
+              boxaInput.placeholder = '';
+            }
+            if (vals && (vals.lenderCredits || vals.lenderCredits === 0)) {
+              s.zhlCredits = vals.lenderCredits;
+              credInput.value = vals.lenderCredits > 0 ? String(vals.lenderCredits) : '';
+            } else {
+              credInput.placeholder = '';
+            }
+          }).catch(function () {
+            boxaInput.placeholder = '';
+            credInput.placeholder = '';
+          });
+        }
+      }
     },
     'U-pe-result': function (body) {
       const s = workflowState;
@@ -516,12 +736,11 @@
         '<input id="pe-subject" type="text" value="' + escapeHtml(email.subject) + '" style="' + fieldStyle + 'margin-bottom:10px;" />' +
         '<label style="display:block;font-size:11px;color:#6b7280;font-weight:600;margin-bottom:2px;">Body</label>' +
         '<textarea id="pe-body" style="' + fieldStyle + 'min-height:280px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;">' + escapeHtml(email.body) + '</textarea>' +
-        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">Tip: <em>Copy body</em> puts a formatted HTML version + plain text on the clipboard. Pasting into Gmail uses the formatted version (table, headers, link). Attachments still need to be added manually after the email opens.</p>' +
+        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">Tip: <strong>Open in Gmail</strong> opens a new Gmail compose tab with To + Subject filled in AND copies the formatted email to your clipboard — paste with <kbd>Ctrl</kbd>+<kbd>V</kbd> in the body field to drop the formatted table / headers / hyperlinks in. Attachments still need to be added manually. RM email is auto-saved for next time.</p>' +
         '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">' +
-          btnPrimary('Open in Gmail', 'zhl-pe-mailto') +
-          btnSecondary('Copy body', 'zhl-pe-copy-body') +
-          btnSecondary('Copy subject', 'zhl-pe-copy-subj') +
-          btnSecondary('Save RM email for next time', 'zhl-pe-save-rm') +
+          btnPrimary('Open in Gmail + copy body', 'zhl-pe-mailto') +
+          btnSecondary('Copy body only', 'zhl-pe-copy-body') +
+          btnSecondary('Copy subject only', 'zhl-pe-copy-subj') +
         '</div>';
 
       // wire
@@ -545,40 +764,45 @@
       });
       body.querySelector('#pe-subject').addEventListener('input', function () { subjectAuto = false; });
 
+      // Auto-save the RM email whenever the field loses focus, so once
+      // the LO types it they never have to type it again.
+      function persistRmEmail() {
+        const v = (body.querySelector('#pe-rm-email').value || '').trim();
+        if (!v) return;
+        try { chrome.storage.local.set({ [STORAGE_KEY_RM]: v }); } catch (_) {}
+      }
+      body.querySelector('#pe-rm-email').addEventListener('blur', persistRmEmail);
+
       body.querySelector('#zhl-pe-mailto').addEventListener('click', function () {
-        const e = read();
-        // Gmail compose URL — opens in a new tab directly inside Gmail
-        // rather than handing off to the OS default mail client (which
-        // for many users is Outlook). Subject parameter is `su`, not
-        // `subject`.
-        const url = 'https://mail.google.com/mail/?view=cm&fs=1' +
-          '&to=' + encodeURIComponent(e.to) +
-          '&su=' + encodeURIComponent(e.subject) +
-          '&body=' + encodeURIComponent(e.body);
-        try { window.open(url, '_blank'); }
-        catch (_) { window.location.href = url; }
+        read();
+        persistRmEmail();
+        // Open Gmail with To + Subject but EMPTY body — Gmail's compose
+        // URL only carries plain text in &body=, which loses our formatted
+        // table / headers / hyperlinks. So we ALSO put the formatted HTML
+        // (plus plain-text fallback) on the clipboard, and the LO does a
+        // single Ctrl+V in Gmail's body field to get the nice version.
+        const rebuilt = buildEmail(workflowState);
+        const plain   = body.querySelector('#pe-body').value;
+        const e       = read();
+        copyHtmlAndPlain(this, rebuilt.html, plain, function () {
+          const url = 'https://mail.google.com/mail/?view=cm&fs=1' +
+            '&to=' + encodeURIComponent(e.to) +
+            '&su=' + encodeURIComponent(e.subject);
+          try { window.open(url, '_blank'); }
+          catch (_) { window.location.href = url; }
+        });
       });
       body.querySelector('#zhl-pe-copy-body').addEventListener('click', function () {
-        read(); // sync state from the editable fields
-        // Re-build with the latest state so Subject + Body edits feed back
-        // into the HTML version. We give the textarea-edited body to the
-        // plain-text MIME (so user edits survive) and the freshly built
-        // HTML to the text/html MIME (so Gmail's rich-text body renders it).
+        read();
+        persistRmEmail();
         const rebuilt = buildEmail(workflowState);
-        const plain = body.querySelector('#pe-body').value;
+        const plain   = body.querySelector('#pe-body').value;
         copyHtmlAndPlain(this, rebuilt.html, plain);
       });
       body.querySelector('#zhl-pe-copy-subj').addEventListener('click', function () {
         const e = read();
+        persistRmEmail();
         flashCopy(this, e.subject);
-      });
-      body.querySelector('#zhl-pe-save-rm').addEventListener('click', function () {
-        const e = read();
-        try {
-          chrome.storage.local.set({ [STORAGE_KEY_RM]: e.to }, function () {
-            flashLabel(body.querySelector('#zhl-pe-save-rm'), '✓ Saved');
-          });
-        } catch (_) {}
       });
     }
   };
@@ -596,7 +820,13 @@
   // Put BOTH text/html and text/plain on the clipboard so a paste into
   // Gmail's body field (which accepts HTML) renders the formatted table,
   // while a paste into a plain-text target still gets the plain version.
-  function copyHtmlAndPlain(btn, html, plain) {
+  // Optional onDone callback fires after the write completes (or fails) so
+  // the caller can chain a window.open() that needs to happen after.
+  function copyHtmlAndPlain(btn, html, plain, onDone) {
+    function done(ok, msg) {
+      flashLabel(btn, msg);
+      if (typeof onDone === 'function') onDone(ok);
+    }
     try {
       if (navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
         const item = new ClipboardItem({
@@ -604,20 +834,23 @@
           'text/plain': new Blob([plain], { type: 'text/plain' })
         });
         navigator.clipboard.write([item]).then(
-          function () { flashLabel(btn, '✓ Copied (formatted)'); },
+          function () { done(true, '✓ Copied (formatted)'); },
           function () {
-            // Browsers that have ClipboardItem but block multi-type writes
-            // fall back to plain text only.
             navigator.clipboard.writeText(plain).then(
-              function () { flashLabel(btn, '✓ Copied (plain)'); },
-              function () { flashLabel(btn, '✗ Failed'); }
+              function () { done(true, '✓ Copied (plain)'); },
+              function () { done(false, '✗ Copy failed'); }
             );
           }
         );
         return;
       }
     } catch (_) {}
-    flashCopy(btn, plain);
+    try {
+      navigator.clipboard.writeText(plain).then(
+        function () { done(true, '✓ Copied'); },
+        function () { done(false, '✗ Failed'); }
+      );
+    } catch (_) { done(false, '✗ Failed'); }
   }
   function flashLabel(btn, msg) {
     const orig = btn.textContent;
@@ -635,6 +868,7 @@
   function loLabel(s) { return (s.loName || '').trim() || '(your name)'; }
   function loanIdForEmail(s) { return (s.zgNumber || s.loanId || '(loan id)').trim(); }
   function sizeLabel(s) { return s.isOver25 ? '2.5 points or over' : 'under 2.5 points'; }
+  function compLabel(s)     { return (s.compLender || '').trim() || 'Competitor'; }
 
   // Build a complete email — returns { subject, body, html }.
   // body  = plain text (used by Open-in-Gmail compose URL, and as the
@@ -718,7 +952,7 @@
       '  Lender credits:     ' + formatMoney(s.zhlCredits),
       '  Net cost (A − cr.): ' + formatMoney(zhlNet),
       '',
-      'Competitor pricing:',
+      'Competitor pricing (' + compLabel(s) + '):',
       '  Interest rate:      ' + formatPctDisplay(s.compRate),
       '  Total Box A:        ' + formatMoney(s.compBoxA),
       '  Lender credits:     ' + formatMoney(s.compCredits),
@@ -752,8 +986,9 @@
       '<p style="margin:18px 0 0;color:#6b7280;font-size:12px;font-style:italic;">Attached: ZHL pricing summary, comp pricing summary, comp LE.</p>' +
       '<p style="margin-top:14px;">Thanks.</p>'
     );
+    const compForSubject = (s.compLender || '').trim() ? ' vs ' + (s.compLender || '').trim() : '';
     return {
-      subject: 'PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + (s.isOver25 ? ' — >2.5 pts' : ''),
+      subject: 'PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + compForSubject + (s.isOver25 ? ' — >2.5 pts' : ''),
       body: lines.join('\n'),
       html: html
     };
@@ -838,7 +1073,7 @@
       '<thead><tr style="background:#f9fafb;">' +
         '<th style="' + th + 'text-align:left;">&nbsp;</th>' +
         '<th style="' + th + numericRight + 'color:' + COLORS.zhl + ';">ZHL</th>' +
-        '<th style="' + th + numericRight + 'color:' + COLORS.comp + ';">Competitor</th>' +
+        '<th style="' + th + numericRight + 'color:' + COLORS.comp + ';">' + escapeHtml(compLabel(s)) + '</th>' +
       '</tr></thead>' +
       '<tbody>' +
         row('Interest rate',  formatPctDisplay(s.zhlRate),    formatPctDisplay(s.compRate)) +

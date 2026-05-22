@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.39.3",
+    headline: "Pricing Exception Workflow: Open in Gmail now produces the formatted email, RM email is sticky, and the comp pricing form auto-fills almost everything from LOP — including Box A from the Closing Costs popup.",
+    highlights: [
+      "Open in Gmail looked like ass compared to Copy body because Gmail's compose URL only accepts plain text in &body=. Fix: clicking Open in Gmail now ALSO copies the formatted HTML + plain text to the clipboard via the ClipboardItem API, then opens Gmail with To + Subject filled in and an empty body. One Ctrl+V in the Gmail body field drops in the same formatted table / headers / clickable LOP link as Copy body. Button relabeled 'Open in Gmail + copy body' so it's clear what's happening.",
+      "RM email auto-saves now. As soon as you type your manager's email and leave the field (or click any of the action buttons), it's persisted in chrome.storage — no more 'Save RM email for next time' button. Future PE workflows on any loan default to the saved address until you change it.",
+      "Comp pricing form now pre-fills Purchase price, Loan amount, ZHL Interest rate, Loan type, and FRM/ARM from LOP's Loan Details right-rail card. Loan type + ARM/FRM are derived from the Product name string (e.g. 'Conf Home Poss 30 Yr Fixed' → Conventional + FRM, 'FHA 30 Yr ARM 5/6' → FHA + ARM).",
+      "ZHL Box A + Lender credits now auto-fill too. The form silently clicks the 'Total closing costs' link in the Loan Details card, scrapes the 'Lender costs Total' (Box A = discount points + origination fee) and 'Lender credit' from the Detailed cost summary popup, then closes it. The popup is hidden via injected CSS during the scrape so no visible flash. Inputs show 'Auto-filling from LOP…' as the placeholder while waiting.",
+      "New 'Competitor lender name' field on the Competitor card (e.g. Rocket, Better.com, local CU). When set, it shows up in the email subject ('PE Request for X (ZG#) vs LenderXYZ') and as the column header in the formatted comparison table instead of the generic 'Competitor' label."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.39.2",
     headline: "Pricing Exception Workflow: friendlier header, formatted Copy body (HTML for Gmail), auto-fills the ZG# and Loan Officer name from the page.",
     highlights: [
