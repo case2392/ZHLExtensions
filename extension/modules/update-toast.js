@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.37.8": "Bulk-download: confirmation prompt now warns you to disable Chrome's 'Ask where to save' setting — the Save As dialog can't be bypassed by extensions when that's on.",
     "1.37.7": "Bulk-download Save As dialog actually fixed — override Chrome's prompt-each-time preference by passing conflictAction in onDeterminingFilename's suggest() call.",
     "1.37.6": "Bulk-download: diagnostic logging + DNR rule fix (broadened to all URLs, properly awaited before tab open). Open the service worker console to see what's happening.",
     "1.37.5": "Bulk-download BUG FIX: Save As dialog gone for real now — Content-Disposition header is stripped during the run so Chrome doesn't treat responses as attachments.",

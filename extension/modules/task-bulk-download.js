@@ -204,9 +204,14 @@
       return;
     }
     // Confirm before opening 10+ background tabs.
-    if (!window.confirm('Download all ' + docs.length + ' completed documents?\n\n' +
-        'Each one will open in a background tab and auto-click Download, then close.\n' +
-        'Your browser may prompt once to allow multiple downloads — click Allow.')) {
+    if (!window.confirm(
+        'Download all ' + docs.length + ' completed documents?\n\n' +
+        'Each one will open in a background tab, auto-download silently, then close.\n\n' +
+        '⚠ IMPORTANT: If you get a "Save As" prompt for every file, you need to disable\n' +
+        '   "Ask where to save each file before downloading" in chrome://settings/downloads.\n' +
+        '   If that toggle is greyed out, your organization\'s IT has locked it via the\n' +
+        '   PromptForDownloadLocation enterprise policy — no Chrome extension can bypass\n' +
+        '   that policy. Contact IT, or click Cancel here and download files manually.')) {
       console.log('User cancelled.');
       console.groupEnd();
       return;

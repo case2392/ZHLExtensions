@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.8",
+    headline: "Bulk-download: clearer warning about Chrome's 'Ask where to save' setting — the Save As dialog can't be bypassed by extensions when this is enabled.",
+    highlights: [
+      "v1.37.7 diagnostics proved that suggest({ conflictAction: 'uniquify' }) DOES apply our filename and uniquify behavior — but DOES NOT bypass the Save As dialog when the user's Chrome has 'Ask where to save each file before downloading' enabled. Worse: if it's enforced by enterprise policy (PromptForDownloadLocation), no extension can override it.",
+      "The bulk-download confirmation prompt now includes a clear note explaining what to do: open chrome://settings/downloads and disable 'Ask where to save each file before downloading'. If the toggle is greyed out, contact IT — the policy is locked at the org level and no Chrome extension API can bypass it."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.7",
     headline: "Bulk-download Save As dialog — actually fixed this time via onDeterminingFilename + conflictAction override.",
     highlights: [
