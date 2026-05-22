@@ -458,47 +458,133 @@
     return String(raw).replace(/^CoreLogic[-\s]*/i, '').replace(/\s+/g, '').trim();
   }
 
+  // Wait up to ~30s for the credit-report-reader content script
+  // (running on zillowdocs.com) to stash the ref ID in storage,
+  // then resolve with it. Returns null on timeout so the caller
+  // can fall back to the manual-paste modal.
+  function waitForAutoCapturedCreditRef(timeoutMs) {
+    timeoutMs = timeoutMs || 30000;
+    return new Promise(function (resolve) {
+      // Clear any leftover from a previous capture so we don't
+      // pick up a stale one.
+      try { chrome.storage.local.remove(['zhlPendingCreditRef']); } catch (_) {}
+      const t0 = Date.now();
+      let done = false;
+      const interval = setInterval(function () {
+        if (done) return;
+        try {
+          chrome.storage.local.get(['zhlPendingCreditRef'], function (data) {
+            if (done) return;
+            const pending = data && data.zhlPendingCreditRef;
+            if (pending && pending.refId && pending.capturedAt >= t0) {
+              done = true;
+              clearInterval(interval);
+              try { chrome.storage.local.remove(['zhlPendingCreditRef']); } catch (_) {}
+              resolve(pending.refId);
+            } else if (Date.now() - t0 > timeoutMs) {
+              done = true;
+              clearInterval(interval);
+              resolve(null);
+            }
+          });
+        } catch (_) {
+          if (Date.now() - t0 > timeoutMs) {
+            done = true;
+            clearInterval(interval);
+            resolve(null);
+          }
+        }
+      }, 500);
+    });
+  }
+
   function captureCreditReferenceFromUser(creditButtonInfo) {
     return new Promise(function (resolve) {
-      // Open the credit report in a new tab so the user can grab
-      // the reference ID. .click() on the actual button preserves
-      // any window.open / target=_blank wiring LOP uses.
+      // Open the credit report in a new tab. The credit-report-reader
+      // content script will run on that tab, find the CoreLogic-XXX
+      // header, and stash it in chrome.storage.local. We poll for
+      // that value and auto-fill — but keep the manual-paste fallback
+      // visible at the bottom of the modal in case the auto-read
+      // misses (page render delay, layout change, etc.).
       try { creditButtonInfo.button.click(); } catch (_) {}
+
+      // Start the auto-capture race.
+      const autoP = waitForAutoCapturedCreditRef(30000);
+
+      let resolved = false;
+      function finish(refId) {
+        if (resolved) return;
+        resolved = true;
+        removeModal();
+        resolve(refId ? { refId: refId, pullType: creditButtonInfo.type } : null);
+      }
+
       showModal(
-        '<h3 style="margin:0 0 8px;font-size:16px;color:#1e3a8a;">Capture credit reference ID</h3>' +
+        '<h3 style="margin:0 0 8px;font-size:16px;color:#1e3a8a;">Reading credit report…</h3>' +
         '<p style="margin:0 0 8px;color:#374151;font-size:13px;">' +
-          'Clicked the <strong>' + escapeHtml(creditButtonInfo.type) + '</strong> credit button — a new tab ' +
-          'should have opened with the credit report. ' +
-          'Copy the reference ID from the top of that tab (looks like <code>CoreLogic-117747122510000</code>) ' +
-          'and paste it below. You can close the report tab once you\'ve copied it.' +
+          'Clicked the <strong>' + escapeHtml(creditButtonInfo.type) + '</strong> credit button. ' +
+          'A new tab is loading the credit report — the extension will auto-detect the reference ID ' +
+          '(<code>CoreLogic-XXXXXXXXX</code>) and close the tab as soon as it finds it. ' +
+          'No action needed unless the auto-read times out.' +
         '</p>' +
-        '<input id="zhl-credit-ref-input" type="text" placeholder="CoreLogic-XXXXXXXXX (or just the number)" ' +
-          'style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:4px;font:13px monospace;box-sizing:border-box;margin-bottom:6px;">' +
-        '<p style="margin:4px 0 0;color:#6b7280;font-size:11px;font-style:italic;">' +
-          'The <code>CoreLogic-</code> prefix and any trailing spaces are stripped automatically.' +
-        '</p>' +
+        '<div id="zhl-credit-auto-status" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;margin:10px 0;font-size:13px;color:#1e3a8a;display:flex;align-items:center;gap:10px;">' +
+          '<div style="width:18px;height:18px;border:2px solid #bfdbfe;border-top-color:#1d4ed8;border-radius:50%;animation:zhl-lop-copy-spin 0.8s linear infinite;"></div>' +
+          '<span>Waiting for credit report to load…</span>' +
+        '</div>' +
+        '<details style="margin-top:8px;font-size:12px;color:#6b7280;">' +
+          '<summary style="cursor:pointer;">Fallback: paste manually</summary>' +
+          '<p style="margin:6px 0;">If the auto-read doesn\'t complete, copy <code>CoreLogic-XXXXXXXXX</code> from the report tab and paste here:</p>' +
+          '<input id="zhl-credit-ref-input" type="text" placeholder="CoreLogic-XXXXXXXXX (or just the number)" ' +
+            'style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:4px;font:13px monospace;box-sizing:border-box;">' +
+          '<div style="margin-top:6px;text-align:right;">' +
+            '<button id="zhl-credit-ref-manual-save" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:5px 12px;font-weight:600;cursor:pointer;font-size:12px;">Use this ID</button>' +
+          '</div>' +
+        '</details>' +
         '<div style="text-align:right;margin-top:14px;">' +
-          '<button id="zhl-credit-ref-skip" style="background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;margin-right:8px;">Skip credit reissue</button>' +
-          '<button id="zhl-credit-ref-save" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">Save reference ID</button>' +
+          '<button id="zhl-credit-ref-skip" style="background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">Skip credit reissue</button>' +
         '</div>',
         function (p) {
-          const input = p.querySelector('#zhl-credit-ref-input');
-          input.focus();
-          function save() {
-            const cleaned = cleanCreditReferenceId(input.value);
-            removeModal();
-            resolve({ refId: cleaned, pullType: creditButtonInfo.type });
-          }
-          p.querySelector('#zhl-credit-ref-save').addEventListener('click', save);
           p.querySelector('#zhl-credit-ref-skip').addEventListener('click', function () {
-            removeModal();
-            resolve(null);
+            finish(null);
           });
-          input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); save(); }
+          p.querySelector('#zhl-credit-ref-manual-save').addEventListener('click', function () {
+            const cleaned = cleanCreditReferenceId(p.querySelector('#zhl-credit-ref-input').value);
+            if (cleaned) finish(cleaned);
+          });
+          p.querySelector('#zhl-credit-ref-input').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const cleaned = cleanCreditReferenceId(p.querySelector('#zhl-credit-ref-input').value);
+              if (cleaned) finish(cleaned);
+            }
           });
         }
       );
+
+      // When auto-capture wins, update the modal to confirm + auto-close.
+      autoP.then(function (refId) {
+        if (resolved) return;
+        if (!refId) {
+          // Auto timed out — leave the modal open so the user can
+          // paste manually or skip.
+          const status = document.getElementById('zhl-credit-auto-status');
+          if (status) {
+            status.style.background = '#fef3c7';
+            status.style.borderColor = '#fcd34d';
+            status.style.color = '#92400e';
+            status.innerHTML = '<span>⚠ Auto-read timed out. Use the fallback paste below, or skip.</span>';
+          }
+          return;
+        }
+        const status = document.getElementById('zhl-credit-auto-status');
+        if (status) {
+          status.style.background = '#ecfdf5';
+          status.style.borderColor = '#6ee7b7';
+          status.style.color = '#065f46';
+          status.innerHTML = '<span>✓ Captured <code>' + escapeHtml(refId) + '</code> automatically. Saving…</span>';
+        }
+        setTimeout(function () { finish(refId); }, 600);
+      });
     });
   }
 
@@ -569,6 +655,555 @@
     filtered.unshift(stage);
     // Cap at 10 stages to avoid runaway storage growth.
     await saveStages(filtered.slice(0, 10));
+  }
+
+  // ---- Table row auto-paste ---------------------------------
+  //
+  // Each Full Application table (addresses, employment, other
+  // income, assets, gifts, real estate) has an inline "+ Add X"
+  // button that opens an edit form below the headers. We drive
+  // each form by:
+  //   1. Clicking the Add button
+  //   2. Waiting for tr[data-cy="add-entity-container"] to appear
+  //   3. Filling every field with React-trusted writes
+  //   4. Clicking the table-specific save button
+  //   5. Waiting for the form row to disappear (= save succeeded)
+  //
+  // Liabilities is intentionally skipped — those flow in from the
+  // credit reissue on the destination.
+
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function waitForCondition(predicate, timeoutMs) {
+    timeoutMs = timeoutMs || 3000;
+    return new Promise(function (resolve) {
+      const t0 = Date.now();
+      const tick = function () {
+        let res = null;
+        try { res = predicate(); } catch (_) {}
+        if (res) return resolve(res);
+        if (Date.now() - t0 > timeoutMs) return resolve(null);
+        setTimeout(tick, 80);
+      };
+      tick();
+    });
+  }
+
+  function findTable(ariaLabel) {
+    return document.querySelector('table[aria-label="' + ariaLabel + '"]');
+  }
+  function findAddButtonForTable(table) {
+    // The Add button is in the section's title row above the table.
+    // Walk up to a parent that contains a [data-cy="add-entity-button"].
+    let cur = table.parentElement;
+    while (cur && cur !== document.body) {
+      const btn = cur.querySelector(':scope > div button[data-cy="add-entity-button"], button[data-cy="add-entity-button"]');
+      if (btn) return btn;
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+  function getAddForm(table) {
+    return table.querySelector('tr[data-cy="add-entity-container"]');
+  }
+
+  // Form-scoped setters. Each returns true on a successful write.
+  function fInput(form, name) { return form ? form.querySelector('input[name="' + name + '"]') : null; }
+  function fSelect(form, name) { return form ? form.querySelector('select[name="' + name + '"]') : null; }
+  function fCheckbox(form, name) { return form ? form.querySelector('input[type="checkbox"][name="' + name + '"]') : null; }
+
+  function writeInput(form, name, value) {
+    const el = fInput(form, name);
+    if (!el) { console.warn('[Copy LOP][table] input not found:', name); return false; }
+    if (value == null || value === '') return false;
+    setReactInputValue(el, String(value));
+    return true;
+  }
+  function writeSelect(form, name, value) {
+    const el = fSelect(form, name);
+    if (!el) { console.warn('[Copy LOP][table] select not found:', name); return false; }
+    if (value == null || value === '') return false;
+    let exists = false;
+    for (const opt of el.options) { if (opt.value === value) { exists = true; break; } }
+    if (!exists) { console.warn('[Copy LOP][table] option not in select', name, ':', value); return false; }
+    setReactSelectValue(el, value);
+    return true;
+  }
+  function writeCheckbox(form, name, checked) {
+    const el = fCheckbox(form, name);
+    if (!el) return false;
+    if (el.checked === !!checked) return true;
+    el.click();
+    return true;
+  }
+
+  // --- Parsers / mappers ---
+
+  function parseAddressLine(line) {
+    if (!line) return {};
+    const parts = String(line).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (parts.length < 3) return { street: line };
+    const last = parts[parts.length - 1];
+    const m = /^([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/.exec(last);
+    if (!m) return { street: line };
+    return {
+      state: m[1],
+      zip: m[2],
+      city: parts[parts.length - 2],
+      street: parts.slice(0, parts.length - 2).join(', ')
+    };
+  }
+
+  function normalizeDateStr(d) {
+    if (!d) return '';
+    const t = String(d).trim();
+    if (!t || /^present$/i.test(t)) return '';
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(t);
+    if (!m) return t;
+    let yr = m[3];
+    if (yr.length === 2) yr = (parseInt(yr, 10) > 50 ? '19' : '20') + yr;
+    return m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + yr;
+  }
+
+  function parseAmount(s) {
+    if (s == null) return '';
+    const t = String(s).replace(/[\$,\s]/g, '').replace(/\(/g, '-').replace(/\)/g, '');
+    const n = parseFloat(t);
+    if (!isFinite(n)) return '';
+    return String(Math.round(n * 100) / 100);
+  }
+
+  function mapAddressType(typeText) {
+    if (!typeText) return { type: 'Current address', mailing: false };
+    const parts = String(typeText).split(',').map(function (s) { return s.trim().toLowerCase(); });
+    const mailing = parts.indexOf('mailing') !== -1;
+    let type = 'Current address';
+    if (parts.indexOf('previous') !== -1 || parts.indexOf('prior') !== -1) type = 'Previous address';
+    else if (mailing && parts.length === 1) type = 'Mailing address';
+    return { type: type, mailing: mailing };
+  }
+
+  function mapHousingType(housingText) {
+    if (!housingText) return '';
+    const t = String(housingText).toLowerCase();
+    if (/rent\s*free|living\s*rent\s*free/.test(t)) return 'LivingRentFree';
+    if (/^own/.test(t)) return 'Own';
+    if (/^rent/.test(t)) return 'Rent';
+    return '';
+  }
+
+  function mapEmploymentType(t) {
+    if (!t) return '';
+    const s = String(t).toLowerCase();
+    if (/previous|prior|past/.test(s)) return 'Previous';
+    return 'Current';
+  }
+
+  const OTHER_INCOME_SOURCE_MAP = {
+    'alimony': 'Alimony', 'auto allowance': 'AutoAllowance', 'boarder': 'Boarder',
+    'capital gains': 'CapitalGains', 'child support': 'ChildSupport',
+    'disability': 'Disability', 'foster care': 'FosterCare', 'housing': 'Housing',
+    'interest / dividends': 'InterestAndDividends', 'interest/dividends': 'InterestAndDividends',
+    'mortgage credit certificate': 'MortgageCreditCertificate',
+    'mortgage differential payments': 'MortgageDifferentialPayments',
+    'notes receivable': 'NotesReceivable', 'public assistance': 'PublicAssistance',
+    'retirement': 'Retirement', 'royalties': 'Royalties',
+    'separate maintenance': 'SeparateMaintenance', 'social security': 'SocialSecurity',
+    'trust': 'Trust', 'unemployment': 'Unemployment', 'va compensation': 'VACompensation',
+    'other': 'Other'
+  };
+  function mapOtherIncomeSource(text) {
+    if (!text) return '';
+    return OTHER_INCOME_SOURCE_MAP[String(text).toLowerCase().trim()] || '';
+  }
+
+  const ASSET_TYPE_MAP = {
+    'checking account': 'CheckingAccount', 'savings account': 'SavingsAccount',
+    'money market account': 'MoneyMarketAccount', 'certificate of deposit': 'CertificateOfDeposit',
+    'mutual fund': 'MutualFund', 'stocks': 'Stocks', 'stock options': 'StockOptions',
+    'bonds': 'Bonds', 'retirement account': 'RetirementAccount',
+    'bridge loan proceeds': 'BridgeLoanProceeds',
+    'individual development account': 'IndividualDevelopmentAccount',
+    'trust account': 'TrustAccount', 'cash value of life insurance': 'CashValueOfLifeInsurance',
+    'proceeds from sale of real estate': 'ProceedsFromSaleOfRealEstate',
+    'proceeds from sale of non-real estate asset': 'ProceedsFromSaleOfNonRealEstateAsset',
+    'secured borrowed funds': 'SecuredBorrowedFunds',
+    'unsecured borrowed funds': 'UnsecuredBorrowedFunds',
+    'earnest money credit': 'EarnestMoneyCredit',
+    'employer assistance credit': 'EmployerAssistanceCredit',
+    'lot equity credit': 'LotEquityCredit',
+    'relocation funds credit': 'RelocationFundsCredit',
+    'rent credit': 'RentCredit', 'sweat equity credit': 'SweatEquityCredit',
+    'trade equity credit': 'TradeEquityCredit', 'other': 'Other'
+  };
+  function mapAssetType(text) {
+    if (!text) return '';
+    return ASSET_TYPE_MAP[String(text).toLowerCase().trim()] || '';
+  }
+
+  const GIFT_TYPE_MAP = {
+    'cash gift': 'CashGift', 'equity gift': 'EquityGift', 'grant': 'Grant'
+  };
+  const GIFT_SOURCE_MAP = {
+    'community nonprofit': 'CommunityNonprofit', 'employer': 'Employer',
+    'federal agency': 'FederalAgency', 'local agency': 'LocalAgency',
+    'relative': 'Relative', 'religious nonprofit': 'ReligiousNonprofit',
+    'state agency': 'StateAgency', 'unmarried partner': 'UnmarriedPartner',
+    'lender': 'Lender', 'other': 'Other'
+  };
+  function mapGiftType(text) {
+    if (!text) return '';
+    return GIFT_TYPE_MAP[String(text).toLowerCase().trim()] || '';
+  }
+  function mapGiftSource(text) {
+    if (!text) return '';
+    return GIFT_SOURCE_MAP[String(text).toLowerCase().trim()] || '';
+  }
+
+  function mapPropertyType(text) {
+    if (!text) return '';
+    const t = String(text).toLowerCase();
+    if (/single/.test(t)) return 'Single';
+    if (/2[ -]?4|two.*four|multi/.test(t)) return 'TwoToFourUnit';
+    if (/condo/.test(t)) return 'Condo';
+    if (/mobile|manufactured/.test(t)) return 'MobileOrManufactured';
+    return '';
+  }
+  function mapOccupancy(text) {
+    if (!text) return '';
+    const t = String(text).toLowerCase();
+    if (/primary/.test(t)) return 'PrimaryResidence';
+    if (/second\s*home/.test(t)) return 'SecondHome';
+    if (/investment/.test(t)) return 'InvestmentProperty';
+    return '';
+  }
+  function mapRealEstateStatus(text) {
+    if (!text) return '';
+    const t = String(text).toLowerCase();
+    if (/pending/.test(t)) return 'PendingSale';
+    if (/^sold/.test(t)) return 'Sold';
+    if (/retain/.test(t)) return 'Retained';
+    return '';
+  }
+  function mapFinancialStatus(text) {
+    if (!text) return '';
+    const t = String(text).toLowerCase();
+    if (/free\s*and\s*clear|free\&clear/.test(t)) return 'FreeAndClear';
+    if (/liabilit/.test(t)) return 'WithLiabilities';
+    return '';
+  }
+
+  // Resolve a borrower name from the source ("Sekou Swaray") to a
+  // borrower-id value present on the destination form. The Gifts
+  // form has a plain <select name="borrowerId"> whose options carry
+  // the uuid as value and the borrower's name as the option text.
+  function resolveBorrowerIdFromSelect(form, borrowerNameText) {
+    if (!borrowerNameText) return '';
+    const select = fSelect(form, 'borrowerId');
+    if (!select) return '';
+    const want = String(borrowerNameText).trim().toLowerCase();
+    for (const opt of select.options) {
+      const optText = (opt.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (!opt.value) continue;
+      if (optText === want || want.indexOf(optText) === 0 || optText.indexOf(want) === 0) {
+        return opt.value;
+      }
+    }
+    return '';
+  }
+
+  // --- Per-table drivers ---
+
+  async function pasteAddressRow(row) {
+    const table = findTable('Table for addresses');
+    if (!table) return { ok: false, reason: 'table not found' };
+    const addBtn = findAddButtonForTable(table);
+    if (!addBtn) return { ok: false, reason: 'Add button not found' };
+    if (addBtn.disabled) return { ok: false, reason: 'Add button is disabled (loan locked?)' };
+    addBtn.click();
+    await wait(250);
+    const form = await waitForCondition(function () { return getAddForm(table); }, 3000);
+    if (!form) return { ok: false, reason: 'Add form did not appear' };
+    await wait(150);
+
+    const typeInfo = mapAddressType(row['Type']);
+    const addr = parseAddressLine(row['Address']);
+
+    writeSelect(form, 'addressType', typeInfo.type);
+    await wait(80);
+    if (typeInfo.mailing) { writeCheckbox(form, 'isMailingAddress', true); await wait(80); }
+    writeInput(form, 'streetAddress', addr.street);
+    if (addr.unit) writeInput(form, 'unit', addr.unit);
+    writeInput(form, 'city', addr.city);
+    writeSelect(form, 'state', addr.state);
+    writeInput(form, 'zipCode', addr.zip);
+    writeSelect(form, 'country', 'US');
+    await wait(120);
+    writeSelect(form, 'housingType', mapHousingType(row['Housing']));
+    await wait(200);
+    // Monthly rent only appears when housing=Rent. Try after the wait.
+    if (/rent/i.test(row['Housing'] || '')) {
+      const rentAmt = parseAmount(row['Rent / mo']);
+      if (rentAmt) {
+        const rentInput = form.querySelector('input[name="monthlyRent"]');
+        if (rentInput) { setReactInputValue(rentInput, rentAmt); await wait(120); }
+      }
+    }
+    const moveIn = normalizeDateStr(row['Move in']);
+    if (moveIn) {
+      writeInput(form, 'moveInDate', moveIn);
+      const el = fInput(form, 'moveInDate');
+      if (el) { try { el.blur(); } catch (_) {} await wait(200); }
+    }
+    await wait(200);
+
+    const saveBtn = form.querySelector('button[data-cy="save-address-button"]');
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    saveBtn.click();
+    const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
+    await wait(300);
+    return closed ? { ok: true } : { ok: false, reason: 'Save did not close the form (validation error?)' };
+  }
+
+  async function pasteOtherIncomeRow(row) {
+    const table = findTable('Table for other incomes');
+    if (!table) return { ok: false, reason: 'table not found' };
+    const addBtn = findAddButtonForTable(table);
+    if (!addBtn || addBtn.disabled) return { ok: false, reason: 'Add button not available' };
+    addBtn.click();
+    await wait(250);
+    const form = await waitForCondition(function () { return getAddForm(table); }, 3000);
+    if (!form) return { ok: false, reason: 'Add form did not appear' };
+    await wait(150);
+
+    writeSelect(form, 'source', mapOtherIncomeSource(row['Income source']));
+    await wait(80);
+    // Frequency: source has Income/yr or Income/mo. Pick whichever
+    // is non-empty; prefer monthly when explicitly present.
+    const yr = parseAmount(row['Income / yr']);
+    const mo = parseAmount(row['Income / mo']);
+    let amount = '', frequency = 'Annual';
+    if (yr) { amount = yr; frequency = 'Annual'; }
+    else if (mo) { amount = mo; frequency = 'Monthly'; }
+    writeSelect(form, 'income.frequency', frequency);
+    await wait(60);
+    if (amount) writeInput(form, 'income.amount', amount);
+    await wait(150);
+
+    const saveBtn = form.querySelector('button[data-cy="save-other-income-button"]');
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    saveBtn.click();
+    const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
+    await wait(300);
+    return closed ? { ok: true } : { ok: false, reason: 'Save did not close the form' };
+  }
+
+  async function pasteGiftRow(row) {
+    const table = findTable('Table for gifts or grants');
+    if (!table) return { ok: false, reason: 'table not found' };
+    const addBtn = findAddButtonForTable(table);
+    if (!addBtn || addBtn.disabled) return { ok: false, reason: 'Add button not available' };
+    addBtn.click();
+    await wait(250);
+    const form = await waitForCondition(function () { return getAddForm(table); }, 3000);
+    if (!form) return { ok: false, reason: 'Add form did not appear' };
+    await wait(150);
+
+    writeSelect(form, 'type', mapGiftType(row['Type']));
+    await wait(60);
+    writeSelect(form, 'source', mapGiftSource(row['Source']));
+    await wait(60);
+    const borrowerId = resolveBorrowerIdFromSelect(form, row['Borrower']);
+    if (borrowerId) writeSelect(form, 'borrowerId', borrowerId);
+    await wait(80);
+    const amt = parseAmount(row['Amount']);
+    if (amt) writeInput(form, 'amount', amt);
+    await wait(150);
+
+    const saveBtn = form.querySelector('button[data-cy="save-gift-button"]');
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    saveBtn.click();
+    const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
+    await wait(300);
+    return closed ? { ok: true } : { ok: false, reason: 'Save did not close the form' };
+  }
+
+  async function pasteEmploymentRow(row) {
+    const table = findTable('Table for employments');
+    if (!table) return { ok: false, reason: 'table not found' };
+    const addBtn = findAddButtonForTable(table);
+    if (!addBtn || addBtn.disabled) return { ok: false, reason: 'Add button not available' };
+    addBtn.click();
+    await wait(250);
+    const form = await waitForCondition(function () { return getAddForm(table); }, 3000);
+    if (!form) return { ok: false, reason: 'Add form did not appear' };
+    await wait(150);
+
+    writeSelect(form, 'employmentStatus', mapEmploymentType(row['Type']));
+    await wait(80);
+    writeInput(form, 'name', row['Employer']);
+    const start = normalizeDateStr(row['Start Date']);
+    if (start) writeInput(form, 'startDate', start);
+    // End date: extract from "5/15/2026 5 months" — first token only.
+    const endText = row['End Date'] || '';
+    const endMatch = /(\d{1,2}\/\d{1,2}\/\d{2,4})/.exec(endText);
+    if (endMatch) {
+      const endEl = fInput(form, 'endDate');
+      if (endEl) { setReactInputValue(endEl, normalizeDateStr(endMatch[1])); await wait(150); }
+    }
+    // Annual base income
+    const yr = parseAmount(row['Income / yr']);
+    if (yr) {
+      writeSelect(form, 'base.frequency', 'Annual');
+      await wait(60);
+      writeInput(form, 'base.amount', yr);
+      await wait(150);
+    }
+    // Blur the last field so React commits, then save
+    const baseInput = fInput(form, 'base.amount');
+    if (baseInput) { try { baseInput.blur(); } catch (_) {} await wait(200); }
+
+    // Save button — note: per the supplied DOM the employment form
+    // re-uses save-other-income-button as its [data-cy]. Try both.
+    let saveBtn = form.querySelector('button[data-cy="save-employment-button"]') ||
+                  form.querySelector('button[data-cy="save-other-income-button"]');
+    // Fallback: any button labeled "Add" inside the form
+    if (!saveBtn) {
+      const buttons = form.querySelectorAll('button');
+      for (const b of buttons) {
+        if ((b.textContent || '').trim() === 'Add') { saveBtn = b; break; }
+      }
+    }
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    saveBtn.click();
+    const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
+    await wait(400);
+    return closed ? { ok: true } : { ok: false, reason: 'Save did not close the form' };
+  }
+
+  async function pasteAssetRow(row) {
+    const table = findTable('Table for assets or credits');
+    if (!table) return { ok: false, reason: 'table not found' };
+    const addBtn = findAddButtonForTable(table);
+    if (!addBtn || addBtn.disabled) return { ok: false, reason: 'Add button not available' };
+    addBtn.click();
+    await wait(250);
+    const form = await waitForCondition(function () { return getAddForm(table); }, 3000);
+    if (!form) return { ok: false, reason: 'Add form did not appear' };
+    await wait(150);
+
+    // The Borrower(s) field is a multi-select combobox — hard to
+    // drive from the outside. We leave it for the user to pick.
+    writeSelect(form, 'type', mapAssetType(row['Type']));
+    await wait(80);
+    const inst = row['Financial institution'];
+    if (inst && inst !== 'N/A') writeInput(form, 'financialInstitution', inst);
+    const acct = row['Account No. / Nickname'];
+    if (acct && acct !== 'N/A') writeInput(form, 'accountNumber', acct);
+    const amt = parseAmount(row['Amount']);
+    if (amt) writeInput(form, 'amount', amt);
+    await wait(200);
+
+    const saveBtn = form.querySelector('button[data-cy="save-asset-button"]');
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    saveBtn.click();
+    const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
+    await wait(300);
+    if (!closed) {
+      return { ok: false, reason: 'Save did not close — likely Borrower(s) field is required (it\'s a multi-select that this version can\'t drive). Please pick the borrower(s) manually for this row, then close.' };
+    }
+    return { ok: true };
+  }
+
+  async function pasteRealEstateRow(row) {
+    const table = findTable('Table for real estates');
+    if (!table) return { ok: false, reason: 'table not found' };
+    const addBtn = findAddButtonForTable(table);
+    if (!addBtn || addBtn.disabled) return { ok: false, reason: 'Add button not available' };
+    addBtn.click();
+    await wait(250);
+    const form = await waitForCondition(function () { return getAddForm(table); }, 3000);
+    if (!form) return { ok: false, reason: 'Add form did not appear' };
+    await wait(150);
+
+    // Borrower(s) is a multi-select combobox; we skip it (user picks).
+    writeSelect(form, 'country', 'US');
+    const addr = parseAddressLine(row['Address']);
+    writeInput(form, 'streetAddress', addr.street);
+    writeInput(form, 'city', addr.city);
+    writeSelect(form, 'state', addr.state);
+    writeInput(form, 'zipCode', addr.zip);
+    await wait(120);
+
+    // Property type / occupancy aren't captured in our source row
+    // scrape today — leave for user.
+
+    const pv = parseAmount(row['Property value']);
+    if (pv) writeInput(form, 'propertyValue', pv);
+
+    const status = mapRealEstateStatus(row['Status']);
+    if (status) {
+      writeSelect(form, 'status', status);
+      await wait(300);  // PendingSale reveals an extra date field
+      // If status is PendingSale or Sold, fill the date if we can
+      // infer one. The scraped source row doesn't carry the date,
+      // so this stays blank for the user.
+    }
+
+    const intended = mapOccupancy(row['Intended']);
+    if (intended) writeSelect(form, 'intendedOccupancy', intended);
+
+    const fs = mapFinancialStatus(row['Mortgage / HELOC']);
+    if (fs) writeSelect(form, 'financialStatus', fs);
+
+    await wait(200);
+
+    const saveBtn = form.querySelector('button[data-cy="save-real-estate-button"]');
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    saveBtn.click();
+    const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
+    await wait(400);
+    if (!closed) {
+      return { ok: false, reason: 'Save did not close — likely missing required Borrower(s) / Property type / Current occupancy / Intended occupancy / Status / Financial status. Please finish the form manually.' };
+    }
+    return { ok: true };
+  }
+
+  // Orchestrator: walk every staged table and paste each row one
+  // at a time, returning a per-table report.
+  async function pasteAllTableRows(stage) {
+    const out = {};
+    if (!stage.tableData) return out;
+    const drivers = {
+      addresses: { fn: pasteAddressRow, label: 'addresses' },
+      otherIncomes: { fn: pasteOtherIncomeRow, label: 'other income' },
+      gifts: { fn: pasteGiftRow, label: 'gifts/grants' },
+      employments: { fn: pasteEmploymentRow, label: 'employment' },
+      assets: { fn: pasteAssetRow, label: 'assets' },
+      realEstate: { fn: pasteRealEstateRow, label: 'real estate' }
+    };
+    for (const key of Object.keys(drivers)) {
+      const rows = stage.tableData[key] || [];
+      if (!rows.length) continue;
+      const { fn, label } = drivers[key];
+      out[key] = { label: label, attempted: rows.length, succeeded: 0, failed: [] };
+      console.group('[Copy LOP][tables] ' + label + ' (' + rows.length + ' rows)');
+      for (let i = 0; i < rows.length; i++) {
+        updateProgress(
+          'Adding ' + label + '…',
+          'Row ' + (i + 1) + ' of ' + rows.length + ' — driving LOP\'s + Add form.'
+        );
+        let result;
+        try { result = await fn(rows[i]); }
+        catch (e) { result = { ok: false, reason: String(e && e.message || e) }; }
+        console.log('Row', i + 1, ':', result, rows[i]);
+        if (result.ok) out[key].succeeded++;
+        else out[key].failed.push({ row: rows[i], reason: result.reason || 'unknown' });
+        await wait(200);
+      }
+      console.groupEnd();
+    }
+    return out;
   }
 
   // ---- Paste --------------------------------------------------
@@ -723,6 +1358,18 @@
       console.log('[Copy LOP] No credit reference staged — skipping reissue.');
     }
 
+    // Table-row auto-paste — runs LAST so all the basic fields are
+    // committed first (LOP's table forms can be sensitive to the
+    // borrower section being fully saved).
+    let tableResults = {};
+    const hasAnyTableRows = stage.tableData && Object.keys(stage.tableData).some(function (k) {
+      return Array.isArray(stage.tableData[k]) && stage.tableData[k].length;
+    });
+    if (hasAnyTableRows) {
+      updateProgress('Adding table rows…', 'Walking each + Add form on the page.');
+      tableResults = await pasteAllTableRows(stage);
+    }
+
     hideProgress();
 
     console.log('[Copy LOP] Paste totals: wrote', totalWrote, 'passes', passes,
@@ -738,7 +1385,8 @@
       skippedEmpty: lastResult.skippedEmpty,
       passes: passes,
       borrowerMismatch: borrowerMismatch,
-      creditResult: creditResult
+      creditResult: creditResult,
+      tableResults: tableResults
     };
   }
 
@@ -1094,14 +1742,42 @@
         'Switch to each source tab and click <em>Stage</em> again &mdash; each stage replaces the previous one ' +
         'for that loan, so paste one tab\'s worth at a time before moving on.' +
       '</div>' +
-      '<div style="margin-top:12px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:10px;color:#9a3412;font-size:12px;">' +
-        '<strong>Tables still need manual entry in this version</strong> &mdash; addresses, employment, ' +
-        'other income, assets, gifts/grants, and real estate require LOP\'s own ' +
-        '<em>+ Add</em> button flow that this module can\'t drive yet (each form has its own field structure ' +
-        'that I need to wire up per type). Liabilities will fill automatically from the credit pull.' +
-        ' Use the captured row data below as your reference while you add each row.' +
-      '</div>' +
-      tableSummaryHtml +
+      (function () {
+        // If any table auto-paste ran, show a per-table report
+        // instead of the "manual entry needed" warning.
+        const tr = result.tableResults || {};
+        const tableKeys = Object.keys(tr);
+        if (!tableKeys.length) {
+          return tableSummaryHtml;
+        }
+        let html = '<div style="margin-top:12px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px;color:#166534;font-size:13px;">' +
+          '<strong>Table rows auto-added:</strong><ul style="margin:6px 0 0 18px;padding:0;">';
+        tableKeys.forEach(function (k) {
+          const r = tr[k];
+          html += '<li><strong>' + escapeHtml(r.label) + ':</strong> ' + r.succeeded + ' of ' + r.attempted + ' rows added';
+          if (r.failed.length) {
+            html += ' &nbsp;<span style="color:#9a3412;">(' + r.failed.length + ' need manual)</span>';
+          }
+          html += '</li>';
+        });
+        html += '</ul></div>';
+        // Surface specific failure reasons (truncated to the first
+        // couple per table) so the LO knows what to clean up.
+        const failures = [];
+        tableKeys.forEach(function (k) {
+          const r = tr[k];
+          r.failed.slice(0, 3).forEach(function (f) {
+            failures.push('<li><strong>' + escapeHtml(r.label) + ':</strong> ' + escapeHtml(f.reason) + '</li>');
+          });
+        });
+        if (failures.length) {
+          html += '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px;color:#92400e;font-size:12px;">' +
+            '<strong>Rows that need finishing manually:</strong><ul style="margin:6px 0 0 18px;padding:0;">' +
+            failures.join('') + '</ul></div>';
+        }
+        html += tableSummaryHtml;
+        return html;
+      })() +
       '<p style="margin-top:14px;color:#374151;font-size:12px;font-style:italic;">Tip: scroll the page to verify the fields look right. If a section didn\'t fill, it\'s either locked on this loan or wasn\'t expanded on the source when you staged.</p>' +
       '<div style="text-align:right;margin-top:14px;"><button id="zhl-modal-close" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button></div>',
       function (p) { p.querySelector('#zhl-modal-close').addEventListener('click', removeModal); }

@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.31.0",
+    headline: "Copy LOP file: auto-reads credit reference ID + auto-adds rows for every Full App table",
+    highlights: [
+      "Credit reference ID is now read AUTOMATICALLY from the credit report tab. When Stage clicks Hard or Soft, a new content script on zillowdocs.com finds the CoreLogic-XXX header, sends it to the background script, which stashes it for the source tab to pick up — then closes the report tab. The modal updates live (spinner → ✓ Captured) and saves the stage on its own. Manual paste still works as a fallback if the auto-read times out (30 seconds).",
+      "Table rows are now auto-added on paste — Addresses, Employment, Other income, Assets, Gifts/Grants, and Real estate. The extension clicks each + Add button, fills the inline form field-by-field (using LOP's actual field names and value codes per type — addressType=Current/Previous/Mailing, housingType=Own/Rent/LivingRentFree, source=Social Security/Disability/etc., etc.), clicks Save, waits for the row to commit, and moves to the next. Per-row progress is shown in the overlay; per-table success/failure counts and specific failure reasons appear in the summary modal.",
+      "Liabilities still skipped on purpose — they flow in from the reissued credit pull. Assets and Real Estate have a multi-select Borrower(s) combobox the auto-fill can't drive yet; those rows save what they can but the LO finishes the borrower-pick. Real Estate's PendingSale date input shows up on cascade and is left for manual entry since the source row doesn't carry the date."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.30.2",
     headline: "Copy LOP file: deep console logging so any field issue is debuggable in DevTools",
     highlights: [

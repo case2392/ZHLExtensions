@@ -690,6 +690,40 @@ let activeGmailDrag = null;
 const GMAIL_DRAG_TTL_MS = 60 * 1000;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // ZHL Credit Reader: a content script on zillowdocs.com found the
+  // CoreLogic-XXX reference ID. Stash it in storage (so the Copy
+  // LOP file feature can pick it up from any tab) and close the
+  // sender's tab so the LO isn't left staring at the credit report.
+  if (msg && msg.type === "ZHL_CREDIT_REF_FOUND") {
+    const refId = String(msg.refId || "");
+    if (!refId) { sendResponse({ ok: false, reason: "empty refId" }); return false; }
+    try {
+      chrome.storage.local.set({
+        zhlPendingCreditRef: {
+          refId: refId,
+          rawText: "CoreLogic-" + refId,
+          capturedAt: Date.now(),
+          fromTabId: sender.tab ? sender.tab.id : null,
+          fromUrl: msg.url || (sender.tab ? sender.tab.url : "")
+        }
+      }, () => {
+        console.log("[ZHL Pack] Credit ref stashed:", refId);
+      });
+    } catch (e) {
+      console.warn("[ZHL Pack] failed to stash credit ref:", e);
+    }
+    // Close the credit-report tab after a short delay so the
+    // storage write completes first.
+    setTimeout(() => {
+      try {
+        if (sender.tab && sender.tab.id) chrome.tabs.remove(sender.tab.id);
+      } catch (e) {
+        console.warn("[ZHL Pack] failed to close credit-report tab:", e);
+      }
+    }, 400);
+    sendResponse({ ok: true, refId: refId });
+    return false;
+  }
   if (msg && msg.type === "GMAIL_DRAG_START") {
     activeGmailDrag = {
       name: String(msg.name || "attachment"),
