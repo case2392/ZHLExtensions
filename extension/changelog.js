@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.36.0",
+    headline: "Copy LOP file: NEW auto-run pricing + auto-assign same product & rate as the source loan — the whole pricing scenario carries over.",
+    highlights: [
+      "Stage now captures the source loan's full Pricing scenario: Subject Property section (occupancy, property type, attachment, address bits), Loan Information section (loan purpose, type, term, purchase price, down payment, MI type, appraised value, HOI, taxes, HOA, other monthly, seller credit, est closing date), Pricing Info section (documentation type, escrow type, FTHB, military / VA usage / VA exemption), and the right-rail Loan Details panel's currently-assigned scenario (product name, interest rate, points, lock period, FTHB, AMI LLPA waiver). All of this lives on the same Full Application page so no extra navigation is needed.",
+      "Paste now drives the destination's Pricing & Scenarios → Pricing tab after credit lands: waits for the credit pull to populate (FICO / liability rows visible), navigates via the Pricing & Scenarios subnav, fills the pricing form from the staged values, clicks Run pricing, waits for results, finds the row matching the source's product + rate (expanding the collapsed product header if needed), checks the matching rate's checkbox, clicks Assign to loan, then navigates back to Full Application.",
+      "Heavy console debug at every step under [Copy LOP][pricing] groups — what we're about to click, what was found, what got written, what got skipped and why. Failure modes (form not mounted, Run pricing disabled, no row matched the rate, Assign button stayed disabled, etc.) log loudly with the candidate-row snippets so you can spot the mismatch from the console alone.",
+      "Summary modal now shows a green '✓ Pricing scenario assigned' banner with the picked product + rate, or a red banner with the specific reason it couldn't assign (so the LO can click Assign to loan manually with one less guess).",
+      "Multi-borrower path: the post-refresh resume handler also runs the pricing flow after credit fires, so the same one-click flow works whether or not a co-borrower had to be auto-added."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.35.1",
     headline: "Walkthrough: added the Copy LOP file card so the feature actually shows up under New features + deep-links from the toast.",
     highlights: [

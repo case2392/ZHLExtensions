@@ -477,6 +477,171 @@
 
   // Source-side: open each real-estate row's edit form to grab
   // the form-only fields the table doesn't show (Property type,
+  // ----- Pricing scenario capture (source-side) ----------------
+  //
+  // Reads the source Full Application page for everything the
+  // destination's Pricing & Scenarios → Pricing tab needs to
+  // produce the same scenario, plus the active scenario's
+  // product name + interest rate from the right-rail "Loan
+  // Details" panel. All inputs already live on Full App, so no
+  // cross-page navigation is required.
+  function scrapePricingScenarioFromSource() {
+    console.group('[Copy LOP][scenario scrape]');
+    function v(sec, name) {
+      if (!sec) return '';
+      const el = sec.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
+      if (!el) return '';
+      if (el.tagName === 'SELECT') {
+        const val = (el.value || '').trim();
+        if (val) return val;
+        if (el.selectedOptions && el.selectedOptions.length) return (el.selectedOptions[0].value || '').trim();
+        return '';
+      }
+      return (el.value || '').trim();
+    }
+    function checked(sec, name) {
+      if (!sec) return false;
+      const el = sec.querySelector('input[type="checkbox"][name="' + name + '"]');
+      return !!(el && el.checked);
+    }
+    const subj = document.querySelector('[data-cy="subject-property-section"]');
+    const loan = document.querySelector('[data-cy="loan-information-section"]');
+    // Pricing info section doesn't have a stable data-cy on every
+    // version of LOP, so fall back to the heading.
+    let pricing = document.getElementById('PricingInfo');
+    if (!pricing) {
+      const h = Array.from(document.querySelectorAll('h5')).find(function (x) {
+        return /pricing\s+information/i.test((x.textContent || '').trim());
+      });
+      if (h) pricing = h.closest('div');
+    }
+    console.log('Sections found:', {
+      subjectProperty: !!subj,
+      loanInformation: !!loan,
+      pricingInfo: !!pricing
+    });
+
+    const subjectProperty = {
+      addressStreet: v(subj, 'addressStreet'),
+      addressUnit: v(subj, 'addressUnit'),
+      addressZIP: v(subj, 'addressZIP'),
+      addressCity: v(subj, 'addressCity'),
+      addressState: v(subj, 'addressState'),
+      addressCountyName: v(subj, 'addressCountyName'),
+      addressCountyFIPS: v(subj, 'addressCountyFIPS'),
+      propertyUse: v(subj, 'propertyUse'),
+      propertyType: v(subj, 'propertyType'),
+      attachmentType: v(subj, 'attachmentType'),
+      financedUnits: v(subj, 'financedUnits'),
+      pud: checked(subj, 'pud'),
+      mixedUse: checked(subj, 'mixedUse'),
+      fhaSecondaryResidence: checked(subj, 'fhaSecondaryResidence')
+    };
+    const loanInformation = {
+      loanPurpose: v(loan, 'loanPurpose'),
+      estClosingDate: v(loan, 'estClosingDate'),
+      loanType: v(loan, 'loanType'),
+      amortizationType: v(loan, 'amortizationType'),
+      loanTerm: v(loan, 'loanTerm'),
+      purchasePrice: v(loan, 'purchasePrice'),
+      baseLoanAmount: v(loan, 'baseLoanAmount'),
+      downPayment: v(loan, 'downPayment'),
+      downPaymentPercent: v(loan, 'downPaymentPercent'),
+      conventionalMortgageInsuranceType: v(loan, 'conventionalMortgageInsuranceType'),
+      appraisedValue: v(loan, 'appraisedValue'),
+      loanToValue: v(loan, 'loanToValue'),
+      homeownersInsurance: v(loan, 'homeownersInsurance'),
+      taxes: v(loan, 'taxes'),
+      homeownersAssociationDues: v(loan, 'homeownersAssociationDues'),
+      otherMonthlyPayment: v(loan, 'otherMonthlyPayment'),
+      sellerCreditLumpSum: v(loan, 'sellerCreditLumpSum')
+    };
+    const pricingInfo = {
+      documentationType: v(pricing, 'documentationType'),
+      escrowType: v(pricing, 'escrowType'),
+      isFirstTimeHomebuyer: checked(pricing, 'isFirstTimeHomebuyer'),
+      militaryType: v(pricing, 'militaryType'),
+      vaUsageType: v(pricing, 'vaUsageType'),
+      isVaFundingFeeExempt: checked(pricing, 'isVaFundingFeeExempt')
+    };
+
+    // Right-rail "Loan Details" panel — read the label/value pairs.
+    // Each row is <span>Label</span><p>Value</p> (or <button><p>Value</p></button>).
+    const loanDetails = readLoanDetailsPanel();
+    console.log('Loan Details panel pairs:', loanDetails);
+
+    const out = {
+      subjectProperty: subjectProperty,
+      loanInformation: loanInformation,
+      pricingInfo: pricingInfo,
+      // Currently-assigned scenario snapshot used to match a row
+      // on the destination after Run pricing returns.
+      assignedScenario: {
+        productName: loanDetails['Product name'] || '',
+        loanPurpose: loanDetails['Loan purpose'] || loanInformation.loanPurpose,
+        purchasePrice: loanDetails['Purchase price'] || loanInformation.purchasePrice,
+        downPayment: loanDetails['Down payment'] || loanInformation.downPayment,
+        baseLoanAmount: loanDetails['Base loan amt.'] || loanInformation.baseLoanAmount,
+        totalLoanAmount: loanDetails['Total loan amt.'] || '',
+        ltv: loanDetails['LTV'] || loanInformation.loanToValue,
+        interestRate: loanDetails['Interest Rate'] || '',
+        pointsPrice: loanDetails['Points / Price'] || '',
+        apr: loanDetails['APR'] || '',
+        monthlyPiti: loanDetails['Monthly PITI'] || '',
+        lockPeriod: loanDetails['Lock period'] || '',
+        firstTimeHomebuyer: loanDetails['First time homebuyer'] || '',
+        zip: loanDetails['Zip code'] || subjectProperty.addressZIP
+      }
+    };
+    console.log('Stage pricingScenario =', out);
+    console.groupEnd();
+    return out;
+  }
+
+  // Right-rail "Loan Details" panel sits next to the eligibility
+  // panel on Full Application. Structure: each entry is a Flex
+  // box with <span>Label</span><p>Value</p>; some values are
+  // wrapped in <button><p>...</p></button> (Monthly PITI, etc).
+  function readLoanDetailsPanel() {
+    const result = {};
+    const headings = Array.from(document.querySelectorAll('h5, h6'));
+    const heading = headings.find(function (h) {
+      return /^loan\s*details/i.test((h.textContent || '').replace(/\s+/g, ' ').trim());
+    });
+    if (!heading) {
+      console.warn('[Copy LOP][loan details] heading not found');
+      return result;
+    }
+    // The panel container is typically the heading's grand-parent
+    // (a card div). Walk up until we find an element that holds
+    // multiple Flex rows with label/value pairs.
+    let panel = heading.parentElement;
+    for (let i = 0; i < 6 && panel; i++) {
+      const rows = panel.querySelectorAll('div > span + p, div > span + button > p');
+      if (rows.length >= 4) break;
+      panel = panel.parentElement;
+    }
+    if (!panel) {
+      console.warn('[Copy LOP][loan details] panel not found from heading');
+      return result;
+    }
+    // Each row: a Flex div whose first child is a <span> (label)
+    // and second child is <p> or <button><p></p></button> (value).
+    const flexRows = panel.querySelectorAll('div');
+    flexRows.forEach(function (row) {
+      const span = row.querySelector(':scope > span');
+      if (!span) return;
+      const label = (span.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!label) return;
+      // Skip if this row has nested rows (parent containers can match too)
+      const valueEl = row.querySelector(':scope > p, :scope > button > p');
+      if (!valueEl) return;
+      const value = (valueEl.textContent || '').replace(/\s+/g, ' ').trim();
+      if (value && !result[label]) result[label] = value;
+    });
+    return result;
+  }
+
   // Current occupancy, Pending sale / sold date,
   // willBePaidPriorToClosing). Returns one entry per real-estate
   // row, keyed by the row's display address so paste can match
@@ -866,6 +1031,18 @@
       hideProgress();
     }
 
+    // Pricing scenario capture — read Subject Property + Loan
+    // Information + Pricing Info sections from the source's Full
+    // Application page, AND the right-rail "Loan Details" panel
+    // that shows the currently-assigned scenario (product name,
+    // interest rate, points). All of this lives on the same
+    // Full App page so no cross-page navigation is needed.
+    let pricingScenario = null;
+    try {
+      pricingScenario = scrapePricingScenarioFromSource();
+      console.log('[Copy LOP] Pricing scenario captured:', pricingScenario);
+    } catch (e) { console.warn('[Copy LOP] pricing scenario scrape failed', e); }
+
     const stage = {
       sourceLoanId: loanIdFromUrl(),
       sourceBorrowerName: readBorrowerName(),
@@ -874,7 +1051,8 @@
       fields: fields,
       tableData: tableData,
       realEstateDetails: realEstateDetails,
-      liabilityEdits: liabilityEdits
+      liabilityEdits: liabilityEdits,
+      pricingScenario: pricingScenario
     };
     console.log('Full stage record:', stage);
     console.groupEnd();
@@ -1215,6 +1393,537 @@
       return runSoftPull();
     }
     return { ok: false, reason: 'No credit action staged (need pullType=Hard with refId, or pullType=Soft).' };
+  }
+
+  // ===== Pricing & Scenarios auto-assign =========================
+  //
+  // After credit lands on the destination, drive Pricing &
+  // Scenarios → Pricing: fill the form from the staged
+  // pricingScenario, click Run pricing, find the row matching
+  // the source's assigned product+rate, check it, click Assign
+  // to loan, navigate back to Full Application.
+  //
+  // Heavy console logging throughout — every step prints what it
+  // expects to find, what it found, and the action it took, so
+  // failure modes are diagnosable from the console alone.
+
+  async function runPricingAssign(stage) {
+    console.group('[Copy LOP][pricing] runPricingAssign');
+    if (!stage || !stage.pricingScenario) {
+      console.warn('[Copy LOP][pricing] no pricingScenario staged — skipping');
+      console.groupEnd();
+      return { ok: false, reason: 'No pricingScenario captured at stage time. Re-stage the source loan with this extension version.' };
+    }
+    const ps = stage.pricingScenario;
+    console.log('Source assignedScenario:', ps.assignedScenario);
+    console.log('Source subjectProperty:', ps.subjectProperty);
+    console.log('Source loanInformation:', ps.loanInformation);
+    console.log('Source pricingInfo:', ps.pricingInfo);
+
+    // Step 1: wait for credit to land. The pricing form needs
+    // the dest's credit score + DTI which only populate after
+    // CoreLogic returns. Poll for ~60s.
+    try {
+      const credit = await waitForCreditToLand(60000);
+      console.log('[Copy LOP][pricing] credit settle:', credit);
+    } catch (e) {
+      console.warn('[Copy LOP][pricing] credit-settle wait threw — proceeding anyway', e);
+    }
+
+    // Step 2: navigate to Pricing & Scenarios → Pricing
+    const navResult = await navigateToPricingTab();
+    console.log('[Copy LOP][pricing] navigate result:', navResult);
+    if (!navResult.ok) {
+      console.groupEnd();
+      return { ok: false, reason: 'Could not navigate to Pricing tab: ' + navResult.reason };
+    }
+
+    // Step 3: wait for the pricing form to mount
+    const form = await waitForCondition(function () {
+      // The pricing form has inputs named "mortgageType",
+      // "fixedTerms", "armTerms", "purchasePrice", etc.
+      const mt = document.querySelector('input[name="mortgageType"]');
+      const pp = document.querySelector('input[name="purchasePrice"]');
+      return (mt && pp) ? mt.closest('form') : null;
+    }, 15000);
+    if (!form) {
+      console.warn('[Copy LOP][pricing] Pricing form never mounted');
+      console.groupEnd();
+      return { ok: false, reason: 'Pricing form did not appear after navigation.' };
+    }
+    console.log('[Copy LOP][pricing] Pricing form mounted', form);
+
+    // Step 4: fill the form from staged data
+    const fillResult = await fillPricingForm(form, stage);
+    console.log('[Copy LOP][pricing] form fill result:', fillResult);
+
+    // Step 5: click Run pricing
+    const runBtn = Array.from(document.querySelectorAll('button')).find(function (b) {
+      return /^run\s*pricing$/i.test((b.textContent || '').trim());
+    });
+    if (!runBtn) {
+      console.warn('[Copy LOP][pricing] Run pricing button not found');
+      console.groupEnd();
+      return { ok: false, reason: 'Run pricing button not found on Pricing tab.' };
+    }
+    console.log('[Copy LOP][pricing] Clicking Run pricing', runBtn,
+      'disabled=' + runBtn.disabled, 'aria-disabled=' + runBtn.getAttribute('aria-disabled'));
+    if (runBtn.disabled || runBtn.getAttribute('aria-disabled') === 'true') {
+      console.groupEnd();
+      return { ok: false, reason: 'Run pricing stayed disabled — required fields missing. Check the fill result above.' };
+    }
+    clickWithMouseEvents(runBtn);
+
+    // Step 6: wait for results to render
+    const results = await waitForPricingResults(45000);
+    console.log('[Copy LOP][pricing] results wait outcome:', results);
+    if (!results.ok) {
+      console.groupEnd();
+      return { ok: false, reason: 'Pricing results never appeared: ' + results.reason };
+    }
+
+    // Step 7: pick matching product row + rate row
+    const pick = await pickMatchingProductAndRate(ps.assignedScenario);
+    console.log('[Copy LOP][pricing] product/rate pick result:', pick);
+    if (!pick.ok) {
+      console.groupEnd();
+      return { ok: false, reason: 'Could not pick matching product/rate: ' + pick.reason };
+    }
+
+    // Step 8: click Assign to loan
+    const assign = await clickAssignToLoan();
+    console.log('[Copy LOP][pricing] Assign to loan result:', assign);
+    if (!assign.ok) {
+      console.groupEnd();
+      return { ok: false, reason: 'Could not click Assign to loan: ' + assign.reason };
+    }
+
+    // Step 9: navigate back to Full Application
+    const back = await navigateBackToFullApp();
+    console.log('[Copy LOP][pricing] navigate back result:', back);
+
+    console.groupEnd();
+    return {
+      ok: true,
+      pickedProduct: pick.productName,
+      pickedRate: pick.interestRate,
+      points: pick.points
+    };
+  }
+
+  // Poll for any of: liability rows populated, FICO score in
+  // eligibility panel, or 'Pull credit succeeded' indicator.
+  async function waitForCreditToLand(timeoutMs) {
+    console.group('[Copy LOP][pricing] waitForCreditToLand');
+    const t0 = Date.now();
+    let lastReason = 'timeout';
+    while (Date.now() - t0 < timeoutMs) {
+      // Check for FICO score in eligibility panel
+      const elig = Array.from(document.querySelectorAll('span, p, div'))
+        .find(function (n) { return /credit\s*score/i.test((n.textContent || '').trim()); });
+      if (elig) {
+        // Walk siblings/parent for a digits-only span
+        const container = elig.parentElement;
+        const m = (container ? container.textContent : '').match(/credit\s*score[:\s]*([3-8]\d{2})/i);
+        if (m) {
+          console.log('FICO seen in eligibility panel:', m[1]);
+          console.groupEnd();
+          return { ok: true, fico: m[1], elapsed: Date.now() - t0 };
+        }
+      }
+      // Check for liability rows that look like real accounts
+      const liabTbody = document.querySelector('table[aria-label="Table for liabilities"] tbody');
+      if (liabTbody) {
+        const rows = Array.from(liabTbody.querySelectorAll('tr')).filter(function (tr) {
+          const tds = tr.querySelectorAll('td');
+          if (tds.length <= 1) return false;
+          return !!(tr.textContent || '').trim() &&
+                 tr.getAttribute('data-cy') !== 'add-entity-container';
+        });
+        if (rows.length > 0) {
+          console.log('Liability rows populated:', rows.length);
+          console.groupEnd();
+          return { ok: true, liabilityRows: rows.length, elapsed: Date.now() - t0 };
+        }
+      }
+      // Check for "soft/hard" credit indicator with a number
+      const right = document.body.textContent || '';
+      if (/(?:soft|hard)[\s\S]{0,40}\b[3-8]\d{2}\b/i.test(right) && (Date.now() - t0) > 5000) {
+        // Risk: this is page-wide regex match. Only count after 5s
+        // so we don't insta-match stale text from the previous load.
+        console.log('Soft/Hard score text appeared somewhere on the page.');
+        console.groupEnd();
+        return { ok: true, indicator: 'soft/hard text', elapsed: Date.now() - t0 };
+      }
+      await wait(800);
+    }
+    console.warn('[Copy LOP][pricing] credit never visibly landed in', timeoutMs, 'ms');
+    console.groupEnd();
+    return { ok: false, reason: lastReason };
+  }
+
+  async function navigateToPricingTab() {
+    console.group('[Copy LOP][pricing] navigateToPricingTab');
+    const link = document.querySelector('a[data-cy="subnav-pricing-scenarios"]');
+    if (!link) {
+      console.warn('Pricing & Scenarios subnav link not found');
+      console.groupEnd();
+      return { ok: false, reason: 'Pricing & Scenarios subnav link not in DOM' };
+    }
+    console.log('Clicking subnav:', link.href);
+    clickWithMouseEvents(link);
+    const ok = await waitForCondition(function () {
+      return /pricing-and-scenarios/.test(location.pathname);
+    }, 8000);
+    console.log('URL now:', location.pathname);
+    console.groupEnd();
+    return ok ? { ok: true } : { ok: false, reason: 'URL never updated to /pricing-and-scenarios' };
+  }
+
+  async function fillPricingForm(form, stage) {
+    console.group('[Copy LOP][pricing] fillPricingForm');
+    const ps = stage.pricingScenario || {};
+    const li = ps.loanInformation || {};
+    const sp = ps.subjectProperty || {};
+    const pi = ps.pricingInfo || {};
+    const wrote = [];
+    const skipped = [];
+
+    // The Loan type, Fixed (Yrs), ARM (Fixed yrs) inputs are
+    // comboboxes. Use selectComboboxOption — text-match the
+    // option label.
+    async function writeCombobox(name, value) {
+      const inp = form.querySelector('input[name="' + name + '"]');
+      if (!inp) { skipped.push(name + ' (input not found)'); return; }
+      if (!value) { skipped.push(name + ' (no source value)'); return; }
+      console.log('[combobox]', name, '→', value);
+      const ok = await selectComboboxOption(inp, value);
+      if (ok) wrote.push(name + '=' + value);
+      else skipped.push(name + ' (option "' + value + '" not in list)');
+    }
+    function writeF(name, value, label) {
+      label = label || name;
+      const el = form.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
+      if (!el) { skipped.push(label + ' (input not found)'); return; }
+      if (value == null || value === '') { skipped.push(label + ' (no source value)'); return; }
+      if (el.tagName === 'SELECT') {
+        const exists = Array.from(el.options || []).some(function (o) { return o.value === value; });
+        if (!exists) { skipped.push(label + ' (option "' + value + '" not in select)'); return; }
+        setReactSelectValue(el, value);
+      } else {
+        setReactInputValue(el, value);
+      }
+      wrote.push(label + '=' + value);
+    }
+    function writeCB(name, want, label) {
+      label = label || name;
+      const el = form.querySelector('input[type="checkbox"][name="' + name + '"]');
+      if (!el) { skipped.push(label + ' (checkbox not found)'); return; }
+      if (!!el.checked === !!want) { return; }
+      setReactCheckedValue(el, !!want);
+      wrote.push(label + '=' + (want ? 'checked' : 'unchecked'));
+    }
+
+    // Loan type — values like Conventional / FHA / VA
+    await writeCombobox('mortgageType', mapMortgageType(li.loanType));
+    await wait(150);
+    // Fixed (Yrs) / ARM (Fixed yrs) — depends on amortizationType
+    if (li.amortizationType === 'Fixed') {
+      await writeCombobox('fixedTerms', li.loanTerm);
+    } else if (li.amortizationType === 'Adjustable') {
+      await writeCombobox('armTerms', li.loanTerm);
+    }
+    await wait(150);
+    // Loan purpose select — usually pre-populated and disabled
+    writeF('loanPurpose', li.loanPurpose, 'loanPurpose');
+    // Money fields
+    writeF('purchasePrice', stripDollar(li.purchasePrice), 'purchasePrice');
+    writeF('appraisedValue', stripDollar(li.appraisedValue), 'appraisedValue');
+    // Down payment $ + %  (downPayments.0.* on the dest)
+    writeF('downPayments.0.downPayment', stripDollar(li.downPayment), 'downPayment');
+    writeF('downPayments.0.downPaymentPercent', stripPercent(li.downPaymentPercent), 'downPaymentPercent');
+    writeF('sellerCreditAmount', stripDollar(li.sellerCreditLumpSum), 'sellerCreditAmount');
+    // Credit score — read from the eligibility panel (it
+    // appeared after the credit pull).
+    const fico = readDestFico();
+    if (fico) writeF('fico', fico, 'fico');
+    // Property / location
+    writeF('propertyZIP', sp.addressZIP, 'propertyZIP');
+    writeF('propertyCity', sp.addressCity, 'propertyCity');
+    writeF('propertyCountyName', sp.addressCountyName, 'propertyCountyName');
+    writeF('propertyState', sp.addressState, 'propertyState');
+    writeF('propertyType', sp.propertyType, 'propertyType');
+    writeF('attachmentType', sp.attachmentType, 'attachmentType');
+    writeF('occupancyType', sp.propertyUse, 'occupancyType');
+    writeCB('isPlannedUnitDevelopment', sp.pud, 'isPlannedUnitDevelopment');
+    // Escrow
+    writeF('escrowType', pi.escrowType, 'escrowType');
+    // HOI / Taxes / HOA / other monthly
+    writeF('hoiAmount', stripDollar(li.homeownersInsurance), 'hoiAmount');
+    writeF('taxesAmount', stripDollar(li.taxes), 'taxesAmount');
+    writeF('homeownersAssociationDues', stripDollar(li.homeownersAssociationDues), 'homeownersAssociationDues');
+    writeF('otherMonthlyPayment', stripDollar(li.otherMonthlyPayment), 'otherMonthlyPayment');
+    // FTHB
+    writeCB('isFirstTimeHomebuyer', pi.isFirstTimeHomebuyer, 'isFirstTimeHomebuyer');
+    // Est closing date
+    writeF('estClosingDate', li.estClosingDate, 'estClosingDate');
+    // Lock period — use 45 days default if source had it
+    const lockDays = parseLockDays(ps.assignedScenario && ps.assignedScenario.lockPeriod);
+    if (lockDays) writeF('lockPeriod', lockDays, 'lockPeriod');
+
+    console.log('Wrote fields:', wrote);
+    console.log('Skipped fields:', skipped);
+    console.groupEnd();
+    return { wrote: wrote, skipped: skipped };
+  }
+
+  function stripDollar(s) {
+    if (s == null) return '';
+    return String(s).replace(/[$,\s]/g, '').trim();
+  }
+  function stripPercent(s) {
+    if (s == null) return '';
+    return String(s).replace(/[%\s]/g, '').trim();
+  }
+  function parseLockDays(s) {
+    if (!s) return '';
+    const m = String(s).match(/(\d+)\s*days?/i);
+    return m ? m[1] : '';
+  }
+  function mapMortgageType(loanType) {
+    if (!loanType) return '';
+    const v = String(loanType).trim();
+    // The Loan Information uses raw values like "Conventional",
+    // "FHA", "VA". The pricing combobox accepts the same labels.
+    return v;
+  }
+  function readDestFico() {
+    // The eligibility panel shows "Credit score: NNN" once the
+    // pull lands. Read it.
+    const text = (document.body.textContent || '');
+    const m = text.match(/credit\s*score[:\s]*([3-8]\d{2})\b/i);
+    return m ? m[1] : '';
+  }
+
+  // Wait for pricing results to render. The results table has
+  // product groups like "3.00% Down Payment | 97.000% LTV"
+  // headings with rows under them. Detection: any "Ineligible
+  // Products" header (always present once pricing has run) or a
+  // table row with class containing "pricing-results".
+  async function waitForPricingResults(timeoutMs) {
+    console.group('[Copy LOP][pricing] waitForPricingResults');
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      const hasIneligible = Array.from(document.querySelectorAll('h2, h3, h4, h5')).some(function (h) {
+        return /ineligible\s*products/i.test((h.textContent || '').trim());
+      });
+      const hasRowCheckbox = !!document.querySelector('[data-cy="pricing-results-row-checkbox"]');
+      const hasArrowOrRow = !!document.querySelector('td button[data-cy*="expand"]') ||
+        Array.from(document.querySelectorAll('td')).some(function (td) {
+          return /\b\d+\.\d+%\s*Down\s*Payment/i.test((td.textContent || '').trim());
+        });
+      if (hasRowCheckbox || hasIneligible || hasArrowOrRow) {
+        console.log('Results detected at', Date.now() - t0, 'ms — ineligible?', hasIneligible,
+          'rowCheckbox?', hasRowCheckbox, 'rowOrArrow?', hasArrowOrRow);
+        console.groupEnd();
+        return { ok: true, elapsed: Date.now() - t0 };
+      }
+      await wait(800);
+    }
+    console.warn('Pricing results never rendered in', timeoutMs, 'ms');
+    console.groupEnd();
+    return { ok: false, reason: 'no results in time' };
+  }
+
+  // Pick the row whose product name (e.g. "Conf Home Poss 30 Yr
+  // Fixed") matches the source's assignedScenario. If the source
+  // product is at the top of the eligible list (always shown
+  // expanded by default), check its single eligible-rate row. If
+  // the source product is in a nested list (expanded by clicking
+  // the row's arrow td), expand it first, then pick the row
+  // whose interest rate matches.
+  async function pickMatchingProductAndRate(assigned) {
+    console.group('[Copy LOP][pricing] pickMatchingProductAndRate');
+    const productWant = (assigned.productName || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const rateWant = (assigned.interestRate || '').replace(/[%\s]/g, '');
+    const pointsWant = (assigned.pointsPrice || '').match(/[\d.]+/);
+    const pointsWantNum = pointsWant ? pointsWant[0] : '';
+    console.log('Want product:', productWant, 'rate:', rateWant, 'pointsBase:', pointsWantNum);
+
+    if (!productWant) {
+      console.warn('No product name in assignedScenario; cannot match.');
+      console.groupEnd();
+      return { ok: false, reason: 'no source product name to match against' };
+    }
+
+    // Scan ALL visible rows that contain BOTH the product name
+    // text AND an interest rate cell + checkbox. The results
+    // table is a flat table-of-tables; the top-level rows
+    // collapse/expand to show nested rate rows.
+    function findRowsForProduct(wantText) {
+      const rows = Array.from(document.querySelectorAll('tr'));
+      return rows.filter(function (tr) {
+        const t = (tr.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return t.indexOf(wantText) !== -1;
+      });
+    }
+
+    let productRows = findRowsForProduct(productWant);
+    console.log('Rows containing product text:', productRows.length);
+    if (!productRows.length) {
+      // Try a softer match — first 4 words of the product name
+      const shortWant = productWant.split(/\s+/).slice(0, 4).join(' ');
+      productRows = findRowsForProduct(shortWant);
+      console.log('Fallback match using', shortWant, '→ rows:', productRows.length);
+    }
+    if (!productRows.length) {
+      console.warn('No rows containing product name; available product names:',
+        Array.from(document.querySelectorAll('tr')).slice(0, 30).map(function (r) {
+          return (r.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        })
+      );
+      console.groupEnd();
+      return { ok: false, reason: 'no row containing the product name "' + assigned.productName + '"' };
+    }
+
+    // Find the row that is the PRODUCT HEADER (collapsed parent)
+    // — it has an arrow svg in its first td. Click that arrow
+    // to expand. The header row has the product name but no
+    // checkbox.
+    let parentRow = null;
+    for (const r of productRows) {
+      const hasArrow = r.querySelector('td:first-child svg, td:first-child button');
+      const hasCheckbox = r.querySelector('[data-cy="pricing-results-row-checkbox"]');
+      if (hasArrow && !hasCheckbox) { parentRow = r; break; }
+    }
+    if (parentRow) {
+      console.log('Found product header row, expanding…', parentRow);
+      const arrowCell = parentRow.querySelector('td:first-child');
+      if (arrowCell) {
+        clickWithMouseEvents(arrowCell);
+        await wait(500);
+      }
+    } else {
+      console.log('No collapsed header row — product list may already be expanded.');
+    }
+
+    // Now find the rate row whose Int. rate cell matches rateWant.
+    // Re-query: the rows-of-rates show as siblings after the
+    // expanded header. Each has a checkbox.
+    const allCheckboxRows = Array.from(document.querySelectorAll('tr')).filter(function (tr) {
+      return !!tr.querySelector('[data-cy="pricing-results-row-checkbox"]');
+    });
+    console.log('All rate rows with a checkbox:', allCheckboxRows.length);
+
+    // Score every rate row: prefer rows that ALSO mention the
+    // product text (siblings under the same expanded product),
+    // then match the rate cell.
+    function rowRateValue(tr) {
+      // The Int. rate column shows e.g. "6.490%". Try to find
+      // it by looking for cells whose text is "N.NNN%".
+      const cells = Array.from(tr.querySelectorAll('td')).map(function (td) {
+        return (td.textContent || '').replace(/\s+/g, ' ').trim();
+      });
+      for (const c of cells) {
+        const m = c.match(/^([0-9]+\.[0-9]{2,3})%$/);
+        if (m) return m[1];
+      }
+      return '';
+    }
+
+    const candidates = allCheckboxRows.map(function (tr) {
+      const rate = rowRateValue(tr);
+      const containsProduct = (tr.textContent || '').toLowerCase().indexOf(productWant) !== -1;
+      return { row: tr, rate: rate, containsProduct: containsProduct };
+    });
+    console.log('Candidate rows:', candidates.slice(0, 12).map(function (c) {
+      return { rate: c.rate, hasProductText: c.containsProduct, snippet: (c.row.textContent || '').replace(/\s+/g, ' ').slice(0, 100) };
+    }));
+
+    // Pick: exact rate match preferred, then product-context preferred.
+    // Compare numerically since "6.490" and "6.49" should match.
+    function rateEqual(a, b) {
+      const na = parseFloat(a);
+      const nb = parseFloat(b);
+      if (isNaN(na) || isNaN(nb)) return false;
+      return Math.abs(na - nb) < 0.005;
+    }
+    let pick = null;
+    if (rateWant) {
+      pick = candidates.find(function (c) { return c.containsProduct && rateEqual(c.rate, rateWant); }) ||
+             candidates.find(function (c) { return rateEqual(c.rate, rateWant); });
+    }
+    if (!pick) {
+      console.warn('No exact rate match; falling back to the first product-context row.');
+      pick = candidates.find(function (c) { return c.containsProduct; });
+    }
+    if (!pick) {
+      console.error('[Copy LOP][pricing] no candidate row matched at all');
+      console.groupEnd();
+      return { ok: false, reason: 'no row matched product "' + assigned.productName + '" at rate ' + assigned.interestRate };
+    }
+    console.log('Picked row:', pick.rate, '|', (pick.row.textContent || '').replace(/\s+/g, ' ').slice(0, 120));
+    const cb = pick.row.querySelector('[data-cy="pricing-results-row-checkbox"]');
+    if (!cb) {
+      console.error('Picked row has no checkbox??');
+      console.groupEnd();
+      return { ok: false, reason: 'matched row has no checkbox' };
+    }
+    if (!cb.checked) {
+      clickWithMouseEvents(cb);
+      await wait(500);
+    }
+    console.groupEnd();
+    return { ok: true, productName: assigned.productName, interestRate: pick.rate, points: assigned.pointsPrice };
+  }
+
+  async function clickAssignToLoan() {
+    console.group('[Copy LOP][pricing] clickAssignToLoan');
+    // The button text is "Assign to loan"; the wrapper is a
+    // disabled-when-no-row-checked styled button. Click the
+    // INNER button (the one with the text), not the tooltip
+    // wrapper.
+    const btn = await waitForCondition(function () {
+      const all = Array.from(document.querySelectorAll('button'));
+      return all.find(function (b) {
+        const t = (b.textContent || '').replace(/\s+/g, ' ').trim();
+        return /^assign\s*to\s*loan$/i.test(t) && !b.disabled && b.getAttribute('aria-disabled') !== 'true';
+      });
+    }, 6000);
+    if (!btn) {
+      console.warn('Assign to loan button not found (or stayed disabled)');
+      console.groupEnd();
+      return { ok: false, reason: 'Assign to loan button not enabled' };
+    }
+    console.log('Clicking Assign to loan:', btn);
+    clickWithMouseEvents(btn);
+    await wait(800);
+    // LOP usually navigates to /scenarios after assign; wait for
+    // either that URL or a confirmation toast.
+    const navOk = await waitForCondition(function () {
+      return /\/scenarios(?:$|\/|\?)/.test(location.pathname) ||
+        (document.body.textContent || '').toLowerCase().indexOf('assigned') !== -1;
+    }, 10000);
+    console.log('Post-assign nav OK:', navOk, 'at', location.pathname);
+    console.groupEnd();
+    return { ok: true };
+  }
+
+  async function navigateBackToFullApp() {
+    console.group('[Copy LOP][pricing] navigateBackToFullApp');
+    const link = document.querySelector('a[data-cy="subnav-full-application"]');
+    if (!link) {
+      console.warn('Full application subnav link not found');
+      console.groupEnd();
+      return { ok: false, reason: 'full-application link missing' };
+    }
+    clickWithMouseEvents(link);
+    const ok = await waitForCondition(function () {
+      return /\/full-application(?:$|\/|\?)/.test(location.pathname);
+    }, 8000);
+    console.log('Now at', location.pathname);
+    console.groupEnd();
+    return ok ? { ok: true } : { ok: false, reason: 'URL never updated to /full-application' };
   }
 
   // Before the field paste runs, check the borrower count on the
@@ -2669,6 +3378,7 @@
         creditPullType: stage.creditPullType,
         creditReferenceId: stage.creditReferenceId || '',
         liabilityEdits: stage.liabilityEdits || [],
+        pricingScenario: stage.pricingScenario || null,
         armedAt: Date.now()
       };
       try {
@@ -2756,6 +3466,24 @@
       console.groupEnd();
     }
 
+    // Pricing scenario auto-assign — runs after liability edits
+    // (so the right rail's DTI / liabilities are settled) when:
+    //   - the source had an assigned scenario at stage time
+    //   - the credit pull succeeded on the destination
+    let pricingResult = null;
+    if (stage.pricingScenario && stage.pricingScenario.assignedScenario &&
+        stage.pricingScenario.assignedScenario.productName &&
+        creditResult && creditResult.ok) {
+      updateProgress('Running pricing scenario…',
+        'Filling the Pricing form from the source loan, running pricing, finding ' +
+        stage.pricingScenario.assignedScenario.productName + ' @ ' +
+        stage.pricingScenario.assignedScenario.interestRate + ', and clicking Assign to loan.');
+      pricingResult = await runPricingAssign(stage);
+      console.log('[Copy LOP] runPricingAssign result:', pricingResult);
+    } else if (stage.pricingScenario) {
+      console.log('[Copy LOP] Skipping pricing (credit not ok, or no assignedScenario captured).');
+    }
+
     hideProgress();
 
     console.log('[Copy LOP] Paste totals: wrote', totalWrote, 'passes', passes,
@@ -2775,7 +3503,8 @@
       creditResult: creditResult,
       saveResult: saveResult,
       tableResults: tableResults,
-      liabilityEditResults: liabilityEditResults
+      liabilityEditResults: liabilityEditResults,
+      pricingResult: pricingResult
     };
   }
 
@@ -3189,6 +3918,21 @@
             : '') +
         '</div>'
         : '') +
+      (result.pricingResult
+        ? (result.pricingResult.ok
+          ? '<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:10px;margin:10px 0;color:#065f46;font-size:13px;">' +
+            '<strong>✓ Pricing scenario assigned</strong> &mdash; picked <strong>' +
+            escapeHtml(result.pricingResult.pickedProduct || '?') + '</strong> at <strong>' +
+            escapeHtml(result.pricingResult.pickedRate || '?') + '%</strong>' +
+            (result.pricingResult.points ? ' (' + escapeHtml(result.pricingResult.points) + ')' : '') +
+            ' and clicked Assign to loan. Returned to Full Application.' +
+            '</div>'
+          : '<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;margin:10px 0;color:#991b1b;font-size:13px;">' +
+            '<strong>⚠ Pricing scenario didn\'t assign:</strong> ' +
+            escapeHtml(result.pricingResult.reason || 'unknown') +
+            '. Open Pricing &amp; Scenarios → Pricing manually, find the matching row, and click Assign to loan.' +
+            '</div>')
+        : '') +
       '<div style="background:#eef6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;margin:10px 0;color:#1e3a8a;font-size:12px;">' +
         '<strong>Multi-pair applications:</strong> if the source loan had more than one borrower-pair tab ' +
         '(<strong>+</strong> &rarr; <em>New application</em>), only the currently-visible tab gets staged. ' +
@@ -3347,6 +4091,18 @@
           'Applying Payoff / Exclude+Reason / Property link to each matching liability.');
         liabilityEditResults = await applyLiabilityEdits(pending.liabilityEdits);
         console.log('[Copy LOP] Post-refresh liability edits result:', liabilityEditResults);
+      }
+      // Post-refresh pricing scenario auto-assign
+      let pricingResult = null;
+      if (pending.pricingScenario && pending.pricingScenario.assignedScenario &&
+          pending.pricingScenario.assignedScenario.productName &&
+          creditResult && creditResult.ok) {
+        updateProgress('Running pricing scenario…',
+          'Filling Pricing form, running pricing, picking ' +
+          pending.pricingScenario.assignedScenario.productName + ' @ ' +
+          pending.pricingScenario.assignedScenario.interestRate + ', and Assign to loan.');
+        pricingResult = await runPricingAssign({ pricingScenario: pending.pricingScenario });
+        console.log('[Copy LOP] Post-refresh pricing result:', pricingResult);
       }
       hideProgress();
       // Surface a small toast-like modal so the LO knows the
