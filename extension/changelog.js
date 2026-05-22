@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.34.5",
+    headline: "Copy LOP file BUG FIX: credit pull no longer races the co-borrower's consent commit.",
+    highlights: [
+      "BUG: when a brand-new co-borrower was auto-added during paste, the credit pull was firing before LOP's backend had fully persisted the co-borrower's credit-consent records, even though the consent dropdowns were already set to Verbal in the UI. LOP rejected the pull with 'co-borrower didn't consent.' Now: paste waits 1.5s after Save Loan File before firing credit (so the consent records commit), and the pre-credit verifier ALSO checks that every borrower's softCreditConsent + hardCreditConsent dropdowns are set on the destination — if they're empty, we re-paste them from the staged values and re-verify before triggering credit.",
+      "Pre-credit verifier now flags missing credit-consent-section render too (the new co-borrower's UI may take an extra render pass before the consent dropdowns mount), with a clear 'try re-paste in a moment' hint instead of failing opaquely downstream."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.34.4",
     headline: "Copy LOP file BUG FIX: Real Estate source-side scrape was being defeated by the nested liabilities table.",
     highlights: [

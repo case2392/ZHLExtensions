@@ -1454,6 +1454,37 @@
   // (CoreLogic needs every applicant identified with an address).
   // Returns a per-borrower issue list so the summary surfaces
   // specifics.
+  // Re-write softCreditConsent / hardCreditConsent from the staged
+  // values onto every borrower's credit-consent-section. Used as
+  // a fallback when the first paste missed a freshly-added
+  // co-borrower's consent dropdowns.
+  async function retryCreditConsentPaste(stage) {
+    const bySection = {};
+    (stage.fields || []).forEach(function (rec) {
+      if (!rec.scope || rec.scope.type !== 'credit-consent-section') return;
+      const k = rec.scope.index;
+      if (!bySection[k]) bySection[k] = {};
+      bySection[k][rec.name] = rec.value;
+    });
+    for (const idx of Object.keys(bySection)) {
+      const sec = document.querySelector('[data-cy="credit-consent-section-' + idx + '"]');
+      if (!sec) continue;
+      const vals = bySection[idx];
+      ['softCreditConsent', 'hardCreditConsent'].forEach(function (name) {
+        if (!vals[name]) return;
+        const el = sec.querySelector('select[name="' + name + '"]');
+        if (!el) return;
+        const cur = (el.value || '').trim();
+        if (cur === vals[name]) return;
+        const optionExists = Array.from(el.options || []).some(function (o) { return o.value === vals[name]; });
+        if (!optionExists) return;
+        setReactSelectValue(el, vals[name]);
+        console.log('[Copy LOP][consent retry] set', name, 'on borrower', idx, '→', vals[name]);
+      });
+      await wait(120);
+    }
+  }
+
   function verifyReadyForCredit(stage) {
     // Group source field values by personal-info-section index so
     // we know which borrowers the source had AND can label them
@@ -1507,6 +1538,28 @@
         if (!dataRows.length) {
           issues.push(borrowerName + ': no address added (credit needs at least one)');
         }
+      }
+
+      // 3. Credit consent — LOP rejects the credit pull when any
+      // borrower is missing soft/hard consent. The brand-new
+      // co-borrower (just added via the + tab) usually defaults
+      // to a blank consent dropdown and the source's "Verbal"
+      // value needs to land before credit fires.
+      const consentSec = document.querySelector('[data-cy="credit-consent-section-' + idx + '"]');
+      if (consentSec) {
+        const softSel = consentSec.querySelector('select[name="softCreditConsent"]') ||
+                        consentSec.querySelector('input[name="softCreditConsent"]');
+        const hardSel = consentSec.querySelector('select[name="hardCreditConsent"]') ||
+                        consentSec.querySelector('input[name="hardCreditConsent"]');
+        const softVal = softSel ? (softSel.value || '').trim() : '';
+        const hardVal = hardSel ? (hardSel.value || '').trim() : '';
+        if (!softVal) issues.push(borrowerName + ': soft credit consent not set');
+        if (!hardVal) issues.push(borrowerName + ': hard credit consent not set');
+      } else {
+        // The consent section is rendered alongside the personal-
+        // info section; if it's not there for this borrower index,
+        // the new co-borrower's UI hasn't fully hydrated yet.
+        issues.push(borrowerName + ': credit-consent section not yet rendered (try re-paste in a moment)');
       }
     });
     return { ok: issues.length === 0, issues: issues };
@@ -2574,6 +2627,14 @@
       saveResult = await saveLoanFile();
       console.log('Result:', saveResult);
       console.groupEnd();
+      // Give LOP's backend extra settle time to persist the
+      // co-borrower's freshly-set credit consent before the
+      // credit pull fires. Without this beat, the credit
+      // preflight can find Borrower 2's consent record still
+      // not-yet-committed (even though we wrote the dropdown to
+      // Verbal moments earlier) and refuse to run.
+      updateProgress('Waiting for save to settle…', 'Letting LOP\'s backend commit the new co-borrower\'s credit consent before credit fires.');
+      await new Promise(function (r) { setTimeout(r, 1500); });
     }
 
     let creditResult = null;
@@ -2582,8 +2643,22 @@
       // Verify every borrower in the source's personal-info-sections
       // has matching first/last/DOB/SSN on the destination —
       // running credit before all borrowers are populated fails
-      // (CoreLogic needs every applicant identified).
-      const verify = verifyReadyForCredit(stage);
+      // (CoreLogic needs every applicant identified). Also checks
+      // soft/hard credit consent is set on every borrower so the
+      // pull doesn't bounce with "co-borrower didn't consent".
+      let verify = verifyReadyForCredit(stage);
+      // If consent is the only remaining issue, try patching it
+      // in once more from the staged values — the auto-add path
+      // sometimes loses the consent dropdowns on the brand-new
+      // co-borrower section before the field paste reaches them.
+      const onlyConsentMissing = verify.issues.length > 0 &&
+        verify.issues.every(function (s) { return /credit consent/i.test(s); });
+      if (onlyConsentMissing) {
+        console.log('[Copy LOP] Consent missing; retrying consent paste then re-verifying.');
+        await retryCreditConsentPaste(stage);
+        await new Promise(function (r) { setTimeout(r, 600); });
+        verify = verifyReadyForCredit(stage);
+      }
       if (!verify.ok) {
         console.warn('[Copy LOP] Skipping credit — borrowers not fully ready:', verify.issues);
         creditResult = {
