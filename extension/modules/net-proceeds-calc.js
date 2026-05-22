@@ -175,7 +175,15 @@
       e.preventDefault();
       openModal();
     });
-    header.appendChild(btn);
+    // Insert before LOP's native "Add asset or credit" button so our
+    // button sits closer to the "Assets" heading and "Add asset or credit"
+    // stays on the far right of the header row.
+    const addBtn = header.querySelector('[data-cy="add-entity-button"]');
+    if (addBtn) {
+      header.insertBefore(btn, addBtn);
+    } else {
+      header.appendChild(btn);
+    }
   }
 
   // ---- modal --------------------------------------------------------------

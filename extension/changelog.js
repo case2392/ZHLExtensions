@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.39.4",
+    headline: "Net Proceeds calc: button now sits to the LEFT of LOP's 'Add asset or credit' button (was on the far right).",
+    highlights: [
+      "Swap the injection order in the Assets section header so the layout reads 'Assets ▸ 🏠 Net proceeds calc ▸ Add asset or credit' instead of pushing our button all the way to the right. Insert via insertBefore the data-cy='add-entity-button' element, with appendChild as the fallback."
+    ],
+    sections: ["net-proceeds-calc"]
+  },
+  {
     version: "1.39.3",
     headline: "Pricing Exception Workflow: Open in Gmail now produces the formatted email, RM email is sticky, and the comp pricing form auto-fills almost everything from LOP — including Box A from the Closing Costs popup.",
     highlights: [
