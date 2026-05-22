@@ -334,6 +334,62 @@
       </div>
     </div>
 
+    <!-- Net Proceeds from Sale calculator -->
+    <div class="feature is-new" id="net-proceeds-calc">
+      <div class="shot">
+        <svg viewBox="0 0 260 170" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .np-row { animation: npFlash 4s ease-in-out infinite; }
+            @keyframes npFlash {
+              0%, 5%    { fill: #f9fafb; }
+              15%, 30%  { fill: #dbeafe; }
+              40%, 100% { fill: #f9fafb; }
+            }
+            .np-2 { animation-delay: 0.4s; }
+            .np-3 { animation-delay: 0.8s; }
+            .np-4 { animation-delay: 1.2s; }
+            .np-5 { animation-delay: 1.6s; }
+            .np-net-box { animation: netPulse 4s ease-in-out infinite; }
+            @keyframes netPulse {
+              0%, 50%   { fill: #f0fdf4; stroke: #15803d; }
+              60%, 75%  { fill: #bbf7d0; stroke: #15803d; }
+              85%, 100% { fill: #f0fdf4; stroke: #15803d; }
+            }
+          </style>
+          <text x="10" y="14" font="700 11px Arial" fill="#0b5cab">🏠 Net Proceeds from Sale</text>
+          <rect class="np-row" x="10" y="22" width="240" height="18" rx="3" stroke="#e5e7eb"/>
+          <text x="16" y="34" font="10px Arial" fill="#374151">Sale price</text>
+          <text x="244" y="34" font="600 10px Arial" fill="#15803d" text-anchor="end">$500,000</text>
+          <rect class="np-row np-2" x="10" y="42" width="240" height="18" rx="3" stroke="#e5e7eb"/>
+          <text x="16" y="54" font="10px Arial" fill="#374151">Listing fee 3%</text>
+          <text x="244" y="54" font="10px Arial" fill="#b91c1c" text-anchor="end">-$15,000</text>
+          <rect class="np-row np-3" x="10" y="62" width="240" height="18" rx="3" stroke="#e5e7eb"/>
+          <text x="16" y="74" font="10px Arial" fill="#374151">Buyer fee 3%</text>
+          <text x="244" y="74" font="10px Arial" fill="#b91c1c" text-anchor="end">-$15,000</text>
+          <rect class="np-row np-4" x="10" y="82" width="240" height="18" rx="3" stroke="#e5e7eb"/>
+          <text x="16" y="94" font="10px Arial" fill="#374151">Closing costs</text>
+          <text x="244" y="94" font="10px Arial" fill="#b91c1c" text-anchor="end">-$5,000</text>
+          <rect class="np-row np-5" x="10" y="102" width="240" height="18" rx="3" stroke="#e5e7eb"/>
+          <text x="16" y="114" font="10px Arial" fill="#374151">Mortgage payoff</text>
+          <text x="244" y="114" font="10px Arial" fill="#b91c1c" text-anchor="end">-$320,000</text>
+          <rect class="np-net-box" x="10" y="128" width="240" height="28" rx="4" stroke-width="2"/>
+          <text x="16" y="147" font="700 12px Arial" fill="#15803d">NET PROCEEDS</text>
+          <text x="244" y="147" font="700 14px Arial" fill="#15803d" text-anchor="end">$145,000</text>
+        </svg>
+      </div>
+      <div class="copy">
+        <h3>Net Proceeds from Sale calculator</h3>
+        <p class="trigger"><strong>Trigger:</strong> click the <strong>🏠 Net proceeds calc</strong> button next to the <em>Add asset or credit</em> button in the Assets section on LOP's Financial Information page.</p>
+        <ul>
+          <li><strong>Six inputs.</strong> Sale price, Listing agent fee % (default 3%), Buyer's agent fee % (default 3%), Closing costs $, Mortgage/Loans/HELOC payoffs, and Other.</li>
+          <li><strong>Closing costs auto-fill</strong> at 1% of the sale price the moment you type it &mdash; the moment you edit the closing-costs field manually, the auto-sync stops so your override sticks.</li>
+          <li><strong>Live computed net proceeds</strong> with a per-line dollar breakdown. Output goes green for positive, red for negative.</li>
+          <li><strong>Copy summary</strong> button puts a plain-text breakdown on your clipboard so you can paste it into notes, Slack, or a borrower email.</li>
+          <li>Last values are kept in <code>localStorage</code> on this tab so you don&rsquo;t lose them if you close the modal accidentally.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- Copy LOP file (Stage / Paste the whole Full Application) -->
     <div class="feature is-new" id="lop-file-copy">
       <div class="shot">

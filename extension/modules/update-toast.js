@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.38.0": "NEW Net Proceeds from Sale calculator — click '🏠 Net proceeds calc' in the Assets section to estimate seller proceeds after fees and payoffs.",
     "1.37.10": "Bulk-download: ~10x faster — skipped the 20s wait per file (Zillow Docs never pre-fetches) and now runs 4 downloads in parallel.",
     "1.37.9": "Bulk-download: NEW 'Save to folder' path that bypasses Chrome's Save As dialog entirely — pick a folder once and every PDF saves silently. Works with the PromptForDownloadLocation enterprise policy.",
     "1.37.8": "Bulk-download: confirmation prompt now warns you to disable Chrome's 'Ask where to save' setting — the Save As dialog can't be bypassed by extensions when that's on.",

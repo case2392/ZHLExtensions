@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.38.0",
+    headline: "NEW Net Proceeds from Sale calculator — one click on the Assets section opens a modal that estimates seller proceeds after fees and payoffs.",
+    highlights: [
+      "Adds a '🏠 Net proceeds calc' button next to 'Add asset or credit' in the Assets section on LOP's Financial Information page. Opens a modal with six line items: Sale Price, Listing Agent Fee (default 3%), Buyer's Agent Fee (default 3%), Closing Costs (auto-fills at 1% of sale price but editable), Mortgage/Loans/HELOC Payoffs, and Other. Live-computes net proceeds as you type, with a per-line dollar breakdown.",
+      "Closing costs auto-sync to 1% of sale price as long as you haven't typed a manual value. Once you edit it the auto-sync stops so you don't lose your override.",
+      "Copy summary button writes a plain-text breakdown to clipboard so you can paste it into notes / Slack / borrower email. Last values persist in localStorage for this tab so you don't lose them if the modal closes."
+    ],
+    sections: ["net-proceeds-calc"]
+  },
+  {
     version: "1.37.10",
     headline: "Bulk-download: ~10x faster — skipped the 20s viewer-load wait per file, and now runs 4 downloads in parallel.",
     highlights: [

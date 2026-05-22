@@ -26,6 +26,7 @@ const FEATURE_KEYS = [
   "feature_gmailCallerId",
   "feature_taskBulkDelete",
   "feature_taskBulkDownload",
+  "feature_netProceedsCalc",
   "feature_fhaBadges",
   "feature_fhaNprWarning",
   "feature_fhaFlipRule",

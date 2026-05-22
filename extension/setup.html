@@ -670,6 +670,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: Net Proceeds Calc ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Net Proceeds from Sale Calculator</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — Financial Information page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_netProceedsCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a <strong>🏠 Net proceeds calc</strong> button next to the <em>Add asset or credit</em> button in the Assets section.</li>
+          <li>Opens a modal with line items: <em>Sale price</em>, <em>Listing agent fee</em> (default 3%), <em>Buyer's agent fee</em> (default 3%), <em>Closing costs</em> (auto-fills at 1% of sale price), <em>Mortgage/Loans/HELOC payoffs</em>, and <em>Other</em>. Live-computes net proceeds as you type.</li>
+          <li><strong>Copy summary</strong> button copies a plain-text breakdown to clipboard so you can paste it into notes or Slack.</li>
+          <li>Last values persist via <code>localStorage</code> on this tab.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Anonymous Telemetry ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
