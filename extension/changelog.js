@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.29.0",
+    headline: "New: Copy LOP file — stage a loan's borrower data and paste it into a new file",
+    highlights: [
+      "Adds a floating bar to the Full Application page with Stage / Paste buttons. On the source loan: click Stage from this file. The extension snapshots every editable Personal info, Contact, Marital, Military, Declarations, and Demographics field (plus a row count of every table section) and stores it under chrome.storage keyed by source loan ID. On the new loan: click Paste from staged, pick a stored loan from the dropdown, and the extension writes every matching field.",
+      "Co-borrower aware: when a loan has a co-borrower on the same pair, both columns share field names like 'first' and 'dob'. The extension scopes each captured field by its enclosing personal-info-section index so primary→primary and co-borrower→co-borrower stay aligned. If the destination doesn't have the co-borrower yet, the summary tells you to add them first (+ tab → Coborrower with [name]) and re-paste.",
+      "Multiple stages persist across browser restarts (up to 10). After pasting, a summary panel breaks down: wrote N, skipped M readonly/disabled, no matching source value for P, and lists table sections that still need manual entry (LOP's Add address / Add employment / Add asset flows can't be auto-driven in v1).",
+      "Uses the same React-trusted write trick as the loan-amount fix from v1.25.1 — execCommand('insertText') + real .blur() for text inputs, native setter + change event for selects/checkboxes, and .click() for radios so LOP's onChange handlers fire as if a human typed every field."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.28.3",
     headline: "ZHL Comparison PDF: each scenario now fits on a single page",
     highlights: [

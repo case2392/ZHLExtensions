@@ -475,6 +475,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: Copy LOP file ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Copy LOP file (stage &amp; paste)</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_lopFileCopy" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a floating <strong>Copy LOP file: Stage / Paste</strong> bar to the Full Application page. On the source loan, click <strong>Stage from this file</strong> &mdash; the extension snapshots every editable Personal info / Contact / Marital / Military / Declarations / Demographics field and stores it under chrome.storage keyed by the source loan ID. On the new loan, click <strong>Paste from staged</strong> and pick which stored loan to fill from.</li>
+          <li>Handles co-borrowers on the same pair: fields in <code>personal-info-section-0</code> (Primary) and <code>personal-info-section-1</code> (Co-borrower) are tracked separately so primary&rarr;primary and co-borrower&rarr;co-borrower stay aligned. If the destination doesn&rsquo;t have a co-borrower yet, add them first (<strong>+</strong> tab &rarr; <em>Coborrower with [primary]</em>) then re-paste.</li>
+          <li>Tables (Addresses, Employment, Other income, Assets, Gifts, Liabilities, Real estate) are NOT auto-pasted in this version &mdash; each row needs to be added through LOP&rsquo;s own <em>Add</em> button flow. The summary panel lists the table row counts from the source so you know what&rsquo;s left to enter manually.</li>
+          <li>Multiple stages persist (up to 10). Source field values that are readonly on the destination are skipped and reported in the summary so you can see exactly what was written vs. what needs manual entry.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: ZHL Loan Comparison PDF ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
