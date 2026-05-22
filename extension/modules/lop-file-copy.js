@@ -1153,6 +1153,199 @@
     return { ok: false, reason: 'No credit action staged (need pullType=Hard with refId, or pullType=Soft).' };
   }
 
+  // Before the field paste runs, check the borrower count on the
+  // destination. If the source had more borrowers than the dest
+  // (e.g. source=2 pair, dest=1), drive LOP's "+" tab to add the
+  // missing co-borrower(s) so personal-info-section-1 (etc.)
+  // actually exists when we try to write into it. Otherwise the
+  // co-borrower's first/last/dob/ssn/etc. either silently fall on
+  // the primary or get reported as noMatch.
+  async function addMissingBorrowersToDest(stage) {
+    const srcBorrowers = countBorrowerSections(stage.fields);
+    const destBorrowers = countCurrentBorrowerSections();
+    if (srcBorrowers <= destBorrowers) return { ok: true, added: 0 };
+    const toAdd = srcBorrowers - destBorrowers;
+
+    // Group source fields by borrower-section index so we can
+    // pull each missing co-borrower's first/middle/last/suffix.
+    const srcSections = {};
+    (stage.fields || []).forEach(function (rec) {
+      if (!rec.scope || rec.scope.type !== 'personal-info-section') return;
+      const k = rec.scope.index;
+      if (!srcSections[k]) srcSections[k] = {};
+      srcSections[k][rec.name] = rec.value;
+    });
+
+    console.group('[Copy LOP] Add missing co-borrowers (' + toAdd + ' to add)');
+    let added = 0;
+    for (let idx = destBorrowers; idx < srcBorrowers; idx++) {
+      const src = srcSections[String(idx)];
+      if (!src) {
+        console.warn('[Copy LOP] No source data for borrower index', idx);
+        continue;
+      }
+      updateProgress(
+        'Adding co-borrower ' + (idx + 1) + '…',
+        'Driving the + tab + Add a new borrower dialog.'
+      );
+      const result = await addOneCoBorrower(src);
+      console.log('Add co-borrower', idx, 'result:', result);
+      if (!result.ok) {
+        console.groupEnd();
+        return { ok: false, added: added, reason: result.reason };
+      }
+      added++;
+      // Wait for the new personal-info-section to render in the DOM
+      await waitForCondition(function () {
+        return document.querySelectorAll('[data-cy^="personal-info-section-"]').length >= destBorrowers + added;
+      }, 5000);
+      await wait(600);
+    }
+    console.groupEnd();
+    return { ok: true, added: added };
+  }
+
+  function findAddBorrowerTabButton() {
+    // Primary: LOP gives the + tab a stable id.
+    const byId = document.getElementById('add-primary-borrower');
+    if (byId) return byId;
+
+    // Fallback 1: any element with role=tab whose text is exactly "+".
+    const tabs = document.querySelectorAll('[role="tab"]');
+    for (const t of tabs) {
+      const txt = (t.textContent || '').replace(/\s+/g, '').trim();
+      if (txt === '+') return t;
+    }
+
+    // Fallback 2: walk every button looking for one with text "+" that
+    // lives near the borrower-pair tabs.
+    const buttons = document.querySelectorAll('button');
+    for (const btn of buttons) {
+      const txt = (btn.textContent || '').replace(/\s+/g, '').trim();
+      if (txt !== '+') continue;
+      let p = btn.parentElement;
+      for (let i = 0; i < 8 && p; i++) {
+        if (p.querySelector('[data-cy^="borrower-pair-tab-"]')) return btn;
+        p = p.parentElement;
+      }
+    }
+    // Fallback 3: aria-label "Add borrower" or similar
+    for (const btn of buttons) {
+      const lbl = (btn.getAttribute('aria-label') || '').toLowerCase();
+      if (/add\s*(co.?)?borrower/.test(lbl)) return btn;
+    }
+    return null;
+  }
+
+  async function addOneCoBorrower(srcBorrower) {
+    const plusBtn = findAddBorrowerTabButton();
+    if (!plusBtn) {
+      return { ok: false, reason: '"+" tab button not found — DOM may have changed; please add co-borrower manually then re-paste' };
+    }
+    console.log('[Copy LOP] Clicking + tab', plusBtn);
+    plusBtn.click();
+
+    const dialog = await waitForCondition(function () {
+      const dlgs = document.querySelectorAll('section[role="dialog"][aria-modal="true"]');
+      for (const d of dlgs) {
+        const h = d.querySelector('h4, h3, h2');
+        if (h && /add\s*(a\s*)?new\s*borrower/i.test(h.textContent || '')) return d;
+      }
+      return null;
+    }, 4000);
+    if (!dialog) return { ok: false, reason: 'Add a new borrower dialog did not open' };
+
+    await wait(200);
+    fillAddBorrowerDialog(dialog, srcBorrower);
+    await wait(250);
+
+    // Ensure the "Coborrower with..." radio is selected (it's
+    // usually the default, but be defensive in case LOP changes
+    // the default to "New application" in some flow).
+    const radios = dialog.querySelectorAll('input[type="radio"]');
+    let coRadio = null;
+    radios.forEach(function (r) {
+      // The label text for the matching radio reads like
+      // "Coborrower with Sekou Swaray". Walk to find it.
+      let label = '';
+      // Try the input's parent/sibling label first
+      if (r.id) {
+        const l = dialog.querySelector('label[for="' + r.id + '"]');
+        if (l) label = (l.textContent || '').replace(/\s+/g, ' ').trim();
+      }
+      if (!label && r.parentElement) {
+        label = (r.parentElement.textContent || '').replace(/\s+/g, ' ').trim();
+      }
+      if (/coborrower\s*with/i.test(label)) coRadio = r;
+    });
+    if (coRadio && !coRadio.checked) {
+      console.log('[Copy LOP] Clicking "Coborrower with" radio');
+      coRadio.click();
+      await wait(150);
+    }
+
+    // Click Create borrower
+    const createBtn = Array.from(dialog.querySelectorAll('button')).find(function (b) {
+      return /^create\s*borrower$/i.test((b.textContent || '').trim());
+    });
+    if (!createBtn) return { ok: false, reason: '"Create borrower" button not found in dialog' };
+    if (createBtn.disabled || createBtn.getAttribute('aria-disabled') === 'true') {
+      // The button enables only when First name + Last name are
+      // both filled. If we couldn't fill those, fall back to a
+      // user-visible message.
+      return { ok: false, reason: '"Create borrower" stayed disabled — First/Last name fill probably failed' };
+    }
+    console.log('[Copy LOP] Clicking Create borrower');
+    createBtn.click();
+
+    // Wait for the dialog to close
+    await waitForCondition(function () {
+      const stillOpen = Array.from(document.querySelectorAll('section[role="dialog"][aria-modal="true"]'))
+        .some(function (d) {
+          const h = d.querySelector('h4, h3, h2');
+          return h && /add\s*(a\s*)?new\s*borrower/i.test(h.textContent || '');
+        });
+      return !stillOpen;
+    }, 6000);
+    await wait(500);
+    return { ok: true };
+  }
+
+  function fillAddBorrowerDialog(dialog, src) {
+    // LOP names the inputs first/middle/last/suffix on the dialog.
+    // Fall back to label-text matching if that ever changes.
+    function pick(nameAttr, labelRe) {
+      let inp = dialog.querySelector('input[name="' + nameAttr + '"]');
+      if (inp) return inp;
+      const labels = dialog.querySelectorAll('label');
+      for (const lbl of labels) {
+        const t = (lbl.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        if (!labelRe.test(t)) continue;
+        const id = lbl.getAttribute('for');
+        if (id) {
+          const found = document.getElementById(id);
+          if (found && found.tagName === 'INPUT') return found;
+        }
+        const wrap = lbl.parentElement;
+        if (wrap) {
+          const found = wrap.querySelector('input[type="text"], input:not([type])');
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    const firstInput = pick('first', /^(legal\s*)?first\s*name/);
+    const middleInput = pick('middle', /^middle\s*name/);
+    const lastInput = pick('last', /^(legal\s*)?last\s*name/);
+    const suffixInput = pick('suffix', /^suffix/);
+
+    if (firstInput && src.first) setReactInputValue(firstInput, src.first);
+    if (middleInput && src.middle) setReactInputValue(middleInput, src.middle);
+    if (lastInput && src.last) setReactInputValue(lastInput, src.last);
+    if (suffixInput && src.suffix) setReactInputValue(suffixInput, src.suffix);
+  }
+
   // Confirm every borrower the source had (one section per index)
   // is ready for credit on the destination:
   //   - personal-info-section has first / last / DOB / SSN populated
@@ -2011,6 +2204,38 @@
     console.log('Destination borrower count:', countCurrentBorrowerSections(),
       'vs source:', countBorrowerSections(stage.fields));
 
+    // STEP 0: if the source has more borrowers than the destination,
+    // click the "+" tab and add the missing co-borrower(s) BEFORE we
+    // start writing fields. Otherwise the co-borrower's first/last/
+    // DOB/SSN, addresses, etc. either silently fall on the primary
+    // borrower's section or get logged as noMatch.
+    let addBorrowersResult = null;
+    const srcBorrowersBefore = countBorrowerSections(stage.fields);
+    const destBorrowersBefore = countCurrentBorrowerSections();
+    if (srcBorrowersBefore > destBorrowersBefore) {
+      showProgress(
+        'Adding co-borrower' + (srcBorrowersBefore - destBorrowersBefore > 1 ? 's' : '') + '…',
+        'Source has ' + srcBorrowersBefore + ' borrower(s), destination has ' + destBorrowersBefore +
+        '. Driving the + tab so the missing section(s) exist before pasting.'
+      );
+      addBorrowersResult = await addMissingBorrowersToDest(stage);
+      console.log('Add missing borrowers result:', addBorrowersResult);
+      if (!addBorrowersResult.ok) {
+        hideProgress();
+        console.groupEnd();
+        return {
+          wrote: 0, skippedLocked: 0, noMatch: 0, skippedEmpty: 0, passes: 0,
+          borrowerMismatch: { source: srcBorrowersBefore, destination: countCurrentBorrowerSections() },
+          addBorrowersResult: addBorrowersResult,
+          aborted: true,
+          abortReason: 'Could not add co-borrower automatically: ' + addBorrowersResult.reason
+        };
+      }
+      // Give LOP a moment to settle after the dialog closes and
+      // the new tab/section renders.
+      await new Promise(function (r) { setTimeout(r, 500); });
+    }
+
     const byKey = {};
     (stage.fields || []).forEach(function (rec) {
       const key = fieldKey(rec.name, rec.tag, rec.type, rec.value, rec.scope);
@@ -2148,6 +2373,7 @@
       skippedEmpty: lastResult.skippedEmpty,
       passes: passes,
       borrowerMismatch: borrowerMismatch,
+      addBorrowersResult: addBorrowersResult,
       creditResult: creditResult,
       saveResult: saveResult,
       tableResults: tableResults,
@@ -2474,6 +2700,23 @@
   function showSummary(stage, result) {
     const headerName = namesFromStage(stage) || stage.sourceBorrowerName || '';
     const tableSummaryHtml = tableDataSummaryHtml(stage.tableData);
+    if (result.aborted) {
+      showModal(
+        '<h3 style="margin:0 0 8px;font-size:16px;color:#991b1b;">Paste aborted</h3>' +
+        '<p style="margin:0 0 8px;color:#7f1d1d;font-size:13px;">' +
+          escapeHtml(result.abortReason || 'Unknown reason') +
+        '</p>' +
+        '<p style="margin:0 0 8px;color:#374151;font-size:12px;">' +
+          'Add the missing borrower manually (click the <strong>+</strong> tab → ' +
+          '<em>Coborrower with [name]</em> → Create borrower) and then re-paste.' +
+        '</p>' +
+        '<div style="text-align:right;margin-top:6px;">' +
+          '<button id="zhl-modal-ok" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button>' +
+        '</div>',
+        function (p) { p.querySelector('#zhl-modal-ok').addEventListener('click', removeModal); }
+      );
+      return;
+    }
     showModal(
       '<h3 style="margin:0 0 8px;font-size:16px;color:#15803d;">Pasted ' + result.wrote + ' fields</h3>' +
       '<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">From <strong>' +
@@ -2491,6 +2734,14 @@
         '<div><strong>No matching source value:</strong> ' + result.noMatch +
           ' <span style="color:#6b7280;">(field name only exists on destination)</span></div>' +
       '</div>' +
+      (result.addBorrowersResult && result.addBorrowersResult.ok && result.addBorrowersResult.added
+        ? '<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:10px;margin:10px 0;color:#065f46;font-size:13px;">' +
+          '<strong>✓ Auto-added ' + result.addBorrowersResult.added + ' co-borrower' +
+            (result.addBorrowersResult.added === 1 ? '' : 's') + '</strong> ' +
+          '&mdash; clicked the <strong>+</strong> tab and filled the <em>Add a new borrower</em> dialog ' +
+          'so every source borrower has a section to paste into.' +
+        '</div>'
+        : '') +
       (result.borrowerMismatch
         ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px;margin:10px 0;color:#92400e;font-size:13px;">' +
           '<strong>⚠ Borrower count mismatch:</strong> source had <strong>' + result.borrowerMismatch.source +

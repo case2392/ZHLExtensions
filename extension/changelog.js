@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.34.0",
+    headline: "Copy LOP file: auto-adds missing co-borrowers before pasting — multi-borrower files now copy cleanly in one click",
+    highlights: [
+      "BUG: when the source file had multiple borrowers but the destination only had the primary, paste was skipping the + tab and just writing everything into the one section it could find. The co-borrower's SSN ended up on the primary, the address got pasted twice, and the second borrower was never created. Fix: paste now checks the borrower-section count on the destination first and, if the source had more, drives the + tab → Add a new borrower dialog → fills First / Middle / Last / Suffix → leaves 'Coborrower with [primary]' selected → clicks Create borrower, then waits for the new personal-info-section to render before pasting any fields. Repeats for each missing co-borrower.",
+      "Uses the dialog's stable input names (first / middle / last / suffix) and the + tab's stable id (add-primary-borrower) so the auto-add survives minor LOP DOM tweaks.",
+      "If the auto-add fails (unexpected dialog state, button stayed disabled, etc.) paste aborts cleanly with a clear message telling the LO to add the borrower manually and re-paste — instead of silently writing co-borrower data onto the primary."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.33.2",
     headline: "Copy LOP file: soft credit pulls now save the file first + Save click uses full mouse-event sequence",
     highlights: [
