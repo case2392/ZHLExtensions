@@ -1511,55 +1511,132 @@
     };
   }
 
-  // Poll for any of: liability rows populated, FICO score in
-  // eligibility panel, or 'Pull credit succeeded' indicator.
+  // Wait for the credit pull to land for EVERY borrower on the
+  // file. The right-rail Credit card lists each borrower by
+  // name (e.g. "Mark Malone" / "Sarah Malone") with Soft / Hard
+  // rows that fill in 3-digit scores once the pull completes.
+  // We don't proceed until each name has at least one numeric
+  // score next to it — otherwise pricing can run against an
+  // incomplete preflight (and may pick the wrong tier).
   async function waitForCreditToLand(timeoutMs) {
     console.group('[Copy LOP][pricing] waitForCreditToLand');
+    const expectedBorrowers = expectedBorrowerNamesForCredit();
+    console.log('Expected borrowers (need a score each):', expectedBorrowers);
     const t0 = Date.now();
-    let lastReason = 'timeout';
+    let lastSeen = null;
     while (Date.now() - t0 < timeoutMs) {
-      // Check for FICO score in eligibility panel
-      const elig = Array.from(document.querySelectorAll('span, p, div'))
-        .find(function (n) { return /credit\s*score/i.test((n.textContent || '').trim()); });
-      if (elig) {
-        // Walk siblings/parent for a digits-only span
-        const container = elig.parentElement;
-        const m = (container ? container.textContent : '').match(/credit\s*score[:\s]*([3-8]\d{2})/i);
-        if (m) {
-          console.log('FICO seen in eligibility panel:', m[1]);
-          console.groupEnd();
-          return { ok: true, fico: m[1], elapsed: Date.now() - t0 };
-        }
-      }
-      // Check for liability rows that look like real accounts
-      const liabTbody = document.querySelector('table[aria-label="Table for liabilities"] tbody');
-      if (liabTbody) {
-        const rows = Array.from(liabTbody.querySelectorAll('tr')).filter(function (tr) {
-          const tds = tr.querySelectorAll('td');
-          if (tds.length <= 1) return false;
-          return !!(tr.textContent || '').trim() &&
-                 tr.getAttribute('data-cy') !== 'add-entity-container';
+      const seen = readPerBorrowerCreditScores();
+      lastSeen = seen;
+      // Every expected name needs to map to a name in `seen`
+      // whose score array has at least one 3-digit entry.
+      const allReady = expectedBorrowers.every(function (name) {
+        const key = (name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const hit = seen.find(function (s) {
+          const sn = (s.name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          return sn === key || sn.indexOf(key) !== -1 || key.indexOf(sn) !== -1;
         });
-        if (rows.length > 0) {
-          console.log('Liability rows populated:', rows.length);
-          console.groupEnd();
-          return { ok: true, liabilityRows: rows.length, elapsed: Date.now() - t0 };
-        }
-      }
-      // Check for "soft/hard" credit indicator with a number
-      const right = document.body.textContent || '';
-      if (/(?:soft|hard)[\s\S]{0,40}\b[3-8]\d{2}\b/i.test(right) && (Date.now() - t0) > 5000) {
-        // Risk: this is page-wide regex match. Only count after 5s
-        // so we don't insta-match stale text from the previous load.
-        console.log('Soft/Hard score text appeared somewhere on the page.');
+        return hit && hit.scores.length > 0;
+      });
+      if (allReady && expectedBorrowers.length > 0) {
+        console.log('Per-borrower credit scores ready at', Date.now() - t0, 'ms:', seen);
         console.groupEnd();
-        return { ok: true, indicator: 'soft/hard text', elapsed: Date.now() - t0 };
+        return { ok: true, perBorrower: seen, elapsed: Date.now() - t0 };
+      }
+      // Log a snapshot every few seconds so the console shows
+      // progress (otherwise it looks frozen).
+      if ((Date.now() - t0) % 4000 < 850) {
+        console.log('Polling… expected', expectedBorrowers.length, 'borrowers; seen so far:', seen);
       }
       await wait(800);
     }
-    console.warn('[Copy LOP][pricing] credit never visibly landed in', timeoutMs, 'ms');
+    console.warn('[Copy LOP][pricing] not every borrower had a score within', timeoutMs, 'ms. Last seen:', lastSeen);
     console.groupEnd();
-    return { ok: false, reason: lastReason };
+    return { ok: false, reason: 'timed out waiting for per-borrower credit scores', lastSeen: lastSeen };
+  }
+
+  // Read every borrower name on the destination's personal-info
+  // sections so we know how many scores to wait for.
+  function expectedBorrowerNamesForCredit() {
+    const names = [];
+    document.querySelectorAll('[data-cy^="personal-info-section-"]').forEach(function (sec) {
+      const first = sec.querySelector('input[name="first"]');
+      const last = sec.querySelector('input[name="last"]');
+      const f = first ? (first.value || '').trim() : '';
+      const l = last ? (last.value || '').trim() : '';
+      const name = (f + ' ' + l).trim();
+      if (name) names.push(name);
+    });
+    return names;
+  }
+
+  // Look at the right-rail Credit card and return one entry
+  // per borrower with their visible Soft / Hard scores.
+  // Returns e.g. [{name: 'Mark Malone', scores: ['763','739','770']}, ...]
+  function readPerBorrowerCreditScores() {
+    const result = [];
+    // Find the "Credit" heading. It's a div with a Heading-styled
+    // h5/h6 whose text is exactly "Credit".
+    const headings = Array.from(document.querySelectorAll('h5, h6, h4, h3'));
+    const creditHeading = headings.find(function (h) {
+      return /^credit$/i.test((h.textContent || '').replace(/\s+/g, ' ').trim());
+    });
+    if (!creditHeading) return result;
+    // Walk up to a container that holds the borrower rows.
+    let card = creditHeading.parentElement;
+    for (let i = 0; i < 8 && card; i++) {
+      // Look for any descendant with text matching one of our
+      // borrower names — if we find at least one, this is the
+      // right card.
+      const looksRight = card.textContent && /soft|hard/i.test(card.textContent);
+      if (looksRight && card.querySelectorAll('div').length > 4) break;
+      card = card.parentElement;
+    }
+    if (!card) return result;
+    // Within the card, every borrower's section is a sub-block
+    // that starts with their name. Use the destination's known
+    // borrower names to anchor.
+    const expected = expectedBorrowerNamesForCredit();
+    expected.forEach(function (name) {
+      // Find an element inside the card whose text starts with
+      // the borrower's name AND is followed by Soft/Hard rows.
+      const all = Array.from(card.querySelectorAll('*'));
+      const anchor = all.find(function (n) {
+        // Only consider leaf-ish text nodes
+        if (n.children.length > 1) return false;
+        const t = (n.textContent || '').replace(/\s+/g, ' ').trim();
+        return t === name;
+      });
+      if (!anchor) {
+        result.push({ name: name, scores: [] });
+        return;
+      }
+      // Look at the next ~12 siblings/descendants for 3-digit
+      // numbers that are plausible FICO (300-850).
+      const scores = [];
+      let scanRoot = anchor.parentElement || anchor;
+      // Walk up to a slightly bigger container to capture the
+      // Soft/Hard sub-rows that sit AFTER the name line.
+      for (let i = 0; i < 3 && scanRoot.parentElement; i++) {
+        scanRoot = scanRoot.parentElement;
+      }
+      const txt = (scanRoot.textContent || '').replace(/\s+/g, ' ');
+      // Pull the slice that starts AT the borrower's name so we
+      // don't count the prior borrower's scores.
+      const slice = txt.slice(txt.indexOf(name));
+      // Stop the slice at the next borrower's name (if any) to
+      // avoid double-counting.
+      let stop = slice.length;
+      expected.forEach(function (other) {
+        if (other === name) return;
+        const i = slice.indexOf(other, name.length);
+        if (i !== -1 && i < stop) stop = i;
+      });
+      const localSlice = slice.slice(0, stop);
+      const nums = localSlice.match(/\b([3-8]\d{2})\b/g) || [];
+      nums.forEach(function (n) { scores.push(n); });
+      result.push({ name: name, scores: scores });
+    });
+    return result;
   }
 
   async function navigateToPricingTab() {
@@ -1648,7 +1725,10 @@
     const fico = readDestFico();
     if (fico) writeF('fico', fico, 'fico');
     // Property / location
-    writeF('propertyZIP', sp.addressZIP, 'propertyZIP');
+    // LOP's pricing form accepts only the 5-digit ZIP — the
+    // source's addressZIP can carry a ZIP+4 ("30504-5682") which
+    // causes a "Failed to run pricing" toast when submitted.
+    writeF('propertyZIP', stripZipToFive(sp.addressZIP), 'propertyZIP');
     writeF('propertyCity', sp.addressCity, 'propertyCity');
     writeF('propertyCountyName', sp.addressCountyName, 'propertyCountyName');
     writeF('propertyState', sp.addressState, 'propertyState');
@@ -1684,6 +1764,11 @@
   function stripPercent(s) {
     if (s == null) return '';
     return String(s).replace(/[%\s]/g, '').trim();
+  }
+  function stripZipToFive(s) {
+    if (s == null) return '';
+    const m = String(s).match(/(\d{5})/);
+    return m ? m[1] : '';
   }
   function parseLockDays(s) {
     if (!s) return '';

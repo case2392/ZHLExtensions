@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.36.1",
+    headline: "Copy LOP file BUG FIXES: pricing ZIP gets stripped to 5 digits + credit wait now requires a score for every borrower.",
+    highlights: [
+      "BUG: pricing form bounced with 'Failed to run pricing. Please check the form for errors and try again.' because the source's source ZIP was a ZIP+4 (e.g. 30504-5682) and LOP's Pricing form only accepts the 5-digit form. Now stripZipToFive() pulls the first 5 digits before writing to propertyZIP.",
+      "BUG: waitForCreditToLand was firing as soon as any credit score appeared on the page (it found the combined 'Credit score: 751' in the eligibility panel and immediately proceeded). On multi-borrower files this meant pricing could run before Borrower 2's pull had landed. Now it reads each borrower's name from the personal-info-sections and waits until the right-rail Credit card shows at least one 3-digit FICO next to EVERY name. Logs the per-borrower scores it sees each poll cycle so you can watch progress in the console."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.36.0",
     headline: "Copy LOP file: NEW auto-run pricing + auto-assign same product & rate as the source loan — the whole pricing scenario carries over.",
     highlights: [
