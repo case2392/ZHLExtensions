@@ -88,6 +88,22 @@
     return m ? m[1] : '';
   }
 
+  // LOP shows the Encompass ZG# in a span near the borrower name
+  // ("#ZG001260248246"). Pull it so the email auto-uses the ZG# instead of
+  // the LOP UUID.
+  function extractZgNumberFromDom() {
+    try {
+      const all = document.querySelectorAll('span, a, button');
+      for (const el of all) {
+        if (el.children && el.children.length > 0) continue; // leaf only
+        const t = (el.textContent || '').trim();
+        const m = t.match(/^#?(ZG\d{6,})$/i);
+        if (m) return m[1].toUpperCase();
+      }
+    } catch (_) {}
+    return '';
+  }
+
   // ---- button injection ---------------------------------------------------
   function findToolbarHost() {
     // Strategy 1: look for the "Paste from staged" button and use its parent.
@@ -147,9 +163,10 @@
       locked: null,             // true | false
       borrowerName: names.primary || '',
       coborrowerName: names.coborrower || '',
+      loName: '',               // set in openWorkflow() from chrome.storage
       loanId: extractLoanIdFromUrl(),
       loanLink: location.href,
-      zgNumber: '',
+      zgNumber: extractZgNumberFromDom(),
       // unlocked-path comp details
       purchasePrice: 0,
       loanAmount:    0,
@@ -175,8 +192,13 @@
   function openWorkflow() {
     workflowState = defaultState();
     try {
-      chrome.storage.local.get([STORAGE_KEY_RM], function (data) {
+      chrome.storage.local.get([STORAGE_KEY_RM, 'lo_name', '_zhl_tlm_user'], function (data) {
         workflowState.rmEmail = (data && data[STORAGE_KEY_RM]) || '';
+        // LO name: prefer the explicit setup-page setting, fall back to
+        // the Salesforce-captured identity name.
+        const fromSetup = (data && data.lo_name) || '';
+        const fromTlm   = (data && data._zhl_tlm_user && data._zhl_tlm_user.name) || '';
+        workflowState.loName = fromSetup || fromTlm || '';
         renderModal();
       });
     } catch (_) { renderModal(); }
@@ -494,7 +516,7 @@
         '<input id="pe-subject" type="text" value="' + escapeHtml(email.subject) + '" style="' + fieldStyle + 'margin-bottom:10px;" />' +
         '<label style="display:block;font-size:11px;color:#6b7280;font-weight:600;margin-bottom:2px;">Body</label>' +
         '<textarea id="pe-body" style="' + fieldStyle + 'min-height:280px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;">' + escapeHtml(email.body) + '</textarea>' +
-        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">⚠ Attachments (Comp LE, ZHL pricing summary, etc.) can\'t be added via mailto: — attach them manually after the email opens.</p>' +
+        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">Tip: <em>Copy body</em> puts a formatted HTML version + plain text on the clipboard. Pasting into Gmail uses the formatted version (table, headers, link). Attachments still need to be added manually after the email opens.</p>' +
         '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">' +
           btnPrimary('Open in Gmail', 'zhl-pe-mailto') +
           btnSecondary('Copy body', 'zhl-pe-copy-body') +
@@ -537,8 +559,14 @@
         catch (_) { window.location.href = url; }
       });
       body.querySelector('#zhl-pe-copy-body').addEventListener('click', function () {
-        const e = read();
-        flashCopy(this, e.body);
+        read(); // sync state from the editable fields
+        // Re-build with the latest state so Subject + Body edits feed back
+        // into the HTML version. We give the textarea-edited body to the
+        // plain-text MIME (so user edits survive) and the freshly built
+        // HTML to the text/html MIME (so Gmail's rich-text body renders it).
+        const rebuilt = buildEmail(workflowState);
+        const plain = body.querySelector('#pe-body').value;
+        copyHtmlAndPlain(this, rebuilt.html, plain);
       });
       body.querySelector('#zhl-pe-copy-subj').addEventListener('click', function () {
         const e = read();
@@ -565,6 +593,32 @@
       flashLabel(btn, '✗ Failed');
     }
   }
+  // Put BOTH text/html and text/plain on the clipboard so a paste into
+  // Gmail's body field (which accepts HTML) renders the formatted table,
+  // while a paste into a plain-text target still gets the plain version.
+  function copyHtmlAndPlain(btn, html, plain) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
+        const item = new ClipboardItem({
+          'text/html':  new Blob([html],  { type: 'text/html' }),
+          'text/plain': new Blob([plain], { type: 'text/plain' })
+        });
+        navigator.clipboard.write([item]).then(
+          function () { flashLabel(btn, '✓ Copied (formatted)'); },
+          function () {
+            // Browsers that have ClipboardItem but block multi-type writes
+            // fall back to plain text only.
+            navigator.clipboard.writeText(plain).then(
+              function () { flashLabel(btn, '✓ Copied (plain)'); },
+              function () { flashLabel(btn, '✗ Failed'); }
+            );
+          }
+        );
+        return;
+      }
+    } catch (_) {}
+    flashCopy(btn, plain);
+  }
   function flashLabel(btn, msg) {
     const orig = btn.textContent;
     btn.textContent = msg;
@@ -572,39 +626,85 @@
   }
 
   // ---- email template -----------------------------------------------------
+  function borrowerLabel(s) {
+    const p = (s.borrowerName || '').trim();
+    const c = (s.coborrowerName || '').trim();
+    if (p && c) return p + ' & ' + c;
+    return p || 'the borrower';
+  }
+  function loLabel(s) { return (s.loName || '').trim() || '(your name)'; }
+  function loanIdForEmail(s) { return (s.zgNumber || s.loanId || '(loan id)').trim(); }
+  function sizeLabel(s) { return s.isOver25 ? '2.5 points or over' : 'under 2.5 points'; }
+
+  // Build a complete email — returns { subject, body, html }.
+  // body  = plain text (used by Open-in-Gmail compose URL, and as the
+  //         text/plain on the clipboard)
+  // html  = formatted version (used as text/html on the clipboard so Gmail's
+  //         body field renders tables / bold / hyperlinks correctly)
   function buildEmail(s) {
-    const id = s.zgNumber || s.loanId || '(loan id)';
-    const greeting = 'Hi,';
+    const id = loanIdForEmail(s);
+    const heading = 'PE request for ' + borrowerLabel(s) + ' by ' + loLabel(s);
     if (s.locked === true) {
-      // Locked path — short email with completed checklist
-      const lines = [
-        greeting,
-        '',
-        id + ' is ready for PE request.',
-        '',
-        'Pre-submission checklist (all complete):',
-        '  ✓ Current pricing imported',
-        '  ✓ Comp PE fields completed in ENC Lock / Pricing Screen',
-        '  ✓ No lock-difference alert',
-        '  ✓ Comp LE uploaded to eFolder',
-        '',
-        'PE request size: ' + (s.isOver25 ? '2.5 points or over' : 'under 2.5 points'),
-        ''
-      ];
-      if (s.isOver25) lines.push.apply(lines, big25Section(s));
-      lines.push('LOP link: ' + s.loanLink);
-      lines.push('');
-      lines.push('Thanks.');
-      return {
-        subject: id + ' is ready for PE request' + (s.isOver25 ? ' (>2.5 pts)' : ''),
-        body: lines.join('\n')
-      };
+      return buildEmailLocked(s, id, heading);
     }
-    // Unlocked path — include comp details + calculation
+    return buildEmailUnlocked(s, id, heading);
+  }
+
+  function buildEmailLocked(s, id, heading) {
+    // ----- plain text -----
     const lines = [
-      greeting,
+      'Hi,',
       '',
-      'PE request — ' + id,
+      heading,
+      '',
+      'Loan: ' + id,
+      'LOP link: ' + s.loanLink,
+      '',
+      id + ' is ready for PE request.',
+      '',
+      'Pre-submission checklist (all complete):',
+      '  ✓ Current pricing imported',
+      '  ✓ Comp PE fields completed in ENC Lock / Pricing Screen',
+      '  ✓ No lock-difference alert',
+      '  ✓ Comp LE uploaded to eFolder',
+      '',
+      'PE request size: ' + sizeLabel(s),
+      ''
+    ];
+    if (s.isOver25) lines.push.apply(lines, big25SectionPlain(s));
+    lines.push('Thanks.');
+    // ----- html -----
+    const html = wrapHtml(
+      htmlHeader(heading, id, s.loanLink) +
+      '<p style="margin:14px 0 8px;">' + escapeHtml(id) + ' is ready for PE request.</p>' +
+      '<p style="margin:14px 0 6px;font-weight:600;color:' + COLORS.accent + ';">Pre-submission checklist (all complete):</p>' +
+      '<ul style="margin:0 0 14px;padding-left:22px;line-height:1.7;">' +
+        '<li>Current pricing imported</li>' +
+        '<li>Comp PE fields completed in ENC Lock / Pricing Screen</li>' +
+        '<li>No lock-difference alert</li>' +
+        '<li>Comp LE uploaded to eFolder</li>' +
+      '</ul>' +
+      '<p style="margin:14px 0;"><strong>PE request size:</strong> ' + escapeHtml(sizeLabel(s)) + '</p>' +
+      (s.isOver25 ? big25SectionHtml(s) : '') +
+      '<p style="margin-top:18px;">Thanks.</p>'
+    );
+    return {
+      subject: 'PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + (s.isOver25 ? ' — >2.5 pts' : ''),
+      body: lines.join('\n'),
+      html: html
+    };
+  }
+
+  function buildEmailUnlocked(s, id, heading) {
+    const zhlNet  = s.zhlBoxA  - s.zhlCredits;
+    const compNet = s.compBoxA - s.compCredits;
+    // ----- plain text -----
+    const lines = [
+      'Hi,',
+      '',
+      heading,
+      '',
+      'Loan: ' + id,
       'LOP link: ' + s.loanLink,
       '',
       'Loan scenario:',
@@ -616,28 +716,50 @@
       '  Interest rate:      ' + formatPctDisplay(s.zhlRate),
       '  Total Box A:        ' + formatMoney(s.zhlBoxA),
       '  Lender credits:     ' + formatMoney(s.zhlCredits),
-      '  Net cost (A − cr.): ' + formatMoney(s.zhlBoxA - s.zhlCredits),
+      '  Net cost (A − cr.): ' + formatMoney(zhlNet),
       '',
       'Competitor pricing:',
       '  Interest rate:      ' + formatPctDisplay(s.compRate),
       '  Total Box A:        ' + formatMoney(s.compBoxA),
       '  Lender credits:     ' + formatMoney(s.compCredits),
-      '  Net cost (A − cr.): ' + formatMoney(s.compBoxA - s.compCredits),
+      '  Net cost (A − cr.): ' + formatMoney(compNet),
       '',
       'PE amount requested: ' + formatMoney(s.peDollars) + '  (' + formatPctDisplay(s.pePoints) + ')',
-      'PE request size:     ' + (s.isOver25 ? '2.5 points or over' : 'under 2.5 points'),
+      'PE request size:     ' + sizeLabel(s),
       ''
     ];
-    if (s.isOver25) lines.push.apply(lines, big25Section(s));
+    if (s.isOver25) lines.push.apply(lines, big25SectionPlain(s));
     lines.push('Attached: ZHL pricing summary, comp pricing summary, comp LE.');
     lines.push('');
     lines.push('Thanks.');
+    // ----- html -----
+    const html = wrapHtml(
+      htmlHeader(heading, id, s.loanLink) +
+      htmlSectionHeading('Loan scenario') +
+      htmlKvTable([
+        ['Purchase price', formatMoney(s.purchasePrice)],
+        ['Loan amount',    formatMoney(s.loanAmount)],
+        ['Loan type',      escapeHtml(s.loanType) + ' (' + escapeHtml(s.armOrFrm) + ')']
+      ]) +
+      htmlSectionHeading('Pricing comparison') +
+      htmlComparisonTable(s, zhlNet, compNet) +
+      '<p style="margin:16px 0;font-size:15px;line-height:1.6;">' +
+        '<strong>PE amount requested:</strong> ' + escapeHtml(formatMoney(s.peDollars)) +
+        ' <span style="color:#6b7280;">(' + escapeHtml(formatPctDisplay(s.pePoints)) + ')</span><br>' +
+        '<strong>PE request size:</strong> ' + escapeHtml(sizeLabel(s)) +
+      '</p>' +
+      (s.isOver25 ? big25SectionHtml(s) : '') +
+      '<p style="margin:18px 0 0;color:#6b7280;font-size:12px;font-style:italic;">Attached: ZHL pricing summary, comp pricing summary, comp LE.</p>' +
+      '<p style="margin-top:14px;">Thanks.</p>'
+    );
     return {
-      subject: 'PE Request — ' + id + (s.isOver25 ? ' (>2.5 pts)' : ''),
-      body: lines.join('\n')
+      subject: 'PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + (s.isOver25 ? ' — >2.5 pts' : ''),
+      body: lines.join('\n'),
+      html: html
     };
   }
-  function big25Section(s) {
+
+  function big25SectionPlain(s) {
     const brName = (s.borrowerName || 'the borrower').trim();
     return [
       'Justification (PE > 2.5 pts):',
@@ -652,6 +774,83 @@
       '     ' + (s.agentRel || '(not provided)'),
       ''
     ];
+  }
+  function big25SectionHtml(s) {
+    const brName = (s.borrowerName || 'the borrower').trim();
+    return htmlSectionHeading('Justification (PE > 2.5 pts)') +
+      '<ol style="margin:0 0 14px;padding-left:22px;line-height:1.6;">' +
+        '<li style="margin-bottom:10px;">' +
+          '<strong>Main reason for PE:</strong><br>' +
+          '<span style="color:#374151;">' + escapeHtml(s.reason || '(not provided)') + '</span>' +
+        '</li>' +
+        '<li style="margin-bottom:10px;">' +
+          '<strong>Expectations set with ' + escapeHtml(brName) + ' that further PEs / rate extensions are at their cost:</strong><br>' +
+          '<span style="color:#374151;">' + escapeHtml(s.expectations || '(not provided)') + '</span>' +
+        '</li>' +
+        '<li style="margin-bottom:10px;">' +
+          '<strong>Relationship with agent / partner:</strong><br>' +
+          '<span style="color:#374151;">' + escapeHtml(s.agentRel || '(not provided)') + '</span>' +
+        '</li>' +
+      '</ol>';
+  }
+
+  // ---- HTML email helpers -------------------------------------------------
+  const COLORS = { accent: '#b45309', zhl: '#0b5cab', comp: '#b45309', muted: '#6b7280', divider: '#fde68a' };
+  function wrapHtml(inner) {
+    return '<div style="font:14px Arial,Helvetica,sans-serif;color:#1f2937;line-height:1.5;">' +
+      '<p style="margin:0 0 10px;">Hi,</p>' +
+      inner +
+    '</div>';
+  }
+  function htmlHeader(heading, id, link) {
+    return '<p style="margin:0 0 4px;font-size:15px;"><strong>' + escapeHtml(heading) + '</strong></p>' +
+      '<p style="margin:0 0 14px;color:' + COLORS.muted + ';font-size:13px;">' +
+        'Loan: ' + escapeHtml(id) + '<br>' +
+        'LOP link: <a href="' + escapeHtml(link) + '" style="color:' + COLORS.zhl + ';">' + escapeHtml(link) + '</a>' +
+      '</p>';
+  }
+  function htmlSectionHeading(title) {
+    return '<h3 style="margin:18px 0 8px;font-size:14px;color:' + COLORS.accent + ';' +
+      'border-bottom:2px solid ' + COLORS.divider + ';padding-bottom:4px;">' + escapeHtml(title) + '</h3>';
+  }
+  function htmlKvTable(rows) {
+    return '<table style="border-collapse:collapse;margin-top:6px;">' +
+      rows.map(function (r) {
+        return '<tr>' +
+          '<td style="padding:3px 16px 3px 0;color:' + COLORS.muted + ';">' + escapeHtml(r[0]) + '</td>' +
+          '<td style="padding:3px 0;font-weight:600;">' + r[1] + '</td>' +
+        '</tr>';
+      }).join('') +
+    '</table>';
+  }
+  function htmlComparisonTable(s, zhlNet, compNet) {
+    const th = 'padding:6px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;';
+    const td = 'padding:5px 12px;';
+    const numericRight = 'text-align:right;';
+    function row(label, zhl, comp) {
+      return '<tr>' +
+        '<td style="' + td + 'color:' + COLORS.muted + ';">' + escapeHtml(label) + '</td>' +
+        '<td style="' + td + numericRight + '">' + escapeHtml(zhl) + '</td>' +
+        '<td style="' + td + numericRight + '">' + escapeHtml(comp) + '</td>' +
+      '</tr>';
+    }
+    return '<table style="border-collapse:collapse;border:1px solid #e5e7eb;margin-top:8px;">' +
+      '<thead><tr style="background:#f9fafb;">' +
+        '<th style="' + th + 'text-align:left;">&nbsp;</th>' +
+        '<th style="' + th + numericRight + 'color:' + COLORS.zhl + ';">ZHL</th>' +
+        '<th style="' + th + numericRight + 'color:' + COLORS.comp + ';">Competitor</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        row('Interest rate',  formatPctDisplay(s.zhlRate),    formatPctDisplay(s.compRate)) +
+        row('Total Box A',    formatMoney(s.zhlBoxA),         formatMoney(s.compBoxA)) +
+        row('Lender credits', formatMoney(s.zhlCredits),      formatMoney(s.compCredits)) +
+        '<tr style="background:#f9fafb;font-weight:700;">' +
+          '<td style="' + td + 'border-top:1px solid #e5e7eb;">Net cost</td>' +
+          '<td style="' + td + numericRight + 'border-top:1px solid #e5e7eb;color:' + COLORS.zhl + ';">' + escapeHtml(formatMoney(zhlNet)) + '</td>' +
+          '<td style="' + td + numericRight + 'border-top:1px solid #e5e7eb;color:' + COLORS.comp + ';">' + escapeHtml(formatMoney(compNet)) + '</td>' +
+        '</tr>' +
+      '</tbody>' +
+    '</table>';
   }
 
   // ---- scan loop ----------------------------------------------------------

@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.39.2",
+    headline: "Pricing Exception Workflow: friendlier header, formatted Copy body (HTML for Gmail), auto-fills the ZG# and Loan Officer name from the page.",
+    highlights: [
+      "Email header changed from 'PE request — <uuid>' to 'PE request for <Borrower> & <Co-borrower> by <Loan Officer>'. The loan id and LOP link drop below the heading as supporting info, not as the headline.",
+      "ZG# is auto-detected from the LOP borrower header (matches the '#ZG…' span on the loan page). If found, it pre-fills the email's Loan: line and the editable ZG# field; if not, the LOP UUID is used until you type one in.",
+      "Loan Officer name auto-loaded from chrome.storage — uses the Loan Officer Profile name from setup.html first, then falls back to the Salesforce-captured identity. Edit in the Email step if it's wrong.",
+      "Copy body now puts BOTH a formatted HTML version (with a real pricing-comparison table, bold section headers, colored ZHL/Competitor columns, and the LOP link as a clickable hyperlink) AND a plain-text fallback on the clipboard via the ClipboardItem API. Paste into Gmail's body and it renders as a formatted email; paste into a plain-text editor (or Slack, etc.) and it falls back to plain text. The old monospace-alignment-in-Gmail-proportional-font ugliness is gone."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.39.1",
     headline: "Pricing Exception Workflow: 'Open in mail' is now 'Open in Gmail' — opens the email directly in Gmail instead of handing off to the OS default mail client (Outlook).",
     highlights: [

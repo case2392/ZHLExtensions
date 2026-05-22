@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.39.2": "Pricing Exception Workflow: new header 'PE request for <Borrowers> by <LO>', auto-detects ZG# and LO name, and Copy body now copies a formatted HTML version that pastes nicely into Gmail.",
     "1.39.1": "Pricing Exception Workflow: button now opens the email directly in Gmail (was handing off to Outlook via the OS default mail client).",
     "1.39.0": "NEW Pricing Exception Workflow — '⚖ Pricing Exception Workflow' button on the LOP toolbar walks the PE checklist and builds the RM email for you.",
     "1.38.1": "Net Proceeds calc now auto-detects Mortgage/HELOC liens from LOP's Liabilities table and pre-fills them as checkboxes — no more manual lookup.",
