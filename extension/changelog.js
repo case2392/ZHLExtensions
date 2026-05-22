@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.30.1",
+    headline: "Copy LOP file: progress overlay during paste so you know it's working",
+    highlights: [
+      "Multi-pass paste + credit reissue takes several seconds. The button used to flip to disabled and then sit there with no feedback. Now a full-viewport overlay (matching the Mark-All-As-Read style) appears with a spinner and a status line that updates per phase: 'Pasting fields — pass 2…' with a running 'Written so far: 47' line, then 'Reissuing credit…' when it gets to that step. Disappears just before the summary modal opens."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.30.0",
     headline: "Copy LOP file: auto-reissue credit on paste + every table's rows captured as reference data",
     highlights: [

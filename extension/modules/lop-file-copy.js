@@ -619,8 +619,16 @@
     let lastResult = { wrote: 0, skippedLocked: 0, noMatch: 0, skippedEmpty: 0 };
     let passes = 0;
     const MAX_PASSES = 4;
+    showProgress(
+      'Pasting fields…',
+      'Pass 1 of up to ' + MAX_PASSES + '. Cascading questions (Decl A1/A2/A3) fill on later passes — please don\'t interact with the page until this finishes.'
+    );
     while (passes < MAX_PASSES) {
       passes++;
+      updateProgress(
+        'Pasting fields — pass ' + passes + '…',
+        'Written so far: ' + totalWrote + '. Each pass waits 250ms after writes so React can render any newly-revealed cascading fields.'
+      );
       lastResult = pasteOnePass(stage, byKey);
       totalWrote += lastResult.wrote;
       // Stop early when a pass writes nothing — no more cascading
@@ -645,9 +653,15 @@
     // one more beat to settle before we open the reissue dialog.
     let creditResult = null;
     if (stage.creditReferenceId) {
+      updateProgress(
+        'Reissuing credit…',
+        'Opening Choose action → Reissue credit report, filling reference ID ' + stage.creditReferenceId + ', and clicking Reissue.'
+      );
       await new Promise(function (r) { setTimeout(r, 600); });
       creditResult = await runCreditReissue(stage.creditReferenceId);
     }
+
+    hideProgress();
 
     return {
       wrote: totalWrote,
@@ -682,6 +696,82 @@
     if (s < 3600) return Math.floor(s / 60) + 'm ago';
     if (s < 86400) return Math.floor(s / 3600) + 'h ago';
     return Math.floor(s / 86400) + 'd ago';
+  }
+
+  // ---- Progress overlay ----------------------------------------
+  //
+  // Multi-pass paste plus credit reissue takes several seconds.
+  // Without feedback the user can't tell whether the click
+  // registered. We paint a full-viewport overlay with a spinner
+  // and a status line that updates as we move through each phase,
+  // matching the Mark-All-As-Read overlay style.
+
+  const PROGRESS_ID = 'zhl-lop-copy-progress';
+
+  function showProgress(text, sub) {
+    let overlay = document.getElementById(PROGRESS_ID);
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = PROGRESS_ID;
+      overlay.style.cssText = [
+        'position:fixed', 'top:0', 'left:0', 'right:0', 'bottom:0',
+        'background:rgba(255,255,255,0.92)',
+        'z-index:2147483647',
+        'display:flex', 'flex-direction:column',
+        'align-items:center', 'justify-content:center',
+        'gap:14px',
+        'font:600 15px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif',
+        'color:#0b5cab', 'text-align:center',
+        'pointer-events:all', 'cursor:wait',
+        'padding:24px'
+      ].join(';');
+      const spinner = document.createElement('div');
+      spinner.style.cssText = [
+        'width:36px', 'height:36px',
+        'border:4px solid #cfe1f5',
+        'border-top-color:#006aff',
+        'border-radius:50%',
+        'animation:zhl-lop-copy-spin 0.8s linear infinite'
+      ].join(';');
+      const msg = document.createElement('div');
+      msg.setAttribute('data-zhl-progress-msg', '1');
+      msg.textContent = text || 'Working…';
+      const subEl = document.createElement('div');
+      subEl.setAttribute('data-zhl-progress-sub', '1');
+      subEl.style.cssText = 'font:500 12px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#6b7280;max-width:340px;';
+      subEl.textContent = sub || '';
+      overlay.appendChild(spinner);
+      overlay.appendChild(msg);
+      overlay.appendChild(subEl);
+      document.body.appendChild(overlay);
+      if (!document.getElementById('zhl-lop-copy-spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'zhl-lop-copy-spin-style';
+        style.textContent = '@keyframes zhl-lop-copy-spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+      }
+    } else {
+      updateProgress(text, sub);
+    }
+    return overlay;
+  }
+
+  function updateProgress(text, sub) {
+    const overlay = document.getElementById(PROGRESS_ID);
+    if (!overlay) return;
+    if (text != null) {
+      const m = overlay.querySelector('[data-zhl-progress-msg]');
+      if (m) m.textContent = text;
+    }
+    if (sub != null) {
+      const s = overlay.querySelector('[data-zhl-progress-sub]');
+      if (s) s.textContent = sub;
+    }
+  }
+
+  function hideProgress() {
+    const overlay = document.getElementById(PROGRESS_ID);
+    if (overlay) overlay.remove();
   }
 
   function removeModal() {
@@ -803,7 +893,9 @@
         stage.creditPullType = captured.pullType;
       }
     }
+    showProgress('Saving staged data…', 'Writing the captured fields + table rows to local storage.');
     await persistStage(stage);
+    hideProgress();
     const stageHeaderName = namesFromStage(stage) || stage.sourceBorrowerName || '';
     const tableSummary = tableDataSummaryHtml(stage.tableData);
     const creditLine = stage.creditReferenceId
