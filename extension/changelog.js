@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.34.1",
+    headline: "Copy LOP file BUG FIX: Add-a-new-borrower dialog detector is now permissive — auto-add co-borrower no longer falsely aborts.",
+    highlights: [
+      "BUG: paste was aborting with 'Add a new borrower dialog did not open' even though the dialog clearly was open. The old matcher required section[role=\"dialog\"][aria-modal=\"true\"] with the title in an h2/h3/h4 child. LOP's actual dialog wrapper varies (some renders use a div with role=dialog, the title sits inside a header, the heading element is referenced via aria-labelledby) so the strict matcher missed it.",
+      "Fix: matcher now accepts any [role=\"dialog\"] or [aria-modal=\"true\"] whose visible text (or aria-labelledby reference) contains 'Add a new borrower'. Final salvage: if that still fails but input[name=\"first\"] exists in the document (an input that ONLY renders on this dialog), use that input's nearest section/dialog/form ancestor as the dialog scope.",
+      "Click on the + tab now uses the full mousedown→mouseup→click event sequence so React's tab handler picks it up reliably (the bare .click() can be swallowed by styled wrapper buttons — same trick the Save button needed)."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.34.0",
     headline: "Copy LOP file: auto-adds missing co-borrowers before pasting — multi-borrower files now copy cleanly in one click",
     highlights: [

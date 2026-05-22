@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.34.1": "Copy LOP file BUG FIX: Add-a-new-borrower dialog detector is now permissive — auto-add co-borrower no longer falsely aborts when the dialog is open.",
     "1.34.0": "Copy LOP file BUG FIX: multi-borrower files now auto-add the missing co-borrower via the + tab before pasting (was dumping co-borrower data onto primary).",
     "1.33.2": "Copy LOP file BUG FIX: soft credit pull now saves the file first (was skipping save → Choose action stayed disabled).",
     "1.33.1": "Copy LOP file: liability stage only opens rows that need it — much faster on files with lots of credit cards.",

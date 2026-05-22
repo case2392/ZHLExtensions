@@ -1242,17 +1242,34 @@
     if (!plusBtn) {
       return { ok: false, reason: '"+" tab button not found — DOM may have changed; please add co-borrower manually then re-paste' };
     }
-    console.log('[Copy LOP] Clicking + tab', plusBtn);
-    plusBtn.click();
+    console.log('[Copy LOP] Clicking + tab', plusBtn,
+      'disabled=' + plusBtn.disabled,
+      'aria-disabled=' + plusBtn.getAttribute('aria-disabled'));
+    // Use a full mouse-event sequence (mousedown→mouseup→click) so
+    // React's tab handler actually picks it up. Bare .click() can
+    // be swallowed by styled wrappers (same reason we needed the
+    // full sequence for the Save button).
+    clickWithMouseEvents(plusBtn);
 
-    const dialog = await waitForCondition(function () {
-      const dlgs = document.querySelectorAll('section[role="dialog"][aria-modal="true"]');
-      for (const d of dlgs) {
-        const h = d.querySelector('h4, h3, h2');
-        if (h && /add\s*(a\s*)?new\s*borrower/i.test(h.textContent || '')) return d;
+    // Find the Add-new-borrower dialog. Be permissive about
+    // selectors — LOP renders dialogs as section[role="dialog"][aria-modal]
+    // but also sometimes as plain divs with role=dialog, and the
+    // title may sit inside <header><h4> or be referenced via
+    // aria-labelledby. Match any [role="dialog"] (or aria-modal)
+    // whose visible text contains "Add a new borrower" near the top,
+    // OR fall back to walking up from the input[name="first"] which
+    // only exists on this dialog.
+    let dialog = await waitForCondition(findAddBorrowerDialog, 6000);
+    if (!dialog) {
+      // Salvage: input[name="first"] only renders on this dialog.
+      // If it's present, the dialog IS open — our wrapper match
+      // just failed. Use the input's nearest sensible ancestor.
+      const firstInput = document.querySelector('input[name="first"]');
+      if (firstInput) {
+        dialog = firstInput.closest('[role="dialog"], [aria-modal="true"], section, dialog, form') || firstInput.parentElement;
+        console.log('[Copy LOP] Dialog found via input[name="first"] fallback:', dialog);
       }
-      return null;
-    }, 4000);
+    }
     if (!dialog) return { ok: false, reason: 'Add a new borrower dialog did not open' };
 
     await wait(200);
@@ -1300,15 +1317,34 @@
 
     // Wait for the dialog to close
     await waitForCondition(function () {
-      const stillOpen = Array.from(document.querySelectorAll('section[role="dialog"][aria-modal="true"]'))
-        .some(function (d) {
-          const h = d.querySelector('h4, h3, h2');
-          return h && /add\s*(a\s*)?new\s*borrower/i.test(h.textContent || '');
-        });
-      return !stillOpen;
+      return !findAddBorrowerDialog() && !document.querySelector('input[name="first"]');
     }, 6000);
     await wait(500);
     return { ok: true };
+  }
+
+  function findAddBorrowerDialog() {
+    const dlgs = document.querySelectorAll('[role="dialog"], [aria-modal="true"]');
+    for (const d of dlgs) {
+      const head = (d.textContent || '').replace(/\s+/g, ' ').slice(0, 200);
+      if (/add\s*(a\s*)?new\s*borrower/i.test(head)) return d;
+      const labelId = d.getAttribute('aria-labelledby');
+      if (labelId) {
+        const lbl = document.getElementById(labelId);
+        if (lbl && /add\s*(a\s*)?new\s*borrower/i.test(lbl.textContent || '')) return d;
+      }
+    }
+    return null;
+  }
+
+  function clickWithMouseEvents(el) {
+    try {
+      ['mousedown', 'mouseup', 'click'].forEach(function (type) {
+        el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window, button: 0 }));
+      });
+    } catch (_) {
+      try { el.click(); } catch (_) {}
+    }
   }
 
   function fillAddBorrowerDialog(dialog, src) {
