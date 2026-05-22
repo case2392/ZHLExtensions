@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.29.1": "Copy LOP file: bar moved to top, Loan & Property skipped, cascading fields (Decl A1/A2/A3) fix, picker shows borrower names.",
     "1.29.0": "New: Copy LOP file — stage every Full App field on the source loan, paste it into a new file. Co-borrower aware.",
     "1.28.3": "ZHL Comparison PDF: itemized closing costs in two columns — each scenario now fits on a single page.",
     "1.28.2": "ZHL Comparison PDF: no more blank pages, itemized costs restyled in ZHL blue to match page 1.",

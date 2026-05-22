@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.29.1",
+    headline: "Copy LOP file: bar moved to the top, Loan & Property excluded, cascading fields fixed, borrower picker actually shows names",
+    highlights: [
+      "Floating Stage / Paste bar moved from bottom-left to pinned at the top-center, in the same band as the page-level tab navigation. Same button, just easier to find.",
+      "Loan & Property fields are now skipped entirely on BOTH stage and paste — Subject Property address, Purchase price, Rate, Lock period, Rental income, Title info, etc. shouldn't carry over from a previous loan and copying them would be actively wrong on a new file.",
+      "Cascading questions now fill correctly. On Declarations, A1 only renders after A=Yes is set, and A2/A3 only render after A1=Yes. The paste now runs up to 4 passes with a 250ms settle between them so each round of newly-revealed fields gets filled. The summary modal reports the pass count.",
+      "Borrower picker now shows the actual borrower name(s) (\"Sekou Swaray\" or \"Sekou Swaray & test test\") read directly from the captured first/last fields per personal-info-section, instead of the previous regex over page text that was picking up navigation labels like \"Pre-approval Letter\". The loan ID is still shown as a secondary line for disambiguation."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.29.0",
     headline: "New: Copy LOP file — stage a loan's borrower data and paste it into a new file",
     highlights: [

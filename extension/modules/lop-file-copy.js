@@ -114,6 +114,34 @@
     'other-incomes-section'
   ];
 
+  // Sections to SKIP entirely. The Loan & Property panel
+  // (Subject Property, Rental Income, Loan info, Pricing info,
+  // Title info) is loan-specific and should NOT carry over from
+  // a previous loan — copying the old property's address /
+  // purchase price / rate / lock period into a brand-new loan
+  // would be actively wrong. Detection is by ancestor div id —
+  // every section's content sits inside a wrapper like
+  // <div id="SubjectProperty-{borrowerPairId}">.
+  const EXCLUDED_SECTION_IDS = [
+    'SubjectProperty',
+    'RentalIncome',
+    'LoanInfo',
+    'PricingInfo',
+    'TitleInfo'
+  ];
+
+  function isInExcludedSection(el) {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      const id = cur.id || '';
+      for (const prefix of EXCLUDED_SECTION_IDS) {
+        if (id === prefix || id.indexOf(prefix + '-') === 0) return true;
+      }
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+
   function findSectionScope(el) {
     let cur = el;
     while (cur && cur !== document.body) {
@@ -173,17 +201,42 @@
   }
 
   function readBorrowerName() {
-    // The top-right loan header carries the primary borrower's name.
-    // Falls back to the first heading-style text shaped like
-    // "First Last" if the header isn't where we expect.
-    const anchors = document.querySelectorAll('a, button, span, p');
-    const re = /^[A-Z][a-z\-']+(?:\s[A-Z]\.?)?\s[A-Z][a-z\-']+(?:\s(?:&|and)\s[A-Z][a-z\-']+(?:\s[A-Z]\.?)?\s[A-Z][a-z\-']+)?$/;
-    for (const el of anchors) {
-      const t = (el.textContent || '').trim();
-      if (!t || t.length > 80) continue;
-      if (re.test(t)) return t;
-    }
-    return '';
+    // Read first+last directly from every personal-info-section on
+    // the page (one per borrower, primary + co-borrower) and join
+    // with " & ". This is the only reliable source — the previous
+    // regex-based scan over page text picked up navigation labels
+    // like "Pre-approval Letter" because they happen to match a
+    // First-Last word shape.
+    const sections = document.querySelectorAll('[data-cy^="personal-info-section-"]');
+    const names = [];
+    sections.forEach(function (sec) {
+      const fnEl = sec.querySelector('input[name="first"]');
+      const lnEl = sec.querySelector('input[name="last"]');
+      const fn = fnEl ? (fnEl.value || '').trim() : '';
+      const ln = lnEl ? (lnEl.value || '').trim() : '';
+      const full = (fn + ' ' + ln).trim();
+      if (full) names.push(full);
+    });
+    return names.join(' & ');
+  }
+
+  // Derive borrower names from a stored stage (for the paste
+  // picker), so the picker label always reflects the captured
+  // people regardless of what's on the current page.
+  function namesFromStage(stage) {
+    const byScope = {};
+    (stage.fields || []).forEach(function (rec) {
+      if (!rec.scope || rec.scope.type !== 'personal-info-section') return;
+      if (rec.name !== 'first' && rec.name !== 'last') return;
+      const k = rec.scope.index;
+      if (!byScope[k]) byScope[k] = {};
+      byScope[k][rec.name] = rec.value || '';
+    });
+    const names = Object.keys(byScope).sort().map(function (k) {
+      const n = byScope[k];
+      return ((n.first || '') + ' ' + (n.last || '')).trim();
+    }).filter(Boolean);
+    return names.join(' & ');
   }
 
   function isOnFullApplicationPage() {
@@ -245,6 +298,11 @@
   function stageFromCurrentPage() {
     const fields = [];
     findAllNamedFields(document).forEach(function (el) {
+      // Skip Loan & Property fields entirely — those are
+      // loan-specific (Subject Property address, Purchase price,
+      // Lock period, Rate, etc.) and copying them from a previous
+      // loan would be actively wrong on a new file.
+      if (isInExcludedSection(el)) return;
       const tag = el.tagName.toLowerCase();
       const type = (el.type || '').toLowerCase();
       const scope = findSectionScope(el);
@@ -306,36 +364,22 @@
 
   // ---- Paste --------------------------------------------------
 
-  function pasteStageOntoCurrentPage(stage) {
-    const byKey = {};
-    (stage.fields || []).forEach(function (rec) {
-      const key = fieldKey(rec.name, rec.tag, rec.type, rec.value, rec.scope);
-      byKey[key] = rec;
-    });
-
+  function pasteOnePass(stage, byKey) {
     let wrote = 0;
     let skippedLocked = 0;
     let noMatch = 0;
     let skippedEmpty = 0;
-    let skippedScopeMissing = 0;
 
     findAllNamedFields(document).forEach(function (el) {
+      // Mirror stage-side: never touch Loan & Property fields,
+      // even if an older stage captured them.
+      if (isInExcludedSection(el)) return;
       const tag = el.tagName.toLowerCase();
       const type = (el.type || '').toLowerCase();
       const scope = findSectionScope(el);
       const key = fieldKey(el.name, tag, type, el.value, scope);
       const rec = byKey[key];
-      if (!rec) {
-        // If the source had this field scoped to a borrower section
-        // that doesn't exist on the destination yet (e.g. dest has
-        // no co-borrower while source did), count it separately so
-        // the LO knows to add the borrower first.
-        if (scope === null && byKey[fieldKey(el.name, tag, type, el.value, { type: 'personal-info-section', index: '1' })]) {
-          skippedScopeMissing++;
-        }
-        noMatch++;
-        return;
-      }
+      if (!rec) { noMatch++; return; }
       if (!isEditable(el)) { skippedLocked++; return; }
 
       try {
@@ -370,6 +414,44 @@
       }
     });
 
+    return {
+      wrote: wrote,
+      skippedLocked: skippedLocked,
+      noMatch: noMatch,
+      skippedEmpty: skippedEmpty
+    };
+  }
+
+  // Multi-pass paste so cascading fields fill correctly. Some
+  // questions on the Declarations form (e.g. A1, A2, A3) are only
+  // rendered after their parent (A=Yes) is set. A single pass
+  // writes A=Yes; React then re-renders and adds A1 to the DOM;
+  // a second pass writes A1; React re-renders again to add A2 / A3
+  // (which are selects that only appear after A1=Yes). Up to 4
+  // passes with a 250ms settle catches any reasonable cascade
+  // depth without taking forever.
+  async function pasteStageOntoCurrentPage(stage) {
+    const byKey = {};
+    (stage.fields || []).forEach(function (rec) {
+      const key = fieldKey(rec.name, rec.tag, rec.type, rec.value, rec.scope);
+      byKey[key] = rec;
+    });
+
+    let totalWrote = 0;
+    let lastResult = { wrote: 0, skippedLocked: 0, noMatch: 0, skippedEmpty: 0 };
+    let passes = 0;
+    const MAX_PASSES = 4;
+    while (passes < MAX_PASSES) {
+      passes++;
+      lastResult = pasteOnePass(stage, byKey);
+      totalWrote += lastResult.wrote;
+      // Stop early when a pass writes nothing — no more cascading
+      // fields are appearing.
+      if (lastResult.wrote === 0) break;
+      // Give React time to re-render before the next pass.
+      await new Promise(function (r) { setTimeout(r, 250); });
+    }
+
     // Surface borrower-section count mismatch so the LO knows
     // when they need to add a co-borrower (or remove one) on the
     // destination before re-pasting.
@@ -379,10 +461,11 @@
       ? { source: srcBorrowers, destination: destBorrowers }
       : null;
     return {
-      wrote: wrote,
-      skippedLocked: skippedLocked,
-      noMatch: noMatch,
-      skippedEmpty: skippedEmpty,
+      wrote: totalWrote,
+      skippedLocked: lastResult.skippedLocked,
+      noMatch: lastResult.noMatch,
+      skippedEmpty: lastResult.skippedEmpty,
+      passes: passes,
       borrowerMismatch: borrowerMismatch
     };
   }
@@ -441,8 +524,13 @@
     if (!isOnFullApplicationPage()) return;
     const panel = document.createElement('div');
     panel.id = PANEL_ID;
+    // Pinned to the top of the viewport, horizontally centered, so
+    // it sits in the same band as the page-level tab navigation
+    // (Insights / Pre-approval / Pricing / etc.) instead of
+    // hiding at the bottom-left where it competed with system
+    // notifications and the borrower selector flyout.
     panel.style.cssText =
-      'position:fixed;bottom:18px;left:18px;z-index:2147483645;' +
+      'position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:2147483645;' +
       'background:#fff;border:1px solid #bfdbfe;border-radius:8px;' +
       'padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,0.12);' +
       'font:13px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2937;' +
@@ -493,10 +581,13 @@
       .filter(function (k) { return stage.tableCounts[k] > 0; })
       .map(function (k) { return '<li>' + escapeHtml(String(stage.tableCounts[k])) + ' ' + escapeHtml(k) + '</li>'; })
       .join('');
+    const stageHeaderName = namesFromStage(stage) || stage.sourceBorrowerName || '';
     showModal(
       '<h3 style="margin:0 0 8px;font-size:16px;color:#1e3a8a;">✓ Staged ' + stage.fields.length + ' fields</h3>' +
-      '<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">From loan <code>' + escapeHtml(stage.sourceLoanId) + '</code>' +
-        (stage.sourceBorrowerName ? ' (' + escapeHtml(stage.sourceBorrowerName) + ')' : '') + '</p>' +
+      '<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">From <strong>' +
+        escapeHtml(stageHeaderName || stage.sourceLoanId || '(unknown)') + '</strong>' +
+        (stageHeaderName ? ' &nbsp;<span style="color:#9ca3af;">loan ' + escapeHtml(stage.sourceLoanId) + '</span>' : '') +
+      '</p>' +
       (tcLines
         ? '<div style="margin-top:12px;"><strong>Table data (manual entry required when pasting):</strong>' +
           '<ul style="margin:6px 0 0 18px;padding:0;color:#374151;">' + tcLines + '</ul></div>'
@@ -524,14 +615,20 @@
         .filter(function (k) { return s.tableCounts[k] > 0; })
         .map(function (k) { return s.tableCounts[k] + ' ' + k.replace(/ entries$| records$/, ''); })
         .join(' · ');
+      // Prefer the names derived from captured first/last fields
+      // over whatever was scanned off the page at stage time —
+      // older stages may carry stale or wrong text in
+      // sourceBorrowerName (the regex-based scan could pick up
+      // navigation labels like "Pre-approval Letter").
+      const borrowerLabel = namesFromStage(s) || s.sourceBorrowerName || '';
       return '<label style="display:block;padding:10px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:8px;cursor:pointer;">' +
         '<input type="radio" name="zhl-stage-pick" value="' + i + '"' + (i === 0 ? ' checked' : '') + ' style="margin-right:8px;">' +
-        '<strong>' + escapeHtml(s.sourceLoanId || '(no loan id)') + '</strong>' +
-        (s.sourceBorrowerName ? ' &mdash; ' + escapeHtml(s.sourceBorrowerName) : '') +
+        '<strong>' + escapeHtml(borrowerLabel || s.sourceLoanId || '(unknown borrower)') + '</strong>' +
         '<div style="color:#6b7280;font-size:12px;margin-top:2px;">' +
           (s.fields ? s.fields.length : 0) + ' fields · staged ' + fmtAgo(s.capturedAt) +
           (tcSummary ? ' · tables: ' + escapeHtml(tcSummary) : '') +
         '</div>' +
+        '<div style="color:#9ca3af;font-size:11px;margin-top:1px;">loan ' + escapeHtml(s.sourceLoanId || '?') + '</div>' +
         '</label>';
     }).join('');
     showModal(
@@ -544,13 +641,13 @@
       '</div>',
       function (p) {
         p.querySelector('#zhl-modal-cancel').addEventListener('click', removeModal);
-        p.querySelector('#zhl-modal-paste').addEventListener('click', function () {
+        p.querySelector('#zhl-modal-paste').addEventListener('click', async function () {
           const sel = p.querySelector('input[name="zhl-stage-pick"]:checked');
           const idx = sel ? parseInt(sel.value, 10) : 0;
           const stage = useStages[idx];
           if (!stage) { removeModal(); return; }
           removeModal();
-          const result = pasteStageOntoCurrentPage(stage);
+          const result = await pasteStageOntoCurrentPage(stage);
           showSummary(stage, result);
         });
       }
@@ -562,10 +659,16 @@
       .filter(function (k) { return stage.tableCounts[k] > 0; })
       .map(function (k) { return '<li>' + escapeHtml(String(stage.tableCounts[k])) + ' ' + escapeHtml(k) + '</li>'; })
       .join('');
+    const headerName = namesFromStage(stage) || stage.sourceBorrowerName || '';
     showModal(
       '<h3 style="margin:0 0 8px;font-size:16px;color:#15803d;">Pasted ' + result.wrote + ' fields</h3>' +
-      '<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">From <code>' + escapeHtml(stage.sourceLoanId) + '</code>' +
-        (stage.sourceBorrowerName ? ' (' + escapeHtml(stage.sourceBorrowerName) + ')' : '') + '</p>' +
+      '<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">From <strong>' +
+        escapeHtml(headerName || stage.sourceLoanId || '(unknown)') + '</strong>' +
+        (headerName ? ' &nbsp;<span style="color:#9ca3af;">loan ' + escapeHtml(stage.sourceLoanId) + '</span>' : '') +
+        (result.passes && result.passes > 1
+          ? ' &nbsp;·&nbsp; <span style="color:#1e3a8a;">' + result.passes + ' passes for cascading fields</span>'
+          : '') +
+      '</p>' +
       '<div style="background:#f9fafb;border-radius:6px;padding:10px;margin:10px 0;font-size:13px;">' +
         '<div><strong>Written:</strong> ' + result.wrote + '</div>' +
         '<div><strong>Skipped — read-only / disabled:</strong> ' + result.skippedLocked +
