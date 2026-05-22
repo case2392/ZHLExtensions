@@ -641,7 +641,15 @@
           '<div>' + select('pe-loan-type', 'Loan type', s.loanType, ['Conventional','FHA','VA','USDA','Jumbo']) +
                    select('pe-arm', 'FRM / ARM', s.armOrFrm, ['FRM','ARM']) + '</div>' +
         '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px;">' +
+        // Competitor lender name lives ABOVE the two pricing cards so the
+        // card rows (Interest rate / Box A / Credits) line up across ZHL
+        // and Competitor instead of being shifted down on the comp side.
+        '<div style="margin-top:8px;">' +
+          '<div style="' + fieldWrap + '"><label style="' + labelStyle + '">Competitor lender name</label>' +
+            '<input id="pe-comp-lender" type="text" value="' + escapeHtml(s.compLender || '') +
+            '" placeholder="e.g. Rocket, Better.com, local CU" style="' + inputStyle + '" /></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px;">' +
           '<div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;">' +
             '<div style="font-weight:700;color:#0b5cab;margin-bottom:6px;font-size:12px;">ZHL pricing</div>' +
             field('pe-zhl-rate',    'Interest rate %',         s.zhlRate    || '') +
@@ -650,9 +658,6 @@
           '</div>' +
           '<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:10px;">' +
             '<div style="font-weight:700;color:#b45309;margin-bottom:6px;font-size:12px;">Competitor</div>' +
-            '<div style="' + fieldWrap + '"><label style="' + labelStyle + '">Competitor lender name</label>' +
-              '<input id="pe-comp-lender" type="text" value="' + escapeHtml(s.compLender || '') +
-              '" placeholder="e.g. Rocket, Better.com, local CU" style="' + inputStyle + '" /></div>' +
             field('pe-comp-rate',    'Interest rate %',         s.compRate    || '') +
             field('pe-comp-boxa',    'Total Box A charges ($)', s.compBoxA    || '') +
             field('pe-comp-credits', 'Lender + other credits ($)', s.compCredits || '') +

@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.40.4",
+    headline: "Pricing Exception Workflow: ZHL and Competitor cards now line up row-for-row.",
+    highlights: [
+      "The Competitor card had an extra 'Competitor lender name' field at the top that shifted its Interest rate / Box A / Credits rows one row down vs the ZHL card, so the labels and inputs didn't sit on the same horizontal lines. Moved the Competitor lender name field OUT of the card and into its own row above both cards — now both cards start with 'Interest rate %' and align cleanly."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.40.3",
     headline: "Pricing Exception Workflow: 'Open in Gmail' auto-paste now actually fires — was being gated on a URL param Gmail strips.",
     highlights: [
