@@ -39,49 +39,82 @@
     return { heading: h, table: table };
   }
 
-  // Pull every (taskName, docName, url) tuple out of the completed
-  // table. Each Completed task can have 0+ documents under it; the
-  // documents only show when a task row is expanded — but LOP keeps
-  // their <a href="zillowdocs.com/..."> nodes in the DOM whether the
-  // row is visually expanded or collapsed, so this works without
-  // expanding any rows. Heavy logging so the LO can see what got
-  // collected.
-  function collectAllZillowDocsLinks(table) {
+  // Poll until predicate() returns a truthy value or timeout elapses.
+  function waitFor(predicate, timeout) {
+    return new Promise(function (resolve) {
+      const r = predicate();
+      if (r) { resolve(r); return; }
+      const start = Date.now();
+      const interval = setInterval(function () {
+        const v = predicate();
+        if (v) { clearInterval(interval); resolve(v); }
+        else if (Date.now() - start >= timeout) { clearInterval(interval); resolve(null); }
+      }, 100);
+    });
+  }
+
+  // Pull every (taskName, docName, url) tuple out of the completed table.
+  // Document links live inside <tr data-cy="edit-task-row-{uuid}"> which
+  // LOP only renders once the task row has been expanded. We therefore
+  // expand each collapsed row by clicking its toggle cell, wait up to 3 s
+  // for the edit-row to appear, collect links, then collapse again.
+  async function collectAllZillowDocsLinks(table) {
     console.group('[Task Bulk Download] collectAllZillowDocsLinks');
     const out = [];
-    const rows = Array.from(table.querySelectorAll('tbody > tr'));
-    let currentTaskName = '';
-    rows.forEach(function (tr) {
-      // Top-level task rows have data-cy="task-<uuid>" and contain
-      // a <td data-cy="task-name"> with the title text.
-      const dc = tr.getAttribute('data-cy') || '';
-      const nameCell = tr.querySelector('td[data-cy="task-name"]');
-      if (nameCell) {
-        currentTaskName = (nameCell.textContent || '').replace(/\s+/g, ' ').trim();
+    const taskRows = Array.from(table.querySelectorAll('tbody > tr[data-cy^="task-"]'));
+    console.log('Found', taskRows.length, 'task rows to inspect');
+
+    for (const taskRow of taskRows) {
+      const nameCell = taskRow.querySelector('td[data-cy="task-name"]');
+      const taskName = nameCell ? (nameCell.textContent || '').replace(/\s+/g, ' ').trim() : '';
+      // Extract uuid — data-cy is "task-<uuid>", strip only the first "task-" prefix.
+      const taskUuid = (taskRow.getAttribute('data-cy') || '').replace(/^task-/, '');
+
+      // Check whether the edit-row is already present in the DOM.
+      let editRow = table.querySelector('tr[data-cy="edit-task-row-' + taskUuid + '"]');
+      const wasExpanded = !!editRow;
+
+      if (!editRow) {
+        const toggle = taskRow.querySelector('td[data-cy="toggle-task-row"]');
+        if (toggle) {
+          toggle.click();
+          editRow = await waitFor(function () {
+            return table.querySelector('tr[data-cy="edit-task-row-' + taskUuid + '"]');
+          }, 3000);
+        }
       }
-      // Document links live inside the expanded edit-row, but the
-      // expanded row's anchor is always in the DOM regardless of
-      // visual state. Grab any zillowdocs links inside this tr's
-      // descendant scope.
-      const anchors = tr.querySelectorAll('a[href*="zillowdocs.com/embed/editor"]');
+
+      if (!editRow) {
+        console.warn('[Task Bulk Download] Could not expand task row:', taskName, '(uuid:', taskUuid + ')');
+        continue;
+      }
+
+      // Collect all zillowdocs links from the expanded detail row.
+      const anchors = editRow.querySelectorAll('a[href*="zillowdocs.com/embed/editor"]');
       anchors.forEach(function (a) {
         const href = a.getAttribute('href') || '';
         if (!href) return;
-        // The doc name is the <strong> text inside the anchor.
         const strong = a.querySelector('strong');
         const docName = (strong ? strong.textContent : (a.textContent || '')).replace(/\s+/g, ' ').trim();
-        out.push({ url: href, taskName: currentTaskName, docName: docName || 'document' });
+        out.push({ url: href, taskName: taskName, docName: docName || 'document' });
       });
-    });
-    // De-dup by URL — LOP sometimes renders both the collapsed and
-    // expanded forms of a row, doubling the anchors.
+      console.log('  Task "' + taskName + '":', anchors.length, 'doc link(s)');
+
+      // Collapse again only if we expanded it, to leave the page tidy.
+      if (!wasExpanded) {
+        const toggle = taskRow.querySelector('td[data-cy="toggle-task-row"]');
+        if (toggle) toggle.click();
+      }
+    }
+
+    // De-dup by URL in case LOP renders a link in multiple places.
     const seen = new Set();
     const unique = out.filter(function (e) {
       if (seen.has(e.url)) return false;
       seen.add(e.url);
       return true;
     });
-    console.log('Collected', unique.length, 'unique documents (' + out.length + ' total anchors after de-dup):', unique);
+    console.log('Collected', unique.length, 'unique documents (' + out.length + ' total):', unique);
     console.groupEnd();
     return unique;
   }
@@ -163,7 +196,7 @@
       alert('Could not find the Completed tasks section on this page. Re-load Tasks and try again.');
       return;
     }
-    const docs = collectAllZillowDocsLinks(section.table);
+    const docs = await collectAllZillowDocsLinks(section.table);
     if (!docs.length) {
       console.log('No documents to download.');
       console.groupEnd();

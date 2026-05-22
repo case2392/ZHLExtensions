@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.1",
+    headline: "Bulk-download BUG FIX: document links now collected correctly by expanding each task row before scanning.",
+    highlights: [
+      "BUG: 'Collected 0 unique documents' every time. LOP only renders the document anchor tags (<a href='zillowdocs.com/…'>) inside a task's detail row after that row has been expanded — if tasks are collapsed (the default on page load) there are zero anchors in the DOM to find. Fix: the collector now clicks each task's toggle chevron, waits up to 3 s for the detail row to appear, scrapes its links, then collapses the row again. Tasks that were already expanded are left as-is."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.0",
     headline: "NEW Bulk-download completed-task documents — one click downloads every borrower-uploaded file under Completed.",
     highlights: [
