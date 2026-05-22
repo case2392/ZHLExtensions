@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.40.1",
+    headline: "Pricing Exception Workflow: Open in Gmail now AUTO-PASTES the formatted body — no Ctrl+V needed.",
+    highlights: [
+      "v1.40.0's flow needed the LO to manually Ctrl+V in Gmail's body field after the new tab opened. New companion content script (modules/gmail-pe-paste.js) runs on every Gmail tab, watches for the operator side to stash the formatted HTML in chrome.storage.local under zhlPePendingPaste, finds the compose body (div[contenteditable=true][aria-label*='message body']) and sets its innerHTML to the formatted version — automatically, the moment the compose dialog renders.",
+      "Three-layer fallback so this always works: (1) chrome.storage stash + auto-paste (primary, fully automatic), (2) HTML on the clipboard via ClipboardItem (manual Ctrl+V still works if storage handoff fails), (3) plain text in the Gmail URL's &body= param (visible in the compose body even if both above fail).",
+      "Single-use storage entry with a 30 s TTL — cleared before paste so a second Gmail tab can't accidentally pick up the same payload."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.40.0",
     headline: "Pricing Exception Workflow: new 'Reason / description' step on the unlocked path — included in every email so the RM can approve without coming back.",
     highlights: [

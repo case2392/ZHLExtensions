@@ -822,7 +822,7 @@
         '<input id="pe-subject" type="text" value="' + escapeHtml(email.subject) + '" style="' + fieldStyle + 'margin-bottom:10px;" />' +
         '<label style="display:block;font-size:11px;color:#6b7280;font-weight:600;margin-bottom:2px;">Body</label>' +
         '<textarea id="pe-body" style="' + fieldStyle + 'min-height:280px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;">' + escapeHtml(email.body) + '</textarea>' +
-        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">Tip: <strong>Open in Gmail</strong> opens a new Gmail compose tab with To + Subject filled in AND copies the formatted email to your clipboard — paste with <kbd>Ctrl</kbd>+<kbd>V</kbd> in the body field to drop the formatted table / headers / hyperlinks in. Attachments still need to be added manually. RM email is auto-saved for next time.</p>' +
+        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">Tip: <strong>Open in Gmail</strong> opens a new Gmail compose tab and <strong>auto-pastes the formatted email body</strong> for you — no Ctrl+V needed. If auto-paste ever fails, the body is still on your clipboard (Ctrl+V) and the plain-text version is in the Gmail URL as a backup. Attachments still need to be added manually. RM email is auto-saved for next time.</p>' +
         '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">' +
           btnPrimary('Open in Gmail + copy body', 'zhl-pe-mailto') +
           btnSecondary('Copy body only', 'zhl-pe-copy-body') +
@@ -860,23 +860,40 @@
       body.querySelector('#pe-rm-email').addEventListener('blur', persistRmEmail);
 
       body.querySelector('#zhl-pe-mailto').addEventListener('click', function () {
+        const btn = this;
         read();
         persistRmEmail();
-        // Open Gmail with To + Subject but EMPTY body — Gmail's compose
-        // URL only carries plain text in &body=, which loses our formatted
-        // table / headers / hyperlinks. So we ALSO put the formatted HTML
-        // (plus plain-text fallback) on the clipboard, and the LO does a
-        // single Ctrl+V in Gmail's body field to get the nice version.
         const rebuilt = buildEmail(workflowState);
         const plain   = body.querySelector('#pe-body').value;
         const e       = read();
-        copyHtmlAndPlain(this, rebuilt.html, plain, function () {
+        // Belt: stash HTML in chrome.storage so the companion Gmail
+        // content script (gmail-pe-paste.js) can auto-paste it into the
+        // compose body when the new Gmail tab loads.
+        // Suspenders: also copy HTML+plain to the clipboard so Ctrl+V
+        // works if the auto-paste fails for any reason.
+        // Belt-and-suspenders: include the plain text in the Gmail URL's
+        // &body= param so even if both above fail, the LO still has the
+        // (plain) email body sitting in the new compose tab.
+        function openGmail() {
           const url = 'https://mail.google.com/mail/?view=cm&fs=1' +
             '&to=' + encodeURIComponent(e.to) +
-            '&su=' + encodeURIComponent(e.subject);
+            '&su=' + encodeURIComponent(e.subject) +
+            '&body=' + encodeURIComponent(plain);
           try { window.open(url, '_blank'); }
           catch (_) { window.location.href = url; }
-        });
+        }
+        function stashThenOpen() {
+          try {
+            chrome.storage.local.set({
+              zhlPePendingPaste: { html: rebuilt.html, plain: plain, ts: Date.now() }
+            }, function () {
+              copyHtmlAndPlain(btn, rebuilt.html, plain, function () { openGmail(); });
+            });
+          } catch (_) {
+            copyHtmlAndPlain(btn, rebuilt.html, plain, function () { openGmail(); });
+          }
+        }
+        stashThenOpen();
       });
       body.querySelector('#zhl-pe-copy-body').addEventListener('click', function () {
         read();
