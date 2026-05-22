@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.36.4": "Copy LOP file BUG FIX: liability edits now gated on every borrower having a credit score (not just stable-row-count on the table side) so we don't start before CoreLogic finishes streaming.",
     "1.36.3": "Copy LOP file BUG FIX: liability edits now wait for every staged account to stream in from CoreLogic before trying to match (90s cap, 4-tick stable exit, per-row 12s retry).",
     "1.36.2": "Copy LOP file BUG FIXES: credit detect now reads LOP's per-borrower data-cy grids (was missing the scores) + ZIP autocomplete / date picker poppers get dismissed before Run pricing.",
     "1.36.1": "Copy LOP file BUG FIX: pricing ZIP gets stripped to 5 digits (was failing on ZIP+4) + credit wait now requires a score for EVERY borrower before pricing fires.",

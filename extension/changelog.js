@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.36.4",
+    headline: "Copy LOP file BUG FIX: liability edits now gated on every borrower having a credit score (not just the table-side stable-count exit).",
+    highlights: [
+      "BUG: liability edits were still firing before CoreLogic had finished streaming back, missing accounts that hadn't landed yet. The applyLiabilityEdits-side table wait could stable-exit too early (Borrower 1's liabilities arrive ~5s before Borrower 2's on multi-borrower files, so the row count plateaus briefly between them). Now we ALSO wait — between runCreditAction and applyLiabilityEdits — until every borrower's right-rail Credit card shows a 3-digit FICO (using the same waitForCreditToLand check that gates pricing). 120s cap. Applies to both the inline path AND the post-refresh resume path."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.36.3",
     headline: "Copy LOP file BUG FIX: liability edits now wait for every staged account to actually appear in the destination table.",
     highlights: [

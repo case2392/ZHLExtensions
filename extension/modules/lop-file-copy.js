@@ -3695,8 +3695,28 @@
     // Property link) — runs after the credit pull/reissue
     // populates the dest liabilities. Skips silently when source
     // had no liability edits to apply.
+    //
+    // CRITICAL: gate this on every borrower having a credit
+    // score visible. runCreditAction returns as soon as the
+    // Reissue click goes through, but CoreLogic streams scores
+    // + liabilities back over many seconds. If we kick off
+    // liability edits before all scores have landed, the pull
+    // isn't actually done and some staged accounts won't be in
+    // the dest table yet. The applyLiabilityEdits-side wait
+    // catches some of that, but it can stable-exit too early
+    // (especially on multi-borrower files where Borrower 1's
+    // liabilities arrive ~5s before Borrower 2's).
     if (stage.liabilityEdits && stage.liabilityEdits.length &&
         creditResult && creditResult.ok) {
+      updateProgress('Waiting for every borrower\'s credit to land before liability edits…',
+        'CoreLogic streams scores + liabilities back over many seconds. Watching the right-rail Credit card for a FICO next to every borrower.');
+      console.group('[Copy LOP] Pre-liability credit wait');
+      const creditWait = await waitForCreditToLand(120000);
+      console.log('Pre-liability credit wait result:', creditWait);
+      console.groupEnd();
+      // Even if creditWait timed out, fall through to
+      // applyLiabilityEdits — it has its own table-side wait
+      // with stable-row-count detection and per-row retries.
       console.group('[Copy LOP] Liability edits');
       liabilityEditResults = await applyLiabilityEdits(stage.liabilityEdits);
       console.log('Result:', liabilityEditResults);
@@ -4324,6 +4344,17 @@
       let liabilityEditResults = null;
       if (pending.liabilityEdits && pending.liabilityEdits.length &&
           creditResult && creditResult.ok) {
+        // Same gate as the inline path — wait for every
+        // borrower's credit score to land before trying to
+        // match liability accounts. CoreLogic streams scores
+        // and liabilities together, so a missing per-borrower
+        // score means the pull isn't done streaming.
+        updateProgress('Waiting for every borrower\'s credit to land…',
+          'CoreLogic streams scores + liabilities back over many seconds.');
+        console.group('[Copy LOP] Post-refresh pre-liability credit wait');
+        const creditWait = await waitForCreditToLand(120000);
+        console.log('Pre-liability credit wait result:', creditWait);
+        console.groupEnd();
         updateProgress('Applying liability edits…',
           'Applying Payoff / Exclude+Reason / Property link to each matching liability.');
         liabilityEditResults = await applyLiabilityEdits(pending.liabilityEdits);
