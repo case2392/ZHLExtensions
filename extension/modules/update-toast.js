@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.31.1": "Copy LOP file: save before credit reissue + asset borrower picker now drives the combobox + employment income subtable wait.",
     "1.31.0": "Copy LOP file: NEW auto-reads CoreLogic ref ID + auto-adds rows for Addresses, Employment, Income, Assets, Gifts, Real Estate.",
     "1.30.2": "Copy LOP file: deep console logging — every field decision (written / skipped / no match) shown in DevTools.",
     "1.30.1": "Copy LOP file: progress overlay during paste with per-pass + credit-reissue status.",

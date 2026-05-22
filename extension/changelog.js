@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.31.1",
+    headline: "Copy LOP file: save before credit reissue + asset/real-estate borrower picker + employment income subtable wait",
+    highlights: [
+      "Credit reissue now works after the first paste. Issue: the Choose action button is disabled until the loan file is saved. Fix: after the field paste and table-row paste complete, the extension now clicks the file's Save button (data-cy=save-loan-file-button) and waits for the save cycle to finish before attempting the Choose action → Reissue credit flow.",
+      "Asset (and Real Estate) Borrower(s) combobox is now driven programmatically. Issue: the borrower field is a role=combobox + portaled role=listbox — setting .value didn't work, save was blocked with 'at least one borrower must be attributed'. Fix: focus the input, open the listbox (click + ArrowDown), find the option whose text matches the staged borrower name, click it.",
+      "Employment income subtable now fills on every row, not just the first. Issue: writeSelect was firing 80ms after employmentStatus was set, but LOP needed longer to render the employment-incomes-table on the 2nd and 3rd Add cycles. Fix: explicitly wait for the table to appear (up to 2.5s) before writing base.amount/base.frequency, with a clear warning logged if it never shows."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.31.0",
     headline: "Copy LOP file: auto-reads credit reference ID + auto-adds rows for every Full App table",
     highlights: [

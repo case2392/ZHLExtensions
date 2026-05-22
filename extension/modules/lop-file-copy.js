@@ -588,6 +588,37 @@
     });
   }
 
+  // Saves the loan file. Required before Choose action / Reissue
+  // credit are enabled on the right-rail Credit card. Waits for
+  // the save to actually commit by watching the Save button's
+  // disabled state (it goes disabled mid-save then re-enables).
+  async function saveLoanFile() {
+    const saveBtn = document.querySelector('button[data-cy="save-loan-file-button"]');
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    if (saveBtn.disabled || saveBtn.getAttribute('aria-disabled') === 'true') {
+      // Nothing to save (already saved). That's still OK for our
+      // downstream — the reissue still needs an enabled Choose
+      // action, but if Save is disabled it usually means the file
+      // is already in a saved state.
+      console.log('[Copy LOP] Save button is disabled — already saved or nothing to save.');
+      return { ok: true, alreadySaved: true };
+    }
+    console.log('[Copy LOP] Clicking Save loan file…');
+    saveBtn.click();
+    // Watch for the save cycle. The button typically goes disabled
+    // mid-save then re-enables when done. Wait up to 8 seconds.
+    await waitForCondition(function () {
+      return saveBtn.disabled || saveBtn.getAttribute('aria-disabled') === 'true';
+    }, 1500);
+    // Then wait for it to be done (re-enabled or stays disabled
+    // because there's nothing more to save).
+    await wait(800);
+    // Extra settle so LOP's right-rail can refresh and enable
+    // Choose action.
+    await wait(1200);
+    return { ok: true };
+  }
+
   // Paste side: drive Choose action → Reissue credit report →
   // fill reference ID → click Reissue. Returns { ok, reason }.
   async function runCreditReissue(refId) {
@@ -893,6 +924,44 @@
     return '';
   }
 
+  // Drive an accessibility-combobox (role="combobox" + portaled
+  // role="listbox") so we can pick a borrower from the Asset and
+  // Real Estate forms. The standard "set .value" trick doesn't work
+  // for these — they require an actual interaction that opens the
+  // listbox, then a click on the desired option.
+  async function selectComboboxOption(input, wantedText) {
+    if (!input || !wantedText) return false;
+    const want = String(wantedText).replace(/\s+/g, ' ').trim().toLowerCase();
+    input.focus();
+    input.click();
+    await wait(180);
+    // Some combobox implementations only open on keyboard input.
+    if (input.getAttribute('aria-expanded') !== 'true') {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+      await wait(180);
+    }
+    // Look for any visible listbox in the document — c11n portals
+    // them out of the form to escape overflow clipping.
+    const listboxes = document.querySelectorAll('[role="listbox"]');
+    for (const lb of listboxes) {
+      if (lb.offsetHeight === 0 && lb.offsetWidth === 0) continue;
+      const options = lb.querySelectorAll('[role="option"]');
+      for (const opt of options) {
+        const t = (opt.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        if (!t) continue;
+        if (t === want || t.indexOf(want) === 0 || want.indexOf(t) === 0) {
+          opt.click();
+          await wait(150);
+          // Close the listbox by blurring the input.
+          try { input.blur(); } catch (_) {}
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   // Resolve a borrower name from the source ("Sekou Swaray") to a
   // borrower-id value present on the destination form. The Gifts
   // form has a plain <select name="borrowerId"> whose options carry
@@ -1051,15 +1120,23 @@
       const endEl = fInput(form, 'endDate');
       if (endEl) { setReactInputValue(endEl, normalizeDateStr(endMatch[1])); await wait(150); }
     }
-    // Annual base income
+    // Annual base income. The employment-incomes-table can take a
+    // moment to render after the form opens, especially on the 2nd
+    // and 3rd Add cycles (LOP doesn't always rebuild it
+    // synchronously). Wait for it before trying to write.
+    const incomeTable = await waitForCondition(function () {
+      return form.querySelector('table[aria-label="employment-incomes-table"]') &&
+             form.querySelector('input[name="base.amount"]');
+    }, 2500);
     const yr = parseAmount(row['Income / yr']);
-    if (yr) {
+    if (yr && incomeTable) {
       writeSelect(form, 'base.frequency', 'Annual');
-      await wait(60);
+      await wait(80);
       writeInput(form, 'base.amount', yr);
-      await wait(150);
+      await wait(180);
+    } else if (yr && !incomeTable) {
+      console.warn('[Copy LOP][employment] income table did not render — base income left blank');
     }
-    // Blur the last field so React commits, then save
     const baseInput = fInput(form, 'base.amount');
     if (baseInput) { try { baseInput.blur(); } catch (_) {} await wait(200); }
 
@@ -1092,8 +1169,19 @@
     if (!form) return { ok: false, reason: 'Add form did not appear' };
     await wait(150);
 
-    // The Borrower(s) field is a multi-select combobox — hard to
-    // drive from the outside. We leave it for the user to pick.
+    // Borrower(s) is a multi-select combobox — open the listbox
+    // and click the matching option. The source row's text is like
+    // "Sekou Swaray"; for multi-borrower assets the source carried
+    // both names joined together — we attempt each token.
+    const borrowerInput = form.querySelector('input[name="borrowerIds"]');
+    if (borrowerInput && row['Borrower(s)']) {
+      const names = String(row['Borrower(s)']).split(/\s*(?:&|and|,)\s*/).filter(Boolean);
+      for (const name of names) {
+        const ok = await selectComboboxOption(borrowerInput, name);
+        console.log('[Copy LOP][assets] select borrower', name, '→', ok);
+        await wait(120);
+      }
+    }
     writeSelect(form, 'type', mapAssetType(row['Type']));
     await wait(80);
     const inst = row['Financial institution'];
@@ -1126,7 +1214,17 @@
     if (!form) return { ok: false, reason: 'Add form did not appear' };
     await wait(150);
 
-    // Borrower(s) is a multi-select combobox; we skip it (user picks).
+    // Borrower(s) is a multi-select combobox (named "borrowerIDs"
+    // on this form — note the caps D).
+    const borrowerInput = form.querySelector('input[name="borrowerIDs"]');
+    if (borrowerInput && row['Borrower(s)']) {
+      const names = String(row['Borrower(s)']).split(/\s*(?:&|and|,)\s*/).filter(Boolean);
+      for (const name of names) {
+        const ok = await selectComboboxOption(borrowerInput, name);
+        console.log('[Copy LOP][real estate] select borrower', name, '→', ok);
+        await wait(120);
+      }
+    }
     writeSelect(form, 'country', 'US');
     const addr = parseAddressLine(row['Address']);
     writeInput(form, 'streetAddress', addr.street);
@@ -1342,6 +1440,33 @@
     // email, and phone have all been written, which are the inputs
     // CoreLogic needs to match the staged reference. Give the form
     // one more beat to settle before we open the reissue dialog.
+    // ORDER MATTERS:
+    //   1. Field paste (done above)
+    //   2. Table-row paste (so all the borrower-pair data is in)
+    //   3. Save the loan file (required before Reissue credit's
+    //      Choose action enables)
+    //   4. Credit reissue
+    let tableResults = {};
+    const hasAnyTableRows = stage.tableData && Object.keys(stage.tableData).some(function (k) {
+      return Array.isArray(stage.tableData[k]) && stage.tableData[k].length;
+    });
+    if (hasAnyTableRows) {
+      updateProgress('Adding table rows…', 'Walking each + Add form on the page.');
+      tableResults = await pasteAllTableRows(stage);
+    }
+
+    // Save the loan file so the Credit card's Choose action button
+    // un-disables. Without this, the reissue step finds the menu
+    // missing because the button never opened.
+    let saveResult = null;
+    if (stage.creditReferenceId) {
+      updateProgress('Saving loan file…', 'Required before Choose action → Reissue credit becomes available.');
+      console.group('[Copy LOP] Save loan file');
+      saveResult = await saveLoanFile();
+      console.log('Result:', saveResult);
+      console.groupEnd();
+    }
+
     let creditResult = null;
     if (stage.creditReferenceId) {
       console.group('[Copy LOP] Credit reissue');
@@ -1356,18 +1481,6 @@
       console.groupEnd();
     } else {
       console.log('[Copy LOP] No credit reference staged — skipping reissue.');
-    }
-
-    // Table-row auto-paste — runs LAST so all the basic fields are
-    // committed first (LOP's table forms can be sensitive to the
-    // borrower section being fully saved).
-    let tableResults = {};
-    const hasAnyTableRows = stage.tableData && Object.keys(stage.tableData).some(function (k) {
-      return Array.isArray(stage.tableData[k]) && stage.tableData[k].length;
-    });
-    if (hasAnyTableRows) {
-      updateProgress('Adding table rows…', 'Walking each + Add form on the page.');
-      tableResults = await pasteAllTableRows(stage);
     }
 
     hideProgress();
@@ -1386,6 +1499,7 @@
       passes: passes,
       borrowerMismatch: borrowerMismatch,
       creditResult: creditResult,
+      saveResult: saveResult,
       tableResults: tableResults
     };
   }
