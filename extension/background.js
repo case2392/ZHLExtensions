@@ -36,6 +36,71 @@ const FEATURE_KEYS = [
   "feature_telemetry"
 ];
 
+// ---- Bulk Download: strip Content-Disposition during a run ---------------
+//
+// The Zillow Docs viewer's Download button triggers a request whose
+// response carries `Content-Disposition: attachment`, which makes Chrome
+// open a Save As dialog regardless of any in-page interception we attempt
+// (the viewer uses an iframe-load / location-assign style trigger, not
+// an anchor click). Removing that header makes Chrome treat the response
+// as inline — no Save As. Our own chrome.downloads.download() call
+// downloads the same URL silently with saveAs:false, so the file lands
+// in the user's Downloads folder correctly.
+//
+// Rule is enabled when a bulk-download OPEN arrives, refreshed on every
+// subsequent OPEN, and auto-removed after 30 s of inactivity. We also
+// clear it on startup so a crashed-mid-flow session can't leave it on.
+const BULK_DL_HEADER_RULE_ID = 1001;
+let _bulkDlRuleTimer = null;
+
+async function enableDispositionStripping() {
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [BULK_DL_HEADER_RULE_ID],
+      addRules: [{
+        id: BULK_DL_HEADER_RULE_ID,
+        priority: 1,
+        condition: {
+          urlFilter: "||zillowdocs.com",
+          resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "other", "media"]
+        },
+        action: {
+          type: "modifyHeaders",
+          responseHeaders: [{ header: "content-disposition", operation: "remove" }]
+        }
+      }]
+    });
+    console.log("[ZHL Bulk DL] Content-Disposition stripping ENABLED");
+  } catch (e) {
+    console.warn("[ZHL Bulk DL] enable rule failed:", e && e.message || e);
+  }
+}
+
+async function disableDispositionStripping() {
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [BULK_DL_HEADER_RULE_ID]
+    });
+    console.log("[ZHL Bulk DL] Content-Disposition stripping DISABLED");
+  } catch (e) {
+    console.warn("[ZHL Bulk DL] disable rule failed:", e && e.message || e);
+  }
+}
+
+// Idempotent — call on every OPEN. Enables the rule if not active and
+// resets a 30 s auto-disable timer.
+function armDispositionStripping() {
+  if (!_bulkDlRuleTimer) enableDispositionStripping();
+  if (_bulkDlRuleTimer) clearTimeout(_bulkDlRuleTimer);
+  _bulkDlRuleTimer = setTimeout(() => {
+    _bulkDlRuleTimer = null;
+    disableDispositionStripping();
+  }, 30 * 1000);
+}
+
+// Safety: clear any stale rule from a previous session on startup.
+disableDispositionStripping();
+
 chrome.runtime.onInstalled.addListener(async (details) => {
   // Seed any unset feature flags to true so a fresh install ships with all
   // modules enabled. The setup page can flip them off after.
@@ -731,6 +796,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // that content script reports back (or times out / errors).
   // Sequential — the operator-side awaits one OPEN at a time.
   if (msg && msg.type === "ZHL_BULK_DOWNLOAD_OPEN") {
+    armDispositionStripping(); // strip Content-Disposition during the run
     const url = String(msg.url || "");
     if (!url || !/^https:\/\/(?:www\.)?zillowdocs\.com\/embed\/editor/.test(url)) {
       sendResponse({ ok: false, reason: "bad or non-zillowdocs URL" });

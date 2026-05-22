@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.5",
+    headline: "Bulk-download BUG FIX: Save As dialog truly gone — Content-Disposition header is stripped server-side during the run so Chrome never treats responses as attachments.",
+    highlights: [
+      "v1.37.4 was capturing the PDF URL successfully (logs showed 'fetch-url-after-click') but the Save As dialog still appeared. Root cause: the Zillow Docs viewer triggers its download via an iframe/location mechanism — NOT an anchor click — so all our prototype.click / dispatchEvent / document-click intercepts were bypassed. The response from that request carries Content-Disposition: attachment, which makes Chrome open Save As regardless of any in-page interception.",
+      "New approach: use chrome.declarativeNetRequest to dynamically strip the Content-Disposition header from any zillowdocs.com response during an active bulk-download run. With no attachment header, Chrome treats the response as inline (no Save As). Meanwhile, our own chrome.downloads.download(saveAs:false) call downloads the same URL silently — the file still lands in the Downloads folder with the correct PDF name. Rule auto-disables 30 s after the last download to avoid affecting normal Zillow Docs use afterward."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.4",
     headline: "Bulk-download BUG FIX: Save As dialog is now actually eliminated — the Download button is never clicked.",
     highlights: [
