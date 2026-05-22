@@ -828,22 +828,98 @@
   // matching dest row (matched by accountIdentifier). Returns a
   // per-row report.
   async function applyLiabilityEdits(liabilityEdits) {
-    if (!liabilityEdits || !liabilityEdits.length) return { total: 0, applied: 0, skipped: 0, errors: [] };
-    // Wait for the dest liabilities table to actually have rows —
-    // credit pull is async and can take many seconds.
-    updateProgress('Waiting for credit pull to populate liabilities…', 'Up to 60 seconds.');
-    const table = await waitForCondition(function () {
+    console.group('[Copy LOP][liability edits] applyLiabilityEdits');
+    if (!liabilityEdits || !liabilityEdits.length) {
+      console.log('No edits to apply.');
+      console.groupEnd();
+      return { total: 0, applied: 0, skipped: 0, errors: [] };
+    }
+    // Only edits that actually carry data need a matching row.
+    const actionable = liabilityEdits.filter(function (e) {
+      return e && (e.payoff || e.exclude || e.realEstateAddress);
+    });
+    const wantedAccts = actionable
+      .map(function (e) { return (e.accountIdentifier || '').trim(); })
+      .filter(Boolean);
+    console.log('Staged edits:', liabilityEdits.length,
+      '— actionable:', actionable.length,
+      '— wanted accountIdentifiers:', wantedAccts);
+
+    // Helper: read the current dest table's rows + account #s
+    function readDestTableSnapshot() {
       const t = document.querySelector('table[aria-label="Table for liabilities"]');
-      if (!t) return null;
+      if (!t) return { table: null, rows: [], accts: [] };
       const tbody = t.querySelector('tbody');
-      if (!tbody) return null;
-      const dataRows = Array.from(tbody.children).filter(function (tr) {
+      if (!tbody) return { table: t, rows: [], accts: [] };
+      const rows = Array.from(tbody.children).filter(function (tr) {
         const tds = tr.querySelectorAll('td');
-        return tds.length > 1 && (tds[4] ? (tds[4].textContent || '').trim() : '');
+        if (tds.length <= 1) return false;
+        if (tr.getAttribute('data-cy') === 'add-entity-container') return false;
+        const txt = (tr.textContent || '').replace(/\s+/g, '').trim();
+        return !!txt;
       });
-      return dataRows.length > 0 ? t : null;
-    }, 60000);
-    if (!table) return { total: liabilityEdits.length, applied: 0, skipped: liabilityEdits.length, errors: [{ reason: 'Liabilities never populated' }] };
+      const accts = rows.map(function (tr) {
+        const tds = tr.querySelectorAll('td');
+        return tds[4] ? (tds[4].textContent || '').replace(/\s+/g, ' ').trim() : '';
+      }).filter(Boolean);
+      return { table: t, rows: rows, accts: accts };
+    }
+
+    // Wait until either:
+    //   - every wanted accountIdentifier appears in the dest table, OR
+    //   - the row count is stable for several poll cycles
+    //     (meaning credit returned and any remaining wanted accts
+    //     simply aren't in this dest's pull), OR
+    //   - 90 seconds passes (hard cap)
+    updateProgress('Waiting for credit pull to populate liabilities…',
+      'Watching the destination liabilities table for ' + wantedAccts.length + ' matching account(s).');
+    const TIMEOUT_MS = 90 * 1000;
+    const STABLE_REQUIRED = 4; // 4 polls × 800ms = ~3.2s of no change
+    const t0 = Date.now();
+    let lastAcctCount = -1;
+    let stableTicks = 0;
+    let lastSnap = readDestTableSnapshot();
+    while (Date.now() - t0 < TIMEOUT_MS) {
+      const snap = readDestTableSnapshot();
+      lastSnap = snap;
+      const presentWanted = wantedAccts.filter(function (a) {
+        return snap.accts.indexOf(a) !== -1;
+      });
+      const allPresent = wantedAccts.length === 0 || presentWanted.length === wantedAccts.length;
+      // Progress log every ~3s
+      if ((Date.now() - t0) % 3000 < 850) {
+        console.log('Polling liabilities…',
+          'dest rows:', snap.accts.length,
+          '| wanted ' + wantedAccts.length + ' / present ' + presentWanted.length,
+          '| missing:', wantedAccts.filter(function (a) { return snap.accts.indexOf(a) === -1; }));
+      }
+      if (allPresent) {
+        console.log('All wanted accts present at', Date.now() - t0, 'ms.');
+        break;
+      }
+      // Stable-row-count exit: if row count hasn't moved for a few
+      // ticks AND we have at least 1 row, the pull is done and
+      // remaining wanted accts won't show up.
+      if (snap.accts.length > 0 && snap.accts.length === lastAcctCount) {
+        stableTicks++;
+        if (stableTicks >= STABLE_REQUIRED) {
+          console.warn('Row count stable for', stableTicks, 'ticks — proceeding even though some wanted accts are missing.');
+          break;
+        }
+      } else {
+        stableTicks = 0;
+      }
+      lastAcctCount = snap.accts.length;
+      await wait(800);
+    }
+    if (!lastSnap.table) {
+      console.warn('Liability table never rendered.');
+      console.groupEnd();
+      return { total: liabilityEdits.length, applied: 0, skipped: liabilityEdits.length, errors: [{ reason: 'Liabilities never populated' }] };
+    }
+    // Small final settle so React finishes hydrating any final row
+    await wait(400);
+    console.log('Final dest accts:', lastSnap.accts);
 
     const out = { total: liabilityEdits.length, applied: 0, skipped: 0, errors: [] };
     for (let i = 0; i < liabilityEdits.length; i++) {
@@ -857,24 +933,53 @@
         'Applying liability edits…',
         'Row ' + (i + 1) + ' of ' + liabilityEdits.length + ' (' + (edit.creditor || edit.accountIdentifier || 'unknown') + ')'
       );
-      // Find a matching dest row by account #
-      const tbody = table.querySelector('tbody');
-      const matchedRow = Array.from(tbody.children).find(function (tr) {
-        const tds = tr.querySelectorAll('td');
-        if (tds.length <= 1) return false;
-        const acct = tds[4] ? (tds[4].textContent || '').trim() : '';
-        return acct === edit.accountIdentifier;
-      });
+      // Find a matching dest row by account #. If it's not there
+      // yet, give it one more short window — handles the case
+      // where the pull was still streaming when we exited the
+      // wait loop above on stable-row-count.
+      let matchedRow = findLiabilityRowByAcct(edit.accountIdentifier);
       if (!matchedRow) {
-        out.errors.push({ accountIdentifier: edit.accountIdentifier, reason: 'No matching dest row' });
+        console.log('Row not found yet for', edit.accountIdentifier, '— extra-waiting up to 12s.');
+        const extraT0 = Date.now();
+        while (Date.now() - extraT0 < 12000) {
+          await wait(700);
+          matchedRow = findLiabilityRowByAcct(edit.accountIdentifier);
+          if (matchedRow) {
+            console.log('Row appeared for', edit.accountIdentifier, 'after extra', Date.now() - extraT0, 'ms.');
+            break;
+          }
+        }
+      }
+      if (!matchedRow) {
+        const snap = readDestTableSnapshot();
+        console.warn('Still no match for', edit.accountIdentifier, '— dest accts now:', snap.accts);
+        out.errors.push({ accountIdentifier: edit.accountIdentifier, reason: 'No matching dest row (dest had: ' + snap.accts.join(', ') + ')' });
         continue;
       }
       // Expand → apply → save
       const result = await expandRowAndApply(matchedRow, edit);
+      console.log('Row apply result for', edit.accountIdentifier, ':', result);
       if (result.ok) out.applied++;
       else out.errors.push({ accountIdentifier: edit.accountIdentifier, reason: result.reason });
     }
+    console.log('applyLiabilityEdits totals:', out);
+    console.groupEnd();
     return out;
+  }
+
+  function findLiabilityRowByAcct(wantAcct) {
+    const want = (wantAcct || '').trim();
+    if (!want) return null;
+    const t = document.querySelector('table[aria-label="Table for liabilities"]');
+    if (!t) return null;
+    const tbody = t.querySelector('tbody');
+    if (!tbody) return null;
+    return Array.from(tbody.children).find(function (tr) {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length <= 1) return false;
+      const acct = tds[4] ? (tds[4].textContent || '').replace(/\s+/g, ' ').trim() : '';
+      return acct === want;
+    }) || null;
   }
 
   async function expandRowAndApply(row, edit) {

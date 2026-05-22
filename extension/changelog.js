@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.36.3",
+    headline: "Copy LOP file BUG FIX: liability edits now wait for every staged account to actually appear in the destination table.",
+    highlights: [
+      "BUG: liability edits (Payoff / Exclude+Reason / Property link) were missing rows after the credit reissue. CoreLogic streams the liabilities back over many seconds, but our old wait just polled for ANY row to appear — so the moment the first card landed, we'd try to find the rest and bail with 'No matching dest row' on accounts that hadn't streamed in yet. New logic polls until either (a) every staged accountIdentifier is present in the destination's liabilities table, or (b) the row count is stable for 4 poll cycles (meaning the pull is done and remaining staged accts won't appear), or (c) 90s hard cap. Per-row also has a 12s extra-wait fallback if the row still isn't there when we try to match it.",
+      "Verbose console debug throughout — every poll cycle logs dest row count, wanted count, present count, and which accts are still missing, so you can see exactly when each one lands. Final dest-acct list is logged before edits start, and per-row apply results land under [Copy LOP][liability edits]."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.36.2",
     headline: "Copy LOP file BUG FIXES: per-borrower credit detect now reads LOP's data-cy grids + popper dismiss before Run pricing.",
     highlights: [
