@@ -496,7 +496,7 @@
         '<textarea id="pe-body" style="' + fieldStyle + 'min-height:280px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;">' + escapeHtml(email.body) + '</textarea>' +
         '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">⚠ Attachments (Comp LE, ZHL pricing summary, etc.) can\'t be added via mailto: — attach them manually after the email opens.</p>' +
         '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">' +
-          btnPrimary('Open in mail', 'zhl-pe-mailto') +
+          btnPrimary('Open in Gmail', 'zhl-pe-mailto') +
           btnSecondary('Copy body', 'zhl-pe-copy-body') +
           btnSecondary('Copy subject', 'zhl-pe-copy-subj') +
           btnSecondary('Save RM email for next time', 'zhl-pe-save-rm') +
@@ -525,8 +525,13 @@
 
       body.querySelector('#zhl-pe-mailto').addEventListener('click', function () {
         const e = read();
-        const url = 'mailto:' + encodeURIComponent(e.to) +
-          '?subject=' + encodeURIComponent(e.subject) +
+        // Gmail compose URL — opens in a new tab directly inside Gmail
+        // rather than handing off to the OS default mail client (which
+        // for many users is Outlook). Subject parameter is `su`, not
+        // `subject`.
+        const url = 'https://mail.google.com/mail/?view=cm&fs=1' +
+          '&to=' + encodeURIComponent(e.to) +
+          '&su=' + encodeURIComponent(e.subject) +
           '&body=' + encodeURIComponent(e.body);
         try { window.open(url, '_blank'); }
         catch (_) { window.location.href = url; }

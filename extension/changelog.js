@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.39.1",
+    headline: "Pricing Exception Workflow: 'Open in mail' is now 'Open in Gmail' — opens the email directly in Gmail instead of handing off to the OS default mail client (Outlook).",
+    highlights: [
+      "v1.39.0's mailto: link respected the OS default mail handler, which is Outlook for most ZHL users. Switched to Gmail's compose URL (https://mail.google.com/mail/?view=cm&fs=1&to=...&su=...&body=...) so clicking the button opens a new Gmail tab with the email pre-filled. To/Subject/Body all carry over."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.39.0",
     headline: "NEW Pricing Exception Workflow — guided multi-step modal that walks the PE submission checklist and builds the RM email for you.",
     highlights: [
