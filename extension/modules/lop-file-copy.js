@@ -1100,10 +1100,15 @@
   }
   function mapFinancialStatus(text) {
     if (!text) return '';
-    const t = String(text).toLowerCase();
-    if (/free\s*and\s*clear|free\&clear/.test(t)) return 'FreeAndClear';
-    if (/liabilit/.test(t)) return 'WithLiabilities';
-    return '';
+    const t = String(text).toLowerCase().trim();
+    if (!t) return '';
+    if (/free\s*and\s*clear|free\s*&\s*clear/.test(t)) return 'FreeAndClear';
+    // Any non-empty Mortgage / HELOC content (e.g. "JPMCB - HOME
+    // LENDING - 4654031444586", possibly multi-line for multi-lien
+    // properties) implies WithLiabilities. LOP's real-estate form
+    // requires a financial-status pick so we default to the more
+    // common case rather than leaving it blank.
+    return 'WithLiabilities';
   }
 
   // Drive an accessibility-combobox (role="combobox" + portaled
@@ -1444,7 +1449,17 @@
     const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
     await wait(400);
     if (!closed) {
-      return { ok: false, reason: 'Save did not close — likely missing required Borrower(s) / Property type / Current occupancy / Intended occupancy / Status / Financial status. Please finish the form manually.' };
+      // The source row scrape doesn't carry Property type or
+      // Current occupancy (LOP only shows those in the form, not
+      // the table), and the Pending sale / Sold date is also a
+      // form-only field. The save validation typically fails on
+      // those.
+      const missing = ['Property type', 'Current occupancy'];
+      if (status === 'PendingSale' || status === 'Sold') missing.push('Pending sale or sold date');
+      return {
+        ok: false,
+        reason: 'Save did not close — finish these required fields manually: ' + missing.join(', ') + '.'
+      };
     }
     return { ok: true };
   }

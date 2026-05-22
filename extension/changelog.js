@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.32.1",
+    headline: "Copy LOP file: Real estate financial-status defaults to With liabilities when source has a mortgage + clearer failure reason",
+    highlights: [
+      "Real-estate rows now infer Financial status correctly. Bug: the mapper was only setting WithLiabilities when the source column literally contained the word 'liabilities', but the column actually shows the lender name + account # (e.g. 'JPMCB - HOME LENDING - 4654031444586'). Fix: any non-empty Mortgage/HELOC content is treated as WithLiabilities; explicit 'Free and clear' text keeps FreeAndClear; truly empty leaves it blank.",
+      "When a real-estate Save fails, the failure reason now lists the specific form-only fields that need manual entry (Property type, Current occupancy, plus Pending sale / Sold date when status is PendingSale or Sold). The source row scrape doesn't carry those — LOP only shows them in the form, not the table — so they're always the culprit when save bounces."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.32.0",
     headline: "Copy LOP file: one click handles EVERY borrower (per-borrower tables + soft credit pull + pre-credit verification)",
     highlights: [
