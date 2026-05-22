@@ -1010,27 +1010,51 @@
     const saveBtn = document.querySelector('button[data-cy="save-loan-file-button"]');
     if (!saveBtn) return { ok: false, reason: 'Save button not found' };
     if (saveBtn.disabled || saveBtn.getAttribute('aria-disabled') === 'true') {
-      // Nothing to save (already saved). That's still OK for our
-      // downstream — the reissue still needs an enabled Choose
-      // action, but if Save is disabled it usually means the file
-      // is already in a saved state.
+      // The button stays disabled until the form is "dirty"
+      // (a paste should make it dirty). If it's still disabled
+      // we have nothing to save — that's fine, the file's
+      // already in a saved state.
       console.log('[Copy LOP] Save button is disabled — already saved or nothing to save.');
       return { ok: true, alreadySaved: true };
     }
-    console.log('[Copy LOP] Clicking Save loan file…');
-    saveBtn.click();
-    // Watch for the save cycle. The button typically goes disabled
-    // mid-save then re-enables when done. Wait up to 8 seconds.
-    await waitForCondition(function () {
+    console.log('[Copy LOP] Clicking Save loan file…', saveBtn);
+    // Full mouse-event sequence so React's onClick handler fires
+    // even when a plain .click() gets swallowed by the styled
+    // wrapper (which we hit earlier on the Choose action button).
+    try {
+      saveBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      saveBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      saveBtn.click();
+    } catch (e) {
+      console.warn('[Copy LOP] Save click sequence threw:', e);
+      try { saveBtn.click(); } catch (_) {}
+    }
+    // Wait for the save cycle to begin (button goes disabled).
+    const wentDisabled = await waitForCondition(function () {
       return saveBtn.disabled || saveBtn.getAttribute('aria-disabled') === 'true';
-    }, 1500);
-    // Then wait for it to be done (re-enabled or stays disabled
-    // because there's nothing more to save).
-    await wait(800);
-    // Extra settle so LOP's right-rail can refresh and enable
+    }, 2000);
+    if (!wentDisabled) {
+      console.warn('[Copy LOP] Save button never went disabled — click may not have fired.');
+    } else {
+      console.log('[Copy LOP] Save in progress (button disabled), waiting for it to complete…');
+    }
+    // Then wait for the save to complete. Some LOP saves take a
+    // few seconds; cap at 10s.
+    await waitForCondition(function () {
+      // Save is done when the button is enabled OR when Choose
+      // action becomes enabled (which is what we actually need).
+      const action = document.querySelector('[data-cy="credit-actions-buttons"]');
+      const actionReady = action && !action.disabled && action.getAttribute('aria-disabled') !== 'true';
+      const saveDoneOrIdle = !saveBtn.disabled && saveBtn.getAttribute('aria-disabled') !== 'true';
+      return actionReady || saveDoneOrIdle;
+    }, 10000);
+    // One more beat for the right-rail to render the enabled
     // Choose action.
-    await wait(1200);
-    return { ok: true };
+    await wait(1500);
+    const action = document.querySelector('[data-cy="credit-actions-buttons"]');
+    const actionEnabled = !!(action && !action.disabled && action.getAttribute('aria-disabled') !== 'true');
+    console.log('[Copy LOP] Save complete. Choose action enabled:', actionEnabled);
+    return { ok: true, actionEnabled: actionEnabled };
   }
 
   // Paste side: drive Choose action → Reissue credit report →
@@ -1043,6 +1067,9 @@
       console.log('[Copy LOP] Hard reissue Step 1: looking for [data-cy="credit-actions-buttons"]');
       const actionBtn = document.querySelector('[data-cy="credit-actions-buttons"]');
       if (!actionBtn) return { ok: false, reason: 'Choose action button not found on the right rail.' };
+      if (actionBtn.disabled || actionBtn.getAttribute('aria-disabled') === 'true') {
+        return { ok: false, reason: 'Choose action button is still disabled — file may not have saved successfully. Try Save manually, then click Choose action → Reissue credit report.' };
+      }
       console.log('[Copy LOP] Step 1: clicking Choose action', actionBtn);
       actionBtn.click();
       await new Promise(function (r) { setTimeout(r, 200); });
@@ -1084,6 +1111,9 @@
       console.log('[Copy LOP] Soft pull Step 1: looking for [data-cy="credit-actions-buttons"]');
       const actionBtn = document.querySelector('[data-cy="credit-actions-buttons"]');
       if (!actionBtn) return { ok: false, reason: 'Choose action button not found on the right rail.' };
+      if (actionBtn.disabled || actionBtn.getAttribute('aria-disabled') === 'true') {
+        return { ok: false, reason: 'Choose action button is still disabled — file may not have saved successfully. Try Save manually, then click Choose action → Pull credit report.' };
+      }
       console.log('[Copy LOP] Soft pull Step 1: clicking Choose action', actionBtn);
       actionBtn.click();
       await new Promise(function (r) { setTimeout(r, 200); });
@@ -2043,8 +2073,15 @@
     // un-disables. Without this, the reissue step finds the menu
     // missing because the button never opened.
     let saveResult = null;
-    if (stage.creditReferenceId) {
-      updateProgress('Saving loan file…', 'Required before Choose action → Reissue credit becomes available.');
+    if (stage.creditPullType) {
+      // Save BEFORE running the credit action — Choose action
+      // (for both Hard reissue and Soft pull) is disabled until
+      // the loan file has been saved at least once. The old
+      // version gated this on creditReferenceId which was only
+      // set for Hard pulls, so Soft pulls skipped save and then
+      // failed at the "Pull credit report" menu lookup because
+      // Choose action was still disabled.
+      updateProgress('Saving loan file…', 'Required before Choose action → Pull / Reissue credit becomes available.');
       console.group('[Copy LOP] Save loan file');
       saveResult = await saveLoanFile();
       console.log('Result:', saveResult);

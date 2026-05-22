@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.33.2",
+    headline: "Copy LOP file: soft credit pulls now save the file first + Save click uses full mouse-event sequence",
+    highlights: [
+      "BUG: soft credit pull was failing with '\"Pull credit report\" menu item not found.' because the file save step was being skipped. The save gate checked stage.creditReferenceId, which only gets set for HARD pulls — soft pulls have no reference so save never ran, Choose action stayed disabled, and the menu lookup failed. Gate is now stage.creditPullType so both Hard and Soft pulls trigger save before the credit action.",
+      "Save click now fires a full mousedown/mouseup/click sequence so React's onClick handler actually picks it up (a bare .click() can get swallowed by styled wrapper buttons — same trick we needed on the loan-amount field). Also added explicit waits for the Choose action button to become enabled after save, with a clear log when it doesn't.",
+      "Hard reissue and Soft pull both now bail with a specific 'Choose action still disabled' message if the save didn't take, instead of silently failing at the menu lookup further downstream."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.33.1",
     headline: "Copy LOP file: liability stage skips rows with no E/P tag and no mortgage type — much faster on big files",
     highlights: [
