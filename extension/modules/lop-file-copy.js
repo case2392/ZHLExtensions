@@ -4376,9 +4376,8 @@
       // Surface a small toast-like modal so the LO knows the
       // resume ran (no full summary — most of that already
       // appeared before the refresh).
-      const okHtml = '<h3 style="margin:0 0 8px;font-size:16px;color:#15803d;">Credit ' +
-        (pending.creditPullType === 'Hard' ? 'reissue' : 'pull') + ' triggered after refresh</h3>' +
-        '<p style="margin:0 0 6px;color:#374151;font-size:13px;">Watch the right rail for the new pull to come back.</p>';
+      const okHtml = '<h3 style="margin:0 0 8px;font-size:18px;color:#15803d;">🎉 Congrats on cloning your LOP file!</h3>' +
+        '<p style="margin:0;color:#374151;font-size:13px;">Please make sure to leave Justin karma if you found this useful 💛</p>';
       const failHtml = '<h3 style="margin:0 0 8px;font-size:16px;color:#991b1b;">Couldn\'t trigger credit after refresh</h3>' +
         '<p style="margin:0 0 6px;color:#7f1d1d;font-size:13px;">' +
         (creditResult && creditResult.reason ? escapeHtml(creditResult.reason) : 'Unknown error') +

@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.36.5",
+    headline: "Copy LOP file: cheerier success modal at the end of the post-refresh flow.",
+    highlights: [
+      "Renamed the post-refresh success modal from 'Credit reissue triggered after refresh / Watch the right rail for the new pull to come back' to '🎉 Congrats on cloning your LOP file! Please make sure to leave Justin karma if you found this useful 💛' — by this point in the flow the credit pull AND liability edits AND pricing assign have all run, so 'triggered, watch the right rail' was outdated."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.36.4",
     headline: "Copy LOP file BUG FIX: liability edits now gated on every borrower having a credit score (not just the table-side stable-count exit).",
     highlights: [
