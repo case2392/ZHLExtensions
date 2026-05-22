@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.39.0",
+    headline: "NEW Pricing Exception Workflow — guided multi-step modal that walks the PE submission checklist and builds the RM email for you.",
+    highlights: [
+      "Adds a '⚖ Pricing Exception Workflow' button to the LOP loan toolbar (near Copy LOP file / Stage / Paste-from-staged). Click to start the guided flow.",
+      "Branches on 'Is this loan locked?'. Locked path checks: pricing imported → Comp PE fields completed in ENC → no lock-difference alert → comp LE uploaded to eFolder. Unlocked path checks: updated scenario assigned → comp LE on tasks → enter ZHL + competitor pricing in a side-by-side form (rate, Box A, lender credits).",
+      "Auto-computes PE $ and points on the unlocked path: PE $ = (ZHL Box A − ZHL credits) − (Comp Box A − Comp credits); PE points = PE $ / loan amount × 100.",
+      "When the PE is ≥ 2.5 points, the modal surfaces the three justification questions your manager requires (main reason; expectations set with borrower re: further PEs / rate extensions being at their cost; relationship with agent/partner) and includes them in the email.",
+      "Final step shows an editable Subject + Body with Open in mail (mailto:) and Copy buttons. RM email is remembered between sessions via Save RM email for next time. Attachments (Comp LE etc.) still attach manually after the email opens — mailto: can't carry files."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.38.1",
     headline: "Net Proceeds calc: auto-detects Mortgage / HELOC liens from LOP's Liabilities table and lists them as pre-filled checkboxes.",
     highlights: [

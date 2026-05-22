@@ -694,6 +694,32 @@
       </div>
     </section>
 
+    <!-- ============== Module: Pricing Exception Workflow ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Pricing Exception Workflow</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> &mdash; loan toolbar</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_pricingExceptionWorkflow" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a <strong>⚖ Pricing Exception Workflow</strong> button to the loan toolbar (near <em>Copy LOP file / Stage / Paste from staged</em>). Click to walk through your manager&rsquo;s PE submission checklist.</li>
+          <li><strong>Branched flow:</strong> first asks whether the loan is locked, then walks the appropriate prerequisite checks (locked: import pricing → Comp PE fields → no lock-diff alert → Comp LE in eFolder; unlocked: scenario assigned → Comp LE on tasks → enter ZHL + comp pricing).</li>
+          <li><strong>Auto-computes PE $ and points</strong> on the unlocked path: <em>PE $ = (ZHL Box A − ZHL credits) − (Comp Box A − Comp credits)</em>; <em>PE points = PE $ / loan amount × 100</em>.</li>
+          <li><strong>&gt; 2.5 pts branch</strong> surfaces the three justification questions your manager requires (reason for PE, expectations set with borrower, relationship with agent/partner) and includes them in the generated email.</li>
+          <li><strong>Email output:</strong> editable subject + body, with <em>Open in mail</em> (uses <code>mailto:</code>) and <em>Copy body / Copy subject</em> buttons. Attachments still have to be added manually after the email opens.</li>
+          <li><strong>RM email</strong> is remembered between sessions once you click <em>Save RM email for next time</em>.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Anonymous Telemetry ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

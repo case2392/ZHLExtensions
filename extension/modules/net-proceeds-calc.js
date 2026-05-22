@@ -282,6 +282,9 @@
                   '<input type="checkbox" class="np-lien-cb" ' +
                     'data-lien-id="' + escapeAttr(lien.id) + '" ' +
                     'data-balance="' + lien.balance + '" ' +
+                    'data-type="' + escapeAttr(lien.type) + '" ' +
+                    'data-payee="' + escapeAttr(lien.payee) + '" ' +
+                    'data-last4="' + escapeAttr(lien.accountLast4) + '" ' +
                     (checked ? 'checked' : '') + ' style="margin:0;cursor:pointer;width:14px;height:14px;" />' +
                   '<span style="flex:1;color:#374151;">' +
                     '<span style="font-weight:600;color:#0b5cab;">' + escapeHtml(lien.type) + '</span>' +

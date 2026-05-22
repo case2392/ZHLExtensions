@@ -27,6 +27,7 @@ const FEATURE_KEYS = [
   "feature_taskBulkDelete",
   "feature_taskBulkDownload",
   "feature_netProceedsCalc",
+  "feature_pricingExceptionWorkflow",
   "feature_fhaBadges",
   "feature_fhaNprWarning",
   "feature_fhaFlipRule",
