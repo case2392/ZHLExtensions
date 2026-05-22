@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.4",
+    headline: "Bulk-download BUG FIX: Save As dialog is now actually eliminated — the Download button is never clicked.",
+    highlights: [
+      "Previous attempts to intercept the Download button click kept failing because the Zillow Docs viewer uses a download mechanism (iframe, navigation, or service worker) that bypasses anchor-click hooks. New strategy: don't click the Download button at all. The MAIN-world fetch/XHR interceptor captures the PDF's HTTPS URL the moment the viewer fetches it to display in its viewer pane. The content script sends that URL to background.js, which downloads it directly via chrome.downloads (saveAs: false, conflictAction: 'uniquify'). No button click, no native download, no Save As dialog.",
+      "Fixed a timing race: the MAIN-world script runs at document_start and the PDF fetch can complete before the content script runs at document_idle. The interceptor now also stashes the URL on <html data-zhl-pdf-url=...> so the content script picks it up regardless of which started listening first.",
+      "Falls back to clicking the Download button only if no PDF URL is captured within 20 s (rare — only for viewers with a different architecture)."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.3",
     headline: "Bulk-download BUG FIX: files now save with correct names — no more UUID.tmp; Save As dialog fully eliminated.",
     highlights: [

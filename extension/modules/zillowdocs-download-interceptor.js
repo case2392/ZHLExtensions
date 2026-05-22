@@ -1,100 +1,102 @@
 // ZHL Productivity Pack — Zillow Docs download interceptor (MAIN world)
 //
-// Runs at document_start in the page's JS context. Sits dormant until
-// zillowdocs-bulk-download.js sets data-zhl-bulk-armed on <html>.
+// Runs at document_start in the page's JS context. Observes the viewer's
+// own network traffic to find the PDF URL.
 //
-// Three-layer intercept so we catch every mechanism the viewer might use:
-//   1. fetch wrapper     — captures the original HTTPS PDF URL so
-//                          chrome.downloads can use it directly (avoids
-//                          the Windows UUID.tmp filename bug with data URLs)
-//   2. prototype.click   — catches a.click() on download anchors
-//   3. dispatchEvent     — catches a.dispatchEvent(new MouseEvent('click'))
-//                          on anchors that are NOT in the DOM (most common
-//                          SPA pattern — doesn't bubble to document)
-//   4. capture listener  — catches bubbled clicks on in-DOM anchors
+// PRIMARY ROLE (v1.37.4+):
+//   When the viewer fetches the PDF to display it in its viewer pane, this
+//   script captures that URL and announces it to the content script via
+//   window.postMessage({ __zhlPdfReady, url }). The content script then
+//   asks background.js to download that HTTPS URL directly via
+//   chrome.downloads — so the Download button never gets clicked, no native
+//   download is triggered, and no Save As dialog ever appears.
 //
-// Posts { __zhlDl:true, blobUrl, pdfUrl, name } via window.postMessage
-// and prevents the native browser download from starting.
+// SECONDARY ROLE (fallback):
+//   If for some reason the URL isn't captured during viewer load (e.g.
+//   on-demand fetch), the content script falls back to clicking Download.
+//   In that case the anchor-click intercepts here try to swallow the
+//   download — but real-world viewers can route around those, so the
+//   PRIMARY role is what makes the silent-download experience reliable.
 (function () {
   'use strict';
 
-  var _blobToSrc    = Object.create(null); // blob URL → original HTTPS URL
-  var _pendingRevoke = Object.create(null); // blob URLs whose revoke is delayed
-  var _lastPdfUrl   = null;               // most recent PDF-typed fetch URL
+  function announcePdfUrl(url) {
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      try { url = new URL(url, location.href).href; } catch (_) { return; }
+    }
+    // Stash on <html> so the content script (which runs at document_idle,
+    // after the fetch has likely completed) can pick it up even if it
+    // missed the live postMessage.
+    try {
+      var el = document.documentElement;
+      if (el && !el.getAttribute('data-zhl-pdf-url')) {
+        el.setAttribute('data-zhl-pdf-url', url);
+      }
+    } catch (_) {}
+    window.postMessage({ __zhlPdfReady: true, url: url }, '*');
+  }
 
-  // ---- 1. Intercept fetch to capture the PDF source URL ------------------
+  // ---- fetch wrapper -----------------------------------------------------
   var _origFetch = window.fetch;
   window.fetch = function (input, init) {
     var url = '';
     try {
       url = typeof input === 'string' ? input
           : (input instanceof Request  ? input.url : String(input));
-      if (url && !/^https?:\/\//i.test(url)) url = new URL(url, location.href).href;
     } catch (_) { url = ''; }
     var p = _origFetch.apply(this, arguments);
     if (url) {
       p.then(function (res) {
         if (!res || !res.ok) return;
         var ct = (res.headers && res.headers.get('content-type')) || '';
-        if (/pdf|octet-stream/i.test(ct)) _lastPdfUrl = url;
+        if (/pdf|octet-stream/i.test(ct)) announcePdfUrl(url);
       }).catch(function () {});
     }
     return p;
   };
 
-  // ---- 2. Intercept URL.createObjectURL to map blob → fetch URL ----------
-  var _origCreate = URL.createObjectURL.bind(URL);
-  URL.createObjectURL = function (obj) {
-    var url = _origCreate(obj);
-    if (obj instanceof Blob) {
-      _blobToSrc[url]     = _lastPdfUrl || '';
-      _pendingRevoke[url] = true;
-    }
-    return url;
+  // ---- XMLHttpRequest wrapper -------------------------------------------
+  // Some viewers / vendor bundles still use XHR. Capture there too.
+  var _origXhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    try { this.__zhlUrl = url; } catch (_) {}
+    return _origXhrOpen.apply(this, arguments);
+  };
+  var _origXhrSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function () {
+    var xhr = this;
+    try {
+      xhr.addEventListener('load', function () {
+        try {
+          if (xhr.status < 200 || xhr.status >= 300) return;
+          var ct = xhr.getResponseHeader('content-type') || '';
+          if (/pdf|octet-stream/i.test(ct)) announcePdfUrl(xhr.__zhlUrl || '');
+        } catch (_) {}
+      });
+    } catch (_) {}
+    return _origXhrSend.apply(this, arguments);
   };
 
-  // Delay revoke on intercepted blobs so the content script can fetch them.
-  var _origRevoke = URL.revokeObjectURL.bind(URL);
-  URL.revokeObjectURL = function (url) {
-    if (url && _pendingRevoke[url]) {
-      setTimeout(function () {
-        delete _pendingRevoke[url];
-        delete _blobToSrc[url];
-        _origRevoke(url);
-      }, 10000);
-      return;
-    }
-    _origRevoke(url);
-  };
-
-  // ---- Core: swallow the anchor download, post details to content script --
+  // ---- Anchor-click intercepts (fallback only) ---------------------------
   function tryIntercept(a) {
     if (!a || !a.hasAttribute('download')) return false;
     if (!document.documentElement.hasAttribute('data-zhl-bulk-armed')) return false;
-    var blobUrl = a.href || '';
-    if (!blobUrl) return false;
+    var href = a.href || '';
+    if (!href) return false;
     document.documentElement.removeAttribute('data-zhl-bulk-armed');
-    var pdfUrl = (_blobToSrc[blobUrl] !== undefined ? _blobToSrc[blobUrl] : null)
-              || _lastPdfUrl
-              || '';
     window.postMessage({
       __zhlDl : true,
-      blobUrl : blobUrl,
-      pdfUrl  : pdfUrl,
+      blobUrl : href,
       name    : a.getAttribute('download') || ''
     }, '*');
     return true;
   }
-
-  // ---- 3. Intercept a.click() -------------------------------------------
   var _origClick = HTMLAnchorElement.prototype.click;
   HTMLAnchorElement.prototype.click = function () {
     if (tryIntercept(this)) return;
     return _origClick.call(this);
   };
-
-  // ---- 4. Intercept a.dispatchEvent(new MouseEvent('click')) --------------
-  // This catches off-DOM programmatic clicks that never bubble to document.
   var _origDispatch = EventTarget.prototype.dispatchEvent;
   EventTarget.prototype.dispatchEvent = function (event) {
     if (event && event.type === 'click' && event.cancelable
@@ -103,8 +105,6 @@
     }
     return _origDispatch.call(this, event);
   };
-
-  // ---- 5. Document capture listener (in-DOM bubbled clicks) ---------------
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a') : null;
     if (a && tryIntercept(a)) {

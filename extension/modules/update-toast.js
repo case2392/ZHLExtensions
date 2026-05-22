@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.37.4": "Bulk-download BUG FIX: Save As dialog truly gone now. The Download button is never clicked — we capture the PDF URL from the viewer's own fetch and route it through chrome.downloads silently.",
     "1.37.3": "Bulk-download BUG FIXES: files now save with correct PDF names (not UUID.tmp) and the Save As dialog is fully gone.",
     "1.37.2": "Bulk-download: files now save automatically to Downloads — no 'Save As' dialog on each file.",
     "1.37.1": "Bulk-download BUG FIX: was collecting 0 documents every time — task rows are collapsed by default, so links weren't in the DOM yet. Now expands each row, grabs links, then collapses it again.",
