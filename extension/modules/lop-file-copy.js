@@ -415,20 +415,24 @@
   // Current occupancy, Property link on liabilities, etc.) that
   // aren't visible in the table cells.
   async function expandRowAndReadForm(row, formFieldSelector, fieldReader) {
+    // The expanded form lives in the NEXT tr — a single direct-
+    // child td with colspan, holding the edit form. NOTE: we
+    // check DIRECT children only, because the form can contain
+    // nested tables (e.g. Real Estate has an internal
+    // real-estate-liabilities-table with its own tds). A simple
+    // querySelectorAll('td') would count those nested tds and
+    // mis-report the form-tr as "not the form".
+    function isFormRow(tr) {
+      if (!tr) return false;
+      const directTds = Array.from(tr.children).filter(function (c) { return c.tagName === 'TD'; });
+      if (directTds.length !== 1) return false;
+      return !!tr.querySelector(formFieldSelector);
+    }
     // First: if the row is ALREADY expanded (the LO had it open
     // for inspection before staging), the form is the next
     // sibling and we should read it in-place. Clicking the
     // chevron here would CLOSE it.
-    let alreadyOpen = false;
-    {
-      const next = row.nextElementSibling;
-      if (next) {
-        const tds = next.querySelectorAll('td');
-        if (tds.length === 1 && next.querySelector(formFieldSelector)) {
-          alreadyOpen = true;
-        }
-      }
-    }
+    let alreadyOpen = isFormRow(row.nextElementSibling);
     if (!alreadyOpen) {
       // Click the chevron in the first td (or the row itself) to
       // expand. Use full mouse-event sequence so React's onClick
@@ -441,12 +445,7 @@
     // Wait for the form row to appear and to contain the marker
     // input/select that proves the form is mounted.
     const formRoot = await waitForCondition(function () {
-      let next = row.nextElementSibling;
-      if (!next) return null;
-      // The expanded form is a tr with a single colspan td.
-      const tds = next.querySelectorAll('td');
-      if (tds.length !== 1) return null;
-      return next.querySelector(formFieldSelector) ? next : null;
+      return isFormRow(row.nextElementSibling) ? row.nextElementSibling : null;
     }, 3000);
     if (!formRoot) {
       console.warn('[Copy LOP] expandRowAndReadForm: form did not open for row',
@@ -469,8 +468,7 @@
         try { clickWithMouseEvents(trigger); } catch (_) {}
       }
       await waitForCondition(function () {
-        const next = row.nextElementSibling;
-        return !next || !next.querySelector(formFieldSelector);
+        return !isFormRow(row.nextElementSibling);
       }, 2000);
       await wait(120);
     }

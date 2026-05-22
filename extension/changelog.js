@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.34.4",
+    headline: "Copy LOP file BUG FIX: Real Estate source-side scrape was being defeated by the nested liabilities table.",
+    highlights: [
+      "BUG: stage was failing to capture Property type / Current occupancy / Pending-sale date because expandRowAndReadForm couldn't recognize the open form row. The form's outer tr has a single colspan td, but Real Estate's edit form contains an INNER real-estate-liabilities-table whose own tds were being counted by our querySelectorAll('td') length check. That made tds.length be 9 (1 outer + 8 inner from a 2-row × 4-col liabilities table) instead of 1, so the predicate rejected the form-tr and we either toggled the row closed or timed out waiting. Fixed by counting only DIRECT children tds — nested tables no longer fool the detector. This unblocks the source-side scrape that v1.34.2 added.",
+      "Same fix applies to Liabilities source-side scrape (which uses the same expandRowAndReadForm helper) — Property link / Payoff / Exclude+Reason capture now also survives forms with nested tables."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.34.3",
     headline: "Copy LOP file: Borrower multi-select now verifies the chip + tells you when to re-stage for Real Estate.",
     highlights: [
