@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.0",
+    headline: "NEW Bulk-download completed-task documents — one click downloads every borrower-uploaded file under Completed.",
+    highlights: [
+      "Adds a '⬇ Download all docs' button next to the Completed heading on LOP's Tasks tab. Walks every Zillow Docs link in the Completed table, opens each one in a background tab, auto-clicks the viewer's Download button, then closes the tab — repeats sequentially for every document.",
+      "A small progress modal shows current document name + task + a progress bar so you can see what's happening. The browser's 'this site wants to download multiple files' prompt fires once at the start; click Allow and the rest land automatically.",
+      "When done, a summary modal lists every downloaded file with its task name so you can rename or sort them after. Failed downloads show the specific reason (e.g. Download button never rendered) so you know which ones to grab manually.",
+      "Files land in your browser's default Downloads folder with whatever filename Zillow Docs assigns them (V8663-Regular.pdf, etc.) — same as if you'd opened each doc manually and clicked Download.",
+      "Safety: the zillowdocs-side content script is armed-flag gated. Opening a Zillow Docs document manually never triggers the auto-click; only this feature's bulk flow can arm it. Same pattern as the credit-report-reader v1.31.2 fix."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.36.6",
     headline: "Copy LOP file: 'leave Justin karma' on the success modal is now an actual link to my Zall Wall.",
     highlights: [

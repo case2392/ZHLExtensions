@@ -25,6 +25,7 @@ const FEATURE_KEYS = [
   "feature_gmailDragAttachments",
   "feature_gmailCallerId",
   "feature_taskBulkDelete",
+  "feature_taskBulkDownload",
   "feature_fhaBadges",
   "feature_fhaNprWarning",
   "feature_fhaFlipRule",
@@ -722,6 +723,75 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
     }, 400);
     sendResponse({ ok: true, refId: refId });
+    return false;
+  }
+  // ZHL Task Bulk Download: open a Zillow Docs viewer URL in a
+  // background tab, arm the zillowdocs-side content script via
+  // chrome.storage, and resolve the operator-side promise once
+  // that content script reports back (or times out / errors).
+  // Sequential — the operator-side awaits one OPEN at a time.
+  if (msg && msg.type === "ZHL_BULK_DOWNLOAD_OPEN") {
+    const url = String(msg.url || "");
+    if (!url || !/^https:\/\/(?:www\.)?zillowdocs\.com\/embed\/editor/.test(url)) {
+      sendResponse({ ok: false, reason: "bad or non-zillowdocs URL" });
+      return false;
+    }
+    // Stash armed flag BEFORE creating the tab so the content
+    // script sees it on its very first read.
+    chrome.storage.local.set({
+      zhlBulkDownloadArmed: {
+        url: url,
+        docName: String(msg.docName || ""),
+        taskName: String(msg.taskName || ""),
+        armedAt: Date.now()
+      }
+    }, () => {
+      chrome.tabs.create({ url: url, active: false }, (tab) => {
+        if (chrome.runtime.lastError || !tab || tab.id == null) {
+          const err = chrome.runtime.lastError && chrome.runtime.lastError.message || "tabs.create failed";
+          console.warn("[ZHL Bulk DL] tabs.create failed:", err);
+          sendResponse({ ok: false, reason: err });
+          return;
+        }
+        const tabId = tab.id;
+        let settled = false;
+        const TIMEOUT_MS = 45 * 1000;
+        const onMsg = (innerMsg, innerSender) => {
+          if (settled) return;
+          if (!innerMsg || innerMsg.type !== "ZHL_BULK_DOWNLOAD_TAB_DONE") return;
+          if (!innerSender || !innerSender.tab || innerSender.tab.id !== tabId) return;
+          settled = true;
+          chrome.runtime.onMessage.removeListener(onMsg);
+          // Brief delay so the download actually starts before we
+          // close the tab.
+          setTimeout(() => {
+            try { chrome.tabs.remove(tabId); } catch (e) {
+              console.warn("[ZHL Bulk DL] tabs.remove failed:", e);
+            }
+            sendResponse(Object.assign({ ok: true }, innerMsg.result || {}));
+          }, 600);
+        };
+        chrome.runtime.onMessage.addListener(onMsg);
+        // Timeout fallback — close the tab and resolve with an
+        // error so the operator-side's await unblocks.
+        setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          chrome.runtime.onMessage.removeListener(onMsg);
+          try { chrome.tabs.remove(tabId); } catch (_) {}
+          // Also clear the armed flag so a future manual open
+          // doesn't trigger the auto-download.
+          try { chrome.storage.local.remove(["zhlBulkDownloadArmed"]); } catch (_) {}
+          sendResponse({ ok: false, reason: "timed out waiting for Download click" });
+        }, TIMEOUT_MS);
+      });
+    });
+    return true; // async
+  }
+  if (msg && msg.type === "ZHL_BULK_DOWNLOAD_TAB_DONE") {
+    // Just an ack — the OPEN handler above already wired its own
+    // onMessage listener for the actual completion bookkeeping.
+    sendResponse({ ok: true });
     return false;
   }
   if (msg && msg.type === "GMAIL_DRAG_START") {

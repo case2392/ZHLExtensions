@@ -646,6 +646,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: Bulk-download completed-task docs ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Bulk-download completed-task documents</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> + <code>zillowdocs.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_taskBulkDownload" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a <strong>⬇ Download all docs</strong> button next to the <em>Completed</em> heading on LOP's Tasks tab. Walks every Zillow Docs link in the Completed table, opens each one in a background tab, auto-clicks the viewer's Download button, then closes the tab.</li>
+          <li>Sequential &mdash; one document at a time &mdash; so Chrome's "this site wants to download multiple files" prompt only fires once and you can watch live progress in a small modal that shows the current document name and a progress bar.</li>
+          <li>Files land in your browser's default Downloads folder with whatever filename Zillow Docs assigns them. The "Done" modal lists every downloaded file with its task name so you can rename / move them after.</li>
+          <li>The background-tab content script is armed-flag gated: opening a Zillow Docs document manually doesn't trigger the auto-click. Only this feature's bulk flow can arm it.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Anonymous Telemetry ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

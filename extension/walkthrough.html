@@ -240,6 +240,100 @@
     <p class="runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
 
     <!-- Address copy -->
+    <!-- Bulk-download completed-task documents -->
+    <div class="feature is-new" id="task-bulk-download">
+      <div class="shot">
+        <!-- Animated SVG: a stack of document cards on the left
+             gets walked top-to-bottom. Each card briefly highlights,
+             a download arrow ↓ pops, then the card moves to a
+             "Downloads" tray on the right. Loops. -->
+        <svg viewBox="0 0 260 170" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .doc-card { fill: #fff; stroke: #cbd5e1; stroke-width: 1; }
+            .doc-text { font: 600 9px Arial; fill: #0b5cab; }
+            .doc-highlight { animation: cardPulse 5s ease-in-out infinite; }
+            @keyframes cardPulse {
+              0%, 10%   { stroke: #cbd5e1; fill: #fff; }
+              14%, 26%  { stroke: #0b5cab; fill: #dbeafe; }
+              30%, 100% { stroke: #cbd5e1; fill: #fff; }
+            }
+            .doc-2 { animation-delay: 1s; }
+            .doc-3 { animation-delay: 2s; }
+            .doc-4 { animation-delay: 3s; }
+            .doc-5 { animation-delay: 4s; }
+            .arrow-pop { animation: arrPop 5s ease-in-out infinite; opacity: 0; }
+            @keyframes arrPop {
+              0%, 18%    { opacity: 0; transform: translateY(-6px); }
+              22%, 28%   { opacity: 1; transform: translateY(0); }
+              32%, 100%  { opacity: 0; transform: translateY(0); }
+            }
+            .arrow-pop-2 { animation-delay: 1s; }
+            .arrow-pop-3 { animation-delay: 2s; }
+            .arrow-pop-4 { animation-delay: 3s; }
+            .arrow-pop-5 { animation-delay: 4s; }
+            .tray-fill { animation: trayFill 5s ease-in-out infinite; }
+            @keyframes trayFill {
+              0%, 30%    { width: 0; }
+              40%        { width: 18px; }
+              55%        { width: 36px; }
+              70%        { width: 54px; }
+              85%        { width: 72px; }
+              95%, 100%  { width: 90px; }
+            }
+          </style>
+          <!-- Source stack: 5 doc cards -->
+          <text x="10" y="14" class="doc-text">Completed tasks</text>
+          <rect class="doc-card doc-highlight" x="10" y="22" width="110" height="22" rx="3"/>
+          <text x="18" y="36" font="600 9px Arial" fill="#374151">V8663 - Regular.pdf</text>
+          <rect class="doc-card doc-highlight doc-2" x="10" y="48" width="110" height="22" rx="3"/>
+          <text x="18" y="62" font="600 9px Arial" fill="#374151">V8881 - Regular.pdf</text>
+          <rect class="doc-card doc-highlight doc-3" x="10" y="74" width="110" height="22" rx="3"/>
+          <text x="18" y="88" font="600 9px Arial" fill="#374151">2024 W-2.pdf</text>
+          <rect class="doc-card doc-highlight doc-4" x="10" y="100" width="110" height="22" rx="3"/>
+          <text x="18" y="114" font="600 9px Arial" fill="#374151">Ally savings.pdf</text>
+          <rect class="doc-card doc-highlight doc-5" x="10" y="126" width="110" height="22" rx="3"/>
+          <text x="18" y="140" font="600 9px Arial" fill="#374151">Purchase contract.pdf</text>
+          <!-- Arrows on each card (download triggered) -->
+          <g class="arrow-pop">
+            <text x="108" y="38" font="700 12px Arial" fill="#16a34a">↓</text>
+          </g>
+          <g class="arrow-pop arrow-pop-2">
+            <text x="108" y="64" font="700 12px Arial" fill="#16a34a">↓</text>
+          </g>
+          <g class="arrow-pop arrow-pop-3">
+            <text x="108" y="90" font="700 12px Arial" fill="#16a34a">↓</text>
+          </g>
+          <g class="arrow-pop arrow-pop-4">
+            <text x="108" y="116" font="700 12px Arial" fill="#16a34a">↓</text>
+          </g>
+          <g class="arrow-pop arrow-pop-5">
+            <text x="108" y="142" font="700 12px Arial" fill="#16a34a">↓</text>
+          </g>
+          <!-- Downloads tray on the right -->
+          <text x="150" y="14" class="doc-text">Downloads folder</text>
+          <rect x="150" y="22" width="100" height="126" rx="6" fill="#f9fafb" stroke="#cbd5e1"/>
+          <!-- Filling progress bar -->
+          <rect x="158" y="135" width="0" height="6" rx="3" fill="#16a34a" class="tray-fill"/>
+          <text x="158" y="44" font="600 8px Arial" fill="#15803d">📄 V8663-Regular</text>
+          <text x="158" y="58" font="600 8px Arial" fill="#15803d">📄 V8881-Regular</text>
+          <text x="158" y="72" font="600 8px Arial" fill="#15803d">📄 2024 W-2</text>
+          <text x="158" y="86" font="600 8px Arial" fill="#15803d">📄 Ally savings</text>
+          <text x="158" y="100" font="600 8px Arial" fill="#15803d">📄 Purchase contract</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Bulk-download completed-task documents</h3>
+        <div class="where">Tasks tab → next to the <em>Completed</em> heading</div>
+        <p>One click downloads every borrower-uploaded document on the file. Walks every Zillow Docs link in the Completed tasks table, opens each one in a background tab, clicks the viewer's Download button, then closes the tab &mdash; sequential, one at a time, so the browser only prompts once about multiple downloads.</p>
+        <ul>
+          <li><strong>Live progress modal</strong> shows the current document name + task name + progress bar.</li>
+          <li><strong>Summary at the end</strong> lists every downloaded file with its task name so you can rename / sort them after.</li>
+          <li><strong>Files keep Zillow Docs' filenames</strong> (V8663-Regular.pdf, etc.) and land in your default Downloads folder &mdash; same as clicking Download manually.</li>
+          <li><strong>Manual opens are safe.</strong> The zillowdocs-side helper is armed-flag gated, so opening a document on your own never triggers the auto-click &mdash; only this feature's bulk flow can arm it.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- Copy LOP file (Stage / Paste the whole Full Application) -->
     <div class="feature is-new" id="lop-file-copy">
       <div class="shot">

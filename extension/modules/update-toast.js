@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.37.0": "NEW Bulk-download completed-task documents — one click opens each Zillow Docs link in a background tab, auto-clicks Download, and closes. Sequential, with progress.",
     "1.36.6": "Copy LOP file: 'leave Justin karma' on the success modal is now a clickable link to my Zall Wall (was plain text in v1.36.5).",
     "1.36.5": "Copy LOP file: cheerier success modal at the end — 'Congrats on cloning your LOP file!' instead of the old 'credit reissue triggered, watch the right rail.'",
     "1.36.4": "Copy LOP file BUG FIX: liability edits now gated on every borrower having a credit score (not just stable-row-count on the table side) so we don't start before CoreLogic finishes streaming.",
