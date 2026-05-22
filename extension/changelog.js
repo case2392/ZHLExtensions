@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.9",
+    headline: "Bulk-download: NEW 'Save to folder' path that bypasses Chrome's Save As dialog entirely — works even with the PromptForDownloadLocation policy.",
+    highlights: [
+      "When you click ⬇ Download all docs, you now get TWO options: (a) 'Save to a folder' which uses the File System Access API — you pick a folder ONCE and every PDF saves silently into it, completely sidestepping Chrome's download manager (and therefore the PromptForDownloadLocation enterprise policy that was forcing Save As prompts); (b) 'Save to Downloads' which is the old chrome.downloads path for users without the policy.",
+      "How it works under the hood: the zillowdocs background tab fetches each PDF in its own tab context (so cookies and signed-URL tokens just work), encodes the bytes as base64, and ships them back to the LOP tab. The LOP tab decodes and writes via FileSystemDirectoryHandle.getFileHandle(...).createWritable() — that's a regular web API, not Chrome's download manager, so PromptForDownloadLocation doesn't apply. Filename conflicts get a '(1)', '(2)' suffix automatically.",
+      "Requires Chrome 86+ (File System Access API). If the API isn't available, the modal hides that option."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.8",
     headline: "Bulk-download: clearer warning about Chrome's 'Ask where to save' setting — the Save As dialog can't be bypassed by extensions when this is enabled.",
     highlights: [

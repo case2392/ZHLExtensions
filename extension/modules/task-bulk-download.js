@@ -186,6 +186,149 @@
     if (x) x.remove();
   }
 
+  function sanitizeFilenameLOP(name) {
+    return (name || 'document')
+      .replace(/[/\\:*?"<>|]/g, '_')
+      .replace(/\.{2,}/g, '.')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200) || 'document';
+  }
+
+  function base64ToBlob(base64, mimeType) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mimeType || 'application/pdf' });
+  }
+
+  // Render the "pick a folder" intro modal. Returns a promise that
+  // resolves to { mode: 'folder', folderHandle } | { mode: 'downloads' } | null.
+  function chooseDestinationModal(count, fsaAvailable) {
+    return new Promise(function (resolve) {
+      const fsaSection = fsaAvailable
+        ? '<button id="zhl-bd-folder" style="background:#0b5cab;color:#fff;border:1px solid #0b5cab;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:13px;">📁 Save to a folder (recommended)</button>' +
+          '<p style="margin:6px 0 14px;color:#6b7280;font-size:11px;">Pick a folder once. Every PDF saves silently into it — no Save As prompts. Works even if your IT has locked Chrome\'s download prompt setting.</p>'
+        : '<p style="margin:0 0 14px;color:#991b1b;font-size:12px;">Your browser doesn\'t support the File System Access API. Falling back to the Downloads folder path below.</p>';
+      const panel = showModal(
+        '<h3 style="margin:0 0 10px;font-size:16px;color:#0b5cab;">Download ' + count + ' documents</h3>' +
+        '<p style="margin:0 0 14px;color:#374151;font-size:13px;">Two options for where to save:</p>' +
+        '<div style="margin:0 0 6px;">' + fsaSection + '</div>' +
+        '<button id="zhl-bd-downloads" style="background:#fff;color:#0b5cab;border:1px solid #0b5cab;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:13px;">⬇ Save to Downloads (Chrome\'s download manager)</button>' +
+        '<p style="margin:6px 0 14px;color:#6b7280;font-size:11px;">' +
+          'Goes through Chrome\'s downloads. If your Chrome is configured (or IT-locked) to ask where to save each file, you\'ll get a Save As prompt PER file. Check chrome://settings/downloads first.' +
+        '</p>' +
+        '<div style="text-align:right;margin-top:8px;">' +
+          '<button id="zhl-bd-cancel" style="background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:12px;">Cancel</button>' +
+        '</div>'
+      );
+      function cleanup(v) {
+        removeModal();
+        resolve(v);
+      }
+      const folderBtn = panel.querySelector('#zhl-bd-folder');
+      if (folderBtn) folderBtn.addEventListener('click', async function () {
+        try {
+          // Must be inside the user-gesture event handler for showDirectoryPicker.
+          const handle = await window.showDirectoryPicker({
+            id: 'zhl-bulk-download',
+            mode: 'readwrite',
+            startIn: 'downloads'
+          });
+          cleanup({ mode: 'folder', folderHandle: handle });
+        } catch (e) {
+          if (e && e.name === 'AbortError') {
+            // User cancelled the picker — leave the modal up.
+            return;
+          }
+          console.warn('[Task Bulk Download] showDirectoryPicker error:', e);
+          alert('Could not open the folder picker: ' + (e && e.message || e) + '\n\nFalling back to Chrome\'s download manager.');
+          cleanup({ mode: 'downloads' });
+        }
+      });
+      panel.querySelector('#zhl-bd-downloads').addEventListener('click', function () {
+        cleanup({ mode: 'downloads' });
+      });
+      panel.querySelector('#zhl-bd-cancel').addEventListener('click', function () {
+        cleanup(null);
+      });
+    });
+  }
+
+  // Pick a unique filename inside the folder by checking existence and
+  // appending (1), (2)... when needed. Returns the actual filename used.
+  async function writeBlobToFolder(folderHandle, baseFilename, blob) {
+    const dotIdx = baseFilename.lastIndexOf('.');
+    const base = dotIdx > 0 ? baseFilename.slice(0, dotIdx) : baseFilename;
+    const ext  = dotIdx > 0 ? baseFilename.slice(dotIdx) : '';
+    let actual = baseFilename;
+    for (let i = 1; i <= 100; i++) {
+      let exists = false;
+      try {
+        await folderHandle.getFileHandle(actual, { create: false });
+        exists = true;
+      } catch (e) {
+        exists = false; // NotFoundError — good, name is free
+      }
+      if (!exists) break;
+      actual = base + ' (' + i + ')' + ext;
+    }
+    const fileHandle = await folderHandle.getFileHandle(actual, { create: true });
+    const writable   = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return actual;
+  }
+
+  // ----- TWO download paths --------------------------------------------------
+  // (A) File System Access API: zillowdocs content script fetches the PDF in
+  //     its tab (with cookies), sends base64 back, we write to user-picked
+  //     folder via FileSystemDirectoryHandle. No chrome.downloads, no policy.
+  // (B) Chrome downloads: existing flow — chrome.downloads.download() which
+  //     respects PromptForDownloadLocation policy → may show Save As per file.
+  // ---------------------------------------------------------------------------
+  function downloadOneAsBlob(url, docName, taskName) {
+    return new Promise(function (resolve) {
+      try {
+        chrome.runtime.sendMessage({
+          type: 'ZHL_BULK_DOWNLOAD_FETCH_BLOB',
+          url: url,
+          docName: docName,
+          taskName: taskName
+        }, function (response) {
+          if (chrome.runtime.lastError) {
+            resolve({ ok: false, reason: 'background error: ' + chrome.runtime.lastError.message });
+            return;
+          }
+          resolve(response || { ok: false, reason: 'empty response' });
+        });
+      } catch (e) {
+        resolve({ ok: false, reason: 'sendMessage threw: ' + (e && e.message || e) });
+      }
+    });
+  }
+
+  function downloadOneViaChromeDownloads(url, docName, taskName) {
+    return new Promise(function (resolve) {
+      try {
+        chrome.runtime.sendMessage({
+          type: 'ZHL_BULK_DOWNLOAD_OPEN',
+          url: url,
+          docName: docName,
+          taskName: taskName
+        }, function (response) {
+          if (chrome.runtime.lastError) {
+            resolve({ ok: false, reason: 'background error: ' + chrome.runtime.lastError.message });
+            return;
+          }
+          resolve(response || { ok: false, reason: 'empty response' });
+        });
+      } catch (e) {
+        resolve({ ok: false, reason: 'sendMessage threw: ' + (e && e.message || e) });
+      }
+    });
+  }
+
   // Sequentially open + download every document.
   async function startBulkDownload() {
     console.group('[Task Bulk Download] startBulkDownload');
@@ -203,19 +346,15 @@
       alert('No documents found under the Completed tasks. (Borrower-uploaded files only — Plaid pulls and form submissions don\'t have a download link.)');
       return;
     }
-    // Confirm before opening 10+ background tabs.
-    if (!window.confirm(
-        'Download all ' + docs.length + ' completed documents?\n\n' +
-        'Each one will open in a background tab, auto-download silently, then close.\n\n' +
-        '⚠ IMPORTANT: If you get a "Save As" prompt for every file, you need to disable\n' +
-        '   "Ask where to save each file before downloading" in chrome://settings/downloads.\n' +
-        '   If that toggle is greyed out, your organization\'s IT has locked it via the\n' +
-        '   PromptForDownloadLocation enterprise policy — no Chrome extension can bypass\n' +
-        '   that policy. Contact IT, or click Cancel here and download files manually.')) {
+
+    const fsaAvailable = typeof window.showDirectoryPicker === 'function';
+    const choice = await chooseDestinationModal(docs.length, fsaAvailable);
+    if (!choice) {
       console.log('User cancelled.');
       console.groupEnd();
       return;
     }
+    console.log('User chose:', choice.mode);
 
     const panel = showModal(renderProgress(0, docs.length, docs[0]));
     const results = [];
@@ -225,41 +364,37 @@
       console.group('[Task Bulk Download] ' + (i + 1) + '/' + docs.length + ' — ' + d.docName);
       console.log('Task:', d.taskName);
       console.log('URL:', d.url.slice(0, 120) + '…');
-      const r = await downloadOne(d.url, d.docName, d.taskName);
+      let r;
+      if (choice.mode === 'folder') {
+        // FSA path: ask background to fetch blob, then write it to the folder.
+        const blobResp = await downloadOneAsBlob(d.url, d.docName, d.taskName);
+        if (!blobResp || !blobResp.ok || !blobResp.base64) {
+          r = { ok: false, reason: (blobResp && blobResp.reason) || 'no blob' };
+        } else {
+          try {
+            const blob = base64ToBlob(blobResp.base64, blobResp.mimeType);
+            let fn = sanitizeFilenameLOP((d.docName || 'document').trim());
+            if (!/\.[a-z0-9]{2,5}$/i.test(fn)) fn += '.pdf';
+            const actualName = await writeBlobToFolder(choice.folderHandle, fn, blob);
+            r = { ok: true, savedAs: actualName, bytes: blob.size };
+          } catch (e) {
+            r = { ok: false, reason: 'write failed: ' + (e && e.message || e) };
+          }
+        }
+      } else {
+        r = await downloadOneViaChromeDownloads(d.url, d.docName, d.taskName);
+      }
       console.log('Result:', r);
       console.groupEnd();
       results.push({ doc: d, result: r });
     }
-    panel.innerHTML = renderDone(results);
+    panel.innerHTML = renderDone(results, choice.mode);
     const ok = results.filter(function (r) { return r.result && r.result.ok; });
     const bad = results.filter(function (r) { return !r.result || !r.result.ok; });
     console.log('Bulk download finished. OK:', ok.length, 'Failed:', bad.length);
-    // Wire close
     const closeBtn = panel.querySelector('#zhl-bd-close');
     if (closeBtn) closeBtn.addEventListener('click', removeModal);
     console.groupEnd();
-  }
-
-  function downloadOne(url, docName, taskName) {
-    return new Promise(function (resolve) {
-      try {
-        chrome.runtime.sendMessage({
-          type: 'ZHL_BULK_DOWNLOAD_OPEN',
-          url: url,
-          docName: docName,
-          taskName: taskName
-        }, function (response) {
-          if (chrome.runtime.lastError) {
-            console.warn('sendMessage error:', chrome.runtime.lastError.message);
-            resolve({ ok: false, reason: 'background message error: ' + chrome.runtime.lastError.message });
-            return;
-          }
-          resolve(response || { ok: false, reason: 'empty response' });
-        });
-      } catch (e) {
-        resolve({ ok: false, reason: 'sendMessage threw: ' + (e && e.message || e) });
-      }
-    });
   }
 
   function escapeHtml(s) {
@@ -280,7 +415,7 @@
         'Tip: keep this tab focused while downloads run. Each file opens in a background tab, auto-clicks Download, and closes.' +
       '</p>';
   }
-  function renderDone(results) {
+  function renderDone(results, mode) {
     const ok = results.filter(function (r) { return r.result && r.result.ok; });
     const bad = results.filter(function (r) { return !r.result || !r.result.ok; });
     const okList = ok.map(function (r) {
@@ -294,8 +429,11 @@
           escapeHtml((r.result && r.result.reason) || 'unknown error') +
         '</div></li>';
     }).join('');
+    const locationLine = mode === 'folder'
+      ? 'Files saved to the folder you picked.'
+      : 'Files are in your browser\'s Downloads folder (named by Zillow Docs).';
     return '<h3 style="margin:0 0 8px;font-size:16px;color:#15803d;">✓ Done — ' + ok.length + ' of ' + results.length + ' downloaded</h3>' +
-      '<p style="margin:0 0 8px;color:#374151;font-size:13px;">Files are in your browser\'s Downloads folder (named by Zillow Docs).</p>' +
+      '<p style="margin:0 0 8px;color:#374151;font-size:13px;">' + escapeHtml(locationLine) + '</p>' +
       (okList ? '<details open style="margin:8px 0;font-size:12px;"><summary style="cursor:pointer;color:#15803d;font-weight:600;">Downloaded (' + ok.length + ')</summary>' +
         '<ul style="margin:6px 0 0 18px;padding:0;">' + okList + '</ul></details>' : '') +
       (badList ? '<details open style="margin:8px 0;font-size:12px;"><summary style="cursor:pointer;color:#991b1b;font-weight:600;">Failed (' + bad.length + ')</summary>' +

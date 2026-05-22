@@ -36,9 +36,29 @@
       return;
     }
     try { chrome.storage.local.remove([ARMED_KEY]); } catch (_) {}
-    console.log('[ZHL Doc Downloader] Armed (age', age + 'ms). Waiting for PDF URL from viewer load.');
-    run(armed);
+    // Two modes: 'fetch-blob' means fetch the PDF here and return base64
+    // (used by the File System Access path on the LOP side). Anything
+    // else falls through to the chrome.downloads path.
+    const mode = armed.mode === 'fetch-blob' ? 'fetch-blob' : 'chrome-downloads';
+    console.log('[ZHL Doc Downloader] Armed (age', age + 'ms, mode=' + mode + ').');
+    run(armed, mode);
   });
+
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        const r = reader.result || '';
+        const i = r.indexOf(',');
+        resolve({
+          base64: i >= 0 ? r.slice(i + 1) : r,
+          mimeType: blob.type || 'application/pdf'
+        });
+      };
+      reader.onerror = function () { reject(reader.error); };
+      reader.readAsDataURL(blob);
+    });
+  }
 
   function sanitizeFilename(name) {
     return (name || 'document')
@@ -102,14 +122,59 @@
     try { chrome.runtime.sendMessage({ type: 'ZHL_BULK_DOWNLOAD_DIAG', label: label, payload: payload, doc: location.href.slice(0, 200) }); } catch (_) {}
   }
 
-  async function run(armed) {
-    diag('run starting', { docName: armed.docName, taskName: armed.taskName, url: location.href.slice(0, 200) });
+  // Helper: fetch a URL in this tab's context (so cookies + signed-URL
+  // params work) and return base64 + mime. Throws on network error.
+  async function fetchAsBase64(url) {
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) throw new Error('fetch returned ' + response.status);
+    const blob = await response.blob();
+    const enc  = await blobToBase64(blob);
+    return { base64: enc.base64, mimeType: enc.mimeType, bytes: blob.size };
+  }
+
+  async function run(armed, mode) {
+    diag('run starting', { docName: armed.docName, taskName: armed.taskName, mode: mode, url: location.href.slice(0, 200) });
     const pdfUrl = await waitForPdfUrl(PDF_WAIT_MS);
 
     let rawName = (armed.docName || 'document').trim();
     if (!/\.[a-z0-9]{2,5}$/i.test(rawName)) rawName += '.pdf';
     const filename = sanitizeFilename(rawName);
 
+    if (mode === 'fetch-blob') {
+      // File System Access path: caller wants the PDF bytes, not a
+      // chrome.downloads call. If we have the URL we fetch it here in
+      // this tab's context (cookies + signed-URL params just work) and
+      // return base64. Falls back to clicking the Download button only
+      // if no URL came through.
+      let urlToFetch = pdfUrl;
+      if (!urlToFetch) {
+        diag('No PDF URL during viewer load (fetch-blob mode), trying button click', { waitedMs: PDF_WAIT_MS });
+        urlToFetch = await clickAndCaptureUrl();
+      }
+      if (!urlToFetch) {
+        diag('Failed to capture PDF URL in fetch-blob mode', {});
+        await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_TAB_DONE', result: { ok: false, reason: 'could not capture PDF URL' } });
+        return;
+      }
+      try {
+        diag('fetching PDF bytes in tab', { url: urlToFetch.slice(0, 200) });
+        const enc = await fetchAsBase64(urlToFetch);
+        diag('fetched bytes', { size: enc.bytes, mime: enc.mimeType });
+        await sendMsg({
+          type: 'ZHL_BULK_DOWNLOAD_TAB_DONE',
+          result: { ok: true, via: 'fetch-blob', base64: enc.base64, mimeType: enc.mimeType, suggestedFilename: filename, bytes: enc.bytes }
+        });
+      } catch (e) {
+        diag('fetch failed in fetch-blob mode', { error: e && e.message || String(e) });
+        await sendMsg({
+          type: 'ZHL_BULK_DOWNLOAD_TAB_DONE',
+          result: { ok: false, reason: 'fetch failed: ' + (e && e.message || e) }
+        });
+      }
+      return;
+    }
+
+    // ---- chrome-downloads mode (legacy / fallback) ----
     if (pdfUrl) {
       diag('PDF URL captured during viewer load', { pdfUrl: pdfUrl, filename: filename });
       const resp = await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_URL', url: pdfUrl, filename: filename });
@@ -117,11 +182,24 @@
       await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_TAB_DONE', result: { ok: !!(resp && resp.ok), via: 'fetch-url' } });
       return;
     }
-
-    // Fallback: no PDF URL came in during viewer load. Try clicking the
-    // Download button and let the anchor intercepts do their thing.
     diag('No PDF URL during viewer load, falling back to button click', { waitedMs: PDF_WAIT_MS });
     await fallbackButtonClick(armed, filename);
+  }
+
+  // Clicks the Download button and waits up to 6s for the fetch
+  // interceptor to surface a PDF URL. Returns the URL or null.
+  async function clickAndCaptureUrl() {
+    let btn = null;
+    for (let i = 0; i < 20; i++) {
+      btn = findDownloadButton();
+      if (btn) break;
+      await new Promise(function (r) { setTimeout(r, 500); });
+    }
+    if (!btn) return null;
+    document.documentElement.setAttribute('data-zhl-bulk-armed', '1');
+    const captured = waitForPdfUrl(6000);
+    clickWithMouseEvents(btn);
+    return await captured;
   }
 
   function findDownloadButton() {
