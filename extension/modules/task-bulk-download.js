@@ -357,37 +357,58 @@
     console.log('User chose:', choice.mode);
 
     const panel = showModal(renderProgress(0, docs.length, docs[0]));
-    const results = [];
-    for (let i = 0; i < docs.length; i++) {
-      const d = docs[i];
-      panel.innerHTML = renderProgress(i, docs.length, d);
-      console.group('[Task Bulk Download] ' + (i + 1) + '/' + docs.length + ' — ' + d.docName);
-      console.log('Task:', d.taskName);
-      console.log('URL:', d.url.slice(0, 120) + '…');
-      let r;
+    const results = new Array(docs.length);
+    let nextIdx = 0;
+    let doneCount = 0;
+    let lastStartedDoc = docs[0];
+
+    // For one doc: run the configured download path.
+    async function processOne(d) {
       if (choice.mode === 'folder') {
-        // FSA path: ask background to fetch blob, then write it to the folder.
         const blobResp = await downloadOneAsBlob(d.url, d.docName, d.taskName);
         if (!blobResp || !blobResp.ok || !blobResp.base64) {
-          r = { ok: false, reason: (blobResp && blobResp.reason) || 'no blob' };
-        } else {
-          try {
-            const blob = base64ToBlob(blobResp.base64, blobResp.mimeType);
-            let fn = sanitizeFilenameLOP((d.docName || 'document').trim());
-            if (!/\.[a-z0-9]{2,5}$/i.test(fn)) fn += '.pdf';
-            const actualName = await writeBlobToFolder(choice.folderHandle, fn, blob);
-            r = { ok: true, savedAs: actualName, bytes: blob.size };
-          } catch (e) {
-            r = { ok: false, reason: 'write failed: ' + (e && e.message || e) };
-          }
+          return { ok: false, reason: (blobResp && blobResp.reason) || 'no blob' };
         }
-      } else {
-        r = await downloadOneViaChromeDownloads(d.url, d.docName, d.taskName);
+        try {
+          const blob = base64ToBlob(blobResp.base64, blobResp.mimeType);
+          let fn = sanitizeFilenameLOP((d.docName || 'document').trim());
+          if (!/\.[a-z0-9]{2,5}$/i.test(fn)) fn += '.pdf';
+          const actualName = await writeBlobToFolder(choice.folderHandle, fn, blob);
+          return { ok: true, savedAs: actualName, bytes: blob.size };
+        } catch (e) {
+          return { ok: false, reason: 'write failed: ' + (e && e.message || e) };
+        }
       }
-      console.log('Result:', r);
-      console.groupEnd();
-      results.push({ doc: d, result: r });
+      return await downloadOneViaChromeDownloads(d.url, d.docName, d.taskName);
     }
+
+    // Worker loop: pulls next index, runs, records result.
+    async function worker(workerId) {
+      while (true) {
+        const myIdx = nextIdx++;
+        if (myIdx >= docs.length) return;
+        const d = docs[myIdx];
+        lastStartedDoc = d;
+        panel.innerHTML = renderProgress(doneCount, docs.length, d, workerId);
+        console.log('[Task Bulk Download] worker' + workerId + ' starting ' + (myIdx + 1) + '/' + docs.length + ' — ' + d.docName);
+        const r = await processOne(d);
+        results[myIdx] = { doc: d, result: r };
+        doneCount++;
+        console.log('[Task Bulk Download] worker' + workerId + ' done ' + (myIdx + 1) + '/' + docs.length + ' — ' + d.docName, r);
+        panel.innerHTML = renderProgress(doneCount, docs.length, lastStartedDoc);
+      }
+    }
+
+    // Folder mode = parallel (FSA + per-tab arming via tabs.sendMessage —
+    // no shared storage key, safe to run concurrently).
+    // chrome-downloads mode = sequential (each download may trigger Save As
+    // dialog; parallel would just stack dialogs).
+    const CONCURRENCY = choice.mode === 'folder' ? 4 : 1;
+    console.log('[Task Bulk Download] starting with concurrency=' + CONCURRENCY);
+    const workers = [];
+    for (let w = 0; w < CONCURRENCY; w++) workers.push(worker(w + 1));
+    await Promise.all(workers);
+
     panel.innerHTML = renderDone(results, choice.mode);
     const ok = results.filter(function (r) { return r.result && r.result.ok; });
     const bad = results.filter(function (r) { return !r.result || !r.result.ok; });

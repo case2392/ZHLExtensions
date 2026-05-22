@@ -870,49 +870,75 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: false, reason: "bad or non-zillowdocs URL" });
       return false;
     }
-    console.log("[ZHL Bulk DL] FETCH_BLOB received for:", String(msg.docName || ""));
-    (async () => {
-      await new Promise((r) => chrome.storage.local.set({
-        zhlBulkDownloadArmed: {
-          url: url,
-          docName: String(msg.docName || ""),
-          taskName: String(msg.taskName || ""),
-          armedAt: Date.now(),
-          mode: "fetch-blob"
-        }
-      }, r));
-      chrome.tabs.create({ url: url, active: false }, (tab) => {
-        if (chrome.runtime.lastError || !tab || tab.id == null) {
-          const err = chrome.runtime.lastError && chrome.runtime.lastError.message || "tabs.create failed";
-          sendResponse({ ok: false, reason: err });
-          return;
-        }
-        const tabId = tab.id;
-        let settled = false;
-        const TIMEOUT_MS = 60 * 1000; // longer for big PDFs
-        const onMsg = (innerMsg, innerSender) => {
-          if (settled) return;
-          if (!innerMsg || innerMsg.type !== "ZHL_BULK_DOWNLOAD_TAB_DONE") return;
-          if (!innerSender || !innerSender.tab || innerSender.tab.id !== tabId) return;
-          settled = true;
-          chrome.runtime.onMessage.removeListener(onMsg);
-          setTimeout(() => {
-            try { chrome.tabs.remove(tabId); } catch (_) {}
-            // Pass through the result (base64, mimeType, suggestedFilename, etc.)
-            sendResponse(Object.assign({ ok: !!(innerMsg.result && innerMsg.result.ok) }, innerMsg.result || {}));
-          }, 200);
-        };
-        chrome.runtime.onMessage.addListener(onMsg);
+    const docName  = String(msg.docName || "");
+    const taskName = String(msg.taskName || "");
+    console.log("[ZHL Bulk DL] FETCH_BLOB for:", docName);
+    chrome.tabs.create({ url: url, active: false }, (tab) => {
+      if (chrome.runtime.lastError || !tab || tab.id == null) {
+        const err = chrome.runtime.lastError && chrome.runtime.lastError.message || "tabs.create failed";
+        sendResponse({ ok: false, reason: err });
+        return;
+      }
+      const tabId = tab.id;
+      let settled = false;
+      let armed = false;
+      const TIMEOUT_MS = 60 * 1000;
+      const onMsg = (innerMsg, innerSender) => {
+        if (settled) return;
+        if (!innerMsg || innerMsg.type !== "ZHL_BULK_DOWNLOAD_TAB_DONE") return;
+        if (!innerSender || !innerSender.tab || innerSender.tab.id !== tabId) return;
+        settled = true;
+        chrome.runtime.onMessage.removeListener(onMsg);
         setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          chrome.runtime.onMessage.removeListener(onMsg);
           try { chrome.tabs.remove(tabId); } catch (_) {}
-          try { chrome.storage.local.remove(["zhlBulkDownloadArmed"]); } catch (_) {}
-          sendResponse({ ok: false, reason: "timed out waiting for blob" });
-        }, TIMEOUT_MS);
-      });
-    })();
+          sendResponse(Object.assign({ ok: !!(innerMsg.result && innerMsg.result.ok) }, innerMsg.result || {}));
+        }, 100);
+      };
+      chrome.runtime.onMessage.addListener(onMsg);
+
+      // Poll-send the ZHL_ARM_BULK message to THIS tab until the content
+      // script responds. This addresses the arm by tabId so concurrent
+      // FETCH_BLOB calls don't step on each other (no shared storage key).
+      let armAttempts = 0;
+      const tryArm = () => {
+        if (settled || armed) return;
+        armAttempts++;
+        try {
+          chrome.tabs.sendMessage(tabId, {
+            type: "ZHL_ARM_BULK",
+            mode: "fetch-blob",
+            docName: docName,
+            taskName: taskName
+          }, (resp) => {
+            if (settled || armed) return;
+            const err = chrome.runtime.lastError && chrome.runtime.lastError.message;
+            if (err || !resp || !resp.ok) {
+              if (armAttempts > 150) { // ~30 s of retries
+                settled = true;
+                chrome.runtime.onMessage.removeListener(onMsg);
+                try { chrome.tabs.remove(tabId); } catch (_) {}
+                sendResponse({ ok: false, reason: "could not arm tab: " + (err || (resp && resp.reason) || "no response") });
+                return;
+              }
+              setTimeout(tryArm, 200);
+              return;
+            }
+            armed = true;
+          });
+        } catch (_) {
+          setTimeout(tryArm, 200);
+        }
+      };
+      setTimeout(tryArm, 150);
+
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        chrome.runtime.onMessage.removeListener(onMsg);
+        try { chrome.tabs.remove(tabId); } catch (_) {}
+        sendResponse({ ok: false, reason: "timed out waiting for blob" });
+      }, TIMEOUT_MS);
+    });
     return true; // async
   }
   if (msg && msg.type === "ZHL_BULK_DOWNLOAD_OPEN") {

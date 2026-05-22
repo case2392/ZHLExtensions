@@ -24,23 +24,38 @@
 
   console.log('[ZHL Doc Downloader] loaded on', location.href);
 
-  const ARM_WINDOW_MS   = 5 * 60 * 1000;
-  const ARMED_KEY       = 'zhlBulkDownloadArmed';
-  const PDF_WAIT_MS     = 20000; // how long to wait for the fetch-captured URL
+  const PDF_WAIT_MS     = 4000; // brief wait in case viewer pre-fetches; most viewers don't
 
-  chrome.storage.local.get([ARMED_KEY], function (data) {
-    const armed = data && data[ARMED_KEY];
-    const age   = armed && armed.armedAt ? Date.now() - armed.armedAt : Infinity;
-    if (!armed || age > ARM_WINDOW_MS) {
-      console.log('[ZHL Doc Downloader] Not armed. Standing down.');
-      return;
+  // Two ways to get armed (in priority order):
+  //   1. NEW (v1.37.10+): ZHL_ARM_BULK message from background — addressed
+  //      by tabId so parallel downloads don't step on each other.
+  //   2. LEGACY: chrome.storage zhlBulkDownloadArmed — single key, racy
+  //      under parallelism. Kept only for backward compat during rollout;
+  //      will be removed in a future version.
+  let _hasRun = false;
+
+  chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+    if (msg && msg.type === 'ZHL_ARM_BULK') {
+      if (_hasRun) { sendResponse({ ok: false, reason: 'already running' }); return false; }
+      _hasRun = true;
+      sendResponse({ ok: true });
+      const mode = msg.mode === 'fetch-blob' ? 'fetch-blob' : 'chrome-downloads';
+      console.log('[ZHL Doc Downloader] Armed via message (mode=' + mode + ')');
+      run({ url: location.href, docName: msg.docName, taskName: msg.taskName, mode: mode, armedAt: Date.now() }, mode);
+      return false;
     }
-    try { chrome.storage.local.remove([ARMED_KEY]); } catch (_) {}
-    // Two modes: 'fetch-blob' means fetch the PDF here and return base64
-    // (used by the File System Access path on the LOP side). Anything
-    // else falls through to the chrome.downloads path.
+  });
+
+  // Legacy path
+  chrome.storage.local.get(['zhlBulkDownloadArmed'], function (data) {
+    if (_hasRun) return;
+    const armed = data && data.zhlBulkDownloadArmed;
+    const age   = armed && armed.armedAt ? Date.now() - armed.armedAt : Infinity;
+    if (!armed || age > 5 * 60 * 1000) return;
+    _hasRun = true;
+    try { chrome.storage.local.remove(['zhlBulkDownloadArmed']); } catch (_) {}
     const mode = armed.mode === 'fetch-blob' ? 'fetch-blob' : 'chrome-downloads';
-    console.log('[ZHL Doc Downloader] Armed (age', age + 'ms, mode=' + mode + ').');
+    console.log('[ZHL Doc Downloader] Armed via storage (legacy, mode=' + mode + ')');
     run(armed, mode);
   });
 
@@ -133,22 +148,20 @@
   }
 
   async function run(armed, mode) {
-    diag('run starting', { docName: armed.docName, taskName: armed.taskName, mode: mode, url: location.href.slice(0, 200) });
-    const pdfUrl = await waitForPdfUrl(PDF_WAIT_MS);
+    diag('run starting', { docName: armed.docName, taskName: armed.taskName, mode: mode });
 
     let rawName = (armed.docName || 'document').trim();
     if (!/\.[a-z0-9]{2,5}$/i.test(rawName)) rawName += '.pdf';
     const filename = sanitizeFilename(rawName);
 
     if (mode === 'fetch-blob') {
-      // File System Access path: caller wants the PDF bytes, not a
-      // chrome.downloads call. If we have the URL we fetch it here in
-      // this tab's context (cookies + signed-URL params just work) and
-      // return base64. Falls back to clicking the Download button only
-      // if no URL came through.
-      let urlToFetch = pdfUrl;
+      // The Zillow Docs editor doesn't pre-fetch the PDF on viewer load —
+      // verified by every test run. Go straight to clicking the Download
+      // button to trigger the fetch (the interceptor catches the URL).
+      // Brief race: check the attribute once in case a future viewer DOES
+      // pre-fetch, but no longer wait the full timeout.
+      let urlToFetch = document.documentElement.getAttribute('data-zhl-pdf-url');
       if (!urlToFetch) {
-        diag('No PDF URL during viewer load (fetch-blob mode), trying button click', { waitedMs: PDF_WAIT_MS });
         urlToFetch = await clickAndCaptureUrl();
       }
       if (!urlToFetch) {
@@ -157,7 +170,6 @@
         return;
       }
       try {
-        diag('fetching PDF bytes in tab', { url: urlToFetch.slice(0, 200) });
         const enc = await fetchAsBase64(urlToFetch);
         diag('fetched bytes', { size: enc.bytes, mime: enc.mimeType });
         await sendMsg({
@@ -175,14 +187,12 @@
     }
 
     // ---- chrome-downloads mode (legacy / fallback) ----
+    const pdfUrl = await waitForPdfUrl(PDF_WAIT_MS);
     if (pdfUrl) {
-      diag('PDF URL captured during viewer load', { pdfUrl: pdfUrl, filename: filename });
       const resp = await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_URL', url: pdfUrl, filename: filename });
-      diag('background URL response', resp);
       await sendMsg({ type: 'ZHL_BULK_DOWNLOAD_TAB_DONE', result: { ok: !!(resp && resp.ok), via: 'fetch-url' } });
       return;
     }
-    diag('No PDF URL during viewer load, falling back to button click', { waitedMs: PDF_WAIT_MS });
     await fallbackButtonClick(armed, filename);
   }
 

@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.37.10",
+    headline: "Bulk-download: ~10x faster — skipped the 20s viewer-load wait per file, and now runs 4 downloads in parallel.",
+    highlights: [
+      "v1.37.9 worked but was painfully slow — ~3 minutes for 10 docs. Two reasons: (1) each doc waited 20s for the viewer to pre-fetch the PDF before giving up and clicking the Download button. The Zillow Docs editor never pre-fetches — it loads on demand — so that 20s was pure dead time. Now we go straight to the click. (2) Downloads were sequential.",
+      "v1.37.10 runs the 'Save to folder' path with 4 concurrent workers. Each tab gets its own arm message via chrome.tabs.sendMessage addressed by tabId (replacing the single chrome.storage key that would race under parallelism). Expected: ~20 PDFs in ~30-60 seconds instead of 7+ minutes.",
+      "'Save to Downloads' (chrome.downloads) path stays sequential since parallel chrome.downloads calls would just stack Save As dialogs."
+    ],
+    sections: ["task-bulk-download"]
+  },
+  {
     version: "1.37.9",
     headline: "Bulk-download: NEW 'Save to folder' path that bypasses Chrome's Save As dialog entirely — works even with the PromptForDownloadLocation policy.",
     highlights: [
