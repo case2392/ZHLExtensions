@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.35.1": "Walkthrough: added the Copy LOP file card (it's been missing since v1.29) so the feature shows up under New features and the toast's 'View what's new' actually deep-links to it.",
     "1.35.0": "Copy LOP file: when paste auto-adds a co-borrower, it now reloads the page before credit so LOP's eligibility cache picks up the new consent — credit then fires automatically once the page comes back.",
     "1.34.6": "Copy LOP file BUG FIX: double-save + 4.5s settle so LOP's credit endpoint sees the new co-borrower's Verbal consent before credit fires.",
     "1.34.5": "Copy LOP file BUG FIX: credit pull no longer races the new co-borrower's consent commit — verify consent + 1.5s settle after save before credit fires.",

@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.35.1",
+    headline: "Walkthrough: added the Copy LOP file card so the feature actually shows up under New features + deep-links from the toast.",
+    highlights: [
+      "Bug carried since v1.29: the changelog has been pointing at sections: ['lop-file-copy'] but the walkthrough page never had a card with id='lop-file-copy'. The 'View what's new' button on the update toast was scrolling to nothing, and the feature didn't appear in the top 'New features' strip. Added a full card under the LOP section with an animated demo of the Stage → Paste flow (source card → traveling copy packet → destination filling in → + badge for auto-added co-borrower → ↻ for post-credit refresh) plus the bullet list covering multi-borrower auto-add, auto-save + auto-credit, the LOP credit-cache bypass, locked-field handling, and persistence."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.35.0",
     headline: "Copy LOP file: when a co-borrower is auto-added, paste now reloads the page before credit so LOP's eligibility cache picks up the new consent.",
     highlights: [

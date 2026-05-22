@@ -240,6 +240,106 @@
     <p class="runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
 
     <!-- Address copy -->
+    <!-- Copy LOP file (Stage / Paste the whole Full Application) -->
+    <div class="feature is-new" id="lop-file-copy">
+      <div class="shot">
+        <!-- Animated SVG: source file's fields fly across to the empty
+             destination file, then the destination form lights up.
+             A small "+" badge pops in to show the auto-added co-borrower,
+             and a circular "↻" mark appears at the end to show the
+             post-credit refresh + auto-resume. -->
+        <svg viewBox="0 0 260 170" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .copy-flier { animation: copyFly 4.5s ease-in-out infinite; opacity: 0; }
+            @keyframes copyFly {
+              0%, 6%    { transform: translate(0, 0);   opacity: 0; }
+              10%, 18%  { transform: translate(0, 0);   opacity: 1; }
+              42%, 52%  { transform: translate(118px, 0); opacity: 1; }
+              60%, 100% { transform: translate(118px, 0); opacity: 0; }
+            }
+            .dest-fill { animation: destFill 4.5s ease-in-out infinite; }
+            @keyframes destFill {
+              0%, 52%    { fill: #f3f4f6; stroke: #d1d5db; }
+              58%, 86%   { fill: #0b5cab; stroke: #0b5cab; }
+              94%, 100%  { fill: #f3f4f6; stroke: #d1d5db; }
+            }
+            .dest-text { animation: destText 4.5s ease-in-out infinite; opacity: 0; }
+            @keyframes destText {
+              0%, 56%    { opacity: 0; }
+              62%, 86%   { opacity: 1; }
+              94%, 100%  { opacity: 0; }
+            }
+            .plus-pop { animation: plusPop 4.5s ease-in-out infinite; opacity: 0; transform: scale(0.5); transform-origin: 178px 24px; }
+            @keyframes plusPop {
+              0%, 64%    { opacity: 0; transform: scale(0.5); }
+              70%, 86%   { opacity: 1; transform: scale(1); }
+              94%, 100%  { opacity: 0; transform: scale(0.5); }
+            }
+            .refresh-pop { animation: refreshPop 4.5s ease-in-out infinite; opacity: 0; }
+            @keyframes refreshPop {
+              0%, 78%    { opacity: 0; }
+              82%, 92%   { opacity: 1; }
+              96%, 100%  { opacity: 0; }
+            }
+          </style>
+          <!-- Source loan card -->
+          <text x="10" y="16" font="600 11px Arial" fill="#0b5cab">Source loan</text>
+          <rect x="10" y="22" width="100" height="120" rx="6" fill="#fff" stroke="#cbd5e1"/>
+          <rect x="18" y="32" width="84" height="10" rx="2" fill="#0b5cab"/>
+          <rect x="18" y="48" width="84" height="6" rx="2" fill="#94a3b8"/>
+          <rect x="18" y="60" width="84" height="6" rx="2" fill="#94a3b8"/>
+          <rect x="18" y="72" width="84" height="6" rx="2" fill="#94a3b8"/>
+          <rect x="18" y="84" width="84" height="6" rx="2" fill="#94a3b8"/>
+          <rect x="18" y="96" width="84" height="6" rx="2" fill="#94a3b8"/>
+          <rect x="18" y="108" width="84" height="6" rx="2" fill="#94a3b8"/>
+          <rect x="18" y="120" width="60" height="6" rx="2" fill="#94a3b8"/>
+          <!-- Destination loan card -->
+          <text x="150" y="16" font="600 11px Arial" fill="#0b5cab">New loan</text>
+          <rect class="dest-fill" x="150" y="22" width="100" height="120" rx="6" stroke-width="1"/>
+          <g class="dest-text">
+            <rect x="158" y="32" width="84" height="10" rx="2" fill="#fff"/>
+            <rect x="158" y="48" width="84" height="6" rx="2" fill="#e0e7ff"/>
+            <rect x="158" y="60" width="84" height="6" rx="2" fill="#e0e7ff"/>
+            <rect x="158" y="72" width="84" height="6" rx="2" fill="#e0e7ff"/>
+            <rect x="158" y="84" width="84" height="6" rx="2" fill="#e0e7ff"/>
+            <rect x="158" y="96" width="84" height="6" rx="2" fill="#e0e7ff"/>
+            <rect x="158" y="108" width="84" height="6" rx="2" fill="#e0e7ff"/>
+            <rect x="158" y="120" width="60" height="6" rx="2" fill="#e0e7ff"/>
+          </g>
+          <!-- Flying packet from source to destination -->
+          <g class="copy-flier">
+            <rect x="38" y="56" width="44" height="32" rx="4" fill="#0b5cab" opacity="0.85"/>
+            <text x="60" y="76" font="700 11px Arial" fill="#fff" text-anchor="middle">copy</text>
+          </g>
+          <!-- + badge for auto-added co-borrower -->
+          <g class="plus-pop">
+            <circle cx="178" cy="24" r="9" fill="#16a34a"/>
+            <text x="178" y="28" font="700 12px Arial" fill="#fff" text-anchor="middle">+</text>
+          </g>
+          <!-- Refresh icon for post-credit reload -->
+          <g class="refresh-pop" transform="translate(216, 152)">
+            <circle cx="0" cy="0" r="10" fill="#0b5cab"/>
+            <text x="0" y="4" font="700 12px Arial" fill="#fff" text-anchor="middle">↻</text>
+          </g>
+          <!-- Label strip at bottom -->
+          <text x="10" y="160" font="600 10px Arial" fill="#0b5cab">Stage → Paste → Save → Credit</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Copy LOP file (whole-loan Stage &amp; Paste)</h3>
+        <div class="where">Full application → floating "Copy LOP file" bar (top-right)</div>
+        <p>One click copies almost everything from a source LOP loan into a brand-new one. On the source loan, click <strong>Stage from this file</strong> &mdash; the extension reads every editable Personal info / Contact / Marital / Military / Declarations / Demographics field, every Address / Employment / Other income / Asset / Gift / Real estate row, plus per-liability metadata (Payoff / Exclude+Reason / Property link). It also opens each Real Estate and Liability row to grab form-only fields LOP doesn't show in the table (Property type, Current occupancy, Pending-sale date, etc.) and captures the source's credit pull type + CoreLogic reference ID. On the new loan, click <strong>Paste from staged</strong> and pick which stored loan to fill from.</p>
+        <ul>
+          <li><strong>Multi-borrower files auto-add the co-borrower:</strong> if the source has more borrowers than the destination, paste clicks the <strong>+</strong> tab → fills the Add-a-new-borrower dialog → clicks Create borrower before any fields land, so co-borrower data never ends up on the wrong section.</li>
+          <li><strong>Saves the file then runs credit automatically:</strong> Hard pulls run Reissue with the staged reference ID; Soft pulls fire Choose action → Pull credit report. Liability edits (Payoff / Exclude+Reason / Property link) apply right after the credit pull populates the dest liabilities.</li>
+          <li><strong>Self-bypasses LOP's credit-eligibility cache:</strong> when a co-borrower was just auto-added, paste reloads the page after save so LOP's credit cache picks up the new consent — credit then fires automatically once the page comes back.</li>
+          <li><strong>Read-only / locked-in-this-file fields are skipped cleanly</strong> with a per-field report in the summary modal, so it's clear what the LO needs to finish manually.</li>
+          <li><strong>Each stage persists in chrome.storage</strong> and stays usable across LOP tabs &mdash; no need to keep the source tab open.</li>
+        </ul>
+        <p style="margin-top:8px;color:#6b7280;font-size:12px;font-style:italic;">Tip: this is the longest-running feature in the pack &mdash; the progress overlay shows what step it's on (Reading rows · Adding co-borrower · Paste pass · Saving · Refreshing · Resuming credit).</p>
+      </div>
+    </div>
+
     <div class="feature is-new" id="address-copy">
       <div class="shot">
         <!-- animated SVG: primary's row gets copied down into the empty
