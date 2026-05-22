@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.30.2",
+    headline: "Copy LOP file: deep console logging so any field issue is debuggable in DevTools",
+    highlights: [
+      "Stage now logs (under a collapsible '[Copy LOP] Stage from current page' group): URL, loan ID, borrower names, total fields found, how many were excluded vs captured, full table data, credit button detection, credit capture result, and the final stage object.",
+      "Each Paste pass logs (under '[Copy LOP] Paste pass N: wrote X, skippedLocked Y, …'): the exact list of fields that were written (with values), the list skipped because the dest was read-only/disabled, the list skipped because the source was empty or the option doesn't exist in the dest select, and the list of dest fields with no matching source value. So when something doesn't fill, you can see exactly which key was looked up and why it was dropped.",
+      "Credit reissue logs each step individually: 'Step 1: looking for Choose action', 'Step 2: clicking Reissue credit report', etc. — if any step fails, the console shows exactly which selector missed."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.30.1",
     headline: "Copy LOP file: progress overlay during paste so you know it's working",
     highlights: [

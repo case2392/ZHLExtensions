@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.30.2": "Copy LOP file: deep console logging — every field decision (written / skipped / no match) shown in DevTools.",
     "1.30.1": "Copy LOP file: progress overlay during paste with per-pass + credit-reissue status.",
     "1.30.0": "Copy LOP file: NEW auto-reissue credit on paste + full row data captured for every Full App table.",
     "1.29.3": "Copy LOP file: full row data now captured for tables (addresses, employment, income, assets, gifts, real estate). Auto-fill of the + Add forms is the next step.",

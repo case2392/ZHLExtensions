@@ -353,13 +353,22 @@
   // ---- Stage --------------------------------------------------
 
   function stageFromCurrentPage() {
+    console.group('[Copy LOP] Stage from current page');
+    console.log('URL:', location.pathname);
+    console.log('Loan ID:', loanIdFromUrl());
+    console.log('Borrower name(s):', readBorrowerName());
+
     const fields = [];
-    findAllNamedFields(document).forEach(function (el) {
-      // Skip Loan & Property fields entirely — those are
-      // loan-specific (Subject Property address, Purchase price,
-      // Lock period, Rate, etc.) and copying them from a previous
-      // loan would be actively wrong on a new file.
-      if (isInExcludedSection(el)) return;
+    let totalSeen = 0;
+    let excluded = 0;
+    const allNamed = findAllNamedFields(document);
+    console.log('Found', allNamed.length, 'named form fields on the page.');
+    allNamed.forEach(function (el) {
+      totalSeen++;
+      if (isInExcludedSection(el)) {
+        excluded++;
+        return;
+      }
       const tag = el.tagName.toLowerCase();
       const type = (el.type || '').toLowerCase();
       const scope = findSectionScope(el);
@@ -379,14 +388,27 @@
       }
       fields.push(record);
     });
-    return {
+    console.log('Captured', fields.length, 'fields (', excluded, 'excluded as Loan & Property /',
+      totalSeen - excluded - fields.length, 'other skipped).');
+
+    const tableData = readTableData(document);
+    console.group('Table data');
+    Object.keys(tableData).forEach(function (k) {
+      console.log(k + ':', tableData[k].length, 'rows', tableData[k]);
+    });
+    console.groupEnd();
+
+    const stage = {
       sourceLoanId: loanIdFromUrl(),
       sourceBorrowerName: readBorrowerName(),
       capturedAt: Date.now(),
       url: location.pathname,
       fields: fields,
-      tableData: readTableData(document)
+      tableData: tableData
     };
+    console.log('Full stage record:', stage);
+    console.groupEnd();
+    return stage;
   }
 
   // ---- Credit reissue ------------------------------------------
@@ -485,27 +507,36 @@
   async function runCreditReissue(refId) {
     if (!refId) return { ok: false, reason: 'No reference ID was staged.' };
     try {
+      console.log('[Copy LOP] Step 1: looking for [data-cy="credit-actions-buttons"]');
       const actionBtn = document.querySelector('[data-cy="credit-actions-buttons"]');
       if (!actionBtn) return { ok: false, reason: 'Choose action button not found on the right rail.' };
+      console.log('[Copy LOP] Step 1: clicking Choose action', actionBtn);
       actionBtn.click();
       await new Promise(function (r) { setTimeout(r, 200); });
 
+      console.log('[Copy LOP] Step 2: looking for [data-cy="reissue-credit-button"]');
       const reissueItem = document.querySelector('[data-cy="reissue-credit-button"]');
       if (!reissueItem) return { ok: false, reason: '"Reissue credit report" menu item not found.' };
+      console.log('[Copy LOP] Step 2: clicking Reissue credit report', reissueItem);
       reissueItem.click();
       await new Promise(function (r) { setTimeout(r, 400); });
 
+      console.log('[Copy LOP] Step 3: looking for input[name="reissue.referenceId"]');
       const input = document.querySelector('input[name="reissue.referenceId"]');
       if (!input) return { ok: false, reason: 'Reference ID input not found in the dialog.' };
+      console.log('[Copy LOP] Step 3: writing reference ID', refId);
       setReactInputValue(input, refId);
       try { input.blur(); } catch (_) {}
       await new Promise(function (r) { setTimeout(r, 250); });
 
+      console.log('[Copy LOP] Step 4: looking for [data-cy="run-credit"]');
       const reissueBtn = document.querySelector('[data-cy="run-credit"]');
       if (!reissueBtn) return { ok: false, reason: 'Reissue button not found in the dialog.' };
+      console.log('[Copy LOP] Step 4: clicking Reissue');
       reissueBtn.click();
       return { ok: true, refId: refId };
     } catch (e) {
+      console.error('[Copy LOP] runCreditReissue threw:', e);
       return { ok: false, reason: String(e && e.message || e) };
     }
   }
@@ -542,11 +573,15 @@
 
   // ---- Paste --------------------------------------------------
 
-  function pasteOnePass(stage, byKey) {
+  function pasteOnePass(stage, byKey, passNum) {
     let wrote = 0;
     let skippedLocked = 0;
     let noMatch = 0;
     let skippedEmpty = 0;
+    const wroteFields = [];
+    const skippedLockedFields = [];
+    const noMatchFields = [];
+    const skippedEmptyFields = [];
 
     findAllNamedFields(document).forEach(function (el) {
       // Mirror stage-side: never touch Loan & Property fields,
@@ -557,40 +592,52 @@
       const scope = findSectionScope(el);
       const key = fieldKey(el.name, tag, type, el.value, scope);
       const rec = byKey[key];
-      if (!rec) { noMatch++; return; }
-      if (!isEditable(el)) { skippedLocked++; return; }
+      if (!rec) { noMatch++; noMatchFields.push(key); return; }
+      if (!isEditable(el)) { skippedLocked++; skippedLockedFields.push(key); return; }
 
       try {
         if (tag === 'select') {
-          if (!rec.value) { skippedEmpty++; return; }
-          // Only set if the option exists on the destination select.
+          if (!rec.value) { skippedEmpty++; skippedEmptyFields.push(key + ' (select empty)'); return; }
           let optionExists = false;
           for (const opt of el.options) {
             if (opt.value === rec.value) { optionExists = true; break; }
           }
-          if (!optionExists) { skippedEmpty++; return; }
-          if (el.value === rec.value) { return; }  // already correct
+          if (!optionExists) {
+            skippedEmpty++;
+            skippedEmptyFields.push(key + ' (option "' + rec.value + '" not in dest select)');
+            return;
+          }
+          if (el.value === rec.value) { return; }
           setReactSelectValue(el, rec.value);
           wrote++;
+          wroteFields.push(key + ' = ' + rec.value);
         } else if (type === 'checkbox' || type === 'radio') {
-          // Only flip when destination state differs.
           if (el.checked === !!rec.checked) return;
-          // For radios, only the "true" side of a Y/N pair carries
-          // the meaningful click (clicking "No" deselects "Yes" too).
           if (type === 'radio' && !rec.checked) return;
           setReactCheckedValue(el, rec.checked);
           wrote++;
+          wroteFields.push(key + ' = ' + (rec.checked ? 'checked' : 'unchecked'));
         } else {
-          // Plain text-style input
-          if (rec.value == null || rec.value === '') { skippedEmpty++; return; }
+          if (rec.value == null || rec.value === '') { skippedEmpty++; skippedEmptyFields.push(key + ' (empty in source)'); return; }
           if (el.value === rec.value) { return; }
           setReactInputValue(el, rec.value);
           wrote++;
+          wroteFields.push(key + ' = "' + rec.value + '"');
         }
       } catch (e) {
-        console.warn('[LOP File Copy] write failed for', el.name, e);
+        console.warn('[Copy LOP] write failed for', el.name, e);
       }
     });
+
+    console.group('[Copy LOP] Paste pass ' + (passNum || '?') +
+      ': wrote ' + wrote + ', skippedLocked ' + skippedLocked +
+      ', skippedEmpty ' + skippedEmpty + ', noMatch ' + noMatch);
+    if (wroteFields.length) { console.log('Written:', wroteFields); }
+    if (skippedLockedFields.length) { console.log('Skipped (read-only / disabled on dest):', skippedLockedFields); }
+    if (skippedEmptyFields.length) { console.log('Skipped (empty in source / option not in dest):', skippedEmptyFields); }
+    if (noMatchFields.length && noMatchFields.length < 40) { console.log('No matching source value:', noMatchFields); }
+    else if (noMatchFields.length) { console.log('No matching source value:', noMatchFields.length, 'fields (truncated; first 20):', noMatchFields.slice(0, 20)); }
+    console.groupEnd();
 
     return {
       wrote: wrote,
@@ -609,11 +656,20 @@
   // passes with a 250ms settle catches any reasonable cascade
   // depth without taking forever.
   async function pasteStageOntoCurrentPage(stage) {
+    console.group('[Copy LOP] Paste from stage');
+    console.log('Stage source loan:', stage.sourceLoanId, 'borrower:', namesFromStage(stage) || stage.sourceBorrowerName);
+    console.log('Stage has', (stage.fields || []).length, 'fields,',
+      Object.keys(stage.tableData || {}).reduce(function (a, k) { return a + (stage.tableData[k] || []).length; }, 0), 'table rows.');
+    console.log('Destination loan ID:', loanIdFromUrl());
+    console.log('Destination borrower count:', countCurrentBorrowerSections(),
+      'vs source:', countBorrowerSections(stage.fields));
+
     const byKey = {};
     (stage.fields || []).forEach(function (rec) {
       const key = fieldKey(rec.name, rec.tag, rec.type, rec.value, rec.scope);
       byKey[key] = rec;
     });
+    console.log('Built lookup index with', Object.keys(byKey).length, 'keys.');
 
     let totalWrote = 0;
     let lastResult = { wrote: 0, skippedLocked: 0, noMatch: 0, skippedEmpty: 0 };
@@ -629,7 +685,7 @@
         'Pasting fields — pass ' + passes + '…',
         'Written so far: ' + totalWrote + '. Each pass waits 250ms after writes so React can render any newly-revealed cascading fields.'
       );
-      lastResult = pasteOnePass(stage, byKey);
+      lastResult = pasteOnePass(stage, byKey, passes);
       totalWrote += lastResult.wrote;
       // Stop early when a pass writes nothing — no more cascading
       // fields are appearing.
@@ -653,15 +709,27 @@
     // one more beat to settle before we open the reissue dialog.
     let creditResult = null;
     if (stage.creditReferenceId) {
+      console.group('[Copy LOP] Credit reissue');
+      console.log('Reference ID:', stage.creditReferenceId, '(pull type:', stage.creditPullType || '?', ')');
       updateProgress(
         'Reissuing credit…',
         'Opening Choose action → Reissue credit report, filling reference ID ' + stage.creditReferenceId + ', and clicking Reissue.'
       );
       await new Promise(function (r) { setTimeout(r, 600); });
       creditResult = await runCreditReissue(stage.creditReferenceId);
+      console.log('Result:', creditResult);
+      console.groupEnd();
+    } else {
+      console.log('[Copy LOP] No credit reference staged — skipping reissue.');
     }
 
     hideProgress();
+
+    console.log('[Copy LOP] Paste totals: wrote', totalWrote, 'passes', passes,
+      'skippedLocked', lastResult.skippedLocked,
+      'skippedEmpty', lastResult.skippedEmpty,
+      'noMatch', lastResult.noMatch);
+    console.groupEnd();
 
     return {
       wrote: totalWrote,
@@ -886,8 +954,10 @@
     // "CoreLogic-" prefix and trailing whitespace and save it on
     // the stage so the paste side can drive a Reissue.
     const creditBtn = findCreditButton();
+    console.log('[Copy LOP] Credit button detection:', creditBtn ? creditBtn.type + ' (clickable)' : 'none clickable');
     if (creditBtn) {
       const captured = await captureCreditReferenceFromUser(creditBtn);
+      console.log('[Copy LOP] Credit capture result:', captured);
       if (captured && captured.refId) {
         stage.creditReferenceId = captured.refId;
         stage.creditPullType = captured.pullType;
