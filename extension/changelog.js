@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.34.6",
+    headline: "Copy LOP file BUG FIX: double-save + 4.5s settle so the credit endpoint sees the new co-borrower's consent.",
+    highlights: [
+      "BUG: even with consent dropdowns set to Verbal and a 'Granted on …' timestamp showing in the LOP UI, the credit-reissue pull was still bouncing with 'Missing credit consent — Sarah Malone'. LOP's credit-eligibility endpoint reads from a different cache layer than the consent dropdown auto-commit, and 1.5s wasn't long enough for that cache to refresh.",
+      "Now: paste does a 3-second settle after the first save, then a SECOND Save Loan File click to force another backend round-trip, then waits 1.5s more before firing credit (4.5s total settle from initial save). The second save is cheap when nothing's dirty (LOP returns the disabled button to us so saveLoanFile no-ops) but it reliably nudges the credit-eligibility cache to re-read the consent state."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.34.5",
     headline: "Copy LOP file BUG FIX: credit pull no longer races the co-borrower's consent commit.",
     highlights: [

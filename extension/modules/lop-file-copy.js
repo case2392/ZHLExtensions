@@ -2627,13 +2627,25 @@
       saveResult = await saveLoanFile();
       console.log('Result:', saveResult);
       console.groupEnd();
-      // Give LOP's backend extra settle time to persist the
-      // co-borrower's freshly-set credit consent before the
-      // credit pull fires. Without this beat, the credit
-      // preflight can find Borrower 2's consent record still
-      // not-yet-committed (even though we wrote the dropdown to
-      // Verbal moments earlier) and refuse to run.
-      updateProgress('Waiting for save to settle…', 'Letting LOP\'s backend commit the new co-borrower\'s credit consent before credit fires.');
+      // Two-save settle so LOP's credit-pull cache picks up the
+      // new co-borrower's consent record. The first save commits
+      // everything we wrote during paste; LOP's consent change
+      // also auto-commits inline with a "Granted on …" timestamp,
+      // BUT the credit-eligibility endpoint reads from a separate
+      // cache layer that can lag for a few seconds. Without the
+      // double-save + longer settle, credit reissue fires while
+      // LOP still believes Borrower 2 hasn't consented and the
+      // pull bounces with "Missing credit consent".
+      updateProgress('Letting consent commit…', 'Waiting 3s for LOP to propagate the new co-borrower\'s Verbal consent across services.');
+      await new Promise(function (r) { setTimeout(r, 3000); });
+      // Second save — this is cheap, but it forces another
+      // backend round-trip that lets LOP's credit-eligibility
+      // cache re-read the consent state.
+      updateProgress('Re-saving so credit sees the latest consent…', 'A second save forces LOP\'s credit-eligibility cache to refresh.');
+      console.group('[Copy LOP] Save loan file (consent settle)');
+      const secondSave = await saveLoanFile();
+      console.log('Result:', secondSave);
+      console.groupEnd();
       await new Promise(function (r) { setTimeout(r, 1500); });
     }
 

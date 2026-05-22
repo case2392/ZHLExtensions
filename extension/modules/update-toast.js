@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.34.6": "Copy LOP file BUG FIX: double-save + 4.5s settle so LOP's credit endpoint sees the new co-borrower's Verbal consent before credit fires.",
     "1.34.5": "Copy LOP file BUG FIX: credit pull no longer races the new co-borrower's consent commit — verify consent + 1.5s settle after save before credit fires.",
     "1.34.4": "Copy LOP file BUG FIX: Real Estate source-side scrape no longer defeated by nested liabilities table — Property type / Current occupancy / Pending-sale date now capture on stage.",
     "1.34.3": "Copy LOP file: Borrower multi-select now verifies the chip committed (tries checkbox/label/option/typed in turn) + re-stage hint when Real Estate details are missing.",
