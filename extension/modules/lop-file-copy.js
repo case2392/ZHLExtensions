@@ -4377,7 +4377,7 @@
       // resume ran (no full summary — most of that already
       // appeared before the refresh).
       const okHtml = '<h3 style="margin:0 0 8px;font-size:18px;color:#15803d;">🎉 Congrats on cloning your LOP file!</h3>' +
-        '<p style="margin:0;color:#374151;font-size:13px;">Please make sure to leave Justin karma if you found this useful 💛</p>';
+        '<p style="margin:0;color:#374151;font-size:13px;">Please <a href="https://zallwall.zillowgroup.com/justinca" target="_blank" rel="noopener" data-zhl-karma-link="lop-file-copy" style="color:#0b5cab;font-weight:700;text-decoration:underline;">leave Justin karma</a> if you found this useful 💛</p>';
       const failHtml = '<h3 style="margin:0 0 8px;font-size:16px;color:#991b1b;">Couldn\'t trigger credit after refresh</h3>' +
         '<p style="margin:0 0 6px;color:#7f1d1d;font-size:13px;">' +
         (creditResult && creditResult.reason ? escapeHtml(creditResult.reason) : 'Unknown error') +

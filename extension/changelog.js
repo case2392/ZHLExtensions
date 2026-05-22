@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.36.6",
+    headline: "Copy LOP file: 'leave Justin karma' on the success modal is now an actual link to my Zall Wall.",
+    highlights: [
+      "v1.36.5 added the celebratory end-of-flow modal but the 'leave Justin karma' phrase was plain text. Now it's a real underlined link to zallwall.zillowgroup.com/justinca with the data-zhl-karma-link telemetry attribute so karma clicks from this surface are counted too."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.36.5",
     headline: "Copy LOP file: cheerier success modal at the end of the post-refresh flow.",
     highlights: [
