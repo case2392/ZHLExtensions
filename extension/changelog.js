@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.35.0",
+    headline: "Copy LOP file: when a co-borrower is auto-added, paste now reloads the page before credit so LOP's eligibility cache picks up the new consent.",
+    highlights: [
+      "BUG: even with v1.34.6's double-save + 4.5s settle, LOP's credit-reissue endpoint was STILL bouncing with 'Missing credit consent — Sarah Malone' for some files. LOP's credit-eligibility cache lives on a different service than the consent dropdown commit and the cache lag varies; sometimes 5s isn't enough.",
+      "Fix: when paste auto-added a co-borrower on this run, it now stashes a 'pending credit action' record in chrome.storage (loan ID, pull type, ref ID, liability edits) and triggers a page reload AFTER the save settles. The reload forces LOP to rebuild its credit-eligibility cache from scratch. As soon as the page comes back, an init-time handler reads the pending record, waits for the right-rail Choose-action button to mount, and fires the credit pull + liability edits automatically. A small toast modal confirms when it runs.",
+      "Single-borrower files (no auto-add) keep the inline credit path — no reload needed when there's no consent-cache race condition to bypass."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.34.6",
     headline: "Copy LOP file BUG FIX: double-save + 4.5s settle so the credit endpoint sees the new co-borrower's consent.",
     highlights: [

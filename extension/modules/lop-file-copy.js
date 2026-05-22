@@ -2650,6 +2650,55 @@
     }
 
     let creditResult = null;
+    let liabilityEditResults = null;
+    // When a co-borrower was just auto-added on THIS paste, LOP's
+    // credit-eligibility cache holds onto stale "no consent for
+    // Borrower 2" state for several seconds even after Save Loan
+    // File commits the new consent. Empirically a double-save +
+    // 4.5s settle wasn't always enough (the cache lag varies).
+    // The reliable workaround is a page refresh — LOP rebuilds
+    // the credit cache from scratch on load. We stash a "pending
+    // credit action" record in chrome.storage and trigger the
+    // reload; the init code at the bottom of this module reads
+    // the flag on the next page load and resumes the credit pull
+    // + liability edits automatically.
+    const justAddedBorrower = addBorrowersResult && addBorrowersResult.added > 0;
+    if (stage.creditPullType && justAddedBorrower) {
+      const pending = {
+        loanId: loanIdFromUrl(),
+        creditPullType: stage.creditPullType,
+        creditReferenceId: stage.creditReferenceId || '',
+        liabilityEdits: stage.liabilityEdits || [],
+        armedAt: Date.now()
+      };
+      try {
+        await new Promise(function (resolve) {
+          chrome.storage.local.set({ zhlPendingCreditAction: pending }, resolve);
+        });
+        console.log('[Copy LOP] Armed post-refresh credit action and reloading the page.');
+        updateProgress('Refreshing the page…',
+          'A page reload clears LOP\'s credit-eligibility cache so the new co-borrower\'s consent is picked up. Credit will fire automatically once the page comes back.');
+        await new Promise(function (r) { setTimeout(r, 600); });
+        location.reload();
+        // Don't fall through to the modal — the page is reloading.
+        return {
+          wrote: totalWrote,
+          skippedLocked: lastResult.skippedLocked,
+          noMatch: lastResult.noMatch,
+          skippedEmpty: lastResult.skippedEmpty,
+          passes: passes,
+          borrowerMismatch: borrowerMismatch,
+          addBorrowersResult: addBorrowersResult,
+          tableResults: tableResults,
+          saveResult: saveResult,
+          pendingCredit: pending,
+          aborted: false
+        };
+      } catch (e) {
+        console.warn('[Copy LOP] Could not arm post-refresh credit; falling back to inline path.', e);
+      }
+    }
+
     if (stage.creditPullType) {
       console.group('[Copy LOP] Credit action: ' + stage.creditPullType);
       // Verify every borrower in the source's personal-info-sections
@@ -2699,7 +2748,6 @@
     // Property link) — runs after the credit pull/reissue
     // populates the dest liabilities. Skips silently when source
     // had no liability edits to apply.
-    let liabilityEditResults = null;
     if (stage.liabilityEdits && stage.liabilityEdits.length &&
         creditResult && creditResult.ok) {
       console.group('[Copy LOP] Liability edits');
@@ -3041,6 +3089,12 @@
           if (!stage) { removeModal(); return; }
           removeModal();
           const result = await pasteStageOntoCurrentPage(stage);
+          // If paste armed a post-refresh credit pull, the page
+          // is about to reload — don't pop a summary modal that
+          // the LO would see for half a second before it
+          // disappears. The resume handler shows its own modal
+          // after the reload.
+          if (result && result.pendingCredit) return;
           showSummary(stage, result);
         });
       }
@@ -3233,6 +3287,93 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+
+  // ---- Post-refresh credit resume -------------------------------
+  // When paste auto-adds a co-borrower, the credit-eligibility
+  // cache on LOP's backend can lag the consent commit for several
+  // seconds. The reliable bypass is to reload the page (which
+  // rebuilds the cache) and then re-trigger the credit pull. The
+  // reload erases our JS state, so we stash a small "pending
+  // credit action" record in chrome.storage before reloading;
+  // this handler reads it on the next page load and resumes the
+  // credit pull + liability edits.
+  const PENDING_KEY = 'zhlPendingCreditAction';
+  const PENDING_TTL_MS = 5 * 60 * 1000;
+
+  function tryResumePendingCredit() {
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+    chrome.storage.local.get([PENDING_KEY], async function (data) {
+      const pending = data && data[PENDING_KEY];
+      if (!pending) return;
+      const age = Date.now() - (pending.armedAt || 0);
+      if (age > PENDING_TTL_MS) {
+        try { chrome.storage.local.remove([PENDING_KEY]); } catch (_) {}
+        return;
+      }
+      // Only resume on the loan that armed it.
+      const currentLoan = loanIdFromUrl();
+      if (currentLoan && pending.loanId && currentLoan !== pending.loanId) return;
+      // Wait for the Full Application page + the right-rail credit
+      // button to render before we try to drive it.
+      const ready = await waitForCondition(function () {
+        return isOnFullApplicationPage() &&
+          document.querySelector('[data-cy="credit-actions-buttons"]');
+      }, 60000);
+      if (!ready) {
+        console.warn('[Copy LOP] Post-refresh resume: credit button never appeared; leaving flag alone.');
+        return;
+      }
+      // Clear the flag BEFORE running so a second reload (or a
+      // mistaken trigger) doesn't repeat the credit pull.
+      try { chrome.storage.local.remove([PENDING_KEY]); } catch (_) {}
+      console.log('[Copy LOP] Post-refresh resume: firing', pending.creditPullType, 'credit action.');
+      const actionLabel = pending.creditPullType === 'Hard'
+        ? 'Resuming hard credit reissue…'
+        : 'Resuming soft credit pull…';
+      showProgress(actionLabel,
+        'Page reloaded so LOP\'s credit cache picked up the new co-borrower\'s consent. Firing credit now.');
+      // Brief settle so React finishes mounting.
+      await new Promise(function (r) { setTimeout(r, 1500); });
+      const fakeStage = {
+        creditPullType: pending.creditPullType,
+        creditReferenceId: pending.creditReferenceId
+      };
+      const creditResult = await runCreditAction(fakeStage);
+      console.log('[Copy LOP] Post-refresh credit result:', creditResult);
+      let liabilityEditResults = null;
+      if (pending.liabilityEdits && pending.liabilityEdits.length &&
+          creditResult && creditResult.ok) {
+        updateProgress('Applying liability edits…',
+          'Applying Payoff / Exclude+Reason / Property link to each matching liability.');
+        liabilityEditResults = await applyLiabilityEdits(pending.liabilityEdits);
+        console.log('[Copy LOP] Post-refresh liability edits result:', liabilityEditResults);
+      }
+      hideProgress();
+      // Surface a small toast-like modal so the LO knows the
+      // resume ran (no full summary — most of that already
+      // appeared before the refresh).
+      const okHtml = '<h3 style="margin:0 0 8px;font-size:16px;color:#15803d;">Credit ' +
+        (pending.creditPullType === 'Hard' ? 'reissue' : 'pull') + ' triggered after refresh</h3>' +
+        '<p style="margin:0 0 6px;color:#374151;font-size:13px;">Watch the right rail for the new pull to come back.</p>';
+      const failHtml = '<h3 style="margin:0 0 8px;font-size:16px;color:#991b1b;">Couldn\'t trigger credit after refresh</h3>' +
+        '<p style="margin:0 0 6px;color:#7f1d1d;font-size:13px;">' +
+        (creditResult && creditResult.reason ? escapeHtml(creditResult.reason) : 'Unknown error') +
+        '</p><p style="margin:0;color:#374151;font-size:12px;">Run it manually: Choose action → ' +
+        (pending.creditPullType === 'Hard'
+          ? 'Reissue credit report, paste ref ID <code>' + escapeHtml(pending.creditReferenceId || '') + '</code>, click Reissue.'
+          : 'Pull credit report, leave type Soft, click Pull credit.') +
+        '</p>';
+      showModal(
+        (creditResult && creditResult.ok ? okHtml : failHtml) +
+        '<div style="text-align:right;margin-top:14px;"><button id="zhl-resume-ok" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button></div>',
+        function (p) { p.querySelector('#zhl-resume-ok').addEventListener('click', removeModal); }
+      );
+    });
+  }
+
+  // Run the resume check shortly after load — give the SPA a
+  // moment to render the page chrome first.
+  setTimeout(tryResumePendingCredit, 800);
 
   // ---- Scan loop ------------------------------------------------
 
