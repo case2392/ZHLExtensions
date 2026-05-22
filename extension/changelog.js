@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.33.0",
+    headline: "Copy LOP file: source-side form scrape for Real Estate + Liabilities, with auto-applied Property/Payoff/Exclude on the destination",
+    highlights: [
+      "Real Estate now copies form-only fields. Stage opens each source Real Estate row's edit form to capture Property type, Current occupancy, PendingSale / Sold date, and the Will-be-paid-prior-to-closing checkbox — fields LOP only shows in the form, not the table. Paste matches by address and writes them on the destination, so Real Estate rows save without manual cleanup.",
+      "Liability metadata is now copied. Stage opens each source liability row's edit form to capture Payoff / Exclude+Reason / Property link (matched by the displayed property address since uuids differ across loans). After the destination's credit pull populates its own liabilities, the extension matches by account number, opens each dest row, applies the captured settings (checks Payoff, checks Exclude + selects the Reason after the Reason field renders, sets the Property dropdown by matching the option's address text), and clicks Save. Per-row report appears in the summary modal.",
+      "Source stage now takes a little longer when Real Estate or Liabilities are present (one click per row to open and close each form), with a live progress overlay so you know what it's doing."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.32.1",
     headline: "Copy LOP file: Real estate financial-status defaults to With liabilities when source has a mortgage + clearer failure reason",
     highlights: [

@@ -409,7 +409,287 @@
 
   // ---- Stage --------------------------------------------------
 
-  function stageFromCurrentPage() {
+  // Opens each row of a table-of-rows-that-expand on the source
+  // loan to read the inline edit form for that row. Used to grab
+  // fields that LOP only shows in the form (Property type,
+  // Current occupancy, Property link on liabilities, etc.) that
+  // aren't visible in the table cells.
+  async function expandRowAndReadForm(row, formFieldSelector, fieldReader) {
+    // Click the chevron in the first td (or the row itself) to
+    // expand. The expanded form lives in the NEXT tr — a single
+    // td with colspan that contains the form fields.
+    const chev = row.querySelector('td:first-child svg');
+    const trigger = chev ? chev.parentElement : row;
+    try { trigger.click(); } catch (_) { try { row.click(); } catch (__) {} }
+    // Wait for the form row to appear and to contain the marker
+    // input/select that proves the form is mounted.
+    const formRoot = await waitForCondition(function () {
+      let next = row.nextElementSibling;
+      if (!next) return null;
+      // The expanded form is a tr with a single colspan td.
+      const tds = next.querySelectorAll('td');
+      if (tds.length !== 1) return null;
+      return next.querySelector(formFieldSelector) ? next : null;
+    }, 3000);
+    if (!formRoot) {
+      // Couldn't open; bail.
+      return null;
+    }
+    // Tiny settle so React hydrates the form's initial values.
+    await wait(150);
+    let captured = null;
+    try { captured = fieldReader(formRoot); } catch (e) { console.warn('[Copy LOP] form read threw', e); }
+    // Collapse the form. Re-clicking the trigger toggles it
+    // shut. Some LOP rows respond better to a Cancel click than
+    // a re-click on the chevron, so try Cancel first.
+    const cancelBtn = Array.from(formRoot.querySelectorAll('button'))
+      .find(function (b) { return (b.textContent || '').trim() === 'Cancel'; });
+    if (cancelBtn) cancelBtn.click();
+    else { try { trigger.click(); } catch (_) {} }
+    await waitForCondition(function () {
+      const next = row.nextElementSibling;
+      return !next || !next.querySelector(formFieldSelector);
+    }, 2000);
+    await wait(120);
+    return captured;
+  }
+
+  // Source-side: open each real-estate row's edit form to grab
+  // the form-only fields the table doesn't show (Property type,
+  // Current occupancy, Pending sale / sold date,
+  // willBePaidPriorToClosing). Returns one entry per real-estate
+  // row, keyed by the row's display address so paste can match
+  // by address.
+  async function scrapeRealEstateFromSource() {
+    const table = document.querySelector('table[aria-label="Table for real estates"]');
+    if (!table) return [];
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return [];
+    const rows = Array.from(tbody.children).filter(function (tr) {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length <= 1) return false;
+      // skip the empty-state placeholder and totals row
+      return (tr.textContent || '').trim().length > 0 &&
+             tr.getAttribute('data-cy') !== 'add-entity-container';
+    });
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      // Display address — used as the join key on paste
+      const tds = row.querySelectorAll('td');
+      const addressCell = tds[3];  // Address column
+      const displayAddress = addressCell ? (addressCell.textContent || '').replace(/\s+/g, ' ').trim() : '';
+      const captured = await expandRowAndReadForm(row,
+        'select[name="propertyType"], select[name="currentOccupancy"]',
+        function (formRoot) {
+          function v(name) {
+            const el = formRoot.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
+            return el ? (el.value || '').trim() : '';
+          }
+          function checked(name) {
+            const el = formRoot.querySelector('input[type="checkbox"][name="' + name + '"]');
+            return !!(el && el.checked);
+          }
+          return {
+            displayAddress: displayAddress,
+            propertyType: v('propertyType'),
+            currentOccupancy: v('currentOccupancy'),
+            estimatedClosingDate: v('estimatedClosingDate'),
+            willBePaidPriorToClosing: checked('willBePaidPriorToClosing'),
+            // Re-capture these in case the row scrape was wrong:
+            propertyValue: v('propertyValue'),
+            status: v('status'),
+            intendedOccupancy: v('intendedOccupancy'),
+            financialStatus: v('financialStatus'),
+            taxes: v('taxes'),
+            insurance: v('insurance'),
+            hoaDues: v('hoaDues')
+          };
+        });
+      if (captured) out.push(captured);
+    }
+    return out;
+  }
+
+  // Source-side: open each liability row's edit form to grab the
+  // form-only fields (Property linkage, Payoff, Exclude + Reason)
+  // that aren't visible in the liabilities table. These get
+  // re-applied on the destination AFTER the credit pull populates
+  // the dest liabilities. Match by accountIdentifier.
+  async function scrapeLiabilitiesFromSource() {
+    const table = document.querySelector('table[aria-label="Table for liabilities"]');
+    if (!table) return [];
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return [];
+    const rows = Array.from(tbody.children).filter(function (tr) {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length <= 1) return false;
+      if (tr.getAttribute('data-cy') === 'add-entity-container') return false;
+      // Account # is column 4 (0=icon, 1=borrower, 2=type, 3=company, 4=acct#)
+      const acctText = tds[4] ? (tds[4].textContent || '').trim() : '';
+      return !!acctText;
+    });
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const captured = await expandRowAndReadForm(row,
+        'input[name="creditor"], input[name="accountIdentifier"]',
+        function (formRoot) {
+          function v(name) {
+            const el = formRoot.querySelector('input[name="' + name + '"], select[name="' + name + '"]');
+            return el ? (el.value || '').trim() : '';
+          }
+          function checked(name) {
+            const el = formRoot.querySelector('input[type="checkbox"][name="' + name + '"]');
+            return !!(el && el.checked);
+          }
+          // Capture the Property link by its DISPLAYED ADDRESS
+          // (not the uuid — uuids differ across loans). Paste-side
+          // matches by option text.
+          let realEstateAddress = '';
+          const reSelect = formRoot.querySelector('select[name="realEstateID"]');
+          if (reSelect && reSelect.value) {
+            const selectedOpt = Array.from(reSelect.options).find(function (o) { return o.value === reSelect.value; });
+            if (selectedOpt) realEstateAddress = (selectedOpt.textContent || '').replace(/\s+/g, ' ').trim();
+          }
+          return {
+            accountIdentifier: v('accountIdentifier'),
+            creditor: v('creditor'),
+            type: v('type'),
+            payoff: checked('payoff'),
+            exclude: checked('exclude'),
+            reason: v('reason'),
+            realEstateAddress: realEstateAddress
+          };
+        });
+      if (captured) out.push(captured);
+    }
+    return out;
+  }
+
+  // Destination-side: after credit pull populates dest
+  // liabilities, walk each captured source liability and apply
+  // its Property / Payoff / Exclude+Reason settings to the
+  // matching dest row (matched by accountIdentifier). Returns a
+  // per-row report.
+  async function applyLiabilityEdits(liabilityEdits) {
+    if (!liabilityEdits || !liabilityEdits.length) return { total: 0, applied: 0, skipped: 0, errors: [] };
+    // Wait for the dest liabilities table to actually have rows —
+    // credit pull is async and can take many seconds.
+    updateProgress('Waiting for credit pull to populate liabilities…', 'Up to 60 seconds.');
+    const table = await waitForCondition(function () {
+      const t = document.querySelector('table[aria-label="Table for liabilities"]');
+      if (!t) return null;
+      const tbody = t.querySelector('tbody');
+      if (!tbody) return null;
+      const dataRows = Array.from(tbody.children).filter(function (tr) {
+        const tds = tr.querySelectorAll('td');
+        return tds.length > 1 && (tds[4] ? (tds[4].textContent || '').trim() : '');
+      });
+      return dataRows.length > 0 ? t : null;
+    }, 60000);
+    if (!table) return { total: liabilityEdits.length, applied: 0, skipped: liabilityEdits.length, errors: [{ reason: 'Liabilities never populated' }] };
+
+    const out = { total: liabilityEdits.length, applied: 0, skipped: 0, errors: [] };
+    for (let i = 0; i < liabilityEdits.length; i++) {
+      const edit = liabilityEdits[i];
+      // Skip if there's nothing meaningful to apply
+      if (!edit.payoff && !edit.exclude && !edit.realEstateAddress) {
+        out.skipped++;
+        continue;
+      }
+      updateProgress(
+        'Applying liability edits…',
+        'Row ' + (i + 1) + ' of ' + liabilityEdits.length + ' (' + (edit.creditor || edit.accountIdentifier || 'unknown') + ')'
+      );
+      // Find a matching dest row by account #
+      const tbody = table.querySelector('tbody');
+      const matchedRow = Array.from(tbody.children).find(function (tr) {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length <= 1) return false;
+        const acct = tds[4] ? (tds[4].textContent || '').trim() : '';
+        return acct === edit.accountIdentifier;
+      });
+      if (!matchedRow) {
+        out.errors.push({ accountIdentifier: edit.accountIdentifier, reason: 'No matching dest row' });
+        continue;
+      }
+      // Expand → apply → save
+      const result = await expandRowAndApply(matchedRow, edit);
+      if (result.ok) out.applied++;
+      else out.errors.push({ accountIdentifier: edit.accountIdentifier, reason: result.reason });
+    }
+    return out;
+  }
+
+  async function expandRowAndApply(row, edit) {
+    const chev = row.querySelector('td:first-child svg');
+    const trigger = chev ? chev.parentElement : row;
+    try { trigger.click(); } catch (_) { try { row.click(); } catch (__) {} }
+    const formRoot = await waitForCondition(function () {
+      const next = row.nextElementSibling;
+      return next && next.querySelector('input[name="creditor"]') ? next : null;
+    }, 3000);
+    if (!formRoot) return { ok: false, reason: 'Edit form did not open' };
+    await wait(200);
+
+    // Payoff checkbox
+    if (edit.payoff) {
+      const cb = formRoot.querySelector('input[type="checkbox"][name="payoff"]');
+      if (cb && !cb.checked) { cb.click(); await wait(150); }
+    }
+    // Exclude checkbox + Reason (Reason renders only after Exclude is checked)
+    if (edit.exclude) {
+      const cb = formRoot.querySelector('input[type="checkbox"][name="exclude"]');
+      if (cb && !cb.checked) { cb.click(); await wait(250); }
+      if (edit.reason) {
+        const reasonSel = await waitForCondition(function () {
+          return formRoot.querySelector('select[name="reason"]');
+        }, 1500);
+        if (reasonSel) {
+          setReactSelectValue(reasonSel, edit.reason);
+          await wait(150);
+        }
+      }
+    }
+    // Property link — map source address text to dest option
+    if (edit.realEstateAddress) {
+      const reSel = formRoot.querySelector('select[name="realEstateID"]');
+      if (reSel) {
+        const want = edit.realEstateAddress.toLowerCase();
+        const opt = Array.from(reSel.options).find(function (o) {
+          return (o.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase() === want;
+        });
+        if (opt) {
+          setReactSelectValue(reSel, opt.value);
+          await wait(150);
+        } else {
+          console.warn('[Copy LOP][liability] no matching property option for', edit.realEstateAddress);
+        }
+      }
+    }
+
+    // Save
+    const saveBtn = formRoot.querySelector('button[data-cy="save-liability-button"]');
+    if (!saveBtn) return { ok: false, reason: 'Save button not found' };
+    if (saveBtn.disabled || saveBtn.getAttribute('aria-disabled') === 'true') {
+      // Try cancel-and-collapse rather than leaving an unsaved
+      // form open
+      const cancelBtn = Array.from(formRoot.querySelectorAll('button'))
+        .find(function (b) { return (b.textContent || '').trim() === 'Cancel'; });
+      if (cancelBtn) cancelBtn.click();
+      return { ok: false, reason: 'Save button stayed disabled (form invalid?)' };
+    }
+    saveBtn.click();
+    await waitForCondition(function () {
+      const next = row.nextElementSibling;
+      return !next || !next.querySelector('input[name="creditor"]');
+    }, 3000);
+    await wait(300);
+    return { ok: true };
+  }
+
+  async function stageFromCurrentPage() {
     console.group('[Copy LOP] Stage from current page');
     console.log('URL:', location.pathname);
     console.log('Loan ID:', loanIdFromUrl());
@@ -455,13 +735,39 @@
     });
     console.groupEnd();
 
+    // Open each row of Real Estate / Liabilities to capture
+    // form-only fields the table doesn't show. These take a few
+    // seconds each so we surface progress.
+    let realEstateDetails = [];
+    let liabilityEdits = [];
+    const reTable = document.querySelector('table[aria-label="Table for real estates"]');
+    const liabTable = document.querySelector('table[aria-label="Table for liabilities"]');
+    const reCount = reTable ? reTable.querySelectorAll('tbody tr').length : 0;
+    const liabCount = liabTable ? liabTable.querySelectorAll('tbody tr').length : 0;
+    if (reCount > 1 || liabCount > 1) {
+      showProgress('Reading per-row details…', 'Opening each Real Estate / Liability row to capture fields that LOP only shows in the form.');
+      try {
+        updateProgress('Reading Real Estate rows…', 'Opening each row to capture Property type / Current occupancy / Pending-sale date.');
+        realEstateDetails = await scrapeRealEstateFromSource();
+        console.log('[Copy LOP] Real estate details captured:', realEstateDetails);
+      } catch (e) { console.warn('[Copy LOP] real estate scrape failed', e); }
+      try {
+        updateProgress('Reading Liability rows…', 'Opening each row to capture Payoff / Exclude+Reason / Property link.');
+        liabilityEdits = await scrapeLiabilitiesFromSource();
+        console.log('[Copy LOP] Liability edits captured:', liabilityEdits);
+      } catch (e) { console.warn('[Copy LOP] liability scrape failed', e); }
+      hideProgress();
+    }
+
     const stage = {
       sourceLoanId: loanIdFromUrl(),
       sourceBorrowerName: readBorrowerName(),
       capturedAt: Date.now(),
       url: location.pathname,
       fields: fields,
-      tableData: tableData
+      tableData: tableData,
+      realEstateDetails: realEstateDetails,
+      liabilityEdits: liabilityEdits
     };
     console.log('Full stage record:', stage);
     console.groupEnd();
@@ -1390,7 +1696,19 @@
     return { ok: true };
   }
 
-  async function pasteRealEstateRow(row) {
+  // Look up the captured form-only details from
+  // scrapeRealEstateFromSource() for a given row, joining on the
+  // displayed address.
+  function findRealEstateDetails(stage, row) {
+    if (!stage || !stage.realEstateDetails) return null;
+    const want = String(row['Address'] || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!want) return null;
+    return stage.realEstateDetails.find(function (d) {
+      return String(d.displayAddress || '').replace(/\s+/g, ' ').trim().toLowerCase() === want;
+    }) || null;
+  }
+
+  async function pasteRealEstateRow(row, stage) {
     const table = findTable('Table for real estates');
     if (!table) return { ok: false, reason: 'table not found' };
     const addBtn = findAddButtonForTable(table);
@@ -1420,26 +1738,47 @@
     writeInput(form, 'zipCode', addr.zip);
     await wait(120);
 
-    // Property type / occupancy aren't captured in our source row
-    // scrape today — leave for user.
+    // Form-only fields (Property type, Current occupancy,
+    // PendingSale date, willBePaidPriorToClosing) come from the
+    // source-side scrapeRealEstateFromSource() pass that opens
+    // each row's edit form. Match by address.
+    const details = findRealEstateDetails(stage, row);
+    if (details) {
+      if (details.propertyType) writeSelect(form, 'propertyType', details.propertyType);
+      if (details.currentOccupancy) writeSelect(form, 'currentOccupancy', details.currentOccupancy);
+    }
 
-    const pv = parseAmount(row['Property value']);
+    // Property value — prefer the form-captured value over the
+    // row's display (rows can lose precision on rounding).
+    const pv = parseAmount(details && details.propertyValue ? details.propertyValue : row['Property value']);
     if (pv) writeInput(form, 'propertyValue', pv);
 
-    const status = mapRealEstateStatus(row['Status']);
+    const status = (details && details.status) || mapRealEstateStatus(row['Status']);
     if (status) {
       writeSelect(form, 'status', status);
       await wait(300);  // PendingSale reveals an extra date field
-      // If status is PendingSale or Sold, fill the date if we can
-      // infer one. The scraped source row doesn't carry the date,
-      // so this stays blank for the user.
+      if ((status === 'PendingSale' || status === 'Sold') && details && details.estimatedClosingDate) {
+        writeInput(form, 'estimatedClosingDate', details.estimatedClosingDate);
+        await wait(150);
+      }
+      if (details && details.willBePaidPriorToClosing) {
+        const cb = form.querySelector('input[type="checkbox"][name="willBePaidPriorToClosing"]');
+        if (cb && !cb.checked) { cb.click(); await wait(120); }
+      }
     }
 
-    const intended = mapOccupancy(row['Intended']);
+    const intended = (details && details.intendedOccupancy) || mapOccupancy(row['Intended']);
     if (intended) writeSelect(form, 'intendedOccupancy', intended);
 
-    const fs = mapFinancialStatus(row['Mortgage / HELOC']);
+    const fs = (details && details.financialStatus) || mapFinancialStatus(row['Mortgage / HELOC']);
     if (fs) writeSelect(form, 'financialStatus', fs);
+
+    // Expenses
+    if (details) {
+      if (details.taxes) writeInput(form, 'taxes', details.taxes);
+      if (details.insurance) writeInput(form, 'insurance', details.insurance);
+      if (details.hoaDues) writeInput(form, 'hoaDues', details.hoaDues);
+    }
 
     await wait(200);
 
@@ -1449,17 +1788,22 @@
     const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
     await wait(400);
     if (!closed) {
-      // The source row scrape doesn't carry Property type or
-      // Current occupancy (LOP only shows those in the form, not
-      // the table), and the Pending sale / Sold date is also a
-      // form-only field. The save validation typically fails on
-      // those.
-      const missing = ['Property type', 'Current occupancy'];
-      if (status === 'PendingSale' || status === 'Sold') missing.push('Pending sale or sold date');
-      return {
-        ok: false,
-        reason: 'Save did not close — finish these required fields manually: ' + missing.join(', ') + '.'
-      };
+      // If we DID open the source row and capture details, save
+      // should generally succeed — the only thing the dest can be
+      // missing is the multi-select Borrower(s) which the
+      // combobox driver may not always pick reliably. If we did
+      // NOT capture details (source had no form opened), the
+      // form-only required fields are blank.
+      const missing = [];
+      if (!details || !details.propertyType) missing.push('Property type');
+      if (!details || !details.currentOccupancy) missing.push('Current occupancy');
+      if ((status === 'PendingSale' || status === 'Sold') && !(details && details.estimatedClosingDate)) {
+        missing.push('Pending sale or sold date');
+      }
+      const reason = missing.length
+        ? 'Save did not close — finish these required fields manually: ' + missing.join(', ') + '.'
+        : 'Save did not close — check Borrower(s) selection and validation errors.';
+      return { ok: false, reason: reason };
     }
     return { ok: true };
   }
@@ -1489,7 +1833,7 @@
           'Row ' + (i + 1) + ' of ' + rows.length + ' — driving LOP\'s + Add form.'
         );
         let result;
-        try { result = await fn(rows[i]); }
+        try { result = await fn(rows[i], stage); }
         catch (e) { result = { ok: false, reason: String(e && e.message || e) }; }
         console.log('Row', i + 1, ':', result, rows[i]);
         if (result.ok) out[key].succeeded++;
@@ -1696,6 +2040,19 @@
       console.log('[Copy LOP] No credit action staged — skipping.');
     }
 
+    // Apply per-liability edits (Payoff / Exclude+Reason /
+    // Property link) — runs after the credit pull/reissue
+    // populates the dest liabilities. Skips silently when source
+    // had no liability edits to apply.
+    let liabilityEditResults = null;
+    if (stage.liabilityEdits && stage.liabilityEdits.length &&
+        creditResult && creditResult.ok) {
+      console.group('[Copy LOP] Liability edits');
+      liabilityEditResults = await applyLiabilityEdits(stage.liabilityEdits);
+      console.log('Result:', liabilityEditResults);
+      console.groupEnd();
+    }
+
     hideProgress();
 
     console.log('[Copy LOP] Paste totals: wrote', totalWrote, 'passes', passes,
@@ -1713,7 +2070,8 @@
       borrowerMismatch: borrowerMismatch,
       creditResult: creditResult,
       saveResult: saveResult,
-      tableResults: tableResults
+      tableResults: tableResults,
+      liabilityEditResults: liabilityEditResults
     };
   }
 
@@ -1914,7 +2272,7 @@
   }
 
   async function onStageClick() {
-    const stage = stageFromCurrentPage();
+    const stage = await stageFromCurrentPage();
     if (!stage.fields.length) {
       showModal('<h3 style="margin:0 0 8px;font-size:16px;color:#dc2626;">Nothing to stage</h3>' +
         '<p>No named form fields found on this page. Are you on the Full Application?</p>' +
@@ -2080,6 +2438,21 @@
             (stage.creditReferenceId ? '<code>' + escapeHtml(stage.creditReferenceId) + '</code>' : '(staged value)') +
             ', then click Reissue.' +
           '</div>')
+        : '') +
+      (result.liabilityEditResults
+        ? '<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:10px;margin:10px 0;color:#065f46;font-size:13px;">' +
+          '<strong>Liability edits:</strong> applied ' + result.liabilityEditResults.applied +
+          ' of ' + result.liabilityEditResults.total +
+          (result.liabilityEditResults.skipped ? ' (' + result.liabilityEditResults.skipped + ' skipped — no change needed or no dest match)' : '') +
+          (result.liabilityEditResults.errors && result.liabilityEditResults.errors.length
+            ? '<div style="color:#9a3412;margin-top:4px;">Errors: ' +
+              result.liabilityEditResults.errors.slice(0, 5).map(function (e) {
+                return escapeHtml((e.accountIdentifier || '?') + ' — ' + (e.reason || ''));
+              }).join('; ') +
+              (result.liabilityEditResults.errors.length > 5 ? ' (+' + (result.liabilityEditResults.errors.length - 5) + ' more)' : '') +
+              '</div>'
+            : '') +
+        '</div>'
         : '') +
       '<div style="background:#eef6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;margin:10px 0;color:#1e3a8a;font-size:12px;">' +
         '<strong>Multi-pair applications:</strong> if the source loan had more than one borrower-pair tab ' +
