@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.29.2",
+    headline: "Copy LOP file: bar now lives inline in the subnav (next to Premier Agent)",
+    highlights: [
+      "Stage / Paste bar is now injected as the last child of LOP's subnav row, sitting inline after the Premier Agent tab instead of floating over the page as a fixed overlay. Detection: walks up from any [data-cy^=\"subnav-\"] anchor to its parent container. Falls back to the previous fixed top-center overlay if the subnav isn't on the page (defensive against LOP layout changes)."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.29.1",
     headline: "Copy LOP file: bar moved to the top, Loan & Property excluded, cascading fields fixed, borrower picker actually shows names",
     highlights: [

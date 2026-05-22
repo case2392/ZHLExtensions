@@ -519,22 +519,41 @@
     if (typeof onMount === 'function') onMount(panel);
   }
 
+  function findSubnav() {
+    // The LOP sub-navigation bar (Insights / Pre-approval / …
+    // Premier Agent) is the parent of every subnav-* anchor. We
+    // pick any one of those anchors and return its parent so we
+    // can append our panel inline at the end of the bar.
+    const anchor = document.querySelector('[data-cy="subnav-full-application"]') ||
+                   document.querySelector('[data-cy="subnav-premier-agent"]') ||
+                   document.querySelector('[data-cy^="subnav-"]');
+    return anchor ? anchor.parentElement : null;
+  }
+
   function ensurePanel() {
     if (document.getElementById(PANEL_ID)) return;
     if (!isOnFullApplicationPage()) return;
+    const subnav = findSubnav();
     const panel = document.createElement('div');
     panel.id = PANEL_ID;
-    // Pinned to the top of the viewport, horizontally centered, so
-    // it sits in the same band as the page-level tab navigation
-    // (Insights / Pre-approval / Pricing / etc.) instead of
-    // hiding at the bottom-left where it competed with system
-    // notifications and the borrower selector flyout.
-    panel.style.cssText =
-      'position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:2147483645;' +
-      'background:#fff;border:1px solid #bfdbfe;border-radius:8px;' +
-      'padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,0.12);' +
-      'font:13px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2937;' +
-      'display:flex;gap:8px;align-items:center;';
+    if (subnav) {
+      // Inline in the subnav, after the last existing link
+      // (typically Premier Agent). Margin pushes it off the link
+      // text a little so it doesn't feel glued on.
+      panel.style.cssText =
+        'display:inline-flex;gap:8px;align-items:center;margin-left:24px;' +
+        'font:13px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2937;';
+    } else {
+      // Fallback: pinned to the top-center as a fixed overlay
+      // when the subnav isn't on the page (e.g. an LOP layout
+      // change). Same look as the previous version of v1.29.1.
+      panel.style.cssText =
+        'position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:2147483645;' +
+        'background:#fff;border:1px solid #bfdbfe;border-radius:8px;' +
+        'padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,0.12);' +
+        'font:13px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2937;' +
+        'display:flex;gap:8px;align-items:center;';
+    }
     panel.title = ZHL_TIP;
 
     const label = document.createElement('span');
@@ -564,7 +583,11 @@
     panel.appendChild(label);
     panel.appendChild(stageBtn);
     panel.appendChild(pasteBtn);
-    document.body.appendChild(panel);
+    if (subnav) {
+      subnav.appendChild(panel);
+    } else {
+      document.body.appendChild(panel);
+    }
   }
 
   async function onStageClick() {
