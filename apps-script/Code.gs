@@ -230,14 +230,56 @@ function cleanupAnonRows() {
   SpreadsheetApp.getUi().alert('Done. Enriched ' + enriched + ' anon row(s) with their email/name. No rows were merged or deleted.');
 }
 
-function doGet() {
-  // Serve the admin dashboard at the same /exec URL the extension POSTs
-  // to. Domain-restricted deployments (URL contains /a/macros/<domain>/)
+function doGet(e) {
+  // ?action=totalTimeSaved  →  JSON { totalMinutes: <number> }
+  // Powers the "Across all users" line in every tool's completion popup.
+  // Cached in ScriptProperties for 15 min so the extension can poll
+  // hourly without us re-scanning the Events sheet every time.
+  const action = (e && e.parameter && e.parameter.action) || '';
+  if (action === 'totalTimeSaved') {
+    return ContentService
+      .createTextOutput(JSON.stringify({ totalMinutes: getTotalTimeSavedMinutes_() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  // Default: serve the admin dashboard at the same /exec URL the extension
+  // POSTs to. Domain-restricted deployments (URL contains /a/macros/<domain>/)
   // automatically gate this to your Workspace, so only people in your
   // org with the URL can see it.
   return HtmlService.createHtmlOutput(DASHBOARD_HTML_)
     .setTitle('ZHL Productivity Pack — Telemetry Dashboard')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// Sum minutes from every 'time_saved' event row in the Events sheet.
+// Cached for 15 min in ScriptProperties so repeated hits don't rescan.
+function getTotalTimeSavedMinutes_() {
+  const props = PropertiesService.getScriptProperties();
+  const cached = Number(props.getProperty('timeSavedTotal_v1'));
+  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v1')) || 0;
+  if (cached >= 0 && (Date.now() - cachedTs) < 15 * 60 * 1000) {
+    return cached;
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ss.getSheetByName(SHEET_EVENTS);
+  if (!s) return 0;
+  const last = s.getLastRow();
+  if (last < 2) return 0;
+  // Events sheet columns:
+  //   1 Timestamp | 2 Email | 3 Name | 4 AnonId | 5 Version |
+  //   6 Event    | 7 Props  | 8 URL  | 9 BatchSentAt
+  const vals = s.getRange(2, 6, last - 1, 2).getValues(); // Event + Props
+  let total = 0;
+  for (let i = 0; i < vals.length; i++) {
+    if (vals[i][0] !== 'time_saved') continue;
+    try {
+      const p = JSON.parse(vals[i][1] || '{}');
+      const mins = Number(p.minutes);
+      if (mins > 0) total += mins;
+    } catch (_) { /* skip malformed */ }
+  }
+  props.setProperty('timeSavedTotal_v1', String(total));
+  props.setProperty('timeSavedTotalTs_v1', String(Date.now()));
+  return total;
 }
 
 // Lightweight aggregator. Reads the pre-summarized Daily and Users

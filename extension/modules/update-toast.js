@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.42.0": "NEW Time-saved tracker — every completion popup now shows '🕒 You just saved X' + your running total + the total across all users.",
     "1.41.0": "NEW Add Loan Officer button in the SMS Quick-Add row on Salesforce Leads — one-click adds the Lead Owner to the SMS thread.",
     "1.40.4": "Pricing Exception Workflow: ZHL and Competitor cards now line up row-for-row (Competitor lender name moved above the cards).",
     "1.40.3": "Pricing Exception Workflow BUG FIX: 'Open in Gmail' auto-paste now actually fires — was gated on a URL param Gmail strips on redirect.",

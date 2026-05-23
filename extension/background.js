@@ -844,6 +844,60 @@ setInterval(flushTelemetry, TELEMETRY_FLUSH_MS);
 setTimeout(flushTelemetry, 5 * 1000);
 
 // -------------------------------------------------------------------------
+// Time-saved tracker — per-user running total + best-effort global total
+//
+// Each tool's completion modal calls window.__zhlTimeSaved.record() which
+// posts ZHL_TIME_SAVED_RECORD here. We:
+//   1. add to the per-user running total in chrome.storage.local
+//   2. fire a 'time_saved' telemetry event (Apps Script sums these into
+//      a single Sheet cell for the global total)
+//   3. reply with { userTotal, globalTotal } so the popup can render
+//      both numbers immediately.
+//
+// Global total comes from a GET request to TELEMETRY_ENDPOINT?action=
+// totalTimeSaved, cached for 1 hour in chrome.storage.local so we're not
+// hitting Apps Script on every record. If the endpoint isn't deployed
+// (returns non-200 or non-JSON), globalTotal is null and the popup just
+// hides that line — no error visible to the user.
+// -------------------------------------------------------------------------
+const TIME_SAVED_USER_KEY    = "_zhl_time_saved_user_total_min";
+const TIME_SAVED_GLOBAL_KEY  = "_zhl_time_saved_global_cache";
+const TIME_SAVED_GLOBAL_TTL  = 60 * 60 * 1000; // 1 hour
+
+async function addToUserTimeSavedTotal(minutes) {
+  const data = await chrome.storage.local.get([TIME_SAVED_USER_KEY]);
+  const prev = Number(data[TIME_SAVED_USER_KEY]) || 0;
+  const next = prev + Math.max(0, Math.round(Number(minutes) || 0));
+  await chrome.storage.local.set({ [TIME_SAVED_USER_KEY]: next });
+  return next;
+}
+
+async function getGlobalTimeSavedCached() {
+  const data = await chrome.storage.local.get([TIME_SAVED_GLOBAL_KEY]);
+  const cache = data[TIME_SAVED_GLOBAL_KEY];
+  if (cache && (Date.now() - cache.fetchedAt < TIME_SAVED_GLOBAL_TTL)) {
+    return cache.value;
+  }
+  if (!TELEMETRY_ENDPOINT) return cache ? cache.value : null;
+  try {
+    // Apps Script web apps respond to GET via doGet(e). We pass
+    // action=totalTimeSaved as a query param; the script (see
+    // apps-script/Code.gs) returns { totalMinutes: <number> }.
+    const url = TELEMETRY_ENDPOINT + (TELEMETRY_ENDPOINT.indexOf("?") >= 0 ? "&" : "?") + "action=totalTimeSaved";
+    const res = await fetch(url, { method: "GET" });
+    if (!res.ok) return cache ? cache.value : null;
+    const obj = await res.json();
+    if (typeof obj.totalMinutes === "number") {
+      await chrome.storage.local.set({
+        [TIME_SAVED_GLOBAL_KEY]: { value: obj.totalMinutes, fetchedAt: Date.now() }
+      });
+      return obj.totalMinutes;
+    }
+  } catch (_) {}
+  return cache ? cache.value : null;
+}
+
+// -------------------------------------------------------------------------
 // Cross-tab Gmail attachment drag (feature_gmailDragAttachments — Phase 1)
 // -------------------------------------------------------------------------
 //
@@ -1243,6 +1297,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       name: msg.name ? String(msg.name).trim() : null
     });
     return false;
+  }
+  if (msg && msg.type === "ZHL_TIME_SAVED_RECORD") {
+    (async () => {
+      const tool    = String(msg.tool || "");
+      const minutes = Math.max(0, Math.round(Number(msg.minutes) || 0));
+      const userTotal = await addToUserTimeSavedTotal(minutes);
+      // Telemetry — Apps Script sums minutes from these events into the
+      // global total cell that GET ?action=totalTimeSaved returns.
+      let hostname = null;
+      if (sender && sender.url) {
+        try { hostname = new URL(sender.url).hostname; } catch (_) {}
+      }
+      enqueueEvent({
+        name: "time_saved",
+        props: { tool: tool, minutes: minutes, userTotal: userTotal },
+        url: hostname,
+        ts: Date.now()
+      });
+      const globalTotal = await getGlobalTimeSavedCached();
+      sendResponse({ ok: true, userTotal: userTotal, globalTotal: globalTotal });
+    })();
+    return true;
   }
   return false;
 });

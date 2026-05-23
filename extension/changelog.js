@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.42.0",
+    headline: "NEW Time-saved tracker — every completion popup now shows '🕒 You just saved X minutes' + your running total + the total across all users.",
+    highlights: [
+      "Shared helper modules/zhl-time-saved.js exposes window.__zhlTimeSaved.record(tool, minutes) — each tool calls it from its completion modal. Shows three numbers: minutes saved by this invocation, your running total (chrome.storage.local), and the global total across all users (fetched from the telemetry Apps Script, cached 1 hour).",
+      "Wired into six tools in this release: Copy LOP file (15 min/use), Pricing Exception Workflow (12 min), Bulk-download docs (1 min × file count), 2-1 Buydown PDF (5 min), VA Residual Income Calc (8 min), Net Proceeds Calc (3 min). More tools coming in follow-up versions.",
+      "Apps Script side: doGet now branches on ?action=totalTimeSaved and returns the global running total in JSON. The extension polls hourly and caches; ScriptProperties caches the sum for 15 minutes so the Sheet isn't re-scanned on every hit. To enable the 'across all users' line, paste the new Code.gs from this commit into your deployed Apps Script and re-deploy (Manage deployments → pencil → Version: New version)."
+    ],
+    sections: ["time-saved-tracker"]
+  },
+  {
     version: "1.41.0",
     headline: "NEW Add Loan Officer button in the SMS Quick-Add row on Salesforce Leads — one click texts the Lead Owner the same way as Add Buyer's Agent / Add Co-Borrower.",
     highlights: [

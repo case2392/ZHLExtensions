@@ -697,6 +697,10 @@
     const lo = await readLoProfile();
     const html = renderBuydownPdfHtmlBranded(scenarios, lo);
     track('buydown_pdf_generate_branded', { count: scenarios.length });
+    // Time saved: ~5 minutes per buydown PDF (manual math + formatting).
+    if (window.__zhlTimeSaved) {
+      window.__zhlTimeSaved.recordAndForget('buydown-calc', 5);
+    }
     openBuydownPdfWindowBranded(html);
   }
 

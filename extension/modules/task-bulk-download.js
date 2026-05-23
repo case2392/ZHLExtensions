@@ -413,6 +413,15 @@
     const ok = results.filter(function (r) { return r.result && r.result.ok; });
     const bad = results.filter(function (r) { return !r.result || !r.result.ok; });
     console.log('Bulk download finished. OK:', ok.length, 'Failed:', bad.length);
+    // Time-saved: ~1 minute per successful download (open viewer, click
+    // Download, navigate back). Render into the done modal.
+    if (ok.length > 0 && window.__zhlTimeSaved) {
+      const mins = ok.length;
+      window.__zhlTimeSaved.record('task-bulk-download', mins).then(function (r) {
+        const slot = panel.querySelector('#zhl-bd-time-saved');
+        if (slot) slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+      });
+    }
     const closeBtn = panel.querySelector('#zhl-bd-close');
     if (closeBtn) closeBtn.addEventListener('click', removeModal);
     console.groupEnd();
@@ -461,6 +470,9 @@
         '<ul style="margin:6px 0 0 18px;padding:0;">' + badList + '</ul>' +
         '<p style="margin:6px 0 0;color:#6b7280;font-size:11px;">Open these manually from the Completed tasks section.</p>' +
         '</details>' : '') +
+      // Slot the time-saved tracker writes into asynchronously once it
+      // gets back the user + global totals from the background.
+      '<div id="zhl-bd-time-saved"></div>' +
       '<div style="text-align:right;margin-top:12px;">' +
         '<button id="zhl-bd-close" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button>' +
       '</div>';

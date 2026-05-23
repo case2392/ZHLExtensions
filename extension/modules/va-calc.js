@@ -1700,6 +1700,11 @@
 
   function showPanel(initialState) {
     track('va_calc_open');
+    // Time saved: ~8 minutes per residual income calc (manual income,
+    // debts, PITI, family-size, table lookups). Fired once per open.
+    if (window.__zhlTimeSaved) {
+      window.__zhlTimeSaved.recordAndForget('va-calc-residual', 8);
+    }
     const existing = document.getElementById(PANEL_ID);
     if (existing) existing.remove();
 

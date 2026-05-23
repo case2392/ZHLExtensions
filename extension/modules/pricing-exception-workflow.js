@@ -832,7 +832,19 @@
           btnPrimary('Open in Gmail + copy body', 'zhl-pe-mailto') +
           btnSecondary('Copy body only', 'zhl-pe-copy-body') +
           btnSecondary('Copy subject only', 'zhl-pe-copy-subj') +
-        '</div>';
+        '</div>' +
+        // Time-saved tracker — appears once the user reaches the email
+        // step (i.e. they've completed the workflow).
+        '<div id="zhl-pe-time-saved"></div>';
+
+      // Time saved: ~12 minutes (data gathering + email composition).
+      if (window.__zhlTimeSaved) {
+        const mins = 12;
+        window.__zhlTimeSaved.record('pricing-exception-workflow', mins).then(function (r) {
+          const slot = body.querySelector('#zhl-pe-time-saved');
+          if (slot) slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+        });
+      }
 
       // wire
       function read() {

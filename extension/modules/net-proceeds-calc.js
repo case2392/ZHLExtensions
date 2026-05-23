@@ -480,6 +480,20 @@
         flash('✗ Copy failed');
         console.log(text);
       }
+      // Time saved: ~3 min vs manually doing the math + writing it up.
+      // Only fires on Copy summary (the natural "I'm done" signal).
+      if (window.__zhlTimeSaved) {
+        const mins = 3;
+        window.__zhlTimeSaved.record('net-proceeds-calc', mins).then(function (r) {
+          let slot = panel.querySelector('#zhl-np-time-saved');
+          if (!slot) {
+            slot = document.createElement('div');
+            slot.id = 'zhl-np-time-saved';
+            panel.appendChild(slot);
+          }
+          slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+        });
+      }
     });
 
     // Escape closes

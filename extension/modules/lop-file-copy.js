@@ -4388,8 +4388,20 @@
         '</p>';
       showModal(
         (creditResult && creditResult.ok ? okHtml : failHtml) +
+        '<div id="zhl-lop-copy-time-saved"></div>' +
         '<div style="text-align:right;margin-top:14px;"><button id="zhl-resume-ok" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button></div>',
-        function (p) { p.querySelector('#zhl-resume-ok').addEventListener('click', removeModal); }
+        function (p) {
+          p.querySelector('#zhl-resume-ok').addEventListener('click', removeModal);
+          // Time saved: ~15 min for the full clone + credit + liability
+          // edits + pricing assign flow. Only credit on success.
+          if (creditResult && creditResult.ok && window.__zhlTimeSaved) {
+            const mins = 15;
+            window.__zhlTimeSaved.record('lop-file-copy', mins).then(function (r) {
+              const slot = p.querySelector('#zhl-lop-copy-time-saved');
+              if (slot) slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+            });
+          }
+        }
       );
     });
   }
