@@ -454,6 +454,46 @@ async function lookupContactPhone(contactId) {
   };
 }
 
+// Used by the SMS Quick-Add "Add Loan Officer" button: given a Salesforce
+// User id (the Lead Owner), return that user's Phone / MobilePhone via the
+// same REST plumbing the Caller ID lookup uses. User ids start with "005"
+// in Salesforce — a Lead's OwnerId can ALSO be a Queue (starts with "00G"),
+// in which case the SOQL returns no rows and we report it.
+async function lookupUserPhone(userId) {
+  const safeId = String(userId || "").replace(/[^a-zA-Z0-9]/g, "");
+  if (safeId.length !== 15 && safeId.length !== 18) {
+    return { error: "Invalid Salesforce User id (expected 15 or 18 chars)" };
+  }
+  const cfg = await getCallerIdConfig();
+  const sid = await getSessionId(cfg.myDomainHost);
+  if (!sid) {
+    return { error: "No Salesforce session. Log into Salesforce in this browser." };
+  }
+  const soql = `SELECT Id, Name, Phone, MobilePhone FROM User WHERE Id = '${safeId}' LIMIT 1`;
+  try {
+    const data = await querySalesforce(cfg.myDomainHost, cfg.apiVersion, sid, soql);
+    const rec = data.records && data.records[0];
+    if (!rec) {
+      return { error: "No User found for that id. (Lead Owner may be a Queue, not a person.)" };
+    }
+    if (!rec.Phone && !rec.MobilePhone) {
+      return {
+        error: `Found user "${rec.Name}" but Phone and Mobile are both empty in Salesforce.`,
+        id: rec.Id, name: rec.Name, phone: null, mobilePhone: null, sobject: "User"
+      };
+    }
+    return {
+      id: rec.Id,
+      name: rec.Name,
+      phone: rec.Phone || null,
+      mobilePhone: rec.MobilePhone || null,
+      sobject: "User"
+    };
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+}
+
 // -------------------------------------------------------------------------
 // Loan Officer Profile pulled from Salesforce.
 //
@@ -1157,6 +1197,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg && msg.type === "GET_CONTACT_PHONE") {
     lookupContactPhone(msg.contactId).then(
+      (result) => sendResponse(Object.assign({ ok: !result.error }, result)),
+      (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
+    );
+    return true;
+  }
+  if (msg && msg.type === "GET_USER_PHONE") {
+    lookupUserPhone(msg.userId).then(
       (result) => sendResponse(Object.assign({ ok: !result.error }, result)),
       (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
     );

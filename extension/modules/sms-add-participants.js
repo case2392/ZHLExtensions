@@ -99,6 +99,39 @@
     return null;
   }
 
+  // The LO assigned to the file is the Salesforce User who owns the Lead
+  // — shown in the "Lead Owner" record field. Useful when an assistant is
+  // texting on behalf of the LO and needs to add them to the thread.
+  function getLeadOwnerInfo() {
+    // Match either records-record-layout-item[field-label="Lead Owner"]
+    // or anywhere the label text reads "Lead Owner" — Salesforce flips
+    // between the two depending on the layout.
+    let item = null;
+    const items = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Lead Owner"]');
+    for (const i of items) {
+      if (i.offsetParent !== null) { item = i; break; }
+    }
+    if (!item) {
+      const labels = deepQuerySelectorAll(document, 'span.test-id__field-label, .test-id__field-label, [class*="field-label"]');
+      for (const label of labels) {
+        if (!/^\s*Lead\s*Owner\s*$/i.test((label.textContent || ''))) continue;
+        const form = label.closest('.slds-form-element');
+        if (!form || form.offsetParent === null) continue;
+        item = form;
+        break;
+      }
+    }
+    if (!item) return null;
+    // OwnerId can point to a User OR a Queue. We want the User case only —
+    // Queues don't have phones we can SMS to.
+    const userLink = deepQuerySelector(item, 'a[href*="/lightning/r/User/"]');
+    if (!userLink) return null;
+    const m = /\/lightning\/r\/User\/(\w+)\//.exec(userLink.getAttribute('href') || '');
+    if (!m) return null;
+    const name = (userLink.textContent || '').trim();
+    return { userId: m[1], name: name };
+  }
+
   // Strip curly / straight apostrophes for label comparison.
   function normalizeLabel(s) {
     return (s || '').replace(/[’‘']/g, '').replace(/\s+/g, ' ').trim();
@@ -371,6 +404,45 @@
     });
   }
 
+  // Same shape as fetchContactPhone but queries the User object — used by
+  // the Add Loan Officer button to look up the Lead Owner's mobile/phone.
+  function fetchUserPhone(userId) {
+    return new Promise((resolve) => {
+      try {
+        if (!chrome || !chrome.runtime || !chrome.runtime.id) {
+          resolve({ error: 'Page reload required to access Salesforce data.', reloadNeeded: true });
+          return;
+        }
+        chrome.runtime.sendMessage({ type: 'GET_USER_PHONE', userId }, (resp) => {
+          if (chrome.runtime.lastError) {
+            const lemsg = chrome.runtime.lastError.message || '';
+            if (/Extension context invalidated|message port closed|receiving end does not exist/i.test(lemsg)) {
+              resolve({ error: 'Page reload required to access Salesforce data.', reloadNeeded: true });
+              return;
+            }
+            resolve({ error: lemsg || 'Background worker unreachable' });
+            return;
+          }
+          if (!resp) { resolve({ error: 'No response from background worker' }); return; }
+          if (resp.error) { resolve({ error: resp.error }); return; }
+          const phone = resp.mobilePhone || resp.phone;
+          if (!phone) {
+            resolve({ error: `Found user "${resp.name || userId}" but Phone and Mobile are both empty in Salesforce.` });
+            return;
+          }
+          resolve(String(phone).replace(/\D/g, ''));
+        });
+      } catch (e) {
+        const msg = String(e && e.message || e);
+        if (/Extension context invalidated|message port closed|receiving end does not exist/i.test(msg)) {
+          resolve({ error: 'Page reload required to access Salesforce data.', reloadNeeded: true });
+          return;
+        }
+        resolve({ error: msg });
+      }
+    });
+  }
+
   // ---- Button injection -------------------------------------------------
 
   // Inline styles so the buttons render correctly even when injected into
@@ -501,6 +573,37 @@
       wrapper.appendChild(btn);
     }
 
+    if (leadCtx.loanOfficer) {
+      const id = leadCtx.loanOfficer.userId;
+      const name = leadCtx.loanOfficer.name;
+      const btn = makeAddButton(`Add Loan Officer (${name})`, async (b) => {
+        const orig = b.textContent;
+        b.disabled = true;
+        b.textContent = 'Looking up phone…';
+        const lookup = await fetchUserPhone(id);
+        const phone = typeof lookup === 'string' ? lookup : null;
+        if (!phone) {
+          b.textContent = orig;
+          b.disabled = false;
+          if (lookup && lookup.reloadNeeded) {
+            alert('Loan Officer add failed because the page lost extension context. Please reload and try again.');
+          } else {
+            const reason = lookup && lookup.error ? lookup.error : 'No phone returned.';
+            alert('Could not find a phone number for the Loan Officer (Lead Owner) in Salesforce.\n\n' + reason +
+              '\n\nMake sure the LO has a Phone or Mobile populated on their Salesforce User record.');
+          }
+          return;
+        }
+        b.textContent = 'Adding…';
+        const ok = await addParticipant(panel, phone);
+        b.textContent = orig;
+        b.disabled = false;
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_loan_officer', props: { ok } }); } catch (_) {}
+        if (!ok) alert('Could not add Loan Officer — see console for details.');
+      });
+      wrapper.appendChild(btn);
+    }
+
     if (!wrapper.firstChild) return;
 
     // Insertion strategy: prefer the input's containing div so the buttons
@@ -546,16 +649,18 @@
       return;
     }
     const ctx = {
-      coBorrower: getCoBorrowerInfo(),
-      buyersAgent: getBuyersAgentInfo()
+      coBorrower:  getCoBorrowerInfo(),
+      buyersAgent: getBuyersAgentInfo(),
+      loanOfficer: getLeadOwnerInfo()
     };
-    if (!ctx.coBorrower && !ctx.buyersAgent) {
+    if (!ctx.coBorrower && !ctx.buyersAgent && !ctx.loanOfficer) {
       pruneButtons();
-      debugOnce('SMS panel found, on Lead URL, but neither Co-Borrower link nor Buyer’s Agent Phone found in the DOM yet.');
+      debugOnce('SMS panel found, on Lead URL, but no Co-Borrower / Buyer’s Agent / Lead Owner found in the DOM yet.');
       return;
     }
     debugOnce('Injecting buttons. coBorrower=' + (ctx.coBorrower ? ctx.coBorrower.name : 'none') +
-      ', buyersAgent=' + (ctx.buyersAgent ? ctx.buyersAgent.displayText : 'none'));
+      ', buyersAgent=' + (ctx.buyersAgent ? ctx.buyersAgent.displayText : 'none') +
+      ', loanOfficer=' + (ctx.loanOfficer ? ctx.loanOfficer.name : 'none'));
     injectButtons(panel, ctx);
   }
 

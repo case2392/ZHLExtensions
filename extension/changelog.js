@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.41.0",
+    headline: "NEW Add Loan Officer button in the SMS Quick-Add row on Salesforce Leads — one click texts the Lead Owner the same way as Add Buyer's Agent / Add Co-Borrower.",
+    highlights: [
+      "Adds a third button (next to Add Buyer's Agent / Add Co-Borrower) labeled Add Loan Officer (<name>) — reads the Lead Owner field on the Lead, looks up that Salesforce User's Phone / MobilePhone via the same REST plumbing Caller ID uses, and adds them to the SMS thread. Useful when an LOA/assistant is texting on behalf of the LO and needs them looped into the conversation.",
+      "Lead Owner can also point to a Queue (id starting with 00G); in that case the SOQL returns no rows and the button shows a clear error explaining why. Same fallback messaging if the LO's User record has no Phone or MobilePhone populated."
+    ],
+    sections: ["sms-add-participants"]
+  },
+  {
     version: "1.40.4",
     headline: "Pricing Exception Workflow: ZHL and Competitor cards now line up row-for-row.",
     highlights: [
