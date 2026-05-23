@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.43.0",
+    headline: "SMS Add Loan Officer button now hides itself when YOU are the LO on the file. Plus time-saved tracker now covers all 13 tools.",
+    highlights: [
+      "Add Loan Officer button now disappears on files you own. The background worker now captures your Salesforce User id from chatter/users/me (alongside email + name), and the SMS module compares it to the Lead Owner — if they match (case-insensitive on the first 15 chars), the button is suppressed. Showing it would just add the LO to a thread they're already running, which would be confusing.",
+      "Time-saved tracker wired into the remaining 7 tools — DTI Max Estimator (5 min, once per page load when pricing was run), FHA Flip Rule (4 min, on open), FHA Manual Eligible (3 min, on open), Loan Comparison PDF (5 min, on generate), Task Bulk Delete (1 min × successfully deleted), Loan Amount Calc (2 min, on apply), Calc Student Loans (4 min, when at least one row updates). All 13 tracked tools now feed your running total and the across-all-users total."
+    ],
+    sections: ["sms-add-participants", "time-saved-tracker"]
+  },
+  {
     version: "1.42.0",
     headline: "NEW Time-saved tracker — every completion popup now shows '🕒 You just saved X minutes' + your running total + the total across all users.",
     highlights: [

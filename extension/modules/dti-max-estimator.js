@@ -431,6 +431,7 @@
   // a LOP re-render), but the *value* stays put.
   let lastPricingSignature = null;
   let lastEstimates = [];
+  let creditedDtiTimeSaved = false; // one credit per content-script load
 
   function pricingSignature(rows, income, liab) {
     // Include income / liabilities so we re-derive if the loan-level
@@ -463,6 +464,13 @@
       // the LO ran pricing (or reloaded). Recompute and latch.
       const pp = readCurrentPurchasePrice();
       lastEstimates = computeMaxes(rows, elig.income, elig.liabilities, pp);
+      // Time saved: ~5 min vs manually backing out max purchase prices
+      // from PITI / DTI tables. Once per content-script load so reloads
+      // don't double-count.
+      if (lastEstimates.length && !creditedDtiTimeSaved && window.__zhlTimeSaved) {
+        window.__zhlTimeSaved.recordAndForget('dti-max-estimator', 5);
+        creditedDtiTimeSaved = true;
+      }
       lastPricingSignature = sig;
     }
     // Re-render (the pill DOM may have been stripped by a LOP

@@ -99,6 +99,34 @@
     return null;
   }
 
+  // 18-char Salesforce User id of the currently-logged-in user, captured
+  // from chatter/users/me by the background worker. Null until the first
+  // capture finishes (~10 s after extension load). Used by getLeadOwnerInfo
+  // to suppress the "Add Loan Officer" button when the LO is opening their
+  // own file — they'd just be adding themselves to the SMS thread.
+  let currentSfUserId = null;
+  function fetchCurrentSfUserId() {
+    try {
+      if (!chrome || !chrome.runtime || !chrome.runtime.id) return;
+      chrome.runtime.sendMessage({ type: 'GET_CURRENT_SF_USER_ID' }, function (resp) {
+        if (chrome.runtime.lastError) return;
+        if (resp && resp.sfUserId) currentSfUserId = String(resp.sfUserId);
+      });
+    } catch (_) {}
+  }
+  // Kick off once at load, and retry after 5 s in case the background
+  // identity capture hadn't completed on the first try.
+  fetchCurrentSfUserId();
+  setTimeout(fetchCurrentSfUserId, 5000);
+
+  // Two Salesforce ids compare equal if their first 15 chars match
+  // (case-insensitive) — the 18-char form just adds a case-sensitive
+  // checksum suffix to the 15-char form.
+  function sfIdsEqual(a, b) {
+    if (!a || !b) return false;
+    return String(a).slice(0, 15).toLowerCase() === String(b).slice(0, 15).toLowerCase();
+  }
+
   // The LO assigned to the file is the Salesforce User who owns the Lead
   // — shown in the "Lead Owner" record field. Useful when an assistant is
   // texting on behalf of the LO and needs to add them to the thread.
@@ -128,8 +156,13 @@
     if (!userLink) return null;
     const m = /\/lightning\/r\/User\/(\w+)\//.exec(userLink.getAttribute('href') || '');
     if (!m) return null;
+    const ownerId = m[1];
+    // Skip the button if the LO is opening their own file. They don't
+    // need a button that adds themselves to the SMS thread, and showing
+    // it would be confusing ("why is my own name on this button?").
+    if (currentSfUserId && sfIdsEqual(currentSfUserId, ownerId)) return null;
     const name = (userLink.textContent || '').trim();
-    return { userId: m[1], name: name };
+    return { userId: ownerId, name: name };
   }
 
   // Strip curly / straight apostrophes for label comparison.

@@ -276,6 +276,11 @@
         props: { section: section.key, requested: taskIds.length, ok: okCount, failed: failCount }
       });
     } catch (_) {}
+    // Time saved: ~1 min per task deleted (find row → menu → Delete →
+    // confirm). Only credit successful deletes.
+    if (okCount > 0 && window.__zhlTimeSaved) {
+      window.__zhlTimeSaved.recordAndForget('task-bulk-delete', okCount);
+    }
     if (failCount) {
       alert('Deleted ' + okCount + ' of ' + taskIds.length + ' tasks. ' + failCount + ' failed — see console.');
     }

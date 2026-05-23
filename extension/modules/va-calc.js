@@ -2640,6 +2640,12 @@
   }
 
   function showStudentLoanSummary(results) {
+    // Time saved: ~4 min vs hand-applying FHA/DU/LPA/VA student-loan
+    // payment formulas to each row and typing each payment manually.
+    // Only credit when at least one row got an updated payment.
+    if (results && results.updated && results.updated.length > 0 && window.__zhlTimeSaved) {
+      window.__zhlTimeSaved.recordAndForget('va-calc-student-loans', 4);
+    }
     const existing = document.getElementById(STUDENT_LOAN_PANEL_ID);
     if (existing) existing.remove();
 

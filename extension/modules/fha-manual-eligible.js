@@ -379,6 +379,9 @@
   // ---- Panel rendering ---------------------------------------------------
 
   function openAnalyzerPanel() {
+    // Time saved: ~3 min vs manually checking each manual-UW eligibility
+    // condition against FHA Handbook tables.
+    if (window.__zhlTimeSaved) window.__zhlTimeSaved.recordAndForget('fha-manual-eligible', 3);
     // Close any existing instance first so re-clicking the button
     // refreshes the data.
     const existing = document.getElementById(ANALYZER_PANEL_ID);

@@ -372,7 +372,12 @@ async function tryCaptureSalesforceIdentity() {
     const email = data && data.email ? String(data.email).trim() : null;
     if (!email) return;
     const name = data.displayName || data.name || null;
-    await setTelemetryUser({ email, name });
+    // sfUserId is the 18-char User id of the currently-logged-in Salesforce
+    // user. Used by SMS Quick-Add to hide the "Add Loan Officer" button when
+    // the current user IS the Lead Owner (an LO opening their own file
+    // doesn't need a button that would add themselves).
+    const sfUserId = data && data.id ? String(data.id).trim() : null;
+    await setTelemetryUser({ email, name, sfUserId });
     enqueueEvent({
       name: "identity_captured",
       props: { source: "salesforce_chatter_me" },
@@ -1261,6 +1266,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       (result) => sendResponse(Object.assign({ ok: !result.error }, result)),
       (err) => sendResponse({ ok: false, error: String(err && err.message || err) })
     );
+    return true;
+  }
+  if (msg && msg.type === "GET_CURRENT_SF_USER_ID") {
+    // Used by SMS Quick-Add to hide the "Add Loan Officer" button when
+    // the LO is opening their own file. Tries the stored identity first
+    // (populated by tryCaptureSalesforceIdentity); if missing, kicks off
+    // a fresh capture and returns null this round.
+    (async () => {
+      try {
+        const data = await chrome.storage.local.get([TELEMETRY_USER_KEY]);
+        const u = data && data[TELEMETRY_USER_KEY];
+        if (u && u.sfUserId) { sendResponse({ ok: true, sfUserId: u.sfUserId }); return; }
+        // Refresh in the background and respond with whatever we know.
+        try { tryCaptureSalesforceIdentity(); } catch (_) {}
+        sendResponse({ ok: true, sfUserId: null });
+      } catch (e) {
+        sendResponse({ ok: false, sfUserId: null });
+      }
+    })();
     return true;
   }
   if (msg && msg.type === "GET_SF_LO_PROFILE") {

@@ -319,6 +319,9 @@
   // the full result card. Centered floating dialog with a backdrop.
 
   function openPanel() {
+    // Time saved: ~4 min vs manually checking the FHA 90-day flip rule
+    // (Zillow last-sold lookup + date arithmetic + ratio math).
+    if (window.__zhlTimeSaved) window.__zhlTimeSaved.recordAndForget('fha-flip-rule', 4);
     // Close any existing instance first so re-opens refresh data.
     const existing = document.getElementById(PANEL_ID);
     if (existing) existing.remove();

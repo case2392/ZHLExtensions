@@ -945,6 +945,8 @@
   async function onComparisonPdfClick() {
     const btn = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
     if (btn && btn.disabled) return;
+    // Time saved: ~5 min vs hand-building a side-by-side comparison PDF.
+    if (window.__zhlTimeSaved) window.__zhlTimeSaved.recordAndForget('loan-comparison-pdf', 5);
     const cards = findSelectedScenarioCards();
     if (!cards.length) return;
 

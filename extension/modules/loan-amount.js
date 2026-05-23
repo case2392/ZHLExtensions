@@ -146,6 +146,9 @@
     await waitMs(800);
     console.log('[Loan Amount] +1s settled — downAmt=' + (dAmt && dAmt.value) + ' downPct=' + (dPct && dPct.value));
     console.groupEnd();
+    // Time saved: ~2 min vs hand-computing purchase price − loan amount
+    // → down payment $ + % and typing both values manually.
+    if (window.__zhlTimeSaved) window.__zhlTimeSaved.recordAndForget('loan-amount', 2);
   };
 
   const wirePartner = (el) => {
