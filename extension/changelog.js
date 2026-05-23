@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.43.1",
+    headline: "Time-saved tracker now back-credits your historical usage — every va_calc, buydown PDF, bulk-delete, SMS quick-add etc. you've ever fired counts retroactively.",
+    highlights: [
+      "Apps Script now sums BOTH the explicit 'time_saved' events (v1.42.0+) AND a registry of legacy event names that predate the tracker: va_calc_open → 8 min, buydown_pdf_generate_branded → 5 min, sms_add_* (ok=true) → 0.5 min each, task_bulk_delete → 1 min per successfully deleted task. Powers both the global total and a new per-user endpoint.",
+      "New ?action=userTimeSaved&email=X endpoint returns the user's lifetime total across all their historical events. Both endpoints are cached 15 min in ScriptProperties so re-deploys don't hammer the Sheet.",
+      "Extension auto-seeds your local total from the server on first run after this update (gated by a one-shot flag in chrome.storage). Takes Math.max(local, server) so a partial-flush doesn't undercount. Subsequent runs early-exit on the seed flag and just accumulate normally.",
+      "User action required to get historical credit: redeploy your Apps Script with the updated Code.gs from this commit (Manage deployments → ✏️ → Version: New version → Deploy). Until then the new endpoint 404s and the seeder no-ops — you'll just start counting from v1.42.0 forward, no harm done."
+    ],
+    sections: ["time-saved-tracker"]
+  },
+  {
     version: "1.43.0",
     headline: "SMS Add Loan Officer button now hides itself when YOU are the LO on the file. Plus time-saved tracker now covers all 13 tools.",
     highlights: [

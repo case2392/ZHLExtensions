@@ -868,6 +868,7 @@ setTimeout(flushTelemetry, 5 * 1000);
 const TIME_SAVED_USER_KEY    = "_zhl_time_saved_user_total_min";
 const TIME_SAVED_GLOBAL_KEY  = "_zhl_time_saved_global_cache";
 const TIME_SAVED_GLOBAL_TTL  = 60 * 60 * 1000; // 1 hour
+const TIME_SAVED_SEED_KEY    = "_zhl_time_saved_seeded_v1"; // one-shot seed marker
 
 async function addToUserTimeSavedTotal(minutes) {
   const data = await chrome.storage.local.get([TIME_SAVED_USER_KEY]);
@@ -876,6 +877,49 @@ async function addToUserTimeSavedTotal(minutes) {
   await chrome.storage.local.set({ [TIME_SAVED_USER_KEY]: next });
   return next;
 }
+
+// One-shot: on first run after the time-saved tracker shipped, fetch the
+// user's historical total from the Apps Script (which back-credits
+// pre-tracker events like va_calc_open, task_bulk_delete, etc.) and seed
+// it into local storage. Gated by TIME_SAVED_SEED_KEY so we never seed
+// twice — subsequent record() calls just accumulate on top.
+async function maybeSeedUserTimeSavedFromHistory() {
+  try {
+    const data = await chrome.storage.local.get([TIME_SAVED_SEED_KEY, TELEMETRY_USER_KEY, TIME_SAVED_USER_KEY]);
+    if (data[TIME_SAVED_SEED_KEY]) return; // already seeded
+    if (!TELEMETRY_ENDPOINT) return;
+    const user = data[TELEMETRY_USER_KEY] || {};
+    const email = user && user.email;
+    if (!email) return; // identity capture hasn't completed yet — try again later
+    const url = TELEMETRY_ENDPOINT +
+      (TELEMETRY_ENDPOINT.indexOf("?") >= 0 ? "&" : "?") +
+      "action=userTimeSaved&email=" + encodeURIComponent(email);
+    const res = await fetch(url, { method: "GET" });
+    if (!res.ok) return;
+    const obj = await res.json();
+    if (typeof obj.totalMinutes !== "number" || !isFinite(obj.totalMinutes)) return;
+    const existing = Number(data[TIME_SAVED_USER_KEY]) || 0;
+    // The server's sum already includes any post-tracker time_saved events
+    // we've sent up there. Take the MAX so we never go backwards if
+    // telemetry hasn't fully flushed yet.
+    const seeded = Math.max(existing, Math.round(obj.totalMinutes));
+    await chrome.storage.local.set({
+      [TIME_SAVED_USER_KEY]: seeded,
+      [TIME_SAVED_SEED_KEY]: true
+    });
+    console.log("[ZHL Pack] seeded user time-saved total from history:",
+      Math.round(obj.totalMinutes), "min (local was", existing, "min, set to", seeded, "min)");
+  } catch (e) {
+    // Best-effort; we'll try again on next schedule.
+    console.warn("[ZHL Pack] maybeSeedUserTimeSavedFromHistory failed:", e && e.message || e);
+  }
+}
+// Schedule a few attempts — identity capture might not finish on the
+// first try (depends on the user being logged into Salesforce). Once
+// seeded, all subsequent calls early-exit on the seed flag.
+setTimeout(maybeSeedUserTimeSavedFromHistory, 30 * 1000);
+setTimeout(maybeSeedUserTimeSavedFromHistory, 2 * 60 * 1000);
+setTimeout(maybeSeedUserTimeSavedFromHistory, 10 * 60 * 1000);
 
 async function getGlobalTimeSavedCached() {
   const data = await chrome.storage.local.get([TIME_SAVED_GLOBAL_KEY]);

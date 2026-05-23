@@ -231,14 +231,21 @@ function cleanupAnonRows() {
 }
 
 function doGet(e) {
-  // ?action=totalTimeSaved  →  JSON { totalMinutes: <number> }
-  // Powers the "Across all users" line in every tool's completion popup.
-  // Cached in ScriptProperties for 15 min so the extension can poll
-  // hourly without us re-scanning the Events sheet every time.
+  // ?action=totalTimeSaved              → JSON { totalMinutes: <number> }
+  // ?action=userTimeSaved&email=<x>     → JSON { totalMinutes: <number> }
+  // Powers the "Across all users" and per-user lines in every tool's
+  // completion popup. Cached in ScriptProperties for 15 min so the
+  // extension can poll without re-scanning the Events sheet every time.
   const action = (e && e.parameter && e.parameter.action) || '';
   if (action === 'totalTimeSaved') {
     return ContentService
       .createTextOutput(JSON.stringify({ totalMinutes: getTotalTimeSavedMinutes_() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  if (action === 'userTimeSaved') {
+    const email = (e && e.parameter && e.parameter.email) || '';
+    return ContentService
+      .createTextOutput(JSON.stringify({ totalMinutes: getUserTimeSavedMinutes_(email) }))
       .setMimeType(ContentService.MimeType.JSON);
   }
   // Default: serve the admin dashboard at the same /exec URL the extension
@@ -250,12 +257,42 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// Sum minutes from every 'time_saved' event row in the Events sheet.
+// Map of pre-time-saved-tracker event names → minutes credited per event.
+// These are events the extension fired BEFORE v1.42.0 (when the explicit
+// time_saved event existed). We back-credit them so historical usage shows
+// up in both the global total and per-user totals, instead of starting
+// everyone at 0 on the day the tracker launched.
+//
+// Value can be a number (flat minutes) or a function(props) returning
+// minutes (lets us scale by ok-count for bulk events).
+const LEGACY_TIME_PER_EVENT_ = {
+  'va_calc_open':                 8,
+  'buydown_pdf_generate_branded': 5,
+  'sms_add_buyers_agent':         function (p) { return p && p.ok === true ? 0.5 : 0; },
+  'sms_add_coborrower':           function (p) { return p && p.ok === true ? 0.5 : 0; },
+  'sms_add_loan_officer':         function (p) { return p && p.ok === true ? 0.5 : 0; },
+  'task_bulk_delete':             function (p) { return (Number(p && p.ok) || 0) * 1; }
+};
+
+function eventMinutes_(event, propsJson) {
+  if (event === 'time_saved') {
+    try { const p = JSON.parse(propsJson || '{}'); return Math.max(0, Number(p.minutes) || 0); }
+    catch (_) { return 0; }
+  }
+  const entry = LEGACY_TIME_PER_EVENT_[event];
+  if (entry == null) return 0;
+  let p = {};
+  try { p = JSON.parse(propsJson || '{}'); } catch (_) {}
+  return typeof entry === 'function' ? Math.max(0, Number(entry(p)) || 0) : Math.max(0, Number(entry) || 0);
+}
+
+// Sum minutes across every event row in the Events sheet (time_saved
+// events use their props.minutes; legacy events use LEGACY_TIME_PER_EVENT_).
 // Cached for 15 min in ScriptProperties so repeated hits don't rescan.
 function getTotalTimeSavedMinutes_() {
   const props = PropertiesService.getScriptProperties();
-  const cached = Number(props.getProperty('timeSavedTotal_v1'));
-  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v1')) || 0;
+  const cached = Number(props.getProperty('timeSavedTotal_v2'));
+  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v2')) || 0;
   if (cached >= 0 && (Date.now() - cachedTs) < 15 * 60 * 1000) {
     return cached;
   }
@@ -270,15 +307,43 @@ function getTotalTimeSavedMinutes_() {
   const vals = s.getRange(2, 6, last - 1, 2).getValues(); // Event + Props
   let total = 0;
   for (let i = 0; i < vals.length; i++) {
-    if (vals[i][0] !== 'time_saved') continue;
-    try {
-      const p = JSON.parse(vals[i][1] || '{}');
-      const mins = Number(p.minutes);
-      if (mins > 0) total += mins;
-    } catch (_) { /* skip malformed */ }
+    total += eventMinutes_(vals[i][0], vals[i][1]);
   }
-  props.setProperty('timeSavedTotal_v1', String(total));
-  props.setProperty('timeSavedTotalTs_v1', String(Date.now()));
+  props.setProperty('timeSavedTotal_v2', String(total));
+  props.setProperty('timeSavedTotalTs_v2', String(Date.now()));
+  return total;
+}
+
+// Per-user total — filter by Email column (col 2). Cached 15 min per
+// email key. Used by the extension to seed a new install with the user's
+// historical time-saved minutes on first run.
+function getUserTimeSavedMinutes_(email) {
+  if (!email) return 0;
+  const target = String(email).trim().toLowerCase();
+  if (!target) return 0;
+  const props = PropertiesService.getScriptProperties();
+  // Sanitize for property key length / characters.
+  const safeKey = 'userTimeSaved_' + target.replace(/[^a-z0-9._\-]/g, '_').slice(0, 80);
+  const tsKey   = safeKey + '_ts';
+  const cached  = Number(props.getProperty(safeKey));
+  const cTs     = Number(props.getProperty(tsKey)) || 0;
+  if (cached >= 0 && (Date.now() - cTs) < 15 * 60 * 1000) return cached;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ss.getSheetByName(SHEET_EVENTS);
+  if (!s) return 0;
+  const last = s.getLastRow();
+  if (last < 2) return 0;
+  const emails    = s.getRange(2, 2, last - 1, 1).getValues();
+  const eventCols = s.getRange(2, 6, last - 1, 2).getValues();
+  let total = 0;
+  for (let i = 0; i < emails.length; i++) {
+    const e = String(emails[i][0] || '').trim().toLowerCase();
+    if (e !== target) continue;
+    total += eventMinutes_(eventCols[i][0], eventCols[i][1]);
+  }
+  props.setProperty(safeKey, String(total));
+  props.setProperty(tsKey, String(Date.now()));
   return total;
 }
 

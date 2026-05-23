@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.43.1": "Time-saved tracker now back-credits your historical usage — every va_calc, buydown PDF, bulk-delete, SMS add you've ever fired counts retroactively. Redeploy your Apps Script to enable.",
     "1.43.0": "SMS Add Loan Officer button now hides itself on YOUR own files. Plus time-saved tracker now covers all 13 tools.",
     "1.42.0": "NEW Time-saved tracker — every completion popup now shows '🕒 You just saved X' + your running total + the total across all users.",
     "1.41.0": "NEW Add Loan Officer button in the SMS Quick-Add row on Salesforce Leads — one-click adds the Lead Owner to the SMS thread.",
