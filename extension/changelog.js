@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.43.3",
+    headline: "Time-saved totals were undercounting — expanded the back-credit registry by 12 more event types (caller_id_match, contact_sms_click, va_calc_apply, etc.) and forced cache refresh.",
+    highlights: [
+      "v1.43.1's registry only credited 6 event names. The real volume drivers were missing: caller_id_match (the highest-volume event — fires once per phone displayed in Salesforce/Genesys), contact_sms_click, va_calc_apply (separate from va_calc_open — applying the calc back into LOP), buydown_calc_open, scenario_sort_rate/select_all, exclude_telecom_selfreport, auto_call_details_switched, auto_messaging_switched. Apps Script's LEGACY_TIME_PER_EVENT_ now covers all 14.",
+      "Cache invalidation: Apps Script's ScriptProperties cache keys bumped from _v2 → _v3 so the next call recomputes from scratch instead of serving the old undercount. Extension's chrome.storage cache key bumped from _v1 → _v2 — existing users will refetch global total on next service-worker tick, and re-seed their local user total against the (now-correct) server number.",
+      "User action required (same as last time): redeploy your Apps Script (Manage deployments → ✏️ → Version: New version → Deploy). Until then, the new registry doesn't take effect — even though your extension is invalidating caches, the server is still computing with the old 6-event registry."
+    ],
+    sections: ["time-saved-tracker"]
+  },
+  {
     version: "1.43.2",
     headline: "Time-saved toast now shows up on VA Residual Income, Student Loans, FHA Flip Rule, and FHA Manual Eligible panels (was silently tracked but not displayed).",
     highlights: [

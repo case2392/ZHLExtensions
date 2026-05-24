@@ -260,18 +260,45 @@ function doGet(e) {
 // Map of pre-time-saved-tracker event names → minutes credited per event.
 // These are events the extension fired BEFORE v1.42.0 (when the explicit
 // time_saved event existed). We back-credit them so historical usage shows
-// up in both the global total and per-user totals, instead of starting
-// everyone at 0 on the day the tracker launched.
+// up in both the global total and per-user totals.
 //
 // Value can be a number (flat minutes) or a function(props) returning
-// minutes (lets us scale by ok-count for bulk events).
+// minutes (lets us scale by ok-count for bulk events). When you change
+// these values, also bump the cache-key suffix in
+// getTotalTimeSavedMinutes_ / getUserTimeSavedMinutes_ so the
+// ScriptProperties caches don't keep serving the old sum.
 const LEGACY_TIME_PER_EVENT_ = {
+  // VA calc — open (8 min) and write-back-to-LOP (4 min) are separate
+  // events; both represent real LO effort the calc replaces.
   'va_calc_open':                 8,
+  'va_calc_apply':                4,
+  // 2-1 Buydown — opening the panel is data-gathering effort; PDF gen is
+  // the final formatted output.
+  'buydown_calc_open':            2,
   'buydown_pdf_generate_branded': 5,
+  // SMS quick-add — only count successes (where the participant was
+  // actually added). 0.5 min per add vs typing the phone manually.
   'sms_add_buyers_agent':         function (p) { return p && p.ok === true ? 0.5 : 0; },
   'sms_add_coborrower':           function (p) { return p && p.ok === true ? 0.5 : 0; },
   'sms_add_loan_officer':         function (p) { return p && p.ok === true ? 0.5 : 0; },
-  'task_bulk_delete':             function (p) { return (Number(p && p.ok) || 0) * 1; }
+  // Contact SMS shortcut — one-click vs manually copying the phone and
+  // opening a new SMS thread.
+  'contact_sms_click':            0.5,
+  // Task bulk delete — 1 min per successfully-deleted task.
+  'task_bulk_delete':             function (p) { return (Number(p && p.ok) || 0) * 1; },
+  // Caller ID — fires once per phone displayed in Salesforce / Genesys.
+  // Small per-event but massive in aggregate (this is the highest-volume
+  // event in the sheet). Only credit matches; no_match saved nothing.
+  'caller_id_match':              0.5,
+  // Scenario sort — sorting by rate / select-all batch ops on the
+  // scenarios table.
+  'scenario_sort_rate':           0.5,
+  'scenario_sort_select_all':     0.25,
+  // Liability tweaks the LO would otherwise do by hand.
+  'exclude_telecom_selfreport':   1,
+  // Tab auto-switchers in Salesforce — small per-event, fires constantly.
+  'auto_call_details_switched':   0.25,
+  'auto_messaging_switched':      0.25
 };
 
 function eventMinutes_(event, propsJson) {
@@ -291,8 +318,8 @@ function eventMinutes_(event, propsJson) {
 // Cached for 15 min in ScriptProperties so repeated hits don't rescan.
 function getTotalTimeSavedMinutes_() {
   const props = PropertiesService.getScriptProperties();
-  const cached = Number(props.getProperty('timeSavedTotal_v2'));
-  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v2')) || 0;
+  const cached = Number(props.getProperty('timeSavedTotal_v3'));
+  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v3')) || 0;
   if (cached >= 0 && (Date.now() - cachedTs) < 15 * 60 * 1000) {
     return cached;
   }
@@ -309,8 +336,8 @@ function getTotalTimeSavedMinutes_() {
   for (let i = 0; i < vals.length; i++) {
     total += eventMinutes_(vals[i][0], vals[i][1]);
   }
-  props.setProperty('timeSavedTotal_v2', String(total));
-  props.setProperty('timeSavedTotalTs_v2', String(Date.now()));
+  props.setProperty('timeSavedTotal_v3', String(total));
+  props.setProperty('timeSavedTotalTs_v3', String(Date.now()));
   return total;
 }
 
@@ -323,7 +350,7 @@ function getUserTimeSavedMinutes_(email) {
   if (!target) return 0;
   const props = PropertiesService.getScriptProperties();
   // Sanitize for property key length / characters.
-  const safeKey = 'userTimeSaved_' + target.replace(/[^a-z0-9._\-]/g, '_').slice(0, 80);
+  const safeKey = 'userTimeSaved_v3_' + target.replace(/[^a-z0-9._\-]/g, '_').slice(0, 80);
   const tsKey   = safeKey + '_ts';
   const cached  = Number(props.getProperty(safeKey));
   const cTs     = Number(props.getProperty(tsKey)) || 0;
