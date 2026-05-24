@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.44.2",
+    headline: "PE Workflow email polish: LO name editable inline, drop the redundant 'Loan: <uuid>' line, and Gmail auto-paste is now more reliable.",
+    highlights: [
+      "Removed the 'Loan: <uuid>' line from the PE email body (both plain text and HTML). The ZG# already lives in the subject and the LOP link still appears in the header — the raw UUID was redundant and made the email look engineered. Locked and unlocked paths both updated.",
+      "Email step now has an inline 'Your name' field. If your name is blank (no setup-page LO Profile and no Salesforce identity captured), the field is highlighted red with '← fill in'. Typing rebuilds the subject/body live; blur (or clicking Open/Copy) auto-persists to chrome.storage.local under lo_name so you never have to type it again.",
+      "Gmail auto-paste reliability: don't clear the pending-paste storage entry until we've verified the formatted comparison table is actually present in the compose body. Adds a 6-attempt verify-and-re-paste loop (over ~3s) for the case where Gmail's URL-driven &body= fill lands AFTER our paste and overwrites it. Poll window extended 10s → 20s, TTL 30s → 60s, in-tab dedupe so the URL-change watcher doesn't double-fire.",
+      "Time-saved toast '0m' bug: when the background returns a suspiciously-zero userTotal after a positive record, the helper now falls back to reading chrome.storage directly (stored value + just-saved minutes) so the toast never lies."
+    ],
+    sections: ["pricing-exception-workflow", "time-saved-tracker"]
+  },
+  {
     version: "1.44.1",
     headline: "Time-saved toast now appears instantly instead of waiting up to 15s for the global total to fetch.",
     highlights: [

@@ -815,9 +815,14 @@
 
       // Optional: editable ZG# + borrower name + RM email row before output
       const fieldStyle = 'padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font:12px Arial,sans-serif;width:100%;box-sizing:border-box;';
+      const loNameMissing = !((s.loName || '').trim());
       body.innerHTML =
         '<h4 style="margin:0 0 12px;font-size:15px;color:#111827;">Email to RM</h4>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">' +
+          '<div><label style="display:block;font-size:11px;color:#6b7280;font-weight:600;margin-bottom:2px;">Your name' +
+            (loNameMissing ? ' <span style="color:#b91c1c;font-weight:700;">←  fill in</span>' : '') + '</label>' +
+            '<input id="pe-lo-name" type="text" value="' + escapeHtml(s.loName || '') + '" placeholder="e.g. Justin Case" style="' + fieldStyle +
+              (loNameMissing ? 'border-color:#b91c1c;background:#fef2f2;' : '') + '" /></div>' +
           '<div><label style="display:block;font-size:11px;color:#6b7280;font-weight:600;margin-bottom:2px;">RM email</label>' +
             '<input id="pe-rm-email" type="email" value="' + escapeHtml(s.rmEmail) + '" placeholder="rm@zillowhomeloans.com" style="' + fieldStyle + '" /></div>' +
           '<div><label style="display:block;font-size:11px;color:#6b7280;font-weight:600;margin-bottom:2px;">ZG # (Encompass loan #)</label>' +
@@ -850,22 +855,31 @@
       function read() {
         s.rmEmail   = body.querySelector('#pe-rm-email').value.trim();
         s.zgNumber  = body.querySelector('#pe-zg-number').value.trim();
+        s.loName    = body.querySelector('#pe-lo-name').value.trim();
         return {
           to: s.rmEmail,
           subject: body.querySelector('#pe-subject').value,
           body: body.querySelector('#pe-body').value
         };
       }
-      // Re-render subject when ZG# changes (only if user hasn't manually edited the subject)
+      // Re-render subject + body when ZG# or LO name changes (only if user hasn't manually edited them)
       let subjectAuto = true;
+      let bodyAuto    = true;
+      function rebuildIfAuto() {
+        const rebuilt = buildEmail(s);
+        if (subjectAuto) body.querySelector('#pe-subject').value = rebuilt.subject;
+        if (bodyAuto)    body.querySelector('#pe-body').value    = rebuilt.body;
+      }
       body.querySelector('#pe-zg-number').addEventListener('input', function () {
         s.zgNumber = body.querySelector('#pe-zg-number').value.trim();
-        if (subjectAuto) {
-          const rebuilt = buildEmail(s);
-          body.querySelector('#pe-subject').value = rebuilt.subject;
-        }
+        rebuildIfAuto();
+      });
+      body.querySelector('#pe-lo-name').addEventListener('input', function () {
+        s.loName = body.querySelector('#pe-lo-name').value.trim();
+        rebuildIfAuto();
       });
       body.querySelector('#pe-subject').addEventListener('input', function () { subjectAuto = false; });
+      body.querySelector('#pe-body').addEventListener('input',    function () { bodyAuto    = false; });
 
       // Auto-save the RM email whenever the field loses focus, so once
       // the LO types it they never have to type it again.
@@ -874,12 +888,19 @@
         if (!v) return;
         try { chrome.storage.local.set({ [STORAGE_KEY_RM]: v }); } catch (_) {}
       }
+      function persistLoName() {
+        const v = (body.querySelector('#pe-lo-name').value || '').trim();
+        if (!v) return;
+        try { chrome.storage.local.set({ lo_name: v }); } catch (_) {}
+      }
       body.querySelector('#pe-rm-email').addEventListener('blur', persistRmEmail);
+      body.querySelector('#pe-lo-name').addEventListener('blur',  persistLoName);
 
       body.querySelector('#zhl-pe-mailto').addEventListener('click', function () {
         const btn = this;
         read();
         persistRmEmail();
+        persistLoName();
         const rebuilt = buildEmail(workflowState);
         const plain   = body.querySelector('#pe-body').value;
         const e       = read();
@@ -915,6 +936,7 @@
       body.querySelector('#zhl-pe-copy-body').addEventListener('click', function () {
         read();
         persistRmEmail();
+        persistLoName();
         const rebuilt = buildEmail(workflowState);
         const plain   = body.querySelector('#pe-body').value;
         copyHtmlAndPlain(this, rebuilt.html, plain);
@@ -922,6 +944,7 @@
       body.querySelector('#zhl-pe-copy-subj').addEventListener('click', function () {
         const e = read();
         persistRmEmail();
+        persistLoName();
         flashCopy(this, e.subject);
       });
     }
@@ -1021,7 +1044,6 @@
       '',
       heading,
       '',
-      'Loan: ' + id,
       'LOP link: ' + s.loanLink,
       '',
       id + ' is ready for PE request.',
@@ -1071,7 +1093,6 @@
       '',
       heading,
       '',
-      'Loan: ' + id,
       'LOP link: ' + s.loanLink,
       '',
       'Loan scenario:',
@@ -1195,7 +1216,6 @@
   function htmlHeader(heading, id, link) {
     return '<p style="margin:0 0 4px;font-size:15px;"><strong>' + escapeHtml(heading) + '</strong></p>' +
       '<p style="margin:0 0 14px;color:' + COLORS.muted + ';font-size:13px;">' +
-        'Loan: ' + escapeHtml(id) + '<br>' +
         'LOP link: <a href="' + escapeHtml(link) + '" style="color:' + COLORS.zhl + ';">' + escapeHtml(link) + '</a>' +
       '</p>';
   }

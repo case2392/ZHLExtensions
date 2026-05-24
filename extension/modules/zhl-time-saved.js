@@ -45,15 +45,47 @@
 
   function record(tool, minutes) {
     return new Promise(function (resolve) {
+      const mins = Math.max(0, Math.round(Number(minutes) || 0));
+      let settled = false;
+      function done(payload) {
+        if (settled) return;
+        settled = true;
+        resolve(payload);
+      }
+      // Fallback: read storage ourselves and assume the background WILL
+      // (eventually) persist this record. Stored value + just-saved is
+      // our best estimate. Also pulls the cached global total if present.
+      function fallbackFromStorage() {
+        try {
+          chrome.storage.local.get(
+            ['_zhl_time_saved_user_total_min', '_zhl_time_saved_global_cache_v2'],
+            function (data) {
+              const stored = Number(data['_zhl_time_saved_user_total_min']) || 0;
+              const cache = data['_zhl_time_saved_global_cache_v2'];
+              const globalTotal = (cache && typeof cache.value === 'number') ? cache.value : null;
+              done({ userTotal: stored + mins, globalTotal: globalTotal });
+            }
+          );
+        } catch (_) {
+          done({ userTotal: mins, globalTotal: null });
+        }
+      }
       try {
         chrome.runtime.sendMessage(
-          { type: 'ZHL_TIME_SAVED_RECORD', tool: String(tool || ''), minutes: Number(minutes) || 0 },
+          { type: 'ZHL_TIME_SAVED_RECORD', tool: String(tool || ''), minutes: mins },
           function (resp) {
-            if (chrome.runtime.lastError) { resolve({ userTotal: 0, globalTotal: null }); return; }
-            resolve(resp || { userTotal: 0, globalTotal: null });
+            if (chrome.runtime.lastError) { fallbackFromStorage(); return; }
+            if (!resp || (resp.userTotal === 0 && mins > 0)) {
+              // BG either gave us nothing or a suspiciously-zero userTotal
+              // when we just recorded a positive amount. Either way, read
+              // storage ourselves rather than render a misleading 0.
+              fallbackFromStorage();
+              return;
+            }
+            done(resp);
           }
         );
-      } catch (_) { resolve({ userTotal: 0, globalTotal: null }); }
+      } catch (_) { fallbackFromStorage(); }
     });
   }
 

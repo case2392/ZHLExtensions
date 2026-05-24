@@ -16,9 +16,9 @@
   console.log('[ZHL PE Auto-paste] loaded on', location.href);
 
   const STORAGE_KEY = 'zhlPePendingPaste';
-  const TTL_MS      = 30 * 1000;
+  const TTL_MS      = 60 * 1000;
   const POLL_MS     = 100;
-  const POLL_LIMIT  = 100; // ~10 s total polling for the compose body
+  const POLL_LIMIT  = 200; // ~20 s total polling for the compose body
 
   // Multiple fallback strategies for finding Gmail's compose body, because
   // Gmail keeps changing the markup. Returns the first hit, in priority
@@ -73,7 +73,45 @@
     } catch (_) {}
   }
 
-  function pasteIntoCompose(html) {
+  function doPasteInto(target, html) {
+    try {
+      target.focus();
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (_) {}
+      let ok = false;
+      try { ok = document.execCommand('insertHTML', false, html); } catch (_) {}
+      if (!ok) {
+        try { target.innerHTML = html; ok = true; } catch (_) {}
+      }
+      try {
+        target.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertFromPaste' }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch (_) {}
+      placeCaretAtEnd(target);
+      return ok;
+    } catch (_) { return false; }
+  }
+
+  // Returns a stable "fingerprint" of the body's content: the table tag count
+  // and presence of "PE request" text. We use this to detect when Gmail
+  // overwrites our HTML paste with the plain &body= text (no <table>, no
+  // formatting) — which can happen if Gmail's URL-driven body fill races our
+  // paste and lands last.
+  function looksLikeFormattedPaste(target) {
+    try {
+      if (!target) return false;
+      const html = target.innerHTML || '';
+      // Our formatted body always contains the comparison <table>.
+      return html.indexOf('<table') >= 0 && html.indexOf('Pricing comparison') >= 0;
+    } catch (_) { return false; }
+  }
+
+  function pasteIntoCompose(html, onSuccess, onFail) {
     let attempts = 0;
     let pasted = false;
     const interval = setInterval(function () {
@@ -82,44 +120,43 @@
       if (target && !pasted) {
         clearInterval(interval);
         pasted = true;
-        try {
-          target.focus();
-          // Select all existing content so insertHTML / innerHTML replaces
-          // the URL-filled plain text body (which Gmail loads from &body=).
-          try {
-            const range = document.createRange();
-            range.selectNodeContents(target);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-          } catch (_) {}
-          // Prefer execCommand because some Gmail builds intercept paste
-          // through it and run their sanitizer; falls back to innerHTML.
-          let ok = false;
-          try { ok = document.execCommand('insertHTML', false, html); } catch (_) {}
-          if (!ok) {
-            try { target.innerHTML = html; ok = true; } catch (_) {}
+        const ok = doPasteInto(target, html);
+        console.log('[ZHL PE Auto-paste] pasted formatted body (attempt ' + attempts + ', ok=' + ok + ')');
+        // Verify a moment later in case Gmail's URL-driven body fill landed
+        // after our paste and overwrote it. Re-paste if the formatted table
+        // is no longer present. Try up to 3 times across ~3 seconds.
+        let verifyTries = 0;
+        const verifyInterval = setInterval(function () {
+          verifyTries++;
+          const stillTarget = findComposeBody();
+          if (!stillTarget) return;
+          if (looksLikeFormattedPaste(stillTarget)) {
+            clearInterval(verifyInterval);
+            if (typeof onSuccess === 'function') onSuccess();
+            return;
           }
-          // Notify Gmail's editor so Send button enables and draft saves.
-          try {
-            target.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertFromPaste' }));
-            target.dispatchEvent(new Event('change', { bubbles: true }));
-          } catch (_) {}
-          placeCaretAtEnd(target);
-          console.log('[ZHL PE Auto-paste] pasted formatted body (attempt ' + attempts + ', via ' + (ok ? 'execCommand/innerHTML' : 'unknown') + ')');
-        } catch (e) {
-          console.warn('[ZHL PE Auto-paste] paste failed:', e);
-        }
+          if (verifyTries <= 6) {
+            console.log('[ZHL PE Auto-paste] verify ' + verifyTries + ': formatted content missing — re-pasting');
+            doPasteInto(stillTarget, html);
+          } else {
+            clearInterval(verifyInterval);
+            console.warn('[ZHL PE Auto-paste] gave up after re-paste retries; clipboard fallback (Ctrl+V) still works');
+            if (typeof onFail === 'function') onFail();
+          }
+        }, 500);
         return;
       }
       if (attempts > POLL_LIMIT) {
         clearInterval(interval);
         console.warn('[ZHL PE Auto-paste] gave up — compose body not found within ' + (POLL_LIMIT * POLL_MS / 1000) + ' s. Clipboard fallback still works (Ctrl+V).');
+        if (typeof onFail === 'function') onFail();
       }
     }, POLL_MS);
   }
 
+  let runningInThisTab = false;
   function checkAndPaste() {
+    if (runningInThisTab) return; // dedupe within this tab
     try {
       chrome.storage.local.get([STORAGE_KEY], function (data) {
         const pending = data && data[STORAGE_KEY];
@@ -130,12 +167,23 @@
           console.log('[ZHL PE Auto-paste] pending paste expired (age=' + age + ' ms)');
           return;
         }
-        // Single-use: clear before pasting so concurrent Gmail tabs can't
-        // both pick up the same payload.
-        chrome.storage.local.remove([STORAGE_KEY], function () {
-          console.log('[ZHL PE Auto-paste] pending paste found (age=' + age + ' ms), running…');
-          pasteIntoCompose(pending.html);
-        });
+        // Mark in-flight in this tab BEFORE clearing storage so re-entry
+        // from the URL-change watcher is a no-op. Only clear storage on
+        // verified success — otherwise leave it for a retry / Ctrl+V.
+        runningInThisTab = true;
+        console.log('[ZHL PE Auto-paste] pending paste found (age=' + age + ' ms), running…');
+        pasteIntoCompose(
+          pending.html,
+          function onOk() {
+            try { chrome.storage.local.remove([STORAGE_KEY]); } catch (_) {}
+            console.log('[ZHL PE Auto-paste] verified formatted body in compose — storage cleared');
+          },
+          function onFail() {
+            // Leave storage in place so a manual reload of the compose tab
+            // could still pick it up; the TTL will eventually expire it.
+            runningInThisTab = false;
+          }
+        );
       });
     } catch (e) {
       console.warn('[ZHL PE Auto-paste] storage read failed:', e);
