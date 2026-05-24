@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.44.1",
+    headline: "Time-saved toast now appears instantly instead of waiting up to 15s for the global total to fetch.",
+    highlights: [
+      "User reported the '🕒 You just saved Xm' box took ~15s to appear inside the FHA Manual UW analyzer. Cause: the background was awaiting a fresh fetch of the global total from Apps Script before responding to the tool's record() call — and Apps Script can take 10–20s on a cold start. So the toast Promise was held open for the full roundtrip even though the just-saved minutes + the user's local total were already known.",
+      "Fix: background's global-total cache now returns IMMEDIATELY with whatever's already in chrome.storage (even if stale or null), and fires a refresh in the background for next time. Toast appears in ~100ms. The 'Across all users' line may briefly be missing on the very first click after a long idle, but the next click has the warm cache.",
+      "Belt: service worker also warms the global-total cache 20s after start, so first-toast-of-the-session usually has the full three lines."
+    ],
+    sections: ["time-saved-tracker"]
+  },
+  {
     version: "1.44.0",
     headline: "Setup page: every module card now has an illustration — added 11 new SVGs for cards that were text-only before.",
     highlights: [

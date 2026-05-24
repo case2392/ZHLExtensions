@@ -930,27 +930,32 @@ setTimeout(maybeSeedUserTimeSavedFromHistory, 10 * 60 * 1000);
 async function getGlobalTimeSavedCached() {
   const data = await chrome.storage.local.get([TIME_SAVED_GLOBAL_KEY]);
   const cache = data[TIME_SAVED_GLOBAL_KEY];
-  if (cache && (Date.now() - cache.fetchedAt < TIME_SAVED_GLOBAL_TTL)) {
-    return cache.value;
-  }
-  if (!TELEMETRY_ENDPOINT) return cache ? cache.value : null;
+  const fresh = cache && (Date.now() - cache.fetchedAt < TIME_SAVED_GLOBAL_TTL);
+  if (fresh) return cache.value;
+  // Cache stale or missing — return whatever we have (or null) IMMEDIATELY
+  // and kick off a refresh in the background. The toast in the page should
+  // appear in ~100ms, not wait 15+ s for an Apps Script cold-start.
+  setTimeout(refreshGlobalTimeSaved, 0);
+  return cache ? cache.value : null;
+}
+
+async function refreshGlobalTimeSaved() {
+  if (!TELEMETRY_ENDPOINT) return;
   try {
-    // Apps Script web apps respond to GET via doGet(e). We pass
-    // action=totalTimeSaved as a query param; the script (see
-    // apps-script/Code.gs) returns { totalMinutes: <number> }.
     const url = TELEMETRY_ENDPOINT + (TELEMETRY_ENDPOINT.indexOf("?") >= 0 ? "&" : "?") + "action=totalTimeSaved";
     const res = await fetch(url, { method: "GET" });
-    if (!res.ok) return cache ? cache.value : null;
+    if (!res.ok) return;
     const obj = await res.json();
     if (typeof obj.totalMinutes === "number") {
       await chrome.storage.local.set({
         [TIME_SAVED_GLOBAL_KEY]: { value: obj.totalMinutes, fetchedAt: Date.now() }
       });
-      return obj.totalMinutes;
     }
   } catch (_) {}
-  return cache ? cache.value : null;
 }
+// Warm the global-total cache shortly after worker start so the first
+// toast of the session usually has the "Across all users" line populated.
+setTimeout(refreshGlobalTimeSaved, 20 * 1000);
 
 // -------------------------------------------------------------------------
 // Cross-tab Gmail attachment drag (feature_gmailDragAttachments — Phase 1)

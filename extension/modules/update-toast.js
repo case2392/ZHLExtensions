@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.44.1": "Time-saved toast now appears instantly instead of waiting up to 15s for the global total to fetch.",
     "1.44.0": "Setup page: every module card now has an illustration — 11 new SVGs filled in for cards that were text-only before.",
     "1.43.4": "SMS Add Loan Officer button now detects Lead Owner correctly (it was silently missing on Salesforce Lead pages because Owner uses a different Lightning component than custom lookups).",
     "1.43.3": "Time-saved totals were undercounting — expanded the back-credit registry by 12 more event types and forced cache refresh. Redeploy your Apps Script to enable.",
