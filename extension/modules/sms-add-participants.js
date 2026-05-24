@@ -130,38 +130,103 @@
   // The LO assigned to the file is the Salesforce User who owns the Lead
   // — shown in the "Lead Owner" record field. Useful when an assistant is
   // texting on behalf of the LO and needs to add them to the thread.
+  //
+  // NOTE: Lead Owner is a standard Owner field, which Salesforce often
+  // renders via force-owner-id-related-list-single / force-lookup-
+  // display-with-preview INSTEAD of records-record-layout-item like
+  // custom lookups (Buyer's Agent, Co-Borrower) use. So we try several
+  // strategies in priority order before giving up.
+  let leadOwnerDiagLogged = false;
+  function diagOnce(msg, payload) {
+    if (leadOwnerDiagLogged) return;
+    leadOwnerDiagLogged = true;
+    console.log('[SMS Add Participants] LO detect:', msg, payload || '');
+  }
   function getLeadOwnerInfo() {
-    // Match either records-record-layout-item[field-label="Lead Owner"]
-    // or anywhere the label text reads "Lead Owner" — Salesforce flips
-    // between the two depending on the layout.
     let item = null;
-    const items = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Lead Owner"]');
-    for (const i of items) {
-      if (i.offsetParent !== null) { item = i; break; }
-    }
+
+    // 1. records-record-layout-item with field-label="Lead Owner"
+    let candidates = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Lead Owner"]');
+    for (const c of candidates) { if (c.offsetParent !== null) { item = c; break; } }
+
+    // 2. Any element with field-label="Lead Owner" or "Owner"
     if (!item) {
-      const labels = deepQuerySelectorAll(document, 'span.test-id__field-label, .test-id__field-label, [class*="field-label"]');
+      candidates = deepQuerySelectorAll(document, '[field-label="Lead Owner"], [field-label="Owner"]');
+      for (const c of candidates) { if (c.offsetParent !== null) { item = c; break; } }
+    }
+
+    // 3. Walk text nodes — find a label whose text is literally "Lead
+    //    Owner", then walk up to its row container.
+    if (!item) {
+      const labels = deepQuerySelectorAll(document, 'span, label');
       for (const label of labels) {
-        if (!/^\s*Lead\s*Owner\s*$/i.test((label.textContent || ''))) continue;
-        const form = label.closest('.slds-form-element');
-        if (!form || form.offsetParent === null) continue;
-        item = form;
-        break;
+        const txt = normalizeLabel(label.textContent);
+        if (!/^Lead\s*Owner$/i.test(txt)) continue;
+        if (label.offsetParent === null) continue;
+        let cur = label.parentElement;
+        for (let i = 0; i < 8 && cur; i++) {
+          const tag = (cur.tagName || '').toLowerCase();
+          const cls = (cur.className && typeof cur.className === 'string') ? cur.className : '';
+          if (tag === 'records-record-layout-item' ||
+              tag === 'force-owner-id-related-list-single' ||
+              /slds-form-element/.test(cls) ||
+              /forceListViewManager/.test(cls)) {
+            item = cur;
+            break;
+          }
+          cur = cur.parentElement;
+        }
+        if (item) break;
       }
     }
-    if (!item) return null;
-    // OwnerId can point to a User OR a Queue. We want the User case only —
-    // Queues don't have phones we can SMS to.
-    const userLink = deepQuerySelector(item, 'a[href*="/lightning/r/User/"]');
-    if (!userLink) return null;
-    const m = /\/lightning\/r\/User\/(\w+)\//.exec(userLink.getAttribute('href') || '');
-    if (!m) return null;
+
+    if (!item) {
+      diagOnce('Lead Owner row not found via any selector');
+      return null;
+    }
+
+    // Find any link that points at a User record. Salesforce uses several
+    // href patterns depending on the component:
+    //   /lightning/r/User/<id>/view
+    //   /lightning/r/User/<id>
+    //   /lightning/r/<id>           (where id starts with 005 = User)
+    //   /one/one.app#/sObject/<id>
+    let userLink =
+      deepQuerySelector(item, 'a[href*="/lightning/r/User/"]') ||
+      deepQuerySelector(item, 'a[data-refid*="recordId"]') ||
+      deepQuerySelector(item, 'a[href*="/lightning/r/005"]');
+    if (!userLink) {
+      // Last resort: ANY anchor inside the row whose href contains an id
+      // starting with 005 (Salesforce User id prefix).
+      const anchors = deepQuerySelectorAll(item, 'a');
+      for (const a of anchors) {
+        const href = a.getAttribute('href') || '';
+        if (/\/005[A-Za-z0-9]{12,17}/.test(href)) { userLink = a; break; }
+      }
+    }
+    if (!userLink) {
+      diagOnce('Lead Owner row found but no User link inside', { itemHtml: (item.outerHTML || '').slice(0, 300) });
+      return null;
+    }
+
+    const href = userLink.getAttribute('href') || '';
+    let m = /\/lightning\/r\/User\/(\w+)/.exec(href);
+    if (!m) m = /\/lightning\/r\/(005[A-Za-z0-9]{12,17})/.exec(href);
+    if (!m) m = /\/(005[A-Za-z0-9]{12,17})/.exec(href);
+    if (!m) {
+      diagOnce('User link had no parseable id', { href: href });
+      return null;
+    }
     const ownerId = m[1];
+
     // Skip the button if the LO is opening their own file. They don't
-    // need a button that adds themselves to the SMS thread, and showing
-    // it would be confusing ("why is my own name on this button?").
-    if (currentSfUserId && sfIdsEqual(currentSfUserId, ownerId)) return null;
-    const name = (userLink.textContent || '').trim();
+    // need a button that adds themselves to the SMS thread.
+    if (currentSfUserId && sfIdsEqual(currentSfUserId, ownerId)) {
+      diagOnce('Lead Owner is current user — hiding LO button', { ownerId: ownerId, currentSfUserId: currentSfUserId });
+      return null;
+    }
+
+    const name = (userLink.textContent || '').replace(/\s+/g, ' ').trim();
     return { userId: ownerId, name: name };
   }
 

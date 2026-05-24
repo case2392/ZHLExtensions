@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.43.4": "SMS Add Loan Officer button now detects Lead Owner correctly (it was silently missing on Salesforce Lead pages because Owner uses a different Lightning component than custom lookups).",
     "1.43.3": "Time-saved totals were undercounting — expanded the back-credit registry by 12 more event types and forced cache refresh. Redeploy your Apps Script to enable.",
     "1.43.2": "Time-saved toast now shows up on VA Residual Income, Student Loans, FHA Flip Rule, and FHA Manual Eligible panels.",
     "1.43.1": "Time-saved tracker now back-credits your historical usage — every va_calc, buydown PDF, bulk-delete, SMS add you've ever fired counts retroactively. Redeploy your Apps Script to enable.",

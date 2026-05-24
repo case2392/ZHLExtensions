@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.43.4",
+    headline: "SMS Add Loan Officer button now detects Lead Owner across Salesforce's various Owner-field renderings (it was silently missing on Lead pages).",
+    highlights: [
+      "Lead Owner is a STANDARD Owner field, not a custom lookup — Salesforce renders it via force-owner-id-related-list-single instead of the records-record-layout-item used for Buyer's Agent and Co-Borrower. My old selector only matched the records-record-layout-item form, so the LO row was silently missed and no button rendered.",
+      "Rewritten getLeadOwnerInfo() with four fallback strategies in priority order: (1) records-record-layout-item[field-label=Lead Owner], (2) any element with field-label=Lead Owner or Owner, (3) text-node walk looking for the literal 'Lead Owner' label + walk up to the row container, (4) last-resort scan for any anchor whose href contains a 005-prefix Salesforce User id.",
+      "Href parsing widened to handle /lightning/r/User/<id>, /lightning/r/<005id>, and any anchor with 005-prefixed id in the path.",
+      "Added one-shot diagnostic console.log('[SMS Add Participants] LO detect: …') so if it still misses on some loan, you can see exactly which strategy failed and share the message with me to refine."
+    ],
+    sections: ["sms-add-participants"]
+  },
+  {
     version: "1.43.3",
     headline: "Time-saved totals were undercounting — expanded the back-credit registry by 12 more event types (caller_id_match, contact_sms_click, va_calc_apply, etc.) and forced cache refresh.",
     highlights: [
