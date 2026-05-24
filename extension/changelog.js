@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.43.2",
+    headline: "Time-saved toast now shows up on VA Residual Income, Student Loans, FHA Flip Rule, and FHA Manual Eligible panels (was silently tracked but not displayed).",
+    highlights: [
+      "Four panels were using recordAndForget() — the time-saved was being credited to the user's running total and telemetry, but no '🕒 You just saved X' section rendered in the panel. Swapped each to record() + render the standard toast section inside the panel after its main content. Affected: VA Residual Income Calc (8 min), Calc Student Loans summary (4 min), FHA Flip Rule analyzer (4 min), FHA Manual Eligible analyzer (3 min)."
+    ],
+    sections: ["time-saved-tracker"]
+  },
+  {
     version: "1.43.1",
     headline: "Time-saved tracker now back-credits your historical usage — every va_calc, buydown PDF, bulk-delete, SMS quick-add etc. you've ever fired counts retroactively.",
     highlights: [

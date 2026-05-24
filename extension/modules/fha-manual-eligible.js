@@ -379,9 +379,6 @@
   // ---- Panel rendering ---------------------------------------------------
 
   function openAnalyzerPanel() {
-    // Time saved: ~3 min vs manually checking each manual-UW eligibility
-    // condition against FHA Handbook tables.
-    if (window.__zhlTimeSaved) window.__zhlTimeSaved.recordAndForget('fha-manual-eligible', 3);
     // Close any existing instance first so re-clicking the button
     // refreshes the data.
     const existing = document.getElementById(ANALYZER_PANEL_ID);
@@ -433,6 +430,17 @@
     };
 
     const panel = renderPanel(state);
+    // Time saved: ~3 min vs manually checking each manual-UW eligibility
+    // condition against FHA Handbook tables.
+    if (window.__zhlTimeSaved) {
+      const slot = document.createElement('div');
+      slot.style.cssText = 'padding:0 16px 14px;';
+      panel.appendChild(slot);
+      const mins = 3;
+      window.__zhlTimeSaved.record('fha-manual-eligible', mins).then(function (r) {
+        slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+      });
+    }
     document.body.appendChild(panel);
   }
 

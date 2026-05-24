@@ -1700,11 +1700,6 @@
 
   function showPanel(initialState) {
     track('va_calc_open');
-    // Time saved: ~8 minutes per residual income calc (manual income,
-    // debts, PITI, family-size, table lookups). Fired once per open.
-    if (window.__zhlTimeSaved) {
-      window.__zhlTimeSaved.recordAndForget('va-calc-residual', 8);
-    }
     const existing = document.getElementById(PANEL_ID);
     if (existing) existing.remove();
 
@@ -1748,6 +1743,20 @@
     footer.appendChild(note);
     footer.appendChild(rerun);
     panel.appendChild(footer);
+
+    // Time-saved slot — populated asynchronously once the background
+    // returns the updated user + global totals. ~8 min per residual calc
+    // (manual income / debts / PITI / family-size / VA table lookups).
+    const timeSavedSlot = document.createElement('div');
+    timeSavedSlot.id = 'rric-time-saved';
+    timeSavedSlot.style.padding = '0 14px 14px';
+    panel.appendChild(timeSavedSlot);
+    if (window.__zhlTimeSaved) {
+      const mins = 8;
+      window.__zhlTimeSaved.record('va-calc-residual', mins).then(function (r) {
+        timeSavedSlot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+      });
+    }
 
     document.body.appendChild(panel);
 
@@ -2640,12 +2649,6 @@
   }
 
   function showStudentLoanSummary(results) {
-    // Time saved: ~4 min vs hand-applying FHA/DU/LPA/VA student-loan
-    // payment formulas to each row and typing each payment manually.
-    // Only credit when at least one row got an updated payment.
-    if (results && results.updated && results.updated.length > 0 && window.__zhlTimeSaved) {
-      window.__zhlTimeSaved.recordAndForget('va-calc-student-loans', 4);
-    }
     const existing = document.getElementById(STUDENT_LOAN_PANEL_ID);
     if (existing) existing.remove();
 
@@ -2728,6 +2731,20 @@
     }
 
     panel.appendChild(body);
+
+    // Time saved: ~4 min vs hand-applying FHA/DU/LPA/VA student-loan
+    // payment formulas to each row and typing each payment manually.
+    // Only credit when at least one row got an updated payment.
+    if (results && results.updated && results.updated.length > 0 && window.__zhlTimeSaved) {
+      const slot = document.createElement('div');
+      slot.style.padding = '0 14px 14px';
+      panel.appendChild(slot);
+      const mins = 4;
+      window.__zhlTimeSaved.record('va-calc-student-loans', mins).then(function (r) {
+        slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+      });
+    }
+
     document.body.appendChild(panel);
   }
 

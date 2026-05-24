@@ -319,9 +319,6 @@
   // the full result card. Centered floating dialog with a backdrop.
 
   function openPanel() {
-    // Time saved: ~4 min vs manually checking the FHA 90-day flip rule
-    // (Zillow last-sold lookup + date arithmetic + ratio math).
-    if (window.__zhlTimeSaved) window.__zhlTimeSaved.recordAndForget('fha-flip-rule', 4);
     // Close any existing instance first so re-opens refresh data.
     const existing = document.getElementById(PANEL_ID);
     if (existing) existing.remove();
@@ -383,6 +380,19 @@
     const body = document.createElement('div');
     body.style.cssText = 'padding:14px 20px 18px;';
     panel.appendChild(body);
+
+    // Time-saved slot — rendered after body's interactive content. ~4 min
+    // vs manually checking the FHA 90-day flip rule (Zillow last-sold
+    // lookup + date arithmetic + ratio math).
+    const timeSavedSlot = document.createElement('div');
+    timeSavedSlot.style.cssText = 'padding:0 20px 16px;';
+    panel.appendChild(timeSavedSlot);
+    if (window.__zhlTimeSaved) {
+      const mins = 4;
+      window.__zhlTimeSaved.record('fha-flip-rule', mins).then(function (r) {
+        timeSavedSlot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+      });
+    }
 
     function row(label) {
       const r = document.createElement('div');
