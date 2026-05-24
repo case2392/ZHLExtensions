@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.45.0",
+    headline: "NEW first-run setup wizard + update toast now shows EVERY change since your last installed version.",
+    highlights: [
+      "First-run wizard: when lo_name is empty (either on a fresh install or an existing user who skipped setup), the extension now opens setup.html with a prominent blue banner: '👋 Welcome — let's get you set up in 30 seconds'. One click on '⚡ Auto-fill from Salesforce' runs the existing GET_SF_LO_PROFILE handler against the Salesforce session, pulls Name / Email / Phone / NMLS, writes them to chrome.storage.local, pulses a blue outline around the LO Profile card, and auto-dismisses the banner. Stored under _zhl_firstrun_dismissed so it only fires once per Chrome profile. Background's onInstalled now opens setup.html?firstrun=1 on install OR update when lo_name is missing (guarded by _zhl_firstrun_shown so it doesn't re-pop on every update).",
+      "Why: the PE Workflow's '(your name)' placeholder bug was caused by users never setting lo_name. The setup page has had the LO Profile card forever, but nobody scrolls there. Putting it in their face the first time they install / update halves the problem; the second half is the inline 'Your name' field added on the email step in v1.44.2.",
+      "Update toast diff view: the toast now reads the user's last-seen version and renders a 'See N earlier changes since vX.Y.Z' expander listing every intermediate version's headline (newest first, scrollable). If someone was on v1.41.0 and jumps to v1.45.0, they see four lines instead of one. Click 'View what's new' and the walkthrough page receives a ?since=v1.41.0 query param: instead of showing just the latest headline, it renders a big '🆙 You just updated from v1.41.0 → v1.45.0 · 5 releases' banner and pre-expands ALL diff entries with their full bullet highlights. Even-older pre-update releases collapse into a separate 'Even older' details block. Adds telemetry: update_toast_diff_expanded.",
+      "Telemetry: firstrun_shown, firstrun_pull_clicked (source=auto|click), firstrun_pull_success (fields, missingNmls), firstrun_manual_clicked, firstrun_dismissed, update_toast_diff_expanded. Lets us measure setup-completion rate and how often users actually engage with the diff vs. just dismissing."
+    ],
+    sections: []
+  },
+  {
     version: "1.44.2",
     headline: "PE Workflow email polish: LO name editable inline, drop the redundant 'Loan: <uuid>' line, and Gmail auto-paste is now more reliable.",
     highlights: [

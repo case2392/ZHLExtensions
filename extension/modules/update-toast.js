@@ -26,6 +26,8 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.45.0": "NEW first-run setup wizard (auto-pulls your profile from Salesforce) + update toast now shows ALL changes since your last installed version, not just the latest headline.",
+    "1.44.2": "PE Workflow email polish: editable LO name on the email step, dropped the redundant 'Loan: <uuid>' line, and Gmail auto-paste is now self-healing if Gmail's URL-body fill overwrites our paste.",
     "1.44.1": "Time-saved toast now appears instantly instead of waiting up to 15s for the global total to fetch.",
     "1.44.0": "Setup page: every module card now has an illustration — 11 new SVGs filled in for cards that were text-only before.",
     "1.43.4": "SMS Add Loan Officer button now detects Lead Owner correctly (it was silently missing on Salesforce Lead pages because Owner uses a different Lightning component than custom lookups).",
@@ -179,9 +181,42 @@
     });
   });
 
+  // Semver comparison helpers — used to enumerate the chain of versions
+  // between the user's last-seen and the current install so the toast
+  // can show a per-version diff instead of only the current headline.
+  function parseVer(v) {
+    return String(v || '').split('.').map(function (n) { return parseInt(n, 10) || 0; });
+  }
+  function cmpVer(a, b) {
+    const pa = parseVer(a), pb = parseVer(b);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const x = pa[i] || 0, y = pb[i] || 0;
+      if (x !== y) return x - y;
+    }
+    return 0;
+  }
+  // Return changelog headlines for every version > prevVersion and <= current,
+  // newest first. If prevVersion is "previous version" / unknown, returns just
+  // the current version's headline.
+  function changesSince(prevVersion) {
+    const all = Object.keys(CHANGELOG_HEADLINES)
+      .filter(function (v) { return cmpVer(v, VERSION) <= 0; });
+    let intermediate;
+    if (!prevVersion || prevVersion === 'previous version') {
+      intermediate = [VERSION];
+    } else {
+      intermediate = all.filter(function (v) { return cmpVer(v, prevVersion) > 0; });
+    }
+    intermediate.sort(function (a, b) { return cmpVer(b, a); });
+    return intermediate.map(function (v) { return { version: v, headline: CHANGELOG_HEADLINES[v] || '' }; });
+  }
+
   function showToast(prevVersion) {
     if (document.getElementById(TOAST_ID)) return;
     const headline = CHANGELOG_HEADLINES[VERSION] || ('Updated from v' + prevVersion + ' to v' + VERSION + '.');
+    const diffList = changesSince(prevVersion);
+    const intermediateCount = diffList.length > 1 ? (diffList.length - 1) : 0;
 
     const toast = document.createElement('div');
     toast.id = TOAST_ID;
@@ -225,6 +260,35 @@
     body.textContent = headline;
     body.setAttribute('style', 'margin-bottom:10px;');
 
+    // "Show N earlier changes" expander — only renders when the user skipped
+    // one or more intermediate versions (e.g. they were on v1.42.0 and just
+    // jumped to v1.44.2). The current version's headline is already shown
+    // above; this lists v1.44.1 / v1.44.0 / v1.43.x in newest-first order.
+    let diffBlock = null;
+    if (intermediateCount > 0) {
+      diffBlock = document.createElement('details');
+      diffBlock.setAttribute('style', 'margin:0 0 10px;font-size:12px;color:#374151;border-top:1px dashed #e5e7eb;padding-top:8px;');
+      const summary = document.createElement('summary');
+      summary.textContent = '+ ' + intermediateCount + ' earlier change' + (intermediateCount === 1 ? '' : 's') +
+        ' since v' + prevVersion;
+      summary.setAttribute('style', 'cursor:pointer;color:#0b5cab;font-weight:600;list-style:none;outline:none;');
+      summary.addEventListener('click', function () {
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'update_toast_diff_expanded', props: { from: prevVersion, to: VERSION, count: intermediateCount } }); } catch (_) {}
+      });
+      diffBlock.appendChild(summary);
+      const list = document.createElement('ul');
+      list.setAttribute('style', 'margin:8px 0 0;padding-left:18px;max-height:200px;overflow:auto;');
+      // Skip the current version (index 0) — already in the main body above.
+      diffList.slice(1).forEach(function (entry) {
+        const li = document.createElement('li');
+        li.setAttribute('style', 'margin-bottom:6px;line-height:1.4;');
+        li.innerHTML = '<strong style="color:#0b5cab;">v' + entry.version + '</strong> · ';
+        li.appendChild(document.createTextNode(entry.headline));
+        list.appendChild(li);
+      });
+      diffBlock.appendChild(list);
+    }
+
     const actions = document.createElement('div');
     actions.setAttribute('style', 'display:flex;gap:8px;justify-content:flex-end;');
 
@@ -246,7 +310,12 @@
       // No #whats-new hash — the walkthrough auto-scrolls to a hash if
       // present, and users prefer landing at the top of the page so
       // they see the karma banner + the freshest NEW cards first.
-      const url = chrome.runtime.getURL('walkthrough.html?from=update_toast');
+      // Pass &since=<prevVersion> so the walkthrough's What's-new section
+      // can render a "Changes since v1.x.x" banner and pre-expand the
+      // intermediate versions list.
+      const sincePart = (prevVersion && prevVersion !== 'previous version')
+        ? ('&since=' + encodeURIComponent(prevVersion)) : '';
+      const url = chrome.runtime.getURL('walkthrough.html?from=update_toast' + sincePart);
       try {
         chrome.runtime.sendMessage({ type: 'OPEN_TAB', url: url }, function () {
           // Best-effort fallback if SW didn't respond — try direct.
@@ -297,6 +366,7 @@
 
     toast.appendChild(header);
     toast.appendChild(body);
+    if (diffBlock) toast.appendChild(diffBlock);
     toast.appendChild(actions);
     toast.appendChild(karma);
     toast.title = 'Built by Justin Case. Karma appreciated 💛';

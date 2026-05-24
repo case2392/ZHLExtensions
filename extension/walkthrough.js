@@ -13,7 +13,95 @@
   // ---- Render "What's new" ------------------------------------------------
   const changelog = window.ZHL_CHANGELOG || [];
   const root = document.getElementById('whats-new-content');
+
+  // ?since=<version> tells us the user just upgraded from that version (the
+  // toast's "View what's new" button passes it). We render a banner +
+  // pre-expand the diff so they don't have to click through Older Versions.
+  const earlyParams = new URLSearchParams(location.search);
+  const sinceVersion = earlyParams.get('since') || '';
+  function parseVer(v) { return String(v || '').split('.').map(function (n) { return parseInt(n, 10) || 0; }); }
+  function cmpVer(a, b) {
+    const pa = parseVer(a), pb = parseVer(b);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) { const x = pa[i] || 0, y = pb[i] || 0; if (x !== y) return x - y; }
+    return 0;
+  }
+
+  let sinceRendered = false;
   if (changelog.length) {
+    // "Changes since vX.Y.Z" banner — only shown when the toast deep-linked
+    // us with the user's previous version. Lists every entry between then
+    // and now (newest first) so the upgrade story is the diff, not just the
+    // current headline.
+    if (sinceVersion) {
+      const newer = changelog.filter(function (e) { return cmpVer(e.version, sinceVersion) > 0; });
+      if (newer.length) {
+        sinceRendered = true;
+        const banner = document.createElement('div');
+        banner.setAttribute('style',
+          'margin:0 0 16px;padding:12px 14px;background:linear-gradient(90deg,#dbeafe 0%,#eff6ff 100%);' +
+          'border:2px solid #2563eb;border-radius:8px;color:#1e3a8a;font:14px/1.5 Arial,sans-serif;');
+        banner.innerHTML =
+          '<div style="font-weight:700;font-size:15px;margin-bottom:6px;">' +
+            '🆙 You just updated from <strong>v' + sinceVersion + '</strong> &rarr; <strong>v' + VERSION + '</strong>' +
+            ' &middot; ' + newer.length + ' release' + (newer.length === 1 ? '' : 's') +
+          '</div>' +
+          '<div style="font-size:12px;color:#1e40af;">Here\'s everything that landed in between — newest first.</div>';
+        root.appendChild(banner);
+        newer.forEach(function (entry, i) {
+          const wrap = document.createElement('div');
+          wrap.className = i === 0 ? '' : 'older-version';
+          wrap.style.marginBottom = '14px';
+          const head = document.createElement('div');
+          head.className = i === 0 ? 'ver' : '';
+          if (i === 0) {
+            head.textContent = 'v' + entry.version + ' · ' + entry.headline;
+          } else {
+            head.innerHTML = '<strong>v' + entry.version + '</strong> &middot; ' + entry.headline;
+          }
+          wrap.appendChild(head);
+          const ul = document.createElement('ul');
+          (entry.highlights || []).forEach(function (h) {
+            const li = document.createElement('li');
+            li.textContent = h;
+            ul.appendChild(li);
+          });
+          wrap.appendChild(ul);
+          root.appendChild(wrap);
+        });
+        // Older-than-since versions collapsed under a separate details block
+        // so the page still has the full history if anyone wants to scroll.
+        const earlier = changelog.filter(function (e) { return cmpVer(e.version, sinceVersion) <= 0; });
+        if (earlier.length) {
+          const det = document.createElement('details');
+          const sum = document.createElement('summary');
+          sum.textContent = 'Even older (' + earlier.length + ' — pre-update releases)';
+          det.appendChild(sum);
+          earlier.forEach(function (entry) {
+            const w = document.createElement('div');
+            w.className = 'older-version';
+            const h = document.createElement('div');
+            h.innerHTML = '<strong>v' + entry.version + '</strong> &middot; ' + entry.headline;
+            w.appendChild(h);
+            const oul = document.createElement('ul');
+            (entry.highlights || []).forEach(function (hl) {
+              const li = document.createElement('li');
+              li.textContent = hl;
+              oul.appendChild(li);
+            });
+            w.appendChild(oul);
+            det.appendChild(w);
+          });
+          root.appendChild(det);
+        }
+      }
+    }
+
+    if (sinceRendered) {
+      // Default-path render skipped because the since-diff banner already
+      // rendered the changelog. Drop to the post-render code (NEW cards
+      // clone, click handlers, etc.).
+    } else {
     const latest = changelog[0];
     const verLine = document.createElement('div');
     verLine.className = 'ver';
@@ -50,6 +138,7 @@
         det.appendChild(wrap);
       });
       root.appendChild(det);
+    }
     }
   } else {
     root.textContent = 'No changelog entries yet.';

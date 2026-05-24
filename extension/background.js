@@ -188,6 +188,20 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   // For "update" we intentionally do NOT stamp the version — that's
   // how the content script's update-toast knows to fire on the next
   // LOP/Gmail/Salesforce tab load.
+
+  // First-run wizard: if lo_name is still empty (fresh install OR
+  // existing user who skipped setup), open the setup page with a
+  // ?firstrun=1 banner that nudges them to auto-pull from Salesforce.
+  // Show ONCE per Chrome profile — _zhl_firstrun_shown flag prevents
+  // re-popping the tab on every update.
+  try {
+    const flags = await chrome.storage.local.get(['lo_name', '_zhl_firstrun_shown']);
+    const nameMissing = !flags || !flags.lo_name || !String(flags.lo_name).trim();
+    if (nameMissing && !flags._zhl_firstrun_shown) {
+      await chrome.storage.local.set({ "_zhl_firstrun_shown": true });
+      chrome.tabs.create({ url: chrome.runtime.getURL("setup.html?firstrun=1") });
+    }
+  } catch (_) {}
 });
 
 // Clicking the toolbar icon opens the setup page too — gives users a second
