@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Pricing & Scenarios card -->
+  <rect x="14" y="14" width="332" height="192" rx="8" fill="#ffffff" stroke="#d9dee5"/>
+  <rect x="14" y="14" width="332" height="22" rx="8" fill="#fafbfc"/>
+  <text x="22" y="29" font-size="10" font-weight="700" fill="#1f2937">Pricing &amp; Scenarios — Eligibility</text>
+
+  <!-- Headers -->
+  <g font-size="9" fill="#374151">
+    <text x="24" y="56" font-weight="700">DTI</text>
+    <text x="24" y="76">Front-end</text>
+    <text x="24" y="96">Back-end</text>
+    <text x="24" y="116">Max purchase @ 43% DTI</text>
+    <text x="24" y="136">Max purchase @ 50% DTI</text>
+
+    <text x="240" y="76" text-anchor="end" font-weight="600" fill="#111827">28.4%</text>
+    <text x="240" y="96" text-anchor="end" font-weight="600" fill="#111827">36.2%</text>
+  </g>
+
+  <!-- Estimator pills (the extension's addition) -->
+  <rect x="174" y="105" width="76" height="14" rx="7" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="212" y="115" text-anchor="middle" font-size="9" font-weight="700" fill="#92400e">$398,200</text>
+
+  <rect x="174" y="125" width="76" height="14" rx="7" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="212" y="135" text-anchor="middle" font-size="9" font-weight="700" fill="#92400e">$472,800</text>
+
+  <text x="260" y="115" font-size="8" fill="#92400e" font-style="italic">←  ZHL Pack</text>
+  <text x="260" y="135" font-size="8" fill="#92400e" font-style="italic">←  estimator</text>
+
+  <!-- Inputs side -->
+  <line x1="14" y1="150" x2="346" y2="150" stroke="#e5e7eb"/>
+  <g font-size="9" fill="#6b7280">
+    <text x="24" y="168">Monthly income</text>
+    <text x="240" y="168" text-anchor="end" fill="#111827" font-weight="600">$9,308</text>
+    <text x="24" y="184">Monthly liabilities</text>
+    <text x="240" y="184" text-anchor="end" fill="#111827" font-weight="600">$836</text>
+    <text x="24" y="200">Current purchase price</text>
+    <text x="240" y="200" text-anchor="end" fill="#111827" font-weight="600">$299,000</text>
+  </g>
+</svg>

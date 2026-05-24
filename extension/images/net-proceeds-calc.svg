@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Modal -->
+  <rect x="20" y="10" width="320" height="200" rx="8" fill="#ffffff" stroke="#d9dee5"/>
+  <rect x="20" y="10" width="320" height="24" rx="8" fill="#fafbfc"/>
+  <text x="30" y="26" font-size="11" font-weight="700" fill="#0b5cab">🏠 Net Proceeds from Sale</text>
+
+  <!-- Rows -->
+  <g font-size="9" fill="#374151">
+    <text x="30" y="50">Estimated sale price</text>
+    <text x="332" y="50" text-anchor="end" fill="#15803d" font-weight="700">$500,000.00</text>
+
+    <text x="30" y="68">Listing agent fee (3.000%)</text>
+    <text x="332" y="68" text-anchor="end" fill="#b91c1c">-$15,000.00</text>
+
+    <text x="30" y="86">Buyer's agent fee (3.000%)</text>
+    <text x="332" y="86" text-anchor="end" fill="#b91c1c">-$15,000.00</text>
+
+    <text x="30" y="104">Closing costs (est. 1%)</text>
+    <text x="332" y="104" text-anchor="end" fill="#b91c1c">-$5,000.00</text>
+
+    <text x="30" y="122" font-weight="600">Mortgage / HELOC payoffs</text>
+
+    <text x="42" y="140" fill="#0b5cab" font-weight="600">☑</text>
+    <text x="58" y="140">Mortgage — JPMCB ...4586</text>
+    <text x="332" y="140" text-anchor="end" fill="#b91c1c">-$211,087.00</text>
+
+    <text x="42" y="156" fill="#0b5cab" font-weight="600">☑</text>
+    <text x="58" y="156">HELOC — CENLAR ...9218</text>
+    <text x="332" y="156" text-anchor="end" fill="#b91c1c">-$47,280.00</text>
+
+    <text x="30" y="174">Other</text>
+    <text x="332" y="174" text-anchor="end" fill="#374151">-$0.00</text>
+  </g>
+
+  <!-- Total -->
+  <line x1="28" y1="182" x2="332" y2="182" stroke="#0b5cab" stroke-width="1.5" stroke-dasharray="2,2"/>
+  <text x="30" y="200" font-size="11" font-weight="700" fill="#0b5cab">NET PROCEEDS</text>
+  <text x="332" y="200" text-anchor="end" font-size="13" font-weight="700" fill="#15803d">$206,633.00</text>
+</svg>

@@ -328,6 +328,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sms-mark-all-read.svg" alt="Salesforce Messaging panel with a Mark All Read button in the header and four thread rows whose unread badges have been cleared" />
+        </div>
         <ul class="module-features">
           <li>Adds a <strong>Mark All As Read</strong> button in the Messaging panel header next to <em>New thread</em>.</li>
           <li>One click walks every unread thread, opens it (which is how Salesforce registers a read receipt), then clicks Back to return to the inbox.</li>
@@ -490,6 +493,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/lop-file-copy.svg" alt="Two LOP loan files side by side; the source loan has every section (Borrowers, Addresses, Employment, Assets, Liabilities, Real estate, Subject property, Pricing) staged, with an arrow labeled 'paste' pointing to the destination loan where every section is green-checked. Footer reads 'Credit auto-pulled, Pricing assigned'." />
+        </div>
         <ul class="module-features">
           <li>Adds a floating <strong>Copy LOP file: Stage / Paste</strong> bar to the Full Application page. On the source loan, click <strong>Stage from this file</strong> &mdash; the extension snapshots every editable Personal info / Contact / Marital / Military / Declarations / Demographics field and stores it under chrome.storage keyed by the source loan ID. On the new loan, click <strong>Paste from staged</strong> and pick which stored loan to fill from.</li>
           <li>Handles co-borrowers on the same pair: fields in <code>personal-info-section-0</code> (Primary) and <code>personal-info-section-1</code> (Co-borrower) are tracked separately so primary&rarr;primary and co-borrower&rarr;co-borrower stay aligned. If the destination doesn&rsquo;t have a co-borrower yet, add them first (<strong>+</strong> tab &rarr; <em>Coborrower with [primary]</em>) then re-paste.</li>
@@ -514,6 +520,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/loan-comparison-pdf.svg" alt="Borrower-facing loan comparison PDF with two columns (Option A vs Option B) showing loan amount, rate, points, monthly P&amp;I, total PITI, and closing costs. Bottom green callout reads 'Option B saves $103.65/mo, $37,314 over 30 yr'." />
+        </div>
         <ul class="module-features">
           <li>Adds a <strong>ZHL Comparison PDF</strong> button next to LOP&rsquo;s existing <strong>Generate PDF</strong> on the Scenarios review page. Click to generate a borrower-facing comparison PDF for every selected scenario.</li>
           <li>Mirrors LOP&rsquo;s standard comparison output with the following changes: <strong>Seller credit</strong> is shown as its own line, the <strong>Credit score</strong> and <strong>DTI</strong> rows are removed (the borrower doesn&rsquo;t need their qualifying credit pulled into a handout), and <strong>Estimated monthly cost (PITI)</strong> and <strong>Cash (to)/from</strong> are rendered noticeably bigger / bolder so the borrower&rsquo;s eye lands on the two numbers that matter.</li>
@@ -538,6 +547,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/dti-max-estimator.svg" alt="LOP Pricing & Scenarios Eligibility row with two yellow estimator pills appearing next to the DTI labels, showing 'Max purchase at 43% DTI: $398,200' and 'Max purchase at 50% DTI: $472,800'." />
+        </div>
         <ul class="module-features">
           <li>On the <strong>Pricing &amp; Scenarios</strong> page, adds a pill in the Eligibility Details row showing the estimated max purchase price that would push back-end DTI to its program cap: <strong>Conv 49.99%</strong>, <strong>FHA 56.99%</strong>, <strong>VA 60%</strong>.</li>
           <li>If a scenario priced multiple loan types, shows one pill per type side-by-side.</li>
@@ -562,6 +574,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/fha-flip-rule.svg" alt="FHA 90-Day Flip Rule analyzer panel with seller's purchase date 02/15/2026, contract date 05/01/2026, 75 days between, and a red 'FAILS FHA 90-Day Flip Rule' banner explaining the loan is ineligible for FHA financing. Includes a Look-up-on-Zillow button." />
+        </div>
         <ul class="module-features">
           <li>Adds a small card under <strong>Loan Details</strong> on the right rail (FHA loans only) with inputs for the property address, the seller&rsquo;s purchase date, and the contract date.</li>
           <li>One click on <strong>🔎 Look up on Zillow</strong> opens a new tab searched for the property so you can grab the seller&rsquo;s acquisition date from the price history.</li>
@@ -586,6 +601,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/fha-manual-eligible.svg" alt="Green 'FHA Manual Eligible' pill next to an 'Analyze Manual UW' button, with an open analyzer panel listing six Handbook 4000.1 conditions (FICO, housing payment history, reserves, collections, bankruptcy/foreclosure, DTI) all checked, plus a green verdict bar reading 'All Handbook 4000.1 conditions met'." />
+        </div>
         <ul class="module-features">
           <li>Reads each borrower&rsquo;s three bureau scores from the Credit section, takes the middle, then uses the <strong>LOWER middle score</strong> across borrowers as the qualifying score.</li>
           <li>Pins a green <strong>&check; FHA Manual Eligible</strong> pill under the Credit heading when the qualifying score is <strong>&ge; 640</strong> (ZHL&rsquo;s manual-UW floor), or a red <strong>&times; FHA Manual Ineligible</strong> pill when below 640.</li>
@@ -610,6 +628,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/address-copy.svg" alt="Primary borrower's Addresses card on the left with current and mailing addresses listed, an arrow labeled 'copy all addresses' pointing right to the co-borrower's card, where every line is green-checked indicating the addresses were copied over." />
+        </div>
         <ul class="module-features">
           <li>On the <strong>Full application &rarr; Addresses</strong> section, every empty co-borrower gets a <strong>Copy addresses from primary</strong> button next to its <em>Add address</em> link.</li>
           <li>One click re-adds every address on the primary borrower&rsquo;s list for the co-borrower &mdash; leans on LOP&rsquo;s built-in <em>Use existing address</em> dropdown so Street / City / State / Zip / Country come in cleanly, then fills the four fields LOP leaves blank: <strong>Address type</strong>, <strong>Mailing same as current</strong> checkbox, <strong>Housing type</strong>, and the <strong>Move in / Move out</strong> dates.</li>
@@ -661,6 +682,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/task-bulk-download.svg" alt="LOP Completed-tasks table with a '⬇ Download all' button at the top; an arrow points to a Test Docs folder on the right showing all 21 PDFs (V8663, V8881, 2026 ss-kathy, W2, ally statements, BINDING PS-6, etc.) saved silently with a green '✓ all saved silently' tick." />
+        </div>
         <ul class="module-features">
           <li>Adds a <strong>⬇ Download all docs</strong> button next to the <em>Completed</em> heading on LOP's Tasks tab. Walks every Zillow Docs link in the Completed table, opens each one in a background tab, auto-clicks the viewer's Download button, then closes the tab.</li>
           <li>Sequential &mdash; one document at a time &mdash; so Chrome's "this site wants to download multiple files" prompt only fires once and you can watch live progress in a small modal that shows the current document name and a progress bar.</li>
@@ -685,6 +709,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/net-proceeds-calc.svg" alt="Net Proceeds from Sale modal: sale price $500,000, listing fee -$15k (3%), buyer fee -$15k (3%), closing costs -$5k (1%), Mortgage JPMCB -$211,087 and HELOC CENLAR -$47,280 pre-checked from the Liabilities table, NET PROCEEDS $206,633 in big green." />
+        </div>
         <ul class="module-features">
           <li>Adds a <strong>🏠 Net proceeds calc</strong> button next to the <em>Add asset or credit</em> button in the Assets section.</li>
           <li>Opens a modal with line items: <em>Sale price</em>, <em>Listing agent fee</em> (default 3%), <em>Buyer's agent fee</em> (default 3%), <em>Closing costs</em> (auto-fills at 1% of sale price), <em>Mortgage/Loans/HELOC payoffs</em>, and <em>Other</em>. Live-computes net proceeds as you type.</li>
@@ -709,6 +736,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/pricing-exception-workflow.svg" alt="Pricing Exception Workflow modal: 'Is this loan locked?' branches into a green Yes path (4 checked prerequisites + PE size) and a yellow No path (enter ZHL vs Comp pricing, auto-calc PE $ and points, capture reason, plus 3 justification questions if &gt;2.5 pts). Bottom blue bar shows the generated email ready to open in Gmail." />
+        </div>
         <ul class="module-features">
           <li>Adds a <strong>⚖ Pricing Exception Workflow</strong> button to the loan toolbar (near <em>Copy LOP file / Stage / Paste from staged</em>). Click to walk through your manager&rsquo;s PE submission checklist.</li>
           <li><strong>Branched flow:</strong> first asks whether the loan is locked, then walks the appropriate prerequisite checks (locked: import pricing → Comp PE fields → no lock-diff alert → Comp LE in eFolder; unlocked: scenario assigned → Comp LE on tasks → enter ZHL + comp pricing).</li>
@@ -736,6 +766,9 @@
       </div>
 
       <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/telemetry.svg" alt="Diagram: LOP tab fires events ('VA calc opened', 'Bulk DL 21 files', 'PE Workflow sent', 'Net Proceeds calc'), an arrow points to a Background queue+flush worker, which sends to an Apps Script. Below, a dashboard shows three tiles: Active LOs 150+, Time saved 142d 3h, $ recouped $256k. Footer reads 'Anonymous — no borrower PII. Tool name + duration + email only.'" />
+        </div>
         <ul class="module-features">
           <li>Sends a small event ping to the extension admin (Justin) when you use a tool — which feature, which version, when. Helps decide which modules to invest in.</li>
           <li>Identifies you by your work Gmail address (read once from the Google account button when you have Gmail open) so the admin can see who's using what without anything else to set up.</li>

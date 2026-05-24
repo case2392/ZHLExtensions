@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Modal -->
+  <rect x="20" y="10" width="320" height="200" rx="8" fill="#ffffff" stroke="#d9dee5"/>
+  <rect x="20" y="10" width="320" height="24" rx="8" fill="#fafbfc"/>
+  <text x="30" y="26" font-size="11" font-weight="700" fill="#b45309">⚖ Pricing Exception Workflow</text>
+
+  <!-- Step indicator -->
+  <text x="30" y="50" font-size="9" font-weight="700" fill="#1f2937">Is this loan locked?</text>
+
+  <!-- Yes path -->
+  <rect x="30" y="60" width="140" height="100" rx="6" fill="#ecfdf5" stroke="#86efac"/>
+  <text x="100" y="74" text-anchor="middle" font-size="9" font-weight="700" fill="#15803d">Yes — locked</text>
+  <g font-size="8" fill="#14532d">
+    <text x="40" y="92">✓ Pricing imported</text>
+    <text x="40" y="106">✓ Comp PE fields done</text>
+    <text x="40" y="120">✓ No lock-diff alert</text>
+    <text x="40" y="134">✓ Comp LE in eFolder</text>
+    <text x="40" y="152" font-weight="700">PE size: under 2.5 pts</text>
+  </g>
+
+  <!-- No path -->
+  <rect x="190" y="60" width="140" height="100" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+  <text x="260" y="74" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">No — not locked</text>
+  <g font-size="8" fill="#78350f">
+    <text x="200" y="92">Enter ZHL vs Comp pricing</text>
+    <text x="200" y="106">Auto-calc PE $ + points</text>
+    <text x="200" y="120">Capture reason</text>
+    <text x="200" y="134" font-weight="700">PE: $3,000 (1.20%)</text>
+    <text x="200" y="148" font-weight="700" fill="#b91c1c">Size: 2.5 pts or over →</text>
+    <text x="200" y="158" font-size="7" font-style="italic">+ 3 justification Qs</text>
+  </g>
+
+  <!-- Email output -->
+  <rect x="30" y="172" width="300" height="30" rx="4" fill="#0b5cab"/>
+  <text x="180" y="186" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff">📧 Email to RM ready • Open in Gmail + auto-paste</text>
+  <text x="180" y="198" text-anchor="middle" font-size="7" fill="#bfdbfe">[NOT LOCKED] PE Request for Mark Malone (ZG…) vs Rocket — &gt;2.5 pts</text>
+</svg>

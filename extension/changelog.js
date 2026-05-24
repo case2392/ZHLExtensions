@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.44.0",
+    headline: "Setup page: every module card now has an illustration — added 11 new SVGs for cards that were text-only before.",
+    highlights: [
+      "Setup page was shipping with ~10 module cards that had no screenshot/illustration above their feature list — they read as walls of bullet text and were easy to skim past. Filled the gaps with 11 new SVGs in extension/images/ matching the existing line-art style (off-white background, brand-color line art, viewBox 360×220): sms-mark-all-read, lop-file-copy, loan-comparison-pdf, dti-max-estimator, fha-flip-rule, fha-manual-eligible, address-copy, task-bulk-download, net-proceeds-calc, pricing-exception-workflow, telemetry.",
+      "Going forward, every new card in setup.html and walkthrough.html ships with an image. Added to the project conventions in HANDOFF.md so future Claude sessions inherit the rule."
+    ],
+    sections: []
+  },
+  {
     version: "1.43.4",
     headline: "SMS Add Loan Officer button now detects Lead Owner across Salesforce's various Owner-field renderings (it was silently missing on Lead pages).",
     highlights: [
