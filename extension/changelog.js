@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.47.1",
+    headline: "Loan Comparison PDF: FHA scenarios now show Net closing cost net of the financed UFMIP — the $8k+ MIP no longer reads like cash the borrower brings to closing. Total closing costs unchanged for TRID compliance.",
+    highlights: [
+      "FHA Upfront Mortgage Insurance Premium (UFMIP) is always rolled into the FHA loan amount — the borrower never writes a check for it at closing; it gets paid back over the life of the loan as part of the financed principal. But the Detailed cost summary popup includes it in 'Fees you cannot shop for' under 'Mortgage insurance premium', which then rolls into Total closing costs and made the 'Net closing cost to borrower' line on the PDF read $8,444 too high. The Cash (to)/from at closing line already netted it out (matches LOP's own calc), so the two numbers didn't even reconcile.",
+      "Now: when a scenario's title contains 'FHA', the PDF finds the 'Mortgage insurance premium' line item in the scraped closing detail (also accepts 'Upfront mortgage insurance' and 'UFMIP' synonyms) and subtracts that amount from the Net closing cost to borrower row. A small italic note appears under the row explaining the carve-out so the borrower understands the discrepancy if they cross-check the itemized table.",
+      "Total closing costs in the itemized closing-costs table is UNCHANGED — line for line it still matches the LE / disclosure docs. Only the 'Net closing cost to borrower' figure in the Cash at closing block (and the fallback summary table when the popup wasn't scrapable) reflects the financed UFMIP.",
+      "Conventional loans untouched: the carve-out is gated on the scenario title containing 'FHA', so conventional cards with PMI line items don't trigger the subtraction."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.47.0",
     headline: "Scenarios page: cards now top-align automatically — no more staircased rows when the ASSIGNED-TO-LOAN card lives in a different container than the others.",
     highlights: [

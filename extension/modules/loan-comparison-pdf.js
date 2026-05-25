@@ -657,13 +657,56 @@
     // single "Taxes, insurance, & escrows" line — labeled as such so
     // it doesn't read as misleading detail. Closing-costs summary
     // shows total + seller credit + the upfront cash impact.
+    // FHA Upfront Mortgage Insurance Premium (UFMIP) is ALWAYS rolled
+    // into the loan amount (LOP doesn't disclose any path where it's
+    // paid at closing). Total closing costs still shows it for TRID
+    // reasons, but the borrower never actually brings that money — they
+    // pay it back over the life of the loan as part of the financed
+    // principal. So when we render the "Net closing cost to borrower"
+    // line, subtract the financed UFMIP so the math matches what LOP's
+    // own "Cash (to) / from at closing" already reflects.
+    //
+    // Total closing costs and the itemized table stay UNCHANGED so the
+    // PDF still matches the LE / disclosure docs line for line.
+    function isFhaScenario(s) {
+      return /\bFHA\b/i.test((s && s.title) || '');
+    }
+    function findFinancedMip(detail) {
+      if (!detail || !detail.sections) return 0;
+      for (const sec of detail.sections) {
+        const subs = sec && sec.subsections;
+        if (!subs) continue;
+        for (const sub of subs) {
+          const items = sub && sub.items;
+          if (!items) continue;
+          for (const item of items) {
+            const label = (item && item.label) || '';
+            // Match "Mortgage insurance premium" and common synonyms.
+            // We intentionally don't match plain "MIP" alone (too noisy
+            // in field labels); the popup uses the long form.
+            if (/Mortgage\s+insurance\s+premium|Upfront\s+mortgage\s+insurance|UFMIP/i.test(label)) {
+              const v = Number(item.value);
+              return isFinite(v) ? v : 0;
+            }
+          }
+        }
+      }
+      return 0;
+    }
+    function fhaMipFor(s) {
+      if (!isFhaScenario(s)) return 0;
+      return findFinancedMip(s && s.closingDetail);
+    }
+
     // Itemized closing-costs table — produced when the in-page
     // "Detailed cost summary" popup was successfully scraped for
     // this scenario. Falls back to a small summary block when not.
     function itemizedClosingHtml(detail, s) {
       if (!detail || !detail.sections || !detail.sections.length) {
+        const financedMip = fhaMipFor(s);
         const netClosing = (isFinite(s.closingCosts) ? s.closingCosts : 0) -
-          (isFinite(s.sellerCredit) ? s.sellerCredit : 0);
+          (isFinite(s.sellerCredit) ? s.sellerCredit : 0) -
+          financedMip;
         return (
           '<table class="p2tbl">' +
             '<tr><th>Total closing costs</th><td>' + fmtMoneyHtml(s.closingCosts) + '</td></tr>' +
@@ -672,6 +715,9 @@
                 ? '&minus;' + fmtMoneyHtml(s.sellerCredit)
                 : fmtMoneyHtml(s.sellerCredit)) +
             '</td></tr>' +
+            (financedMip > 0
+              ? '<tr><th>Less: financed FHA MIP <span class="p2note-inline">(rolled into loan)</span></th><td>&minus;' + fmtMoneyHtml(financedMip) + '</td></tr>'
+              : '') +
             '<tr><th>Net closing cost to borrower</th><td>' + fmtMoneyHtml(netClosing) + '</td></tr>' +
             '<tr><th>Down payment</th><td>' + fmtMoneyHtml(s.downPaymentAmount) + '</td></tr>' +
             '<tr class="total"><th>Cash (to) / from at closing</th><td>' + fmtMoneyHtml(s.cashToFrom) + '</td></tr>' +
@@ -761,8 +807,10 @@
       const pi = isFinite(s.pi) ? s.pi : NaN;
       const piti = isFinite(s.piti) ? s.piti : NaN;
       const escrows = (isFinite(pi) && isFinite(piti)) ? Math.max(0, piti - pi) : NaN;
+      const financedMip = fhaMipFor(s);
       const netClosing = (isFinite(s.closingCosts) ? s.closingCosts : 0) -
-        (isFinite(s.sellerCredit) ? s.sellerCredit : 0);
+        (isFinite(s.sellerCredit) ? s.sellerCredit : 0) -
+        financedMip;
       return (
         '<section class="p2card">' +
           '<header class="p2card-hdr">' +
@@ -791,6 +839,10 @@
               '<table class="p2tbl">' +
                 '<tr><th>Down payment</th><td>' + fmtMoneyHtml(s.downPaymentAmount) + '</td></tr>' +
                 '<tr><th>Net closing cost to borrower</th><td>' + fmtMoneyHtml(netClosing) + '</td></tr>' +
+                (financedMip > 0
+                  ? '<tr class="p2note-row"><td colspan="2">FHA MIP of ' + fmtMoneyHtml(financedMip) +
+                    ' is financed into the loan amount &mdash; not paid at closing. (Total closing costs in the itemized table below still reflects the full amount per TRID.)</td></tr>'
+                  : '') +
                 '<tr class="total"><th>Cash (to) / from at closing</th><td>' + fmtMoneyHtml(s.cashToFrom) + '</td></tr>' +
               '</table>' +
             '</div>' +
@@ -872,6 +924,9 @@
       'table.p2tbl th { text-align: left; padding: 2pt 0; font-size: 9pt; font-weight: 400; color: #374151; }' +
       'table.p2tbl td { text-align: right; padding: 2pt 0; font-size: 9pt; font-variant-numeric: tabular-nums; color: #1f2937; }' +
       'table.p2tbl tr.total th, table.p2tbl tr.total td { font-weight: 700; color: #006aff; border-top: 1pt solid #006aff; padding-top: 3pt; }' +
+      // Inline note explaining the financed-MIP carve-out (FHA loans).
+      'table.p2tbl tr.p2note-row td { font-size: 7.5pt; font-style: italic; color: #6b7280; padding: 1pt 0 4pt 8pt; text-align: left; }' +
+      '.p2note-inline { font-size: 7.5pt; font-style: italic; font-weight: 400; color: #6b7280; }' +
       // Itemized closing-cost heading
       'h3.p2cc-hdr { margin: 0 0 5pt; font-size: 10.5pt; color: #1f2937; font-weight: 700; border-bottom: 1pt solid #006aff; padding-bottom: 3pt; }' +
       // Two-column layout for the itemized table

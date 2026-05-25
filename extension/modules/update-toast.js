@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.47.1": "Loan Comparison PDF: FHA scenarios now show Net closing cost net of the financed UFMIP — the $8k+ MIP no longer reads like cash the borrower brings. Total closing costs unchanged for TRID compliance.",
     "1.47.0": "Scenarios page: cards now top-align automatically — no more staircased rows when the ASSIGNED-TO-LOAN card lives in a different container than the others.",
     "1.46.2": "SMS Quick-Add buttons now hide themselves once that participant is already in the To: row — works on both Lead and Opportunity pages.",
     "1.46.1": "SMS Quick-Add buttons on Opportunity / Loan pages BUG FIX — Contact Roles links use /lightning/r/<id>/view without the /Contact/ segment, so my v1.46.0 selector missed them and no buttons rendered. Now matches by 003-prefix id.",
