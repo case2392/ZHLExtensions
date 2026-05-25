@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.47.0",
+    headline: "Scenarios page: cards now top-align automatically — no more staircased rows when the ASSIGNED-TO-LOAN card lives in a different container than the others.",
+    highlights: [
+      "Previously, the scenario cards on the Pricing & Scenarios page rendered staircased: the assigned card with its ASSIGNED-TO-LOAN banner sat in its own sub-container, the unassigned cards sat in another, and LOP's default flex layout left them at different Y positions across the row. Within scenario-sort.js there was already an alignAssignedWrapper() helper, but it only ran AFTER you clicked one of the Sort buttons, and it bottom-aligned the card bodies (so the data rows lined up across the bottom) — which the user explicitly preferred-against in favor of plain top-alignment.",
+      "Now: on every tick of the existing MutationObserver/setInterval loop, ensureTopAlignedRow() runs. (1) If the assigned wrapper's parent differs from the majority parent, it's moved into the majority parent (inserted at the start, preserving 'assigned first' order). (2) The alignment helper now sets the parent's align-items: flex-start AND each wrapper to flex-direction:column / justify-content:flex-start / align-self:flex-start / margin-top:0 — top-align across the board.",
+      "Sig-based skip: ensureTopAlignedRow remembers the last applied layout signature and short-circuits when nothing changed, so the getComputedStyle calls in alignAssignedWrapper aren't repeated on every minor DOM mutation. Original styles are saved on each wrapper in data-zhl-wrapper-layout-saved so the existing Reset button still restores LOP's defaults.",
+      "Works on Pricing & Scenarios for both the simple case (all cards in one parent — just align) and the staircased case shown in the screenshot (assigned card in a different parent — move + align)."
+    ],
+    sections: ["scenario-sort"]
+  },
+  {
     version: "1.46.2",
     headline: "SMS Quick-Add buttons now hide themselves once that participant is already in the To: row — works on both Lead and Opportunity pages.",
     highlights: [

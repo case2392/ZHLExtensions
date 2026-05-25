@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.47.0": "Scenarios page: cards now top-align automatically — no more staircased rows when the ASSIGNED-TO-LOAN card lives in a different container than the others.",
     "1.46.2": "SMS Quick-Add buttons now hide themselves once that participant is already in the To: row — works on both Lead and Opportunity pages.",
     "1.46.1": "SMS Quick-Add buttons on Opportunity / Loan pages BUG FIX — Contact Roles links use /lightning/r/<id>/view without the /Contact/ segment, so my v1.46.0 selector missed them and no buttons rendered. Now matches by 003-prefix id.",
     "1.46.0": "SMS Quick-Add buttons now also appear on Opportunity / Loan pages — with a new Add Borrower button alongside Co-Borrower, Buyer's Agent, and Loan Owner.",

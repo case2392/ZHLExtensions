@@ -256,16 +256,15 @@
       'parent.gap=', parentCs && parentCs.gap);
     if (bannerHeight > 1) {
       // Bottom-align card bodies WITHOUT pushing the whole row down.
-      // align-items:flex-end on the parent moved every wrapper to the
-      // bottom of the parent's cross-axis — but the parent has extra
-      // height beyond the cards, so the row visibly dropped on the
-      // page. Instead: keep parent at its default stretch (so wrappers
-      // fill row height naturally), and turn each wrapper into a flex
-      // column with content justified to the bottom. Wrappers stretch
-      // to row height (= max natural item height = assigned wrapper's
-      // height), and inside each wrapper the card content sits at the
-      // bottom — so neighbor card bodies and the assigned card body
-      // share the same bottom Y, and the row itself stays at top.
+      // Top-align card bodies: every wrapper becomes a flex column whose
+      // content sits at the top. Wrappers stretch to the row's natural
+      // height (= the assigned wrapper's height including banner), so
+      // unassigned cards' bodies start at the same Y as the assigned
+      // banner top, and the bodies start at the same Y across all
+      // wrappers. This is what users expect — "cards lined up at the
+      // top" rather than the older bottom-align which made the row look
+      // staircased on Opportunity / scenario pages where the assigned
+      // card lives in a different parent container.
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
       assigned.style.removeProperty('transform');
       if (parent && parent.hasAttribute(PARENT_ALIGN_ATTR)) {
@@ -273,20 +272,33 @@
         parent.style.alignItems = orig || '';
         parent.removeAttribute(PARENT_ALIGN_ATTR);
       }
+      // Force parent to top-align wrappers in the cross axis so a wrapper
+      // whose natural height differs (e.g. the FHA card with fewer data
+      // rows) still pins to the row's top rather than centering / stretching.
+      if (parent) {
+        if (!parent.hasAttribute(PARENT_ALIGN_ATTR)) {
+          parent.setAttribute(PARENT_ALIGN_ATTR, parent.style.alignItems || '');
+        }
+        parent.style.setProperty('align-items', 'flex-start', 'important');
+      }
       for (const w of wrappers) {
         if (!w.hasAttribute(WRAPPER_LAYOUT_ATTR)) {
           const orig = {
             display: w.style.display || '',
             flexDirection: w.style.flexDirection || '',
-            justifyContent: w.style.justifyContent || ''
+            justifyContent: w.style.justifyContent || '',
+            alignSelf: w.style.alignSelf || '',
+            marginTop: w.style.marginTop || ''
           };
           try { w.setAttribute(WRAPPER_LAYOUT_ATTR, JSON.stringify(orig)); } catch (_) {}
         }
         w.style.setProperty('display', 'flex', 'important');
         w.style.setProperty('flex-direction', 'column', 'important');
-        w.style.setProperty('justify-content', 'flex-end', 'important');
+        w.style.setProperty('justify-content', 'flex-start', 'important');
+        w.style.setProperty('align-self', 'flex-start', 'important');
+        w.style.setProperty('margin-top', '0', 'important');
       }
-      console.log('[Scenario Sort align] applied per-wrapper flex-column + justify-content:flex-end to', wrappers.length, 'wrappers');
+      console.log('[Scenario Sort align] applied per-wrapper flex-column + justify-content:flex-start to', wrappers.length, 'wrappers');
     } else {
       assigned.style.setProperty('margin-top', refCs.marginTop, 'important');
       assigned.style.removeProperty('transform');
@@ -312,6 +324,8 @@
       el.style.display = orig.display || '';
       el.style.flexDirection = orig.flexDirection || '';
       el.style.justifyContent = orig.justifyContent || '';
+      el.style.alignSelf = orig.alignSelf || '';
+      el.style.marginTop = orig.marginTop || '';
       el.removeAttribute(WRAPPER_LAYOUT_ATTR);
     });
   }
@@ -795,7 +809,55 @@
     diag('found ' + cards.length + ' cards. common ancestor=' + describe(ancestor));
     ensureToolbar(ancestor);
     ensureDnd();
+    ensureTopAlignedRow();
     updateSelectAllLabel();
+  }
+
+  // Always-on top-aligner. Runs every tick to keep the scenario cards
+  // visually lined up at the top — including the assigned card whose
+  // ASSIGNED-TO-LOAN banner would otherwise push neighbors out of
+  // alignment, and which on Opportunity / Loan pages lives in a
+  // different parent container than the unassigned cards.
+  //
+  // We do two things:
+  //   1. If the assigned wrapper's parent is different from the parent
+  //      that holds most other wrappers, MOVE the assigned wrapper into
+  //      that majority parent so they share a flex container. This is
+  //      what sortByRate() does as a side-effect of sorting; we now do
+  //      it independently so users don't have to click Sort just to get
+  //      visual alignment.
+  //   2. Apply the top-alignment style overrides via alignAssignedWrapper.
+  let lastAlignedSig = '';
+  function ensureTopAlignedRow() {
+    const wrappers = getCardWrappers();
+    if (wrappers.length < 2) return;
+
+    // Move assigned wrapper into the majority parent if it's elsewhere.
+    const target = pickWrapperTarget(wrappers);
+    if (!target) return;
+    const assigned = wrappers.find(isAssignedWrapper);
+    if (assigned && assigned.parentElement !== target) {
+      // Insert at the start to preserve the visual "assigned card first"
+      // convention LOP uses by default.
+      try { target.insertBefore(assigned, target.firstChild); }
+      catch (_) {}
+    }
+
+    // Re-fetch wrappers in their new DOM order, then apply top-align.
+    const updated = getCardWrappers();
+    // Sig avoids re-running the style-set work when nothing changed —
+    // alignAssignedWrapper does some getComputedStyle calls that are
+    // cheap individually but pile up on every Mutation event.
+    const sig = updated.map((w) => w.getAttribute('data-zhl-assigned-styled') ? 'A' : 'U').join('|');
+    if (sig === lastAlignedSig && updated.length === wrappers.length) {
+      // Even when sig is unchanged we still want to re-run if a wrapper
+      // has lost its overrides (e.g. LOP re-rendered). Cheap check:
+      // verify each wrapper still has the layout marker.
+      const allMarked = updated.every((w) => w.hasAttribute(WRAPPER_LAYOUT_ATTR));
+      if (allMarked) return;
+    }
+    alignAssignedWrapper(updated);
+    lastAlignedSig = sig;
   }
 
   let scheduled = false;
