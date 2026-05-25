@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.46.1": "SMS Quick-Add buttons on Opportunity / Loan pages BUG FIX — Contact Roles links use /lightning/r/<id>/view without the /Contact/ segment, so my v1.46.0 selector missed them and no buttons rendered. Now matches by 003-prefix id.",
     "1.46.0": "SMS Quick-Add buttons now also appear on Opportunity / Loan pages — with a new Add Borrower button alongside Co-Borrower, Buyer's Agent, and Loan Owner.",
     "1.45.1": "SMS Add buttons now fall back to Salesforce's hover preview when the API lookup fails — phone shows up on-screen so you can still add the participant manually.",
     "1.45.0": "NEW first-run setup wizard (auto-pulls your profile from Salesforce) + update toast now shows ALL changes since your last installed version, not just the latest headline.",

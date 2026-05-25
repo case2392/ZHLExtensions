@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.46.1",
+    headline: "SMS Quick-Add buttons on Opportunity / Loan pages BUG FIX — Contact Roles links were missed by my v1.46.0 selector so no buttons rendered.",
+    highlights: [
+      "v1.46.0 shipped Quick-Add support for Opportunity / Loan pages but the buttons never actually appeared, because the Contact Roles related list renders links as /lightning/r/003a700000vrG10AAE/view (with the 003-prefixed Contact id directly in the path) instead of /lightning/r/Contact/<id>/view like every other Salesforce surface uses. My selector was a[href*=\"/lightning/r/Contact/\"], which matched zero anchors, which meant getOpportunityContactRoles() returned an empty {borrower, coBorrower, buyersAgent} and scan() bailed before injection.",
+      "Fix: selector now matches on the data-recordid attribute (a[data-recordid^=\"003\"]) AND the bare-path form (a[href*=\"/lightning/r/003\"]) in addition to the legacy /Contact/ form. Id parsing also accepts the bare-path form. Applied to both the role extractor and the hover-fallback link resolver so the v1.45.1 hover preview keeps working on Opportunity too."
+    ],
+    sections: ["sms-add-participants"]
+  },
+  {
     version: "1.46.0",
     headline: "SMS Quick-Add buttons now also appear on Opportunity / Loan pages — with a new Add Borrower button alongside Co-Borrower, Buyer's Agent, and Loan Owner.",
     highlights: [

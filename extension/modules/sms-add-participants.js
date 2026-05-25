@@ -265,10 +265,27 @@
       { rx: /^Buyer[’'`]?s?\s*Agent$/i,                         slot: 'buyersAgent' }
     ];
 
+    // Salesforce Contact ids start with the prefix 003. The Opportunity
+    // Contact Roles related list renders links as /lightning/r/<id>/view
+    // (no /Contact/ segment), and the anchor also exposes the id via the
+    // data-recordid attribute. Match BOTH forms so we work across the
+    // related list AND any record-layout-item that might surface a Contact.
+    const CONTACT_LINK_SEL =
+      'a[data-recordid^="003"], a[href*="/lightning/r/003"], a[href*="/lightning/r/Contact/"]';
+    function parseContactId(link) {
+      const rid = link.getAttribute && link.getAttribute('data-recordid');
+      if (rid && /^003/.test(rid)) return rid;
+      const href = (link.getAttribute && link.getAttribute('href')) || '';
+      let m = /\/lightning\/r\/Contact\/(\w+)/.exec(href);
+      if (m) return m[1];
+      m = /\/lightning\/r\/(003[A-Za-z0-9]{12,17})/.exec(href);
+      if (m) return m[1];
+      return null;
+    }
+
     // First pass: walk every leaf text span / div on the page and look for
     // role text. For each hit, climb to the nearest container that ALSO
-    // contains an /lightning/r/Contact/<id>/ anchor — that anchor is the
-    // contact for this role row.
+    // contains a Contact link — that anchor is the contact for this role.
     const leaves = deepQuerySelectorAll(document, 'span, div, dt, dd, lightning-formatted-text');
     for (const el of leaves) {
       if (el.children && el.children.length > 0) continue; // leaf only
@@ -287,16 +304,15 @@
       let row = el.parentElement;
       let contactLink = null;
       for (let i = 0; i < 12 && row; i++) {
-        contactLink = deepQuerySelector(row, 'a[href*="/lightning/r/Contact/"]');
+        contactLink = deepQuerySelector(row, CONTACT_LINK_SEL);
         if (contactLink) break;
         row = row.parentElement;
       }
       if (!contactLink) continue;
-      const href = contactLink.getAttribute('href') || '';
-      const m = /\/lightning\/r\/Contact\/(\w+)/.exec(href);
-      if (!m) continue;
+      const contactId = parseContactId(contactLink);
+      if (!contactId) continue;
       const name = (contactLink.textContent || '').replace(/\s+/g, ' ').trim();
-      out[match.slot] = { contactId: m[1], name: name };
+      out[match.slot] = { contactId: contactId, name: name };
     }
 
     return out;
@@ -628,6 +644,11 @@
       const rx = role === 'borrower'     ? /^Borrower$/i
               : role === 'coBorrower'    ? /^Co[\s-]?Borrower$/i
               :                            /^Buyer[’'`]?s?\s*Agent$/i;
+      // Opportunity Contact Roles links use /lightning/r/<id>/view (no
+      // /Contact/ segment); match the 003-prefix id via data-recordid or
+      // the bare path.
+      const CONTACT_LINK_SEL =
+        'a[data-recordid^="003"], a[href*="/lightning/r/003"], a[href*="/lightning/r/Contact/"]';
       const leaves = deepQuerySelectorAll(document, 'span, div, dt, dd, lightning-formatted-text');
       for (const el of leaves) {
         if (el.children && el.children.length > 0) continue;
@@ -635,7 +656,7 @@
         if (!rx.test(normalizeLabel(el.textContent))) continue;
         let row = el.parentElement;
         for (let i = 0; i < 12 && row; i++) {
-          const link = deepQuerySelector(row, 'a[href*="/lightning/r/Contact/"]');
+          const link = deepQuerySelector(row, CONTACT_LINK_SEL);
           if (link) return link;
           row = row.parentElement;
         }
