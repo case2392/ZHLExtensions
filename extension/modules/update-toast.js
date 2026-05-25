@@ -26,6 +26,7 @@
   // in sync with changelog.js on every release — only headlines for
   // versions we actually want a toast on need to live here.
   const CHANGELOG_HEADLINES = {
+    "1.45.1": "SMS Add buttons now fall back to Salesforce's hover preview when the API lookup fails — phone shows up on-screen so you can still add the participant manually.",
     "1.45.0": "NEW first-run setup wizard (auto-pulls your profile from Salesforce) + update toast now shows ALL changes since your last installed version, not just the latest headline.",
     "1.44.2": "PE Workflow email polish: editable LO name on the email step, dropped the redundant 'Loan: <uuid>' line, and Gmail auto-paste is now self-healing if Gmail's URL-body fill overwrites our paste.",
     "1.44.1": "Time-saved toast now appears instantly instead of waiting up to 15s for the global total to fetch.",

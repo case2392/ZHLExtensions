@@ -541,6 +541,134 @@
     });
   }
 
+  // ---- Hover-preview fallback -------------------------------------------
+  //
+  // When the API lookup fails (stale chrome.runtime, no phone in SF, no
+  // matching record, etc.) we trigger Salesforce's own hover preview on
+  // the name link so the LO can SEE the phone on the same screen. Falls
+  // back to a manual "Open contact page" button in case the hover trigger
+  // is rejected (Salesforce occasionally ignores synthetic mouseenter
+  // unless the cursor's actually nearby).
+  //
+  // role: 'coBorrower' | 'buyersAgent' | 'loanOfficer'
+  // Returns the link element it triggered (or null if none found).
+  function findRecordLinkForRole(role) {
+    if (role === 'coBorrower') {
+      const items = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Co-Borrower"]');
+      for (const item of items) {
+        if (item.offsetParent === null) continue;
+        const link = deepQuerySelector(item, 'a[href*="/lightning/r/Contact/"]');
+        if (link) return link;
+      }
+    } else if (role === 'buyersAgent') {
+      const items = deepQuerySelectorAll(document, 'records-record-layout-item');
+      for (const item of items) {
+        if (normalizeLabel(item.getAttribute('field-label')) !== 'Buyers Agent') continue;
+        if (item.offsetParent === null) continue;
+        const link = deepQuerySelector(item, 'a[href*="/lightning/r/Contact/"]');
+        if (link) return link;
+      }
+    } else if (role === 'loanOfficer') {
+      // Lead Owner is rendered via force-owner-id-related-list-single — link
+      // points at /lightning/r/User/<id>. Sometimes it's a plain anchor with
+      // a 005-prefixed id in the href.
+      const ownerHosts = deepQuerySelectorAll(document, 'force-owner-id-related-list-single, records-record-layout-item[field-label="Owner"], records-record-layout-item[field-label="Lead Owner"]');
+      for (const host of ownerHosts) {
+        if (host.offsetParent === null) continue;
+        const link = deepQuerySelector(host, 'a[href*="/lightning/r/User/"], a[href*="/005"]');
+        if (link) return link;
+      }
+    }
+    return null;
+  }
+
+  function dispatchHover(link) {
+    if (!link) return;
+    try { link.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); } catch (_) {}
+    // Wait a tick so the scroll commits before SF computes the popover position.
+    setTimeout(function () {
+      const rect = link.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const base = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy };
+      // Salesforce listens for a mix of pointer + mouse events; fire both.
+      // Order matters — pointerenter / mouseenter before mouseover so the
+      // hover-show controller's gate condition passes.
+      try { link.dispatchEvent(new PointerEvent('pointerover',  base)); } catch (_) {}
+      try { link.dispatchEvent(new PointerEvent('pointerenter', base)); } catch (_) {}
+      try { link.dispatchEvent(new MouseEvent('mouseover',  base)); } catch (_) {}
+      try { link.dispatchEvent(new MouseEvent('mouseenter', base)); } catch (_) {}
+      try { link.focus(); } catch (_) {}
+    }, 250);
+  }
+
+  // Inline non-blocking toast in the top-right with a manual fallback button.
+  // We don't try to detect whether SF's hover preview actually appeared
+  // (that's brittle); we just say "the preview is open, copy the number"
+  // and offer an explicit Open-contact-page link in case synthetic hover
+  // didn't take.
+  function showPhoneFallbackToast(name, contactHref, role, reason) {
+    // Remove any previous toast we left up.
+    const existing = document.getElementById('zhl-sms-fallback-toast');
+    if (existing) existing.remove();
+    const t = document.createElement('div');
+    t.id = 'zhl-sms-fallback-toast';
+    t.style.cssText = [
+      'position:fixed', 'top:80px', 'right:24px', 'z-index:2147483647',
+      'max-width:340px', 'background:#fff', 'border:1px solid #d1d5db',
+      'border-left:4px solid #b45309', 'border-radius:8px',
+      'box-shadow:0 10px 28px rgba(0,0,0,0.2)', 'padding:12px 14px',
+      'font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif',
+      'color:#111'
+    ].join(';');
+    const safeName = String(name || 'this contact');
+    t.innerHTML =
+      '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">' +
+        '<span style="font-size:18px;line-height:1;">📇</span>' +
+        '<div style="flex:1;">' +
+          '<div style="font-weight:700;color:#b45309;margin-bottom:2px;">Couldn\'t auto-fetch phone</div>' +
+          '<div style="color:#374151;font-size:12px;">' + escapeForHtml(reason || 'API lookup failed.') + '</div>' +
+        '</div>' +
+        '<button type="button" id="zhl-sms-fb-x" aria-label="Dismiss" style="background:none;border:none;font:400 18px/1 sans-serif;color:#6b7280;cursor:pointer;padding:0 2px;">×</button>' +
+      '</div>' +
+      '<div style="color:#1f2937;margin-bottom:8px;">Opened the hover preview on <strong>' + escapeForHtml(safeName) + '</strong> — copy the mobile / phone from there.</div>' +
+      (contactHref
+        ? '<a id="zhl-sms-fb-open" href="' + contactHref + '" target="_blank" rel="noopener" style="display:inline-block;background:#0b5cab;color:#fff;text-decoration:none;font:600 12px Arial,sans-serif;padding:6px 10px;border-radius:4px;">If the preview didn\'t open → Open contact page ↗</a>'
+        : '');
+    document.body.appendChild(t);
+    const xBtn = t.querySelector('#zhl-sms-fb-x');
+    if (xBtn) xBtn.addEventListener('click', function () { t.remove(); });
+    // Auto-dismiss after 14s so it doesn't linger forever.
+    setTimeout(function () { try { t.remove(); } catch (_) {} }, 14000);
+    try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_hover_fallback_shown', props: { role: role } }); } catch (_) {}
+  }
+
+  function escapeForHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Combined entry point: trigger hover + show the toast. Returns true if
+  // we found a link to hover on (toast is shown regardless so the user
+  // always has the explicit Open-contact-page fallback).
+  function showHoverFallback(role, name, recordId, reason) {
+    const link = findRecordLinkForRole(role);
+    let href = null;
+    if (link) {
+      const raw = link.getAttribute('href') || '';
+      href = raw.startsWith('http') ? raw : (location.origin + raw);
+      dispatchHover(link);
+    } else if (recordId) {
+      // Build a contact / user URL from the id even if the link element is
+      // somehow gone from the DOM.
+      const obj = role === 'loanOfficer' ? 'User' : 'Contact';
+      href = location.origin + '/lightning/r/' + obj + '/' + recordId + '/view';
+    }
+    showPhoneFallbackToast(name, href, role, reason);
+    return !!link;
+  }
+
   // ---- Button injection -------------------------------------------------
 
   // Inline styles so the buttons render correctly even when injected into
@@ -624,11 +752,10 @@
         if (!phoneToUse) {
           b.textContent = orig;
           b.disabled = false;
-          if (needsReload) {
-            alert("Buyer's Agent added and no reload detected. Please reload the page so the extension can pull their phone from Salesforce.");
-          } else {
-            alert('Could not find a phone number for the Buyer’s Agent.' + (lookupError ? '\n\n' + lookupError : ''));
-          }
+          const reason = needsReload
+            ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
+            : (lookupError || 'No phone returned from Salesforce.');
+          showHoverFallback('buyersAgent', leadCtx.buyersAgent && leadCtx.buyersAgent.name, contactId, reason);
           return;
         }
         b.textContent = 'Adding…';
@@ -653,12 +780,10 @@
         if (!phone) {
           b.textContent = orig;
           b.disabled = false;
-          if (lookup && lookup.reloadNeeded) {
-            alert('Co-borrower added and no reload detected. Please reload the page so the extension can pull their phone from Salesforce.');
-          } else {
-            const reason = lookup && lookup.error ? lookup.error : 'No phone returned.';
-            alert('Could not find a phone number for the Co-Borrower in Salesforce.\n\n' + reason);
-          }
+          const reason = (lookup && lookup.reloadNeeded)
+            ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
+            : (lookup && lookup.error ? lookup.error : 'No phone returned from Salesforce.');
+          showHoverFallback('coBorrower', name, id, reason);
           return;
         }
         b.textContent = 'Adding…';
@@ -683,13 +808,11 @@
         if (!phone) {
           b.textContent = orig;
           b.disabled = false;
-          if (lookup && lookup.reloadNeeded) {
-            alert('Loan Officer add failed because the page lost extension context. Please reload and try again.');
-          } else {
-            const reason = lookup && lookup.error ? lookup.error : 'No phone returned.';
-            alert('Could not find a phone number for the Loan Officer (Lead Owner) in Salesforce.\n\n' + reason +
-              '\n\nMake sure the LO has a Phone or Mobile populated on their Salesforce User record.');
-          }
+          const reason = (lookup && lookup.reloadNeeded)
+            ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
+            : ((lookup && lookup.error ? lookup.error : 'No phone returned from Salesforce.') +
+               ' Make sure the LO has a Phone or Mobile populated on their User record.');
+          showHoverFallback('loanOfficer', name, id, reason);
           return;
         }
         b.textContent = 'Adding…';

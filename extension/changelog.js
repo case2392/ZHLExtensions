@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.45.1",
+    headline: "SMS Add buttons now fall back to Salesforce's hover preview when the API phone lookup fails — phone shows up on-screen so you can still add the participant manually.",
+    highlights: [
+      "Previously, clicking Add Co-Borrower / Add Buyer's Agent / Add Loan Officer on a tab that had been open for a few days (long enough for ZHL Pack to auto-update underneath it) showed a misleading 'Co-borrower added and no reload detected' alert. The wording read as if the file had just had a co-borrower added by someone; really it meant the extension's chrome.runtime connection was dead and the SF API lookup couldn't fire.",
+      "Now: when ANY of the three Add buttons can't fetch a phone — for any reason (stale tab, empty phone fields on the user record, lookup error) — the extension dispatches synthetic pointer + mouse events on the matching name link in the Lead's record layout (Co-Borrower, Buyer's Agent, or Lead Owner row). Salesforce's own hover preview pops open showing the contact's Mobile + Phone fields right where you were looking. The LO copies the number, types it into the SMS search, done.",
+      "Belt + suspenders: shows a small toast in the top-right with the actual reason ('This tab is stale — reload to re-enable auto-fetch' vs 'No phone returned from Salesforce') AND an explicit 'Open contact page ↗' button that links to /lightning/r/Contact/<id>/view in a new tab in case synthetic hover events get rejected. Toast auto-dismisses in 14s.",
+      "Lead Owner (User) lookup path handles the same fallback — falls back to /lightning/r/User/<id>/view if the hover doesn't take. Telemetry: sms_hover_fallback_shown with role."
+    ],
+    sections: ["sms-add-participants"]
+  },
+  {
     version: "1.45.0",
     headline: "NEW first-run setup wizard + update toast now shows EVERY change since your last installed version.",
     highlights: [
