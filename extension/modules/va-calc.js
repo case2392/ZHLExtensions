@@ -1111,7 +1111,12 @@
   // a different section's button overrides it. findEmploymentSummaryRows
   // also uses it directly.
   let activeFormScope = null;
-  const EXCLUDE_TELECOM_PAYEE_MATCH = 'TELECOM SELFREPORTED';
+  // Payee patterns that get auto-excluded. Both TELECOM and UTILITY
+  // self-reported trade lines fit the same rule: they're consumer-reported
+  // installment accounts that don't belong in the DTI calc and get
+  // excluded with reason "Installment debt less than 10 payments". Add
+  // any future SELFREPORTED variants to this regex.
+  const EXCLUDE_SELFREPORT_PAYEE_RX = /\b(TELECOM|UTILITY)\s+SELFREPORTED\b/i;
   const EXCLUDE_TELECOM_REASON_VALUE = 'LessThan10Payments';
   const TRIGGER_VETERAN_TYPES = ['Regular military', 'National Guard or reserves'];
 
@@ -2176,7 +2181,7 @@
       btn.type = 'button';
       btn.className = 'rric-button ' + EXCLUDE_TELECOM_BUTTON_CLASS;
       btn.textContent = 'Exclude SelfReport';
-      btn.title = 'Mark every TELECOM SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".\n\n' + ZHL_TIP;
+      btn.title = 'Mark every TELECOM SELFREPORTED and UTILITY SELFREPORTED liability as Excluded with reason "Installment debt less than 10 payments".\n\n' + ZHL_TIP;
       const scopedTable = sec.table;
       btn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -2321,12 +2326,12 @@
       const allRows = findLiabilityRows(scopeTable);
       console.log('[Exclude SelfReport] total liability rows on page:', allRows.length);
       const matches = allRows.filter(function (r) {
-        return (r.payee || '').toUpperCase().indexOf(EXCLUDE_TELECOM_PAYEE_MATCH) !== -1;
+        return EXCLUDE_SELFREPORT_PAYEE_RX.test(r.payee || '');
       });
-      console.log('[Exclude SelfReport] matching "' + EXCLUDE_TELECOM_PAYEE_MATCH + '" payee:', matches.length,
+      console.log('[Exclude SelfReport] matching TELECOM/UTILITY SELFREPORTED payee:', matches.length,
         matches.map(function (m) { return m.payee + ' / ' + m.accountNo; }));
       if (!matches.length) {
-        alert('No "TELECOM SELFREPORTED" liabilities found on this page.');
+        alert('No "TELECOM SELFREPORTED" or "UTILITY SELFREPORTED" liabilities found on this page.');
         return;
       }
       let okCount = 0;
@@ -2355,7 +2360,7 @@
       console.log('[Exclude SelfReport] done. ok=' + okCount + ' failed=' + failCount);
       track('exclude_telecom_selfreport', { matched: matches.length, ok: okCount, failed: failCount });
       if (failCount === 0) {
-        alert('Excluded ' + okCount + ' TELECOM SELFREPORTED liabilit' + (okCount === 1 ? 'y' : 'ies') + '.');
+        alert('Excluded ' + okCount + ' self-reported liabilit' + (okCount === 1 ? 'y' : 'ies') + ' (TELECOM / UTILITY).');
       } else {
         alert('Excluded ' + okCount + ' of ' + matches.length + '. ' + failCount + ' failed — see console for details.');
       }

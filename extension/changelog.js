@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.47.2",
+    headline: "Exclude SelfReport now also excludes UTILITY SELFREPORTED lines — was only matching TELECOM SELFREPORTED.",
+    highlights: [
+      "User reported a credit report where Exclude SelfReport zeroed out two TELECOM SELFREPORTED rows correctly but left two UTILITY SELFREPORTED rows untouched ($252 and $212 — both still counted in DTI). Both line types follow the same rule (consumer-reported installment accounts that get excluded with reason 'Installment debt less than 10 payments'), so there was no reason for one to skip the other.",
+      "Fix: payee matching switched from the single literal string 'TELECOM SELFREPORTED' to a regex /\\b(TELECOM|UTILITY)\\s+SELFREPORTED\\b/i so both variants get caught in the same pass. Button tooltip and the completion alert now mention both types. Telemetry event name (exclude_telecom_selfreport) stays the same so the historical time-saved series doesn't reset."
+    ],
+    sections: ["va-calc"]
+  },
+  {
     version: "1.47.1",
     headline: "Loan Comparison PDF: FHA scenarios now show Net closing cost net of the financed UFMIP — the $8k+ MIP no longer reads like cash the borrower brings to closing. Total closing costs unchanged for TRID compliance.",
     highlights: [
