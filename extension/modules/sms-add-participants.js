@@ -537,7 +537,86 @@
       return false;
     }
     realClick(addBtn);
+    // Remember the phone we added so future scans can hide the button
+    // even when the pill renders as raw digits (not the contact's name).
+    if (phoneDigits) addedPhonesThisSession.add(String(phoneDigits).replace(/\D/g, ''));
     return true;
+  }
+
+  // ---- "Already added" detection ----------------------------------------
+  //
+  // Pills in the SMS panel's To: row can render as either the contact's
+  // name ("Ryan McClendon") OR raw digits ("17048609132"), depending on
+  // whether Salesforce was able to resolve the typed value to a Contact.
+  // We hide a candidate button if any pill matches by name OR by phone.
+  //
+  // addedPhonesThisSession tracks phones our own clicks have added so we
+  // can suppress the button even when the pill is shown as digits.
+  const addedPhonesThisSession = new Set();
+  // Tracks role:recordId strings we've successfully added in this session.
+  // Belt-and-suspenders alongside pill detection — if Salesforce briefly
+  // shows the pill as raw digits before resolving to a name (or vice
+  // versa), this set keeps the corresponding button hidden through the
+  // transition.
+  const addedRecordsThisSession = new Set();
+  function rememberAddedRecord(role, recordId) {
+    if (role && recordId) addedRecordsThisSession.add(role + ':' + recordId);
+  }
+  function wasRecordAdded(role, recordId) {
+    return !!(role && recordId && addedRecordsThisSession.has(role + ':' + recordId));
+  }
+
+  function digitsOnly(s) { return String(s || '').replace(/\D/g, ''); }
+  function lc(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+
+  // Pull text + extracted digits from every pill-like element inside the
+  // SMS panel. Salesforce uses .slds-pill / lightning-pill in most LWC
+  // surfaces; we also accept anything with "pill" or "participant" in a
+  // class name as a safety net for re-skinned variants.
+  function getAddedPills(panel) {
+    const out = [];
+    const candidates = deepQuerySelectorAll(panel,
+      '.slds-pill, lightning-pill, [class*="slds-pill"], [class*="Pill"], [class*="participant"]');
+    const seenText = new Set();
+    for (const el of candidates) {
+      // Skip a candidate that's an ancestor of another candidate — we want
+      // the most-specific pill node, not a parent listbox.
+      let isWrapper = false;
+      for (const other of candidates) {
+        if (other !== el && el.contains(other)) { isWrapper = true; break; }
+      }
+      if (isWrapper) continue;
+      const txt = (el.textContent || '').replace(/[×✕✖✗]/g, '').replace(/\s+/g, ' ').trim();
+      if (!txt || seenText.has(txt)) continue;
+      seenText.add(txt);
+      out.push({ text: txt, lc: lc(txt), digits: digitsOnly(txt) });
+    }
+    return out;
+  }
+
+  // Returns true if `candidate` (name + optional phones) matches any pill.
+  function isAlreadyAdded(pills, candidate) {
+    const name   = lc(candidate.name);
+    const phones = (candidate.phones || []).map(digitsOnly).filter(Boolean);
+    for (const p of pills) {
+      // Name match (substring either direction — pills sometimes truncate
+      // long names, and "Buyer's Agent (Talia Johnson)" includes the name
+      // inside the role label too).
+      if (name && p.lc) {
+        if (p.lc === name) return true;
+        if (p.lc.indexOf(name) !== -1) return true;
+        if (name.indexOf(p.lc) !== -1 && p.lc.length >= 4) return true;
+      }
+      // Phone match — same digit run (handle leading 1).
+      if (p.digits) {
+        for (const ph of phones) {
+          if (!ph) continue;
+          if (p.digits === ph) return true;
+          if (p.digits.endsWith(ph) || ph.endsWith(p.digits)) return true;
+        }
+      }
+    }
+    return false;
   }
 
   // ---- Co-Borrower phone lookup via background worker -------------------
@@ -828,11 +907,46 @@
     const input = findSmsParticipantInput(panel);
     if (!input) return;
 
-    // Already injected anywhere in this panel? skip.
-    if (deepQuerySelector(panel, '.' + WRAPPER_CLASS)) return;
+    // Filter out roles whose participant is already in the To: row.
+    // Two signals: (1) a pill in the panel matches by name or phone,
+    // (2) we successfully added this role:id earlier in the session.
+    const pills = getAddedPills(panel);
+    function visibleFor(role, info, extraPhones) {
+      if (!info) return null;
+      const id = info.contactId || info.userId;
+      if (wasRecordAdded(role, id)) return null;
+      const phones = (extraPhones || []).slice();
+      if (info.phone) phones.push(info.phone);
+      if (isAlreadyAdded(pills, { name: info.name || info.displayText, phones: phones })) return null;
+      return info;
+    }
+    const visible = {
+      borrower:    visibleFor('borrower',    leadCtx.borrower),
+      coBorrower:  visibleFor('coBorrower',  leadCtx.coBorrower),
+      buyersAgent: visibleFor('buyersAgent', leadCtx.buyersAgent),
+      loanOfficer: visibleFor('loanOfficer', leadCtx.loanOfficer)
+    };
+
+    // Signature = which buttons would render. If the existing wrapper has
+    // the same signature, leave it alone (avoid flicker). If different
+    // (e.g. a pill was just added, hiding one button), rebuild.
+    const sig = ['b',  visible.borrower    ? (visible.borrower.contactId    || '1') : '0',
+                 'cb', visible.coBorrower  ? (visible.coBorrower.contactId  || '1') : '0',
+                 'ba', visible.buyersAgent ? (visible.buyersAgent.contactId || '1') : '0',
+                 'lo', visible.loanOfficer ? (visible.loanOfficer.userId    || '1') : '0'].join('|');
+    const existing = deepQuerySelector(panel, '.' + WRAPPER_CLASS);
+    if (existing) {
+      if (existing.getAttribute('data-zhl-sig') === sig) return;
+      existing.remove();
+    }
+    // Nothing to render — all participants already added (or none detected).
+    if (!visible.borrower && !visible.coBorrower && !visible.buyersAgent && !visible.loanOfficer) return;
+    // Override the role-by-role render below to use the filtered context.
+    leadCtx = visible;
 
     const wrapper = document.createElement('div');
     wrapper.className = WRAPPER_CLASS;
+    wrapper.setAttribute('data-zhl-sig', sig);
     wrapper.setAttribute('style', WRAPPER_STYLE);
 
     if (leadCtx.buyersAgent) {
@@ -872,6 +986,7 @@
         const ok = await addParticipant(panel, phoneToUse);
         b.textContent = orig;
         b.disabled = false;
+        if (ok) { rememberAddedRecord('buyersAgent', contactId); schedule(); }
         try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_buyers_agent', props: { ok } }); } catch (_) {}
         if (!ok) alert('Could not add Buyer’s Agent — see console for details.');
       });
@@ -903,6 +1018,7 @@
         const ok = await addParticipant(panel, phone);
         b.textContent = orig;
         b.disabled = false;
+        if (ok) { rememberAddedRecord('borrower', id); schedule(); }
         try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_borrower', props: { ok } }); } catch (_) {}
         if (!ok) alert('Could not add Borrower — see console for details.');
       });
@@ -931,6 +1047,7 @@
         const ok = await addParticipant(panel, phone);
         b.textContent = orig;
         b.disabled = false;
+        if (ok) { rememberAddedRecord('coBorrower', id); schedule(); }
         try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_coborrower', props: { ok } }); } catch (_) {}
         if (!ok) alert('Could not add Co-Borrower — see console for details.');
       });
@@ -960,6 +1077,7 @@
         const ok = await addParticipant(panel, phone);
         b.textContent = orig;
         b.disabled = false;
+        if (ok) { rememberAddedRecord('loanOfficer', id); schedule(); }
         try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_loan_officer', props: { ok } }); } catch (_) {}
         if (!ok) alert('Could not add Loan Officer — see console for details.');
       });

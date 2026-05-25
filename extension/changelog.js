@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.46.2",
+    headline: "SMS Quick-Add buttons now hide themselves once that participant is already in the To: row — works on both Lead and Opportunity pages.",
+    highlights: [
+      "Previously the Add Borrower / Add Co-Borrower / Add Buyer's Agent / Add Loan Officer buttons rendered permanently once injected. After you clicked one and the participant landed in the To: row, the corresponding pill button still showed — visual clutter and easy to misclick a second time.",
+      "Now: on every scan, the module reads the current To: row pills (matches .slds-pill / lightning-pill and any element with 'pill' or 'participant' in its class name; dedupes nested wrappers) and computes which buttons should be visible. A pill is considered a match when EITHER (a) the pill text contains the candidate's name substring-wise (handles SF's name truncation and the role-suffix in our own button label), OR (b) the pill's digits-only form equals the candidate's known phone (handles the case where SF renders the pill as raw digits — '17048609132' — instead of resolving to a name).",
+      "Belt + suspenders: we also remember every successful addParticipant() call in a per-session role:id Set. So during the brief window where Salesforce flips the pill from digits to a resolved name (or vice versa), the right button stays hidden through the transition. Click handler triggers an immediate re-scan after a successful add so the button disappears in <100ms instead of waiting for the next MutationObserver fire.",
+      "Re-render guard: each wrapper carries a data-zhl-sig signature listing which roles are currently shown. Scans that produce the same signature leave the wrapper alone (no DOM churn), scans where pill state changed remove + rebuild. Avoids flicker on every Salesforce mutation."
+    ],
+    sections: ["sms-add-participants"]
+  },
+  {
     version: "1.46.1",
     headline: "SMS Quick-Add buttons on Opportunity / Loan pages BUG FIX — Contact Roles links were missed by my v1.46.0 selector so no buttons rendered.",
     highlights: [
