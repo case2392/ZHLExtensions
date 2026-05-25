@@ -75,15 +75,21 @@
   // can sit inside the Lead's right-column tabs and the page structure
   // varies. Trust the URL for "are we on a Lead?", then read the fields
   // from anywhere on the page.
-  function isOnLeadPage() {
+  // We work on both Lead and Opportunity pages. URL detection is the same
+  // pattern; the role-extraction code path differs (Lead reads record-layout-
+  // item fields, Opportunity reads the Contact Roles related list).
+  function getTopUrl() {
     let href = location.href || '';
     try {
       if (window.top && window.top.location && window.top.location.href) {
         href = window.top.location.href;
       }
     } catch (_) { /* cross-origin */ }
-    return /\/lightning\/r\/Lead\//i.test(href);
+    return href;
   }
+  function isOnLeadPage()        { return /\/lightning\/r\/Lead\//i.test(getTopUrl()); }
+  function isOnOpportunityPage() { return /\/lightning\/r\/Opportunity\//i.test(getTopUrl()); }
+  function isOnLeadOrOpportunityPage() { return isOnLeadPage() || isOnOpportunityPage(); }
 
   function getCoBorrowerInfo() {
     const items = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Co-Borrower"]');
@@ -146,22 +152,25 @@
     let item = null;
 
     // 1. records-record-layout-item with field-label="Lead Owner"
-    let candidates = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Lead Owner"]');
+    // Lead pages call it "Lead Owner"; Opportunity pages call it "Loan
+    // Owner" (shown in the right-rail Loan Owner section). Both map to
+    // the User who owns the record. We accept either label.
+    let candidates = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Lead Owner"], records-record-layout-item[field-label="Loan Owner"]');
     for (const c of candidates) { if (c.offsetParent !== null) { item = c; break; } }
 
-    // 2. Any element with field-label="Lead Owner" or "Owner"
+    // 2. Any element with field-label="Lead Owner", "Loan Owner", or "Owner"
     if (!item) {
-      candidates = deepQuerySelectorAll(document, '[field-label="Lead Owner"], [field-label="Owner"]');
+      candidates = deepQuerySelectorAll(document, '[field-label="Lead Owner"], [field-label="Loan Owner"], [field-label="Owner"]');
       for (const c of candidates) { if (c.offsetParent !== null) { item = c; break; } }
     }
 
     // 3. Walk text nodes — find a label whose text is literally "Lead
-    //    Owner", then walk up to its row container.
+    //    Owner" or "Loan Owner", then walk up to its row container.
     if (!item) {
       const labels = deepQuerySelectorAll(document, 'span, label');
       for (const label of labels) {
         const txt = normalizeLabel(label.textContent);
-        if (!/^Lead\s*Owner$/i.test(txt)) continue;
+        if (!/^(Lead|Loan)\s*Owner$/i.test(txt)) continue;
         if (label.offsetParent === null) continue;
         let cur = label.parentElement;
         for (let i = 0; i < 8 && cur; i++) {
@@ -233,6 +242,64 @@
   // Strip curly / straight apostrophes for label comparison.
   function normalizeLabel(s) {
     return (s || '').replace(/[’‘']/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  // ---- Opportunity Contact Roles extraction -----------------------------
+  //
+  // Opportunity pages don't have a "Co-Borrower" record-layout-item field
+  // like Leads do. Instead, the right rail shows a "Contact Roles (N)"
+  // related list where each row has a Contact name link + a Role value
+  // (Borrower / Co-Borrower / Buyer's Agent / Listing Agent / etc.).
+  //
+  // Strategy: find every visible "Role" value text matching one of our
+  // known roles, walk up to the enclosing row container, then capture
+  // the nearest Contact link inside that container.
+  function getOpportunityContactRoles() {
+    const out = { borrower: null, coBorrower: null, buyersAgent: null };
+
+    // Role-name -> output-field map. Each role is matched with its visible
+    // text label (case-insensitive, apostrophes optional).
+    const roleMap = [
+      { rx: /^Borrower$/i,                                      slot: 'borrower'    },
+      { rx: /^Co[\s-]?Borrower$/i,                              slot: 'coBorrower'  },
+      { rx: /^Buyer[’'`]?s?\s*Agent$/i,                         slot: 'buyersAgent' }
+    ];
+
+    // First pass: walk every leaf text span / div on the page and look for
+    // role text. For each hit, climb to the nearest container that ALSO
+    // contains an /lightning/r/Contact/<id>/ anchor — that anchor is the
+    // contact for this role row.
+    const leaves = deepQuerySelectorAll(document, 'span, div, dt, dd, lightning-formatted-text');
+    for (const el of leaves) {
+      if (el.children && el.children.length > 0) continue; // leaf only
+      const txt = normalizeLabel(el.textContent);
+      if (!txt) continue;
+      let match = null;
+      for (const r of roleMap) { if (r.rx.test(txt)) { match = r; break; } }
+      if (!match) continue;
+      if (el.offsetParent === null) continue;
+      // Skip already-filled slots (first match wins, which matches the
+      // visual top-to-bottom order in the Contact Roles list).
+      if (out[match.slot]) continue;
+
+      // Climb 12 levels looking for an ancestor that contains a Contact
+      // link. 12 is generous — Salesforce nests record cards 5-8 deep.
+      let row = el.parentElement;
+      let contactLink = null;
+      for (let i = 0; i < 12 && row; i++) {
+        contactLink = deepQuerySelector(row, 'a[href*="/lightning/r/Contact/"]');
+        if (contactLink) break;
+        row = row.parentElement;
+      }
+      if (!contactLink) continue;
+      const href = contactLink.getAttribute('href') || '';
+      const m = /\/lightning\/r\/Contact\/(\w+)/.exec(href);
+      if (!m) continue;
+      const name = (contactLink.textContent || '').replace(/\s+/g, ' ').trim();
+      out[match.slot] = { contactId: m[1], name: name };
+    }
+
+    return out;
   }
 
   function getBuyersAgentInfo() {
@@ -553,6 +620,28 @@
   // role: 'coBorrower' | 'buyersAgent' | 'loanOfficer'
   // Returns the link element it triggered (or null if none found).
   function findRecordLinkForRole(role) {
+    // On Opportunity pages, Borrower / Co-Borrower / Buyer's Agent all live
+    // inside the Contact Roles related list, not in record-layout-item
+    // fields. We walk the same role-text-then-climb logic we use to extract
+    // the IDs in the first place, and return the matching Contact link.
+    if (isOnOpportunityPage() && (role === 'borrower' || role === 'coBorrower' || role === 'buyersAgent')) {
+      const rx = role === 'borrower'     ? /^Borrower$/i
+              : role === 'coBorrower'    ? /^Co[\s-]?Borrower$/i
+              :                            /^Buyer[’'`]?s?\s*Agent$/i;
+      const leaves = deepQuerySelectorAll(document, 'span, div, dt, dd, lightning-formatted-text');
+      for (const el of leaves) {
+        if (el.children && el.children.length > 0) continue;
+        if (el.offsetParent === null) continue;
+        if (!rx.test(normalizeLabel(el.textContent))) continue;
+        let row = el.parentElement;
+        for (let i = 0; i < 12 && row; i++) {
+          const link = deepQuerySelector(row, 'a[href*="/lightning/r/Contact/"]');
+          if (link) return link;
+          row = row.parentElement;
+        }
+      }
+      // fall through to Lead-style selectors as a last resort
+    }
     if (role === 'coBorrower') {
       const items = deepQuerySelectorAll(document, 'records-record-layout-item[field-label="Co-Borrower"]');
       for (const item of items) {
@@ -768,6 +857,37 @@
       wrapper.appendChild(btn);
     }
 
+    // Borrower button — only injected on Opportunity pages (Leads ARE the
+    // borrower, no separate button needed; the SF panel's search already
+    // finds them by phone). Same lookup + hover fallback as Co-Borrower.
+    if (leadCtx.borrower) {
+      const id = leadCtx.borrower.contactId;
+      const name = leadCtx.borrower.name;
+      const btn = makeAddButton(`Add Borrower (${name})`, async (b) => {
+        const orig = b.textContent;
+        b.disabled = true;
+        b.textContent = 'Looking up phone…';
+        const lookup = await fetchContactPhone(id);
+        const phone = typeof lookup === 'string' ? lookup : null;
+        if (!phone) {
+          b.textContent = orig;
+          b.disabled = false;
+          const reason = (lookup && lookup.reloadNeeded)
+            ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
+            : (lookup && lookup.error ? lookup.error : 'No phone returned from Salesforce.');
+          showHoverFallback('borrower', name, id, reason);
+          return;
+        }
+        b.textContent = 'Adding…';
+        const ok = await addParticipant(panel, phone);
+        b.textContent = orig;
+        b.disabled = false;
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_borrower', props: { ok } }); } catch (_) {}
+        if (!ok) alert('Could not add Borrower — see console for details.');
+      });
+      wrapper.appendChild(btn);
+    }
+
     if (leadCtx.coBorrower) {
       const id = leadCtx.coBorrower.contactId;
       const name = leadCtx.coBorrower.name;
@@ -864,23 +984,43 @@
       debugOnce('No "New SMS Conversation" panel visible right now (this log will print again only when the state changes).');
       return;
     }
-    if (!isOnLeadPage()) {
+    if (!isOnLeadOrOpportunityPage()) {
       pruneButtons();
-      debugOnce('SMS panel found but not on a Lead URL — current URL: ' + (location.href || ''));
+      debugOnce('SMS panel found but not on a Lead or Opportunity URL — current URL: ' + (location.href || ''));
       return;
     }
-    const ctx = {
-      coBorrower:  getCoBorrowerInfo(),
-      buyersAgent: getBuyersAgentInfo(),
-      loanOfficer: getLeadOwnerInfo()
-    };
-    if (!ctx.coBorrower && !ctx.buyersAgent && !ctx.loanOfficer) {
+    const onOppty = isOnOpportunityPage();
+    let ctx;
+    if (onOppty) {
+      const roles = getOpportunityContactRoles();
+      ctx = {
+        borrower:    roles.borrower,
+        coBorrower:  roles.coBorrower,
+        buyersAgent: roles.buyersAgent ? {
+          contactId: roles.buyersAgent.contactId,
+          name: roles.buyersAgent.name,
+          displayText: roles.buyersAgent.name,
+          phone: null
+        } : null,
+        loanOfficer: getLeadOwnerInfo()
+      };
+    } else {
+      ctx = {
+        borrower:    null, // Leads ARE the borrower — the Lead page already shows their phone
+        coBorrower:  getCoBorrowerInfo(),
+        buyersAgent: getBuyersAgentInfo(),
+        loanOfficer: getLeadOwnerInfo()
+      };
+    }
+    if (!ctx.borrower && !ctx.coBorrower && !ctx.buyersAgent && !ctx.loanOfficer) {
       pruneButtons();
-      debugOnce('SMS panel found, on Lead URL, but no Co-Borrower / Buyer’s Agent / Lead Owner found in the DOM yet.');
+      debugOnce('SMS panel found, on ' + (onOppty ? 'Opportunity' : 'Lead') + ' URL, but no Borrower / Co-Borrower / Buyer’s Agent / Owner found in the DOM yet.');
       return;
     }
-    debugOnce('Injecting buttons. coBorrower=' + (ctx.coBorrower ? ctx.coBorrower.name : 'none') +
-      ', buyersAgent=' + (ctx.buyersAgent ? ctx.buyersAgent.displayText : 'none') +
+    debugOnce('Injecting buttons (' + (onOppty ? 'Oppty' : 'Lead') + '). ' +
+      'borrower=' + (ctx.borrower ? ctx.borrower.name : 'none') +
+      ', coBorrower=' + (ctx.coBorrower ? ctx.coBorrower.name : 'none') +
+      ', buyersAgent=' + (ctx.buyersAgent ? (ctx.buyersAgent.displayText || ctx.buyersAgent.name) : 'none') +
       ', loanOfficer=' + (ctx.loanOfficer ? ctx.loanOfficer.name : 'none'));
     injectButtons(panel, ctx);
   }

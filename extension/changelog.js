@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.46.0",
+    headline: "SMS Quick-Add buttons now also appear on Opportunity / Loan pages — with a new Add Borrower button alongside Co-Borrower, Buyer's Agent, and Loan Owner.",
+    highlights: [
+      "Previously, the SMS Quick-Add buttons (Add Co-Borrower / Add Buyer's Agent / Add Loan Officer) only injected on Lead record pages. On Opportunity / Loan pages — where the SMS Messaging panel ALSO lives and where you spend most of your time once a loan converts — the buttons were missing entirely and you had to look up phones manually for every participant.",
+      "Module now detects both /lightning/r/Lead/ and /lightning/r/Opportunity/ URLs. On Opportunity pages, role data comes from the Contact Roles related list (not record-layout-item fields, which is why Lead-side selectors didn't work). The extractor walks every leaf text span looking for 'Borrower' / 'Co-Borrower' / 'Buyer's Agent' role values, then climbs up to 12 levels to find the matching Contact link in the same row container.",
+      "NEW Add Borrower button: only shown on Opportunity pages (Leads ARE the borrower — the SF SMS panel already finds them by phone from the Lead record). Uses the same fetchContactPhone -> hover-fallback flow introduced in v1.45.1, so if the API can't reach Salesforce or the phone is empty, you still get the hover preview on the Borrower's name link.",
+      "Loan Owner detection: existing getLeadOwnerInfo() extended to also match the 'Loan Owner' label (Opportunity uses 'Loan Owner', Leads use 'Lead Owner' — both map to the User who owns the record). Self-check still applies — the LO opening their own file doesn't see an Add LO button.",
+      "Hover fallback's role-to-link resolver now knows the Opportunity Contact Roles layout, so when the lookup fails for any of the three contact roles on Opportunity, the hover preview opens on the right link inside the Contact Roles related list (not the wrong record-layout-item).",
+      "Telemetry: new sms_add_borrower event with ok flag, plus all existing sms_add_* events now fire on both Lead and Opportunity pages."
+    ],
+    sections: ["sms-add-participants"]
+  },
+  {
     version: "1.45.1",
     headline: "SMS Add buttons now fall back to Salesforce's hover preview when the API phone lookup fails — phone shows up on-screen so you can still add the participant manually.",
     highlights: [
