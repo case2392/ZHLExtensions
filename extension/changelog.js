@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.6",
+    headline: "Time-saved toast: \"(as of …)\" suffix now always includes the date (e.g. \"5/26 4:15 PM\"), not just the time.",
+    highlights: [
+      "v1.49.5 only showed the date when the global-total cache was from a different day; today's refreshes showed time only. Now the date is always present so there's no ambiguity about which day the across-all-users number was pulled."
+    ]
+  },
+  {
     version: "1.49.5",
     headline: "Time-saved toast: \"Across all users\" line now shows an \"(as of HH:MM)\" timestamp and refreshes faster (~10 min vs. up to 1h15m).",
     highlights: [

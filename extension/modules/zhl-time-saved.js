@@ -117,12 +117,6 @@
     const d = new Date(ms);
     if (isNaN(d.getTime())) return '';
     const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const today = new Date();
-    const sameDay =
-      d.getFullYear() === today.getFullYear() &&
-      d.getMonth() === today.getMonth() &&
-      d.getDate() === today.getDate();
-    if (sameDay) return time;
     const date = d.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
     return date + ' ' + time;
   }
