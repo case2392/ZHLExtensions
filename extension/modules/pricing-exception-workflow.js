@@ -484,6 +484,54 @@
     return { downloadId: dl.downloadId, filename: filename };
   }
 
+  // Click a nav link / tab by its exact (trimmed, whitespace-collapsed)
+  // text content. Returns the element if found-and-clicked, else null.
+  // Used to drive the SPA to the Scenarios tab when the LO triggers the
+  // PE workflow from a different page (Full application, Pricing, etc.).
+  function clickNavByText(text) {
+    const candidates = document.querySelectorAll('a, button');
+    for (const c of candidates) {
+      if (c.offsetParent === null) continue; // not visible
+      const t = (c.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t === text) { c.click(); return c; }
+    }
+    return null;
+  }
+
+  // The Scenarios sub-tab usually renders as "N Scenarios" (with a count
+  // prefix) or just "Scenarios". Match either.
+  function clickScenariosSubTab() {
+    const candidates = document.querySelectorAll('a, button');
+    for (const c of candidates) {
+      if (c.offsetParent === null) continue;
+      const t = (c.textContent || '').replace(/\s+/g, ' ').trim();
+      if (/^\d*\s*Scenarios$/i.test(t) && t !== 'Pricing & Scenarios') {
+        c.click();
+        return c;
+      }
+    }
+    return null;
+  }
+
+  async function navigateToScenariosTabIfNeeded() {
+    // Already on a page where the assigned card is mounted — nothing to do.
+    if (findAssignedScenarioCard()) return { navigated: false, ok: true };
+    // Step 1: top-nav → Pricing & Scenarios.
+    const ps = clickNavByText('Pricing & Scenarios');
+    if (ps) await peSnipWait(450);
+    // Step 2: sub-tab → Scenarios (in case the top-nav landed on the
+    // Pricing sub-tab by default).
+    clickScenariosSubTab();
+    await peSnipWait(450);
+    // Wait up to 5s for the ASSIGNED TO LOAN card to appear.
+    const start = Date.now();
+    while (Date.now() - start < 5000) {
+      if (findAssignedScenarioCard()) return { navigated: true, ok: true };
+      await peSnipWait(150);
+    }
+    return { navigated: true, ok: false };
+  }
+
   async function captureAssignedScenarioSnip(zgNumber) {
     console.group('[ZHL PE Snip] capturing assigned scenario');
     // Hide the PE workflow modal so the captured screenshot shows only
@@ -494,9 +542,17 @@
     if (peOverlay) peOverlay.style.visibility = 'hidden';
     let modalOpened = null;
     try {
+      // If we're not on Scenarios, drive the SPA there first. We don't
+      // navigate back afterwards — the LO is about to open Gmail anyway,
+      // and history.back() in LOP's SPA is unreliable. The LO can
+      // navigate back to Full application themselves when they return.
+      const nav = await navigateToScenariosTabIfNeeded();
+      if (!nav.ok) {
+        return { ok: false, reason: 'Could not navigate to the Scenarios tab — no ASSIGNED TO LOAN card appeared after 5s.' };
+      }
       const card = findAssignedScenarioCard();
       if (!card) {
-        return { ok: false, reason: 'No "ASSIGNED TO LOAN" scenario found on this page. Are you on the Scenarios tab?' };
+        return { ok: false, reason: 'No "ASSIGNED TO LOAN" scenario found after navigating to Scenarios.' };
       }
       const dots = findThreeDotsButton(card);
       if (!dots) {
@@ -1023,7 +1079,7 @@
         '<div style="margin-top:14px;padding:12px 14px;background:#fef3c7;border:2px solid #b45309;border-radius:6px;color:#7c2d12;">' +
           '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">⚠ Don\'t forget to attach 2 files before sending:</div>' +
           '<ol style="margin:0;padding-left:22px;font-size:12px;line-height:1.6;">' +
-            '<li><strong>Scenario details snip</strong> — auto-saved to your Downloads when you click <em>Open in Gmail</em>. Just drag it from the Downloads bar into the Gmail compose.</li>' +
+            '<li><strong>Scenario details snip</strong> — auto-saved to your Downloads when you click <em>Open in Gmail</em> (we hop to the Scenarios tab to grab it, so don\'t panic if the page changes). Just drag it from the Downloads bar into the Gmail compose.</li>' +
             '<li><strong>Competitor LE / worksheet</strong> — drag in the loan estimate or pricing worksheet from the other lender.</li>' +
           '</ol>' +
           '<div id="zhl-pe-snip-status" style="margin-top:8px;font-size:11px;font-weight:600;"></div>' +

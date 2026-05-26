@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.2",
+    headline: "PE Workflow Scenario snip: auto-navigates to the Scenarios tab first instead of failing when you're on Full application.",
+    highlights: [
+      "LOs reported the new snip step always errored with \"No ASSIGNED TO LOAN scenario found on this page\" because they always trigger the PE workflow from the Full application screen, not from Scenarios. The snip now drives the SPA — clicks the Pricing & Scenarios top-nav link, then the Scenarios sub-tab — before looking for the assigned scenario card. Waits up to 5s for the card to mount, then runs the existing snip + download flow. Doesn't navigate back afterwards (LO is about to open Gmail anyway, and SPA back-navigation isn't reliable enough to risk losing state).",
+      "Warning callout on the email-preview step now mentions the page hop so the LO isn't surprised when the LOP tab changes screens during the capture."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.49.1",
     headline: "PE Workflow: removed the \"Have you uploaded the Comp LE to Tasks?\" checklist step in the unlocked path — the LO uploads it manually before requesting the PE anyway.",
     highlights: [
