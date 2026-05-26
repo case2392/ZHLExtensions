@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.5",
+    headline: "Time-saved toast: \"Across all users\" line now shows an \"(as of HH:MM)\" timestamp and refreshes faster (~10 min vs. up to 1h15m).",
+    highlights: [
+      "Extension cache TTL on the global total dropped from 1 hour to 10 minutes; Apps Script side dropped from 15 min to 5 min. Net effect: when you trigger the toast, the across-all-users number is at most ~15 min stale instead of up to ~75 min.",
+      "Added an \"(as of HH:MM)\" suffix next to the global total so you can see exactly when the number was last refreshed from the server. If the timestamp doesn't tick over between toasts, you're seeing the cached value — fire one more action and the background refresh will land for the next toast."
+    ]
+  },
+  {
     version: "1.49.4",
     headline: "PE Workflow: locked path no longer shows the \"Don't forget to attach 2 files\" reminder or auto-snips the scenario — comp pricing and LE are already in Encompass for locked loans.",
     highlights: [

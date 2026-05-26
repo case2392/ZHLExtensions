@@ -43,12 +43,19 @@
     return out;
   }
 
+  // Stashed by the most recent record() so renderHtml can show the
+  // "as of HH:MM" line without every caller having to pass it through.
+  let _lastGlobalFetchedAt = null;
+
   function record(tool, minutes) {
     return new Promise(function (resolve) {
       const mins = Math.max(0, Math.round(Number(minutes) || 0));
       let settled = false;
       function done(payload) {
         if (settled) return;
+        if (payload && typeof payload.globalFetchedAt === 'number') {
+          _lastGlobalFetchedAt = payload.globalFetchedAt;
+        }
         settled = true;
         resolve(payload);
       }
@@ -63,11 +70,12 @@
               const stored = Number(data['_zhl_time_saved_user_total_min']) || 0;
               const cache = data['_zhl_time_saved_global_cache_v2'];
               const globalTotal = (cache && typeof cache.value === 'number') ? cache.value : null;
-              done({ userTotal: stored + mins, globalTotal: globalTotal });
+              const globalFetchedAt = (cache && typeof cache.fetchedAt === 'number') ? cache.fetchedAt : null;
+              done({ userTotal: stored + mins, globalTotal: globalTotal, globalFetchedAt: globalFetchedAt });
             }
           );
         } catch (_) {
-          done({ userTotal: mins, globalTotal: null });
+          done({ userTotal: mins, globalTotal: null, globalFetchedAt: null });
         }
       }
       try {
@@ -105,6 +113,20 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  function formatAsOf(ms) {
+    const d = new Date(ms);
+    if (isNaN(d.getTime())) return '';
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const today = new Date();
+    const sameDay =
+      d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate();
+    if (sameDay) return time;
+    const date = d.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+    return date + ' ' + time;
+  }
+
   function renderHtml(justSavedMin, userTotalMin, globalTotalMin) {
     const just  = formatDuration(justSavedMin);
     const user  = formatDuration(userTotalMin);
@@ -114,7 +136,13 @@
         '<div style="font-size:12px;">Your total with ZHL Pack: <strong>' + escapeHtml(user) + '</strong></div>'
     ];
     if (typeof globalTotalMin === 'number' && globalTotalMin > 0) {
-      lines.push('<div style="font-size:12px;">Across all users: <strong>' + escapeHtml(formatDuration(globalTotalMin)) + '</strong></div>');
+      let line = '<div style="font-size:12px;">Across all users: <strong>' + escapeHtml(formatDuration(globalTotalMin)) + '</strong>';
+      if (typeof _lastGlobalFetchedAt === 'number') {
+        const asOf = formatAsOf(_lastGlobalFetchedAt);
+        if (asOf) line += ' <span style="opacity:0.65;font-size:11px;">(as of ' + escapeHtml(asOf) + ')</span>';
+      }
+      line += '</div>';
+      lines.push(line);
     }
     lines.push('</div>');
     return lines.join('');

@@ -945,12 +945,12 @@ async function getGlobalTimeSavedCached() {
   const data = await chrome.storage.local.get([TIME_SAVED_GLOBAL_KEY]);
   const cache = data[TIME_SAVED_GLOBAL_KEY];
   const fresh = cache && (Date.now() - cache.fetchedAt < TIME_SAVED_GLOBAL_TTL);
-  if (fresh) return cache.value;
+  if (fresh) return { value: cache.value, fetchedAt: cache.fetchedAt };
   // Cache stale or missing — return whatever we have (or null) IMMEDIATELY
   // and kick off a refresh in the background. The toast in the page should
   // appear in ~100ms, not wait 15+ s for an Apps Script cold-start.
   setTimeout(refreshGlobalTimeSaved, 0);
-  return cache ? cache.value : null;
+  return cache ? { value: cache.value, fetchedAt: cache.fetchedAt } : { value: null, fetchedAt: null };
 }
 
 async function refreshGlobalTimeSaved() {
@@ -1457,8 +1457,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         url: hostname,
         ts: Date.now()
       });
-      const globalTotal = await getGlobalTimeSavedCached();
-      sendResponse({ ok: true, userTotal: userTotal, globalTotal: globalTotal });
+      const globalCache = await getGlobalTimeSavedCached();
+      sendResponse({
+        ok: true,
+        userTotal: userTotal,
+        globalTotal: globalCache.value,
+        globalFetchedAt: globalCache.fetchedAt
+      });
     })();
     return true;
   }
