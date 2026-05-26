@@ -68,6 +68,21 @@ function setup() {
 }
 
 function doPost(e) {
+  // Serialize all writes through a script-wide lock. Without this,
+  // concurrent doPost invocations all read the same getLastRow() and
+  // race to setValues() starting at lastRow+1 — second writer clobbers
+  // first, so the Events sheet appears frozen even though every
+  // execution returns ok:true. Up to ~30s wait for the lock; beyond
+  // that we return a transient error and the extension retries.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: 'lock-timeout' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   try {
     const payload = JSON.parse(e.postData.contents);
     const events = Array.isArray(payload.events) ? payload.events : [];
@@ -100,6 +115,7 @@ function doPost(e) {
     });
     if (rows.length > 0) {
       s.getRange(s.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+      SpreadsheetApp.flush(); // commit before releasing the lock
     }
 
     upsertUser_(ss, { email, name, anonId, version, eventDelta: rows.length });
@@ -112,6 +128,8 @@ function doPost(e) {
     return ContentService
       .createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
   }
 }
 
@@ -318,8 +336,8 @@ function eventMinutes_(event, propsJson) {
 // Cached for 15 min in ScriptProperties so repeated hits don't rescan.
 function getTotalTimeSavedMinutes_() {
   const props = PropertiesService.getScriptProperties();
-  const cached = Number(props.getProperty('timeSavedTotal_v3'));
-  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v3')) || 0;
+  const cached = Number(props.getProperty('timeSavedTotal_v4'));
+  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v4')) || 0;
   if (cached >= 0 && (Date.now() - cachedTs) < 15 * 60 * 1000) {
     return cached;
   }
@@ -336,8 +354,8 @@ function getTotalTimeSavedMinutes_() {
   for (let i = 0; i < vals.length; i++) {
     total += eventMinutes_(vals[i][0], vals[i][1]);
   }
-  props.setProperty('timeSavedTotal_v3', String(total));
-  props.setProperty('timeSavedTotalTs_v3', String(Date.now()));
+  props.setProperty('timeSavedTotal_v4', String(total));
+  props.setProperty('timeSavedTotalTs_v4', String(Date.now()));
   return total;
 }
 
