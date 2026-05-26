@@ -415,11 +415,14 @@ function eventMinutes_(event, propsJson) {
 
 // Sum minutes across every event row in the Events sheet (time_saved
 // events use their props.minutes; legacy events use LEGACY_TIME_PER_EVENT_).
-// Cached for 5 min in ScriptProperties so repeated hits don't rescan.
+// Adds the BACKFILL_OFFSET_KEY ScriptProperty so manually-credited
+// gaps (e.g. days when telemetry wasn't deploying) still show in the
+// global total. Cached for 5 min in ScriptProperties so repeated hits
+// don't rescan.
 function getTotalTimeSavedMinutes_() {
   const props = PropertiesService.getScriptProperties();
-  const cached = Number(props.getProperty('timeSavedTotal_v4'));
-  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v4')) || 0;
+  const cached = Number(props.getProperty('timeSavedTotal_v5'));
+  const cachedTs = Number(props.getProperty('timeSavedTotalTs_v5')) || 0;
   if (cached >= 0 && (Date.now() - cachedTs) < 5 * 60 * 1000) {
     return cached;
   }
@@ -438,9 +441,95 @@ function getTotalTimeSavedMinutes_() {
       total += eventMinutes_(vals[i][0], vals[i][1]);
     }
   }
-  props.setProperty('timeSavedTotal_v4', String(total));
-  props.setProperty('timeSavedTotalTs_v4', String(Date.now()));
+  total += Number(props.getProperty(BACKFILL_OFFSET_KEY)) || 0;
+  props.setProperty('timeSavedTotal_v5', String(total));
+  props.setProperty('timeSavedTotalTs_v5', String(Date.now()));
   return total;
+}
+
+// Manual backfill for periods when telemetry wasn't deploying (e.g. the
+// 5/14 – 5/26 gap). Stored as a flat minute offset in ScriptProperties
+// and added to the live sum in getTotalTimeSavedMinutes_ above. Per-user
+// totals are NOT affected — this is a global-only credit.
+const BACKFILL_OFFSET_KEY = 'timeSavedBackfillMin';
+
+// Run this from the Apps Script editor (Run ▸ estimateMissingPeriod).
+// Returns the estimated minutes that would have been logged in the
+// given number of days, based on the average daily rate of EXISTING
+// event data. Does NOT modify anything — use applyBackfillForMissingDays
+// to actually commit the credit.
+function estimateMissingPeriod(daysMissed) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tabs = listEventsTabs_(ss);
+  let total = 0;
+  let minTs = Infinity;
+  let maxTs = -Infinity;
+  for (let t = 0; t < tabs.length; t++) {
+    const s = tabs[t];
+    const last = s.getLastRow();
+    if (last < 2) continue;
+    // Cols 1=ts, 6=event, 7=props
+    const stamps = s.getRange(2, 1, last - 1, 1).getValues();
+    const eventCols = s.getRange(2, 6, last - 1, 2).getValues();
+    for (let i = 0; i < eventCols.length; i++) {
+      const mins = eventMinutes_(eventCols[i][0], eventCols[i][1]);
+      total += mins;
+      const ts = stamps[i][0];
+      // Stored as ISO string by the extension; Sheets may auto-parse to Date.
+      const ms = ts instanceof Date ? ts.getTime() : Date.parse(String(ts));
+      if (isFinite(ms)) {
+        if (ms < minTs) minTs = ms;
+        if (ms > maxTs) maxTs = ms;
+      }
+    }
+  }
+  if (!isFinite(minTs) || !isFinite(maxTs) || maxTs <= minTs) {
+    Logger.log('estimateMissingPeriod: not enough timestamped data to compute rate.');
+    return 0;
+  }
+  const daysOfData = (maxTs - minTs) / (24 * 60 * 60 * 1000);
+  const avgPerDay = total / daysOfData;
+  const estimate = Math.round(avgPerDay * Number(daysMissed || 0));
+  Logger.log(
+    'Total minutes in sheet: ' + total.toFixed(1) +
+    ' over ' + daysOfData.toFixed(2) + ' days' +
+    ' → avg ' + avgPerDay.toFixed(1) + ' min/day' +
+    ' → ' + daysMissed + '-day backfill ≈ ' + estimate + ' min (' +
+    (estimate / 60).toFixed(1) + ' hr)'
+  );
+  return estimate;
+}
+
+// Run this once from the Apps Script editor to commit the backfill
+// credit. Pass the number of missed days; it'll estimate using the
+// average daily rate and write the result to ScriptProperties.
+// Subsequent calls OVERWRITE — they don't add on top — so it's safe
+// to re-run if you got the day count wrong.
+function applyBackfillForMissingDays(daysMissed) {
+  const estimate = estimateMissingPeriod(daysMissed);
+  if (estimate <= 0) {
+    Logger.log('applyBackfillForMissingDays: estimate was 0, nothing committed.');
+    return 0;
+  }
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty(BACKFILL_OFFSET_KEY, String(estimate));
+  // Invalidate the 5-min total cache so the next doGet returns the
+  // new sum immediately instead of waiting up to 5 min.
+  props.deleteProperty('timeSavedTotal_v5');
+  props.deleteProperty('timeSavedTotalTs_v5');
+  Logger.log('applyBackfillForMissingDays: committed ' + estimate +
+    ' min (' + (estimate / 60).toFixed(1) + ' hr) for ' + daysMissed + ' missed days.');
+  return estimate;
+}
+
+// Convenience: clear the backfill credit entirely (e.g. if you want to
+// undo or redo with different inputs).
+function clearTimeSavedBackfill() {
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty(BACKFILL_OFFSET_KEY);
+  props.deleteProperty('timeSavedTotal_v5');
+  props.deleteProperty('timeSavedTotalTs_v5');
+  Logger.log('clearTimeSavedBackfill: backfill cleared.');
 }
 
 // Per-user total — filter by Email column (col 2). Cached 15 min per
