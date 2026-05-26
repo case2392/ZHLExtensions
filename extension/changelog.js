@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.4",
+    headline: "PE Workflow: locked path no longer shows the \"Don't forget to attach 2 files\" reminder or auto-snips the scenario — comp pricing and LE are already in Encompass for locked loans.",
+    highlights: [
+      "On the email-preview step, the yellow attachment callout, the \"Capture scenario snip\" button, and the auto-capture step inside \"Open in Gmail + copy body\" are all suppressed when the LO answered \"Yes — locked\" on Q1. The RM only needs the email body for locked PE requests; the comp pricing and competitor LE live in Encompass already. Unlocked path is unchanged — still gets the reminder, the snip button, and the pre-Gmail auto-capture."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.49.3",
     headline: "PE Workflow Scenario snip: fixed \"captureVisibleTab failed: Either the '<all_urls>' or 'activeTab' permission is required\" by adding <all_urls> host permission.",
     highlights: [

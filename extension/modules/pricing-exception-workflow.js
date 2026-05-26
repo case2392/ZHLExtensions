@@ -1076,17 +1076,22 @@
         // exactly two files; the Scenario details snip is auto-captured
         // for the LO but Gmail compose attachments still need a manual
         // drag-in, so this callout has to be impossible to miss.
-        '<div style="margin-top:14px;padding:12px 14px;background:#fef3c7;border:2px solid #b45309;border-radius:6px;color:#7c2d12;">' +
-          '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">⚠ Don\'t forget to attach 2 files before sending:</div>' +
-          '<ol style="margin:0;padding-left:22px;font-size:12px;line-height:1.6;">' +
-            '<li><strong>Scenario details snip</strong> — auto-saved to your Downloads when you click <em>Open in Gmail</em> (we hop to the Scenarios tab to grab it, so don\'t panic if the page changes). Just drag it from the Downloads bar into the Gmail compose.</li>' +
-            '<li><strong>Competitor LE / worksheet</strong> — drag in the loan estimate or pricing worksheet from the other lender.</li>' +
-          '</ol>' +
-          '<div id="zhl-pe-snip-status" style="margin-top:8px;font-size:11px;font-weight:600;"></div>' +
-        '</div>' +
+        // Locked path skips the whole reminder + snip flow: when the rate
+        // is locked, the comp pricing + LE are already in Encompass, so
+        // the RM doesn't need anything attached to the email.
+        (s.locked === true ? '' :
+          '<div style="margin-top:14px;padding:12px 14px;background:#fef3c7;border:2px solid #b45309;border-radius:6px;color:#7c2d12;">' +
+            '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">⚠ Don\'t forget to attach 2 files before sending:</div>' +
+            '<ol style="margin:0;padding-left:22px;font-size:12px;line-height:1.6;">' +
+              '<li><strong>Scenario details snip</strong> — auto-saved to your Downloads when you click <em>Open in Gmail</em> (we hop to the Scenarios tab to grab it, so don\'t panic if the page changes). Just drag it from the Downloads bar into the Gmail compose.</li>' +
+              '<li><strong>Competitor LE / worksheet</strong> — drag in the loan estimate or pricing worksheet from the other lender.</li>' +
+            '</ol>' +
+            '<div id="zhl-pe-snip-status" style="margin-top:8px;font-size:11px;font-weight:600;"></div>' +
+          '</div>'
+        ) +
         '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">' +
           btnPrimary('Open in Gmail + copy body', 'zhl-pe-mailto') +
-          btnSecondary('Capture scenario snip', 'zhl-pe-snip') +
+          (s.locked === true ? '' : btnSecondary('Capture scenario snip', 'zhl-pe-snip')) +
           btnSecondary('Copy body only', 'zhl-pe-copy-body') +
           btnSecondary('Copy subject only', 'zhl-pe-copy-subj') +
         '</div>' +
@@ -1167,13 +1172,18 @@
         return result;
       }
 
-      body.querySelector('#zhl-pe-snip').addEventListener('click', async function () {
-        const btn = this;
-        const orig = btn.textContent;
-        btn.disabled = true; btn.textContent = 'Snipping…';
-        try { await captureSnipForOpenInGmail(); }
-        finally { btn.disabled = false; btn.textContent = orig; }
-      });
+      // Snip button is omitted on the locked path (no attachments needed),
+      // so guard the listener wiring.
+      const snipBtn = body.querySelector('#zhl-pe-snip');
+      if (snipBtn) {
+        snipBtn.addEventListener('click', async function () {
+          const btn = this;
+          const orig = btn.textContent;
+          btn.disabled = true; btn.textContent = 'Snipping…';
+          try { await captureSnipForOpenInGmail(); }
+          finally { btn.disabled = false; btn.textContent = orig; }
+        });
+      }
 
       body.querySelector('#zhl-pe-mailto').addEventListener('click', async function () {
         const btn = this;
@@ -1215,11 +1225,15 @@
         // and the LO is ready to drag it in. We don't block opening Gmail
         // if the capture fails — the warning callout already tells the
         // LO to attach the snip manually if it didn't work.
-        const origText = btn.textContent;
-        btn.disabled = true; btn.textContent = 'Capturing snip…';
-        try { await captureSnipForOpenInGmail(); }
-        catch (_) {}
-        btn.disabled = false; btn.textContent = origText;
+        // Locked path skips the capture entirely: comp pricing + LE are
+        // already in Encompass, so no attachments go on the email.
+        if (workflowState.locked !== true) {
+          const origText = btn.textContent;
+          btn.disabled = true; btn.textContent = 'Capturing snip…';
+          try { await captureSnipForOpenInGmail(); }
+          catch (_) {}
+          btn.disabled = false; btn.textContent = origText;
+        }
         stashThenOpen();
       });
       body.querySelector('#zhl-pe-copy-body').addEventListener('click', function () {
