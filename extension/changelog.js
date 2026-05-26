@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.3",
+    headline: "PE Workflow Scenario snip: fixed \"captureVisibleTab failed: Either the '<all_urls>' or 'activeTab' permission is required\" by adding <all_urls> host permission.",
+    highlights: [
+      "Chrome's chrome.tabs.captureVisibleTab API requires either <all_urls> host permission or activeTab — host permission for the specific captured URL (https://operator.zillowhomeloans.com/*) does NOT satisfy the check, so the v1.49.0 auto-snip path was failing for everyone with the error above and falling back to the manual-snip message. activeTab wouldn't help here because it's only granted when the LO clicks the extension's action button / context menu / keyboard shortcut, not when they click a button inside the in-page PE modal. So <all_urls> was the only path that keeps the one-click auto-snip flow.",
+      "Chrome will re-prompt to accept the broader site access on update. Nothing else in the extension uses the new permission — it's there strictly so captureVisibleTab can grab the LOP tab for the Scenario snip."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.49.2",
     headline: "PE Workflow Scenario snip: auto-navigates to the Scenarios tab first instead of failing when you're on Full application.",
     highlights: [
