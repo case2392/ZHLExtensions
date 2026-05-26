@@ -884,7 +884,7 @@ const TIME_SAVED_USER_KEY    = "_zhl_time_saved_user_total_min";
 // so existing installs invalidate their cached global total and refetch the new
 // sum. Otherwise users keep seeing yesterday's undercounted number for up to 1h.
 const TIME_SAVED_GLOBAL_KEY  = "_zhl_time_saved_global_cache_v2";
-const TIME_SAVED_GLOBAL_TTL  = 60 * 60 * 1000; // 1 hour
+const TIME_SAVED_GLOBAL_TTL  = 10 * 60 * 1000; // 10 minutes
 // Same rationale: bump when the registry expands so the one-shot seeder re-runs
 // and picks up the higher historical total. Existing users had their _v1 flag set
 // when the registry was much smaller (only 6 events) — flag rename forces a re-seed.

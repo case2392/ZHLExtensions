@@ -415,12 +415,12 @@ function eventMinutes_(event, propsJson) {
 
 // Sum minutes across every event row in the Events sheet (time_saved
 // events use their props.minutes; legacy events use LEGACY_TIME_PER_EVENT_).
-// Cached for 15 min in ScriptProperties so repeated hits don't rescan.
+// Cached for 5 min in ScriptProperties so repeated hits don't rescan.
 function getTotalTimeSavedMinutes_() {
   const props = PropertiesService.getScriptProperties();
   const cached = Number(props.getProperty('timeSavedTotal_v4'));
   const cachedTs = Number(props.getProperty('timeSavedTotalTs_v4')) || 0;
-  if (cached >= 0 && (Date.now() - cachedTs) < 15 * 60 * 1000) {
+  if (cached >= 0 && (Date.now() - cachedTs) < 5 * 60 * 1000) {
     return cached;
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
