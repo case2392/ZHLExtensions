@@ -584,3 +584,22 @@ const DASHBOARD_HTML_ =
 'document.getElementById("days").onchange=function(){state.daysBack=Number(this.value);refresh()};' +
 'refresh();' +
 '</script></body></html>';
+
+// One-shot diagnostic — run from the Apps Script editor (function dropdown
+// → diagSheet → Run), then open the Execution log to see which spreadsheet
+// the script is actually bound to and what it thinks Events' last row is.
+// Useful when doPost is completing but rows aren't visibly landing.
+function diagSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log('Spreadsheet name: ' + (ss ? ss.getName() : 'NULL'));
+  Logger.log('Spreadsheet URL:  ' + (ss ? ss.getUrl()  : 'NULL'));
+  const s = ss && ss.getSheetByName('Events');
+  Logger.log('Events sheet exists: ' + (s ? 'YES' : 'NO'));
+  Logger.log('Events lastRow:      ' + (s ? s.getLastRow() : 'n/a'));
+  if (s && s.getLastRow() > 1) {
+    const last = s.getRange(s.getLastRow(), 1, 1, 9).getValues()[0];
+    Logger.log('Last row: ' + JSON.stringify(last));
+  }
+  const all = ss ? ss.getSheets().map(function (x) { return x.getName(); }) : [];
+  Logger.log('All tab names: ' + all.join(', '));
+}
