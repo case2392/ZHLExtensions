@@ -18,6 +18,9 @@
   const STUDENT_LOAN_PANEL_ID = 'rric-sloan-summary';
   const EXCLUDE_TELECOM_BUTTON_ID = 'rric-exclude-telecom-button';
   const EXCLUDE_TELECOM_BUTTON_CLASS = 'rric-exclude-telecom-button-cls';
+  const COLLECTIONS_5PCT_BUTTON_ID = 'rric-collections-5pct-button';
+  const COLLECTIONS_5PCT_BUTTON_CLASS = 'rric-collections-5pct-button-cls';
+  const COLLECTIONS_5PCT_PANEL_ID = 'rric-collections-5pct-summary';
   const COLLECTIONS_BADGE_CLASS = 'rric-collections-badge-cls';
   const FHA_COLLECTION_CAP = 2000;
   const DISPUTED_BADGE_CLASS = 'rric-disputed-badge-cls';
@@ -2193,6 +2196,250 @@
     }
   }
 
+  // "5% Collections" — FHA 4000.1 lets lenders satisfy the cumulative-
+  // collections rule (when non-medical collection balances total
+  // >= $2,000) by including 5% of each collection's unpaid balance as
+  // a monthly debt in DTI, instead of paying off or excluding the
+  // accounts. This button automates that: expand each collection row,
+  // set monthly payment to balance × 0.05, save, repeat.
+  function ensureCollections5pctButton() {
+    const sections = findLiabilitiesHeaders();
+    if (!sections.length) return;
+    for (const sec of sections) {
+      if (sec.container.querySelector('.' + COLLECTIONS_5PCT_BUTTON_CLASS)) continue;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'rric-button ' + COLLECTIONS_5PCT_BUTTON_CLASS;
+      btn.textContent = '5% Collections';
+      btn.title = 'Set each non-medical collection account\'s monthly payment to 5% of its unpaid balance. Use when the FHA cumulative collections balance exceeds $' + FHA_COLLECTION_CAP.toLocaleString() + ' and you\'re applying the 5%-of-balance DTI rule per FHA 4000.1.\n\nSkips medical collections (excluded from FHA DTI) and rows where a payment is already set manually.\n\n' + ZHL_TIP;
+      const scopedTable = sec.table;
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        addFivePctToCollections(btn, scopedTable);
+      });
+      const group = getOrCreateLiabilitiesGroup(sec);
+      group.appendChild(btn);
+    }
+  }
+
+  async function addFivePctToCollections(button, scopeTable) {
+    const RATE = 0.05;
+    const origText = button ? button.textContent : '';
+    if (button) { button.disabled = true; button.textContent = 'Working…'; }
+    console.group('[5% Collections] run started');
+    try {
+      const liabilityRows = findLiabilityRows(scopeTable);
+      const loanId = getLoanId();
+      const ourPayments = await getOurPayments(loanId);
+      const updated = [];
+      const skipped = [];
+      let detected = 0;
+
+      for (const lib of liabilityRows) {
+        if (!isCollectionAccount(lib.accountType)) continue;
+        detected++;
+
+        if (isMedicalPayee(lib.payee)) {
+          skipped.push({ lib: lib, reason: 'Medical collection — excluded from FHA DTI' });
+          continue;
+        }
+        if (!lib.balance || lib.balance <= 0) {
+          skipped.push({ lib: lib, reason: 'No unpaid balance' });
+          continue;
+        }
+
+        const computed = Math.round(lib.balance * RATE * 100) / 100;
+        const key = liabilityKey(lib);
+        const ours = ourPayments[key];
+
+        // If a non-zero payment is already there and we didn't set it,
+        // and it doesn't match the 5% figure, leave it alone — could
+        // be a verified per-agreement payment the LO entered manually.
+        if (lib.payment > 0 && !ours && Math.abs(lib.payment - computed) > 0.5) {
+          skipped.push({
+            lib: lib,
+            reason: 'Payment already set (' + lib.paymentText + ') — entered manually, not overwritten'
+          });
+          continue;
+        }
+        if (lib.payment > 0 && Math.abs(lib.payment - computed) <= 0.5) {
+          skipped.push({ lib: lib, reason: 'Already at 5% (' + lib.paymentText + ')' });
+          continue;
+        }
+
+        const expanded = await toggleLiabilityRow(lib.tr, true);
+        if (!expanded) {
+          skipped.push({ lib: lib, reason: 'Could not expand row' });
+          continue;
+        }
+        const editForm = lib.tr.nextElementSibling;
+        if (!editForm) {
+          skipped.push({ lib: lib, reason: 'Edit form not found after expanding' });
+          continue;
+        }
+        const excludeFlag = editForm.querySelector('input[name="exclude"]');
+        if (excludeFlag && excludeFlag.checked) {
+          skipped.push({ lib: lib, reason: 'Exclude flag is set' });
+          await toggleLiabilityRow(lib.tr, false);
+          continue;
+        }
+        const payoff = editForm.querySelector('input[name="payoff"]');
+        if (payoff && payoff.checked) {
+          skipped.push({ lib: lib, reason: 'Payoff flag is set' });
+          await toggleLiabilityRow(lib.tr, false);
+          continue;
+        }
+        const paymentInput = editForm.querySelector('input[name="monthlyPayment"]');
+        if (!paymentInput) {
+          skipped.push({ lib: lib, reason: 'Monthly payment input not found' });
+          await toggleLiabilityRow(lib.tr, false);
+          continue;
+        }
+
+        try { paymentInput.focus(); } catch (_) {}
+        setReactInputValue(paymentInput, computed.toFixed(2));
+        await waitMs(150);
+        try { paymentInput.blur(); } catch (_) {}
+        await waitMs(150);
+
+        const saveBtn = editForm.querySelector('button[data-cy="save-liability-button"]');
+        if (!saveBtn) {
+          skipped.push({ lib: lib, reason: 'Save button not found' });
+          continue;
+        }
+        if (typeof saveBtn.click === 'function') saveBtn.click();
+        else simulateClick(saveBtn);
+
+        let saved = false;
+        for (let i = 0; i < 200; i++) {
+          await waitMs(50);
+          if (!isLiabilityRowExpanded(lib.tr)) { saved = true; break; }
+        }
+        if (saved) {
+          await setOurPayment(loanId, key, {
+            calc: 'collections-5pct',
+            payment: computed,
+            balance: lib.balance,
+            ts: Date.now()
+          });
+          updated.push({ lib: lib, payment: computed, previousPayment: lib.payment });
+          // Settle between rows so React finishes the rerender.
+          await waitMs(250);
+        } else {
+          skipped.push({
+            lib: lib,
+            reason: 'Save did not complete within 10s. Value entered ' + fmt(computed) +
+                    '; row left expanded for manual review.'
+          });
+        }
+      }
+
+      console.log('[5% Collections] done. detected=' + detected + ' updated=' + updated.length + ' skipped=' + skipped.length);
+      try { track('collections_5pct', { detected: detected, updated: updated.length, skipped: skipped.length }); } catch (_) {}
+      showCollections5pctSummary({ detected: detected, updated: updated, skipped: skipped, loanId: loanId });
+    } catch (e) {
+      console.error('[5% Collections] run failed:', e);
+      alert('5% Collections hit an error: ' + (e && e.message || e));
+    } finally {
+      console.groupEnd();
+      if (button) { button.disabled = false; button.textContent = origText; }
+    }
+  }
+
+  function showCollections5pctSummary(results) {
+    const existing = document.getElementById(COLLECTIONS_5PCT_PANEL_ID);
+    if (existing) existing.remove();
+
+    const panel = document.createElement('div');
+    panel.id = COLLECTIONS_5PCT_PANEL_ID;
+    panel.className = 'rric-panel';
+    const fontFamily = getPageFontFamily();
+    if (fontFamily) panel.style.fontFamily = fontFamily;
+
+    const header = document.createElement('div');
+    header.className = 'rric-panel-header';
+    const title = document.createElement('div');
+    title.className = 'rric-panel-title';
+    title.textContent = '5% Collections: ' + results.updated.length + ' updated, ' + results.skipped.length + ' skipped';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'rric-panel-close';
+    close.setAttribute('aria-label', 'Close');
+    close.textContent = '×';
+    close.addEventListener('click', function () { panel.remove(); });
+    header.appendChild(title);
+    header.appendChild(close);
+    panel.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'rric-panel-body';
+
+    function addLine(label, value, opts) {
+      opts = opts || {};
+      const row = document.createElement('div');
+      row.className = 'rric-row' + (opts.divider ? ' rric-divider' : '') + (opts.muted ? ' rric-muted' : '');
+      const lbl = document.createElement('div');
+      lbl.className = 'rric-label';
+      lbl.textContent = label;
+      const val = document.createElement('div');
+      val.className = 'rric-value';
+      val.textContent = value;
+      row.appendChild(lbl);
+      row.appendChild(val);
+      body.appendChild(row);
+    }
+    function addSubhead(text) {
+      const h = document.createElement('div');
+      h.className = 'rric-subhead';
+      h.textContent = text;
+      body.appendChild(h);
+    }
+
+    addLine('Formula', '5% × unpaid balance (FHA 4000.1)');
+    addLine('Collections detected', String(results.detected));
+    addLine('Updated', String(results.updated.length));
+    addLine('Skipped', String(results.skipped.length));
+
+    if (results.updated.length > 0) {
+      addSubhead('Updated');
+      for (const u of results.updated) {
+        const who = u.lib.borrower ? ' — ' + u.lib.borrower : '';
+        addLine(u.lib.payee + who, fmt(u.payment));
+      }
+    }
+    if (results.skipped.length > 0) {
+      addSubhead('Skipped');
+      for (const s of results.skipped) {
+        const who = s.lib.borrower ? ' — ' + s.lib.borrower : '';
+        addLine(s.lib.payee + who, s.reason, { muted: true });
+      }
+    }
+    if (results.detected === 0) {
+      addSubhead('No collections found');
+      const note = document.createElement('p');
+      note.className = 'rric-intro';
+      note.textContent = 'No liability rows had Account type "Collection" or "Unknown" (collection-agency rows). If a row should have been included, expand it and check the Account type dropdown.';
+      body.appendChild(note);
+    }
+
+    // Time saved: ~2 min vs hand-expanding each collection, calculating
+    // 5% of balance, and typing the payment. Only credit when at least
+    // one row actually got updated.
+    if (results && results.updated && results.updated.length > 0 && window.__zhlTimeSaved) {
+      const slot = document.createElement('div');
+      slot.style.padding = '0 14px 14px';
+      panel.appendChild(slot);
+      const mins = 2;
+      window.__zhlTimeSaved.record('va-calc-collections-5pct', mins).then(function (r) {
+        slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+      });
+    }
+
+    panel.appendChild(body);
+    document.body.appendChild(panel);
+  }
+
   // React/styled-components controlled checkbox: setting .checked +
   // dispatching change doesn't always commit because the React state is
   // the source of truth. The reliable path is to fire a real click on
@@ -2762,6 +3009,7 @@
       try { ensureButtonState(); } catch (e) { console.error('[Residual Income Calc] observer error', e); }
       try { ensureStudentLoanButton(); } catch (e) { console.error('[Residual Income Calc] sloan observer error', e); }
       try { ensureExcludeTelecomButton(); } catch (e) { console.error('[Exclude SelfReport] observer error', e); }
+      try { ensureCollections5pctButton(); } catch (e) { console.error('[5% Collections] observer error', e); }
       try { ensureCollectionsBadge(); } catch (e) { console.error('[Collections Badge] observer error', e); }
       try { ensureDisputedBadge(); } catch (e) { console.error('[Disputed Badge] observer error', e); }
     });

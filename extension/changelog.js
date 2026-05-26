@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.48.0",
+    headline: "New \"5% Collections\" button on the Liabilities table — auto-applies the FHA 4000.1 5%-of-balance DTI rule to every non-medical collection in one click.",
+    highlights: [
+      "FHA 4000.1 says when cumulative non-medical collection balances total $2,000 or more, the lender must either pay them off, document an active payment plan, OR include 5% of each collection's unpaid balance as a monthly debt in DTI. Option 3 is the path most LOs take, but it meant expanding every collection row, calculating 5% by hand, and typing the payment in — slow and easy to mistype.",
+      "Now: a \"5% Collections\" button sits next to Calc Student Loans / Exclude SelfReport on the Liabilities header. Click it and the extension expands each collection (Account type = Collection or Unknown), sets Monthly payment to balance × 0.05, and saves. Skips medical collections (excluded from FHA DTI), rows already marked Exclude or Payoff, and rows where you've already typed a payment manually (won't clobber a verified per-agreement number).",
+      "Summary panel at the end shows every row updated, every row skipped, and the reason — same look as the Calc Student Loans summary so the audit trail reads the same. Updated payments are tagged in storage as calc:'collections-5pct' so a future re-run is idempotent."
+    ],
+    sections: ["va-calc"]
+  },
+  {
     version: "1.47.2",
     headline: "Exclude SelfReport now also excludes UTILITY SELFREPORTED lines — was only matching TELECOM SELFREPORTED.",
     highlights: [
