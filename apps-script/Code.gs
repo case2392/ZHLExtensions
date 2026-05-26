@@ -34,6 +34,87 @@ const SHEET_EVENTS = 'Events';
 const SHEET_USERS = 'Users';
 const SHEET_DAILY = 'Daily';
 
+// Events tabs roll over: Events → Events2 → Events3 → ... when the
+// workbook approaches Google Sheets' 10M-cell ceiling. listEventsTabs_
+// returns them in chronological order; the newest is the write target.
+const SHEET_EVENTS_RE = /^Events(\d+)?$/;
+const EVENTS_NUM_COLS = 9;          // Timestamp..BatchSentAt
+const MAX_WORKBOOK_CELLS = 10000000;
+const EVENTS_CELL_BUFFER = 20000;   // leave this much headroom before rolling
+
+function listEventsTabs_(ss) {
+  return ss.getSheets()
+    .filter(function (s) { return SHEET_EVENTS_RE.test(s.getName()); })
+    .sort(function (a, b) {
+      var am = a.getName().match(SHEET_EVENTS_RE);
+      var bm = b.getName().match(SHEET_EVENTS_RE);
+      var an = am && am[1] ? Number(am[1]) : 1;
+      var bn = bm && bm[1] ? Number(bm[1]) : 1;
+      return an - bn;
+    });
+}
+
+function totalAllocatedCells_(ss) {
+  return ss.getSheets().reduce(function (acc, s) {
+    return acc + s.getMaxRows() * s.getMaxColumns();
+  }, 0);
+}
+
+// Create the next Events tab (Events2, Events3, ...) with the schema
+// header row and trimmed to 9 columns so each row costs the minimum.
+function createNextEventsTab_(ss) {
+  var tabs = listEventsTabs_(ss);
+  var nextNum = 2;
+  if (tabs.length > 0) {
+    var lastName = tabs[tabs.length - 1].getName();
+    var m = lastName.match(SHEET_EVENTS_RE);
+    var n = m && m[1] ? Number(m[1]) : 1;
+    nextNum = n + 1;
+  }
+  var s = ss.insertSheet('Events' + nextNum);
+  var defaultCols = s.getMaxColumns();
+  if (defaultCols > EVENTS_NUM_COLS) {
+    s.deleteColumns(EVENTS_NUM_COLS + 1, defaultCols - EVENTS_NUM_COLS);
+  }
+  s.appendRow(['Timestamp', 'Email', 'Name', 'AnonId', 'Version', 'Event', 'Props (JSON)', 'URL', 'BatchSentAt']);
+  s.setFrozenRows(1);
+  return s;
+}
+
+// Return the tab doPost should write to, extending its row count or
+// rolling over to a new tab if necessary. neededRows = how many rows
+// this batch is about to append.
+function currentEventsTab_(ss, neededRows) {
+  var tabs = listEventsTabs_(ss);
+  var active = tabs.length ? tabs[tabs.length - 1] : null;
+  if (!active) {
+    active = ss.insertSheet(SHEET_EVENTS);
+    active.appendRow(['Timestamp', 'Email', 'Name', 'AnonId', 'Version', 'Event', 'Props (JSON)', 'URL', 'BatchSentAt']);
+    active.setFrozenRows(1);
+  }
+  var lastRow = active.getLastRow();
+  var maxRows = active.getMaxRows();
+  var maxCols = active.getMaxColumns();
+  var endRow = lastRow + neededRows;
+  if (endRow <= maxRows) return active;
+
+  var addRows = Math.max(1000, endRow - maxRows);
+  var addCells = addRows * maxCols;
+  var alloc = totalAllocatedCells_(ss);
+  if (alloc + addCells + EVENTS_CELL_BUFFER > MAX_WORKBOOK_CELLS) {
+    // Can't grow this tab without busting the 10M-cell workbook limit.
+    // Spin up the next Events tab and write there instead.
+    active = createNextEventsTab_(ss);
+    var newMax = active.getMaxRows();
+    if (neededRows + 1 > newMax) {
+      active.insertRowsAfter(newMax, neededRows + 1 - newMax);
+    }
+  } else {
+    active.insertRowsAfter(maxRows, addRows);
+  }
+  return active;
+}
+
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('Run this from the Sheet whose Apps Script project this is.');
@@ -94,11 +175,6 @@ function doPost(e) {
     const sentAt = payload.sentAt || new Date().toISOString();
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const s = ss.getSheetByName(SHEET_EVENTS) || ss.insertSheet(SHEET_EVENTS);
-    if (s.getLastRow() === 0) {
-      s.appendRow(['Timestamp', 'Email', 'Name', 'AnonId', 'Version', 'Event', 'Props (JSON)', 'URL', 'BatchSentAt']);
-      s.setFrozenRows(1);
-    }
 
     const rows = events.map(function (evt) {
       return [
@@ -114,20 +190,12 @@ function doPost(e) {
       ];
     });
     if (rows.length > 0) {
-      // Auto-extend the sheet if we'd write past its allocated row count.
-      // Google Sheets allocates a fixed number of rows per tab; once
-      // lastRow == maxRows, setValues at lastRow+1 throws "Range exceeds
-      // bounds" — which the catch below swallows, making writes silently
-      // fail. Bumping in chunks of 1000 keeps amortized cost low.
-      const startRow = s.getLastRow() + 1;
-      const endRow = startRow + rows.length - 1;
-      const maxRows = s.getMaxRows();
-      if (endRow > maxRows) {
-        const need = endRow - maxRows;
-        s.insertRowsAfter(maxRows, Math.max(1000, need));
-      }
-      s.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
-      SpreadsheetApp.flush(); // commit before releasing the lock
+      // currentEventsTab_ picks the latest Events* tab, extends its row
+      // count, or rolls over to a new tab if extending would push the
+      // workbook past Sheets' 10M-cell ceiling.
+      const s = currentEventsTab_(ss, rows.length);
+      s.getRange(s.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+      SpreadsheetApp.flush();
     }
 
     upsertUser_(ss, { email, name, anonId, version, eventDelta: rows.length });
@@ -229,19 +297,21 @@ function rollupDaily_(ss, email, events) {
 // are merged or deleted.
 function cleanupAnonRows() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const evSheet = ss.getSheetByName(SHEET_EVENTS);
   const usSheet = ss.getSheetByName(SHEET_USERS);
-  if (!evSheet || !usSheet) throw new Error('Run setup() first.');
+  const evTabs = listEventsTabs_(ss);
+  if (!evTabs.length || !usSheet) throw new Error('Run setup() first.');
 
-  // Build anonId → {email, name} map from Events. Only rows where BOTH
-  // email and anonId are non-empty contribute — that's the link.
-  const evRows = evSheet.getDataRange().getValues();
+  // Build anonId → {email, name} map across ALL Events* tabs. Only rows
+  // where BOTH email and anonId are non-empty contribute — that's the link.
   const anonToInfo = {};
-  for (var i = 1; i < evRows.length; i++) {
-    const email = (evRows[i][1] || '').toString();
-    const name = (evRows[i][2] || '').toString();
-    const anonId = (evRows[i][3] || '').toString();
-    if (email && anonId && !anonToInfo[anonId]) anonToInfo[anonId] = { email: email, name: name };
+  for (var t = 0; t < evTabs.length; t++) {
+    const evRows = evTabs[t].getDataRange().getValues();
+    for (var i = 1; i < evRows.length; i++) {
+      const email = (evRows[i][1] || '').toString();
+      const name = (evRows[i][2] || '').toString();
+      const anonId = (evRows[i][3] || '').toString();
+      if (email && anonId && !anonToInfo[anonId]) anonToInfo[anonId] = { email: email, name: name };
+    }
   }
 
   const usRows = usSheet.getDataRange().getValues();
@@ -354,17 +424,19 @@ function getTotalTimeSavedMinutes_() {
     return cached;
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const s = ss.getSheetByName(SHEET_EVENTS);
-  if (!s) return 0;
-  const last = s.getLastRow();
-  if (last < 2) return 0;
+  const tabs = listEventsTabs_(ss);
+  let total = 0;
   // Events sheet columns:
   //   1 Timestamp | 2 Email | 3 Name | 4 AnonId | 5 Version |
   //   6 Event    | 7 Props  | 8 URL  | 9 BatchSentAt
-  const vals = s.getRange(2, 6, last - 1, 2).getValues(); // Event + Props
-  let total = 0;
-  for (let i = 0; i < vals.length; i++) {
-    total += eventMinutes_(vals[i][0], vals[i][1]);
+  for (let t = 0; t < tabs.length; t++) {
+    const s = tabs[t];
+    const last = s.getLastRow();
+    if (last < 2) continue;
+    const vals = s.getRange(2, 6, last - 1, 2).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      total += eventMinutes_(vals[i][0], vals[i][1]);
+    }
   }
   props.setProperty('timeSavedTotal_v4', String(total));
   props.setProperty('timeSavedTotalTs_v4', String(Date.now()));
@@ -387,17 +459,19 @@ function getUserTimeSavedMinutes_(email) {
   if (cached >= 0 && (Date.now() - cTs) < 15 * 60 * 1000) return cached;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const s = ss.getSheetByName(SHEET_EVENTS);
-  if (!s) return 0;
-  const last = s.getLastRow();
-  if (last < 2) return 0;
-  const emails    = s.getRange(2, 2, last - 1, 1).getValues();
-  const eventCols = s.getRange(2, 6, last - 1, 2).getValues();
+  const tabs = listEventsTabs_(ss);
   let total = 0;
-  for (let i = 0; i < emails.length; i++) {
-    const e = String(emails[i][0] || '').trim().toLowerCase();
-    if (e !== target) continue;
-    total += eventMinutes_(eventCols[i][0], eventCols[i][1]);
+  for (let t = 0; t < tabs.length; t++) {
+    const s = tabs[t];
+    const last = s.getLastRow();
+    if (last < 2) continue;
+    const emails    = s.getRange(2, 2, last - 1, 1).getValues();
+    const eventCols = s.getRange(2, 6, last - 1, 2).getValues();
+    for (let i = 0; i < emails.length; i++) {
+      const e = String(emails[i][0] || '').trim().toLowerCase();
+      if (e !== target) continue;
+      total += eventMinutes_(eventCols[i][0], eventCols[i][1]);
+    }
   }
   props.setProperty(safeKey, String(total));
   props.setProperty(tsKey, String(Date.now()));
@@ -420,7 +494,10 @@ function getDashboardData(opts) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const dailySheet = ss.getSheetByName(SHEET_DAILY);
   const usersSheet = ss.getSheetByName(SHEET_USERS);
-  const eventsSheet = ss.getSheetByName(SHEET_EVENTS);
+  // Recent events come from the latest Events* tab (where new writes land).
+  // Older tabs are historical and already rolled up into Daily.
+  const eventsTabs = listEventsTabs_(ss);
+  const eventsSheet = eventsTabs.length ? eventsTabs[eventsTabs.length - 1] : null;
   if (!dailySheet || !usersSheet || !eventsSheet) {
     throw new Error('Run setup() first to create the Events / Users / Daily sheets.');
   }
@@ -623,12 +700,21 @@ function diagSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   Logger.log('Spreadsheet name: ' + (ss ? ss.getName() : 'NULL'));
   Logger.log('Spreadsheet URL:  ' + (ss ? ss.getUrl()  : 'NULL'));
-  const s = ss && ss.getSheetByName('Events');
-  Logger.log('Events sheet exists: ' + (s ? 'YES' : 'NO'));
-  Logger.log('Events lastRow:      ' + (s ? s.getLastRow() : 'n/a'));
-  if (s && s.getLastRow() > 1) {
-    const last = s.getRange(s.getLastRow(), 1, 1, 9).getValues()[0];
-    Logger.log('Last row: ' + JSON.stringify(last));
+  const alloc = totalAllocatedCells_(ss);
+  Logger.log('Allocated cells:  ' + alloc + ' / ' + MAX_WORKBOOK_CELLS +
+             ' (' + ((alloc / MAX_WORKBOOK_CELLS) * 100).toFixed(1) + '% used, ' +
+             (MAX_WORKBOOK_CELLS - alloc) + ' free)');
+  const tabs = listEventsTabs_(ss);
+  Logger.log('Events* tabs:     ' + tabs.length);
+  for (var i = 0; i < tabs.length; i++) {
+    const s = tabs[i];
+    Logger.log('  ' + s.getName() + ': lastRow=' + s.getLastRow() +
+               ' maxRows=' + s.getMaxRows() + ' maxCols=' + s.getMaxColumns());
+  }
+  const latest = tabs.length ? tabs[tabs.length - 1] : null;
+  if (latest && latest.getLastRow() > 1) {
+    const last = latest.getRange(latest.getLastRow(), 1, 1, 9).getValues()[0];
+    Logger.log('Last row in ' + latest.getName() + ': ' + JSON.stringify(last));
   }
   const all = ss ? ss.getSheets().map(function (x) { return x.getName(); }) : [];
   Logger.log('All tab names: ' + all.join(', '));
