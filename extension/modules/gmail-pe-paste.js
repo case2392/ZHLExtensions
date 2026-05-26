@@ -154,9 +154,20 @@
     }, POLL_MS);
   }
 
+  // True while this content script's chrome.* references are still wired to
+  // a live extension context. Goes false after the extension is reloaded /
+  // updated / disabled, at which point any chrome.* call throws
+  // "Extension context invalidated". We use this to silence the polling
+  // loops instead of spamming console warnings.
+  function extensionContextValid() {
+    try { return !!(chrome && chrome.runtime && chrome.runtime.id); }
+    catch (_) { return false; }
+  }
+
   let runningInThisTab = false;
   function checkAndPaste() {
     if (runningInThisTab) return; // dedupe within this tab
+    if (!extensionContextValid()) return;
     try {
       chrome.storage.local.get([STORAGE_KEY], function (data) {
         const pending = data && data[STORAGE_KEY];
@@ -186,6 +197,9 @@
         );
       });
     } catch (e) {
+      // Swallow "Extension context invalidated" silently — it's expected
+      // after a dev reload and the tab will be reloaded by the user anyway.
+      if (!extensionContextValid()) return;
       console.warn('[ZHL PE Auto-paste] storage read failed:', e);
     }
   }
@@ -197,7 +211,8 @@
 
   // Re-check on SPA URL changes (e.g. user navigates from inbox to compose).
   let lastUrl = location.href;
-  setInterval(function () {
+  const urlWatcher = setInterval(function () {
+    if (!extensionContextValid()) { clearInterval(urlWatcher); return; }
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       setTimeout(checkAndPaste, 300);
