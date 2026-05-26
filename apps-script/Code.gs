@@ -115,6 +115,101 @@ function currentEventsTab_(ss, neededRows) {
   return active;
 }
 
+// Spreadsheet-menu entry point. Apps Script fires this automatically
+// whenever the Telemetry spreadsheet is opened, so the "ZHL Telemetry"
+// menu just shows up for anyone who has the sheet open — no install
+// step. Pure UI plumbing; the real work happens in the functions it
+// dispatches to.
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('ZHL Telemetry')
+    .addItem('Run diagnostics', 'diagSheet')
+    .addSeparator()
+    .addItem('Estimate missing-period backfill…', 'menuEstimateBackfill_')
+    .addItem('Apply missing-days backfill…',      'menuApplyBackfill_')
+    .addItem('Show current backfill credit',      'menuShowBackfill_')
+    .addItem('Clear backfill credit',             'menuClearBackfill_')
+    .addSeparator()
+    .addItem('Clean up anon rows', 'cleanupAnonRows')
+    .addToUi();
+}
+
+function menuEstimateBackfill_() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt(
+    'Estimate backfill',
+    'How many days of missing telemetry do you want to estimate?\n(e.g. 12 for the 5/14 – 5/26 gap)',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const days = Number(resp.getResponseText());
+  if (!isFinite(days) || days <= 0) {
+    ui.alert('Please enter a positive number of days.');
+    return;
+  }
+  const minutes = estimateMissingPeriod(days);
+  ui.alert(
+    'Estimated backfill',
+    days + '-day backfill ≈ ' + minutes + ' min (' +
+      (minutes / 60).toFixed(1) + ' hr).\n\n' +
+      'Nothing was committed. Use "Apply missing-days backfill…" to actually credit this to the global total.',
+    ui.ButtonSet.OK
+  );
+}
+
+function menuApplyBackfill_() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt(
+    'Apply backfill',
+    'How many days of missing telemetry do you want to credit to the global total?\n\n' +
+      'This OVERWRITES any prior backfill (re-running with the right number is safe).',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const days = Number(resp.getResponseText());
+  if (!isFinite(days) || days <= 0) {
+    ui.alert('Please enter a positive number of days.');
+    return;
+  }
+  const minutes = applyBackfillForMissingDays(days);
+  if (minutes <= 0) {
+    ui.alert('Estimate was 0 — nothing committed. Check the Logger for details.');
+    return;
+  }
+  ui.alert(
+    'Backfill applied',
+    'Credited ' + minutes + ' min (' + (minutes / 60).toFixed(1) + ' hr) ' +
+      'to the "Across all users" total for ' + days + ' missed days.\n\n' +
+      'Redeploy the web app (Manage deployments → pencil → New version) ' +
+      'before clients see the new number.',
+    ui.ButtonSet.OK
+  );
+}
+
+function menuShowBackfill_() {
+  const ui = SpreadsheetApp.getUi();
+  const minutes = Number(PropertiesService.getScriptProperties().getProperty(BACKFILL_OFFSET_KEY)) || 0;
+  ui.alert(
+    'Current backfill credit',
+    minutes === 0
+      ? 'No backfill is currently applied.'
+      : 'Backfill credit: ' + minutes + ' min (' + (minutes / 60).toFixed(1) + ' hr).',
+    ui.ButtonSet.OK
+  );
+}
+
+function menuClearBackfill_() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.alert(
+    'Clear backfill?',
+    'This removes the manual backfill credit entirely. The global total will drop back to the sheet-sum-only value. Continue?',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp !== ui.Button.OK) return;
+  clearTimeSavedBackfill();
+  ui.alert('Backfill cleared. Redeploy or wait up to 5 min for the change to take effect for clients.');
+}
+
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('Run this from the Sheet whose Apps Script project this is.');
