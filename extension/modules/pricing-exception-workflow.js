@@ -786,11 +786,6 @@
     'U-assigned-scenario': makeCheckStep(
       'Have you assigned an updated scenario / pricing?',
       'Assign the borrower\'s scenario / pricing in Pricing & Scenarios before requesting a PE.',
-      'U-comp-le-tasks'
-    ),
-    'U-comp-le-tasks': makeCheckStep(
-      'Have you uploaded the Comp LE to Tasks?',
-      'Upload the competitor LE to the Tasks tab so the RM can pull it.',
       'U-enter-pricing'
     ),
     'U-enter-pricing': function (body) {

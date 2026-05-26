@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.1",
+    headline: "PE Workflow: removed the \"Have you uploaded the Comp LE to Tasks?\" checklist step in the unlocked path — the LO uploads it manually before requesting the PE anyway.",
+    highlights: [
+      "The unlocked path used to route U-assigned-scenario → U-comp-le-tasks → U-enter-pricing. Now it goes U-assigned-scenario → U-enter-pricing directly. The locked path's \"uploaded Comp LE to eFolder?\" question is unchanged — it asks about a different destination (eFolder vs Tasks)."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.49.0",
     headline: "Pricing Exception Workflow: auto-snips the assigned Scenario details to Downloads, auto-detects >2.5 pts from the entered numbers (no more manual question), email palette is now Zillow blue, and the email-preview step has a big yellow attachment reminder.",
     highlights: [
