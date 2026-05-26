@@ -349,6 +349,187 @@
     return { loanType: loanType, armOrFrm: armOrFrm };
   }
 
+  // ---- Scenario details snip capture --------------------------------------
+  // The RM team requires a snip of the assigned scenario's "View details"
+  // modal attached to the PE email. This helper does it programmatically:
+  // find the ASSIGNED TO LOAN card → click its three-dots → click "View
+  // details" → wait for the modal → capture the visible tab → crop to the
+  // modal's bounding box → save as PNG to the user's Downloads folder.
+  // The PE modal is hidden during capture so the screenshot only contains
+  // the View details modal (not the PE workflow's own overlay on top of it).
+  function peSnipWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function findAssignedScenarioCard() {
+    // The ASSIGNED TO LOAN label is a <span> with that exact text. Walk up
+    // until we hit a container that ALSO holds a three-dots button.
+    const labels = document.querySelectorAll('span');
+    for (const span of labels) {
+      const t = (span.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+      if (!/ASSIGNED TO LOAN/.test(t)) continue;
+      let node = span.parentElement;
+      while (node && node !== document.body) {
+        if (findThreeDotsButton(node)) return node;
+        node = node.parentElement;
+      }
+    }
+    return null;
+  }
+
+  function findThreeDotsButton(scope) {
+    // The three-dots icon is an inline SVG with 3 <circle> elements at
+    // cy=16, r=3, cx=7/16/25. We match on that geometry so we don't tie
+    // ourselves to c11n's hashed class names.
+    const buttons = scope.querySelectorAll('button');
+    for (const btn of buttons) {
+      const circles = btn.querySelectorAll('svg circle');
+      if (circles.length !== 3) continue;
+      let ok = true;
+      for (const c of circles) {
+        if (c.getAttribute('cy') !== '16' || c.getAttribute('r') !== '3') { ok = false; break; }
+      }
+      if (ok) return btn;
+    }
+    return null;
+  }
+
+  async function clickViewDetailsMenuItem(maxMs) {
+    const max = maxMs || 1500;
+    const start = Date.now();
+    while (Date.now() - start < max) {
+      const items = document.querySelectorAll('button[role="menuitem"]');
+      for (const item of items) {
+        if (/^view\s*details$/i.test((item.textContent || '').trim())) {
+          item.click();
+          return true;
+        }
+      }
+      await peSnipWait(50);
+    }
+    return false;
+  }
+
+  async function waitForScenarioDetailsModal(maxMs) {
+    const max = maxMs || 3000;
+    const start = Date.now();
+    while (Date.now() - start < max) {
+      const dialogs = document.querySelectorAll('section[role="dialog"][aria-modal="true"]');
+      for (const d of dialogs) {
+        const h = d.querySelector('header h4');
+        if (h && /scenario\s*details/i.test(h.textContent || '')) return d;
+      }
+      await peSnipWait(80);
+    }
+    return null;
+  }
+
+  function closeScenarioDetailsModal(modal) {
+    // Try the X close button first (top-right), then the footer Close.
+    const closeBtns = modal.querySelectorAll('button');
+    for (const b of closeBtns) {
+      const hidden = b.querySelector('.VisuallyHidden-c11n-8-111-2__sc-t8tewe-0, [class*="VisuallyHidden"]');
+      if (hidden && /close/i.test(hidden.textContent || '')) { b.click(); return true; }
+    }
+    for (const b of closeBtns) {
+      if (/^close$/i.test((b.textContent || '').trim())) { b.click(); return true; }
+    }
+    return false;
+  }
+
+  async function captureModalAsPng(modal, filename) {
+    const rect = modal.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const capture = await new Promise(function (resolve) {
+      chrome.runtime.sendMessage({ type: 'ZHL_PE_CAPTURE_VISIBLE_TAB' }, function (resp) {
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, reason: chrome.runtime.lastError.message });
+        } else {
+          resolve(resp || { ok: false, reason: 'no response' });
+        }
+      });
+    });
+    if (!capture.ok) throw new Error('captureVisibleTab failed: ' + capture.reason);
+    const img = new Image();
+    await new Promise(function (resolve, reject) {
+      img.onload = resolve;
+      img.onerror = function () { reject(new Error('failed to decode captured PNG')); };
+      img.src = capture.dataUrl;
+    });
+    // captureVisibleTab returns pixels at the device-pixel resolution. Map
+    // the CSS-pixel rect into device-pixel coords with devicePixelRatio.
+    const sx = Math.max(0, Math.round(rect.left * dpr));
+    const sy = Math.max(0, Math.round(rect.top  * dpr));
+    const sw = Math.min(img.width  - sx, Math.round(rect.width  * dpr));
+    const sh = Math.min(img.height - sy, Math.round(rect.height * dpr));
+    if (sw <= 0 || sh <= 0) throw new Error('modal is offscreen; cannot crop');
+    const canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    const croppedDataUrl = canvas.toDataURL('image/png');
+    const dl = await new Promise(function (resolve) {
+      chrome.runtime.sendMessage({
+        type: 'ZHL_PE_DOWNLOAD_PNG',
+        dataUrl: croppedDataUrl,
+        filename: filename
+      }, function (resp) {
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, reason: chrome.runtime.lastError.message });
+        } else {
+          resolve(resp || { ok: false, reason: 'no response' });
+        }
+      });
+    });
+    if (!dl.ok) throw new Error('download failed: ' + dl.reason);
+    return { downloadId: dl.downloadId, filename: filename };
+  }
+
+  async function captureAssignedScenarioSnip(zgNumber) {
+    console.group('[ZHL PE Snip] capturing assigned scenario');
+    // Hide the PE workflow modal so the captured screenshot shows only
+    // the View details modal underneath. We use visibility:hidden so the
+    // overlay's layout / scroll position is preserved while we're hidden.
+    const peOverlay = document.getElementById(MODAL_ID);
+    const prevVisibility = peOverlay ? peOverlay.style.visibility : '';
+    if (peOverlay) peOverlay.style.visibility = 'hidden';
+    let modalOpened = null;
+    try {
+      const card = findAssignedScenarioCard();
+      if (!card) {
+        return { ok: false, reason: 'No "ASSIGNED TO LOAN" scenario found on this page. Are you on the Scenarios tab?' };
+      }
+      const dots = findThreeDotsButton(card);
+      if (!dots) {
+        return { ok: false, reason: 'Three-dots menu button not found on the assigned scenario card' };
+      }
+      dots.click();
+      const clicked = await clickViewDetailsMenuItem(1500);
+      if (!clicked) {
+        return { ok: false, reason: 'View details menu item did not appear after clicking the three-dots' };
+      }
+      modalOpened = await waitForScenarioDetailsModal(3000);
+      if (!modalOpened) {
+        return { ok: false, reason: 'Scenario details modal did not render within 3s' };
+      }
+      // Settle: let any open animation finish before capturing.
+      await peSnipWait(350);
+      const safeZg = String(zgNumber || '').replace(/[^A-Za-z0-9_-]/g, '');
+      const stamp  = (safeZg || new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+      const filename = 'Scenario_Details_' + stamp + '.png';
+      const result = await captureModalAsPng(modalOpened, filename);
+      return { ok: true, filename: result.filename, downloadId: result.downloadId };
+    } catch (e) {
+      console.error('[ZHL PE Snip] failed:', e);
+      return { ok: false, reason: (e && e.message) || String(e) };
+    } finally {
+      if (modalOpened) {
+        try { closeScenarioDetailsModal(modalOpened); } catch (_) {}
+      }
+      if (peOverlay) peOverlay.style.visibility = prevVisibility;
+      console.groupEnd();
+    }
+  }
+
   // ---- button injection ---------------------------------------------------
   function findToolbarHost() {
     // Strategy 1: look for the "Paste from staged" button and use its parent.
@@ -764,15 +945,22 @@
     },
 
     // --------- shared: < 2.5 pts? ---------------------------------------
+    // In the UNLOCKED path we already computed s.pePoints from the
+    // ZHL/comp pricing inputs — no reason to ask the LO a question we
+    // already know the answer to. Auto-route: if pePoints >= 2.5,
+    // straight to the justification step; otherwise straight to the
+    // email step. The LOCKED path still gets the manual question
+    // because we never calculate the PE size in that branch.
     'points-check': function (body) {
       const s = workflowState;
-      const shown = s.locked === false ? formatPctDisplay(s.pePoints) : '';
+      if (s.locked === false && s.loanAmount > 0) {
+        s.isOver25 = (s.pePoints || 0) >= 2.5;
+        goTo(s.isOver25 ? 'big-pe-questions' : 'email');
+        return;
+      }
       body.innerHTML =
         '<h4 style="margin:0 0 12px;font-size:15px;color:#111827;">Is your PE request under 2.5 points?</h4>' +
-        (shown
-          ? '<p style="margin:0 0 16px;color:#374151;font-size:13px;">From the calculation: <strong>' + shown + '</strong>.</p>'
-          : '<p style="margin:0 0 16px;color:#6b7280;font-size:12px;">If you don\'t know, check the PE points field on the ENC Lock screen.</p>'
-        ) +
+        '<p style="margin:0 0 16px;color:#6b7280;font-size:12px;">If you don\'t know, check the PE points field on the ENC Lock screen.</p>' +
         '<div style="display:flex;gap:8px;">' +
           btnPrimary('Yes — under 2.5', 'zhl-pe-under') +
           btnSecondary('No — 2.5 or over', 'zhl-pe-over') +
@@ -832,9 +1020,22 @@
         '<input id="pe-subject" type="text" value="' + escapeHtml(email.subject) + '" style="' + fieldStyle + 'margin-bottom:10px;" />' +
         '<label style="display:block;font-size:11px;color:#6b7280;font-weight:600;margin-bottom:2px;">Body</label>' +
         '<textarea id="pe-body" style="' + fieldStyle + 'min-height:280px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;">' + escapeHtml(email.body) + '</textarea>' +
-        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">Tip: <strong>Open in Gmail</strong> opens a new Gmail compose tab and <strong>auto-pastes the formatted email body</strong> for you — no Ctrl+V needed. If auto-paste ever fails, the body is still on your clipboard (Ctrl+V) and the plain-text version is in the Gmail URL as a backup. Attachments still need to be added manually. RM email is auto-saved for next time.</p>' +
+        '<p style="margin:8px 0 0;color:#6b7280;font-size:11px;font-style:italic;">Tip: <strong>Open in Gmail</strong> opens a new Gmail compose tab and <strong>auto-pastes the formatted email body</strong> for you — no Ctrl+V needed. If auto-paste ever fails, the body is still on your clipboard (Ctrl+V) and the plain-text version is in the Gmail URL as a backup. RM email is auto-saved for next time.</p>' +
+        // Big, unmissable attachment reminder. The PE submission requires
+        // exactly two files; the Scenario details snip is auto-captured
+        // for the LO but Gmail compose attachments still need a manual
+        // drag-in, so this callout has to be impossible to miss.
+        '<div style="margin-top:14px;padding:12px 14px;background:#fef3c7;border:2px solid #b45309;border-radius:6px;color:#7c2d12;">' +
+          '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">⚠ Don\'t forget to attach 2 files before sending:</div>' +
+          '<ol style="margin:0;padding-left:22px;font-size:12px;line-height:1.6;">' +
+            '<li><strong>Scenario details snip</strong> — auto-saved to your Downloads when you click <em>Open in Gmail</em>. Just drag it from the Downloads bar into the Gmail compose.</li>' +
+            '<li><strong>Competitor LE / worksheet</strong> — drag in the loan estimate or pricing worksheet from the other lender.</li>' +
+          '</ol>' +
+          '<div id="zhl-pe-snip-status" style="margin-top:8px;font-size:11px;font-weight:600;"></div>' +
+        '</div>' +
         '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">' +
           btnPrimary('Open in Gmail + copy body', 'zhl-pe-mailto') +
+          btnSecondary('Capture scenario snip', 'zhl-pe-snip') +
           btnSecondary('Copy body only', 'zhl-pe-copy-body') +
           btnSecondary('Copy subject only', 'zhl-pe-copy-subj') +
         '</div>' +
@@ -896,7 +1097,34 @@
       body.querySelector('#pe-rm-email').addEventListener('blur', persistRmEmail);
       body.querySelector('#pe-lo-name').addEventListener('blur',  persistLoName);
 
-      body.querySelector('#zhl-pe-mailto').addEventListener('click', function () {
+      function setSnipStatus(text, color) {
+        const slot = body.querySelector('#zhl-pe-snip-status');
+        if (!slot) return;
+        slot.textContent = text || '';
+        slot.style.color = color || '#7c2d12';
+      }
+
+      async function captureSnipForOpenInGmail() {
+        setSnipStatus('Capturing scenario details snip…', '#7c2d12');
+        const zg = (body.querySelector('#pe-zg-number').value || '').trim();
+        const result = await captureAssignedScenarioSnip(zg);
+        if (result.ok) {
+          setSnipStatus('✓ Saved ' + result.filename + ' to Downloads — drag it into Gmail to attach.', '#166534');
+        } else {
+          setSnipStatus('⚠ Could not auto-snip: ' + result.reason + ' — open View details on the assigned scenario and snip manually.', '#b91c1c');
+        }
+        return result;
+      }
+
+      body.querySelector('#zhl-pe-snip').addEventListener('click', async function () {
+        const btn = this;
+        const orig = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Snipping…';
+        try { await captureSnipForOpenInGmail(); }
+        finally { btn.disabled = false; btn.textContent = orig; }
+      });
+
+      body.querySelector('#zhl-pe-mailto').addEventListener('click', async function () {
         const btn = this;
         read();
         persistRmEmail();
@@ -931,6 +1159,16 @@
             copyHtmlAndPlain(btn, rebuilt.html, plain, function () { openGmail(); });
           }
         }
+        // Capture the scenario snip BEFORE we navigate, so the PNG is
+        // sitting in Downloads by the time the Gmail compose tab mounts
+        // and the LO is ready to drag it in. We don't block opening Gmail
+        // if the capture fails — the warning callout already tells the
+        // LO to attach the snip manually if it didn't work.
+        const origText = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Capturing snip…';
+        try { await captureSnipForOpenInGmail(); }
+        catch (_) {}
+        btn.disabled = false; btn.textContent = origText;
         stashThenOpen();
       });
       body.querySelector('#zhl-pe-copy-body').addEventListener('click', function () {
@@ -1125,7 +1363,7 @@
       lines.push('');
     }
     if (s.isOver25) lines.push.apply(lines, big25SectionPlain(s));
-    lines.push('Attached: ZHL pricing summary, comp pricing summary, comp LE.');
+    lines.push('Attached: Scenario details (View details snip), competitor LE / worksheet.');
     lines.push('');
     lines.push('Thanks.');
     // ----- html -----
@@ -1150,7 +1388,7 @@
           '<p style="margin:0 0 14px;color:#374151;line-height:1.5;white-space:pre-wrap;">' + escapeHtml((s.reason || '').trim()) + '</p>'
         : '') +
       (s.isOver25 ? big25SectionHtml(s) : '') +
-      '<p style="margin:18px 0 0;color:#6b7280;font-size:12px;font-style:italic;">Attached: ZHL pricing summary, comp pricing summary, comp LE.</p>' +
+      '<p style="margin:18px 0 0;color:#6b7280;font-size:12px;font-style:italic;">Attached: Scenario details (View details snip), competitor LE / worksheet.</p>' +
       '<p style="margin-top:14px;">Thanks.</p>'
     );
     const compForSubject = (s.compLender || '').trim() ? ' vs ' + (s.compLender || '').trim() : '';
@@ -1197,7 +1435,10 @@
   }
 
   // ---- HTML email helpers -------------------------------------------------
-  const COLORS = { accent: '#b45309', zhl: '#0b5cab', comp: '#b45309', muted: '#6b7280', divider: '#fde68a' };
+  // Brand palette: section headers + competitor column now use Zillow
+  // blue (matches the ZHL column) so the email reads on-brand. Was a
+  // ZHL-blue vs amber two-tone before; the LO asked for blue everywhere.
+  const COLORS = { accent: '#0b5cab', zhl: '#0b5cab', comp: '#0b5cab', muted: '#6b7280', divider: '#bfdbfe' };
   function wrapHtml(inner) {
     return '<div style="font:14px Arial,Helvetica,sans-serif;color:#1f2937;line-height:1.5;">' +
       '<p style="margin:0 0 10px;">Hi,</p>' +

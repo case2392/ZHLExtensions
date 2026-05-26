@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.0",
+    headline: "Pricing Exception Workflow: auto-snips the assigned Scenario details to Downloads, auto-detects >2.5 pts from the entered numbers (no more manual question), email palette is now Zillow blue, and the email-preview step has a big yellow attachment reminder.",
+    highlights: [
+      "Scenario details snip: when you click \"Open in Gmail + copy body\" (or the new \"Capture scenario snip\" button), the workflow finds the ASSIGNED TO LOAN card, clicks its three-dots → View details, screenshots just that modal via chrome.tabs.captureVisibleTab, crops to the modal's bounding box, and saves it as Scenario_Details_<ZG#>.png to your Downloads folder. The PE workflow modal hides itself during the capture so it's not in the snip. Closes the View details modal when done.",
+      "Attachment reminder: the email-preview step now has a yellow callout listing the EXACT two files you need to drag into Gmail — (1) the Scenario details snip we just auto-saved, (2) the competitor LE / worksheet. Used to say \"Attached: ZHL pricing summary, comp pricing summary, comp LE\" in the email body itself; both that line and the reminder now list only the two files that are actually required.",
+      "Auto-detect >2.5 pts in the unlocked path: the workflow used to ask you \"Is your PE request under 2.5 points?\" right after computing the PE amount. Now it just reads s.pePoints from the calculation, sets isOver25 = (pePoints >= 2.5), and routes you straight to either the justification step or the email step. The locked path still asks because we don't have the PE size in that branch.",
+      "Email body palette: section headers (\"Loan scenario\", \"Pricing comparison\", etc.), the competitor column header, and the comp column values all switched from amber (#b45309) to Zillow blue (#0b5cab). Section-header underline switched from light amber to light blue. The ZHL column was already blue, so the whole email now reads on-brand."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.48.2",
     headline: "Revert v1.48.1 scroll-to-top in SMS Mark All As Read — the scroll call left the messaging panel in a stuck 'no conversations with this person' state until the user manually toggled the Unread filter to refresh.",
     highlights: [

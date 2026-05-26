@@ -1272,6 +1272,55 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true, file: activeGmailDrag });
     return false;
   }
+  // PE workflow Scenario-details snip: capture the visible LOP tab as PNG
+  // so the content script can crop to the View-details modal's bounding
+  // rect. Runs only on the sender's tab; uses the LOP host permission
+  // already declared in the manifest (no activeTab needed).
+  if (msg && msg.type === "ZHL_PE_CAPTURE_VISIBLE_TAB") {
+    if (!sender || !sender.tab || sender.tab.id == null) {
+      sendResponse({ ok: false, reason: "no sender tab" });
+      return false;
+    }
+    try {
+      chrome.tabs.captureVisibleTab(sender.tab.windowId, { format: "png" }, function (dataUrl) {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
+        } else if (!dataUrl) {
+          sendResponse({ ok: false, reason: "captureVisibleTab returned empty" });
+        } else {
+          sendResponse({ ok: true, dataUrl: dataUrl });
+        }
+      });
+    } catch (e) {
+      sendResponse({ ok: false, reason: String(e && e.message || e) });
+    }
+    return true; // async
+  }
+  // PE workflow Scenario-details snip: download the (cropped) PNG that
+  // the content script produced. Goes to the user's default Downloads
+  // folder, no save-as dialog.
+  if (msg && msg.type === "ZHL_PE_DOWNLOAD_PNG") {
+    const dataUrl = String(msg.dataUrl || "");
+    const filename = String(msg.filename || "scenario-details.png");
+    if (!dataUrl) { sendResponse({ ok: false, reason: "no dataUrl" }); return false; }
+    try {
+      chrome.downloads.download({
+        url: dataUrl,
+        filename: filename,
+        saveAs: false,
+        conflictAction: "uniquify"
+      }, function (downloadId) {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ ok: true, downloadId: downloadId });
+        }
+      });
+    } catch (e) {
+      sendResponse({ ok: false, reason: String(e && e.message || e) });
+    }
+    return true; // async
+  }
   return undefined;
 });
 
