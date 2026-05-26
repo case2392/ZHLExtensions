@@ -114,7 +114,19 @@ function doPost(e) {
       ];
     });
     if (rows.length > 0) {
-      s.getRange(s.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+      // Auto-extend the sheet if we'd write past its allocated row count.
+      // Google Sheets allocates a fixed number of rows per tab; once
+      // lastRow == maxRows, setValues at lastRow+1 throws "Range exceeds
+      // bounds" — which the catch below swallows, making writes silently
+      // fail. Bumping in chunks of 1000 keeps amortized cost low.
+      const startRow = s.getLastRow() + 1;
+      const endRow = startRow + rows.length - 1;
+      const maxRows = s.getMaxRows();
+      if (endRow > maxRows) {
+        const need = endRow - maxRows;
+        s.insertRowsAfter(maxRows, Math.max(1000, need));
+      }
+      s.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
       SpreadsheetApp.flush(); // commit before releasing the lock
     }
 
