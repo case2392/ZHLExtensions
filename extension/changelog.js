@@ -13,11 +13,21 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.48.2",
+    headline: "Revert v1.48.1 scroll-to-top in SMS Mark All As Read — the scroll call left the messaging panel in a stuck 'no conversations with this person' state until the user manually toggled the Unread filter to refresh.",
+    highlights: [
+      "v1.48.1 tried to snap the inbox back to scrollTop=0 after a Mark All As Read run so the user landed on the newest thread instead of wherever the last marked thread sat. The scroll-container walk-up landed on the wrong element after the unread-filter re-render, and setting scrollTop on that parent put Salesforce's LWC into a state where the inbox rendered the empty 'You have no conversations with this person' card instead of the thread list. Flipping the Unread filter on and off manually was the only way to recover.",
+      "Reverted to the v1.48.0 behavior — the inbox stays scrolled to wherever the marking loop ended. Will revisit with a safer scroll-target lookup later."
+    ],
+    sections: ["sms-mark-all-read"]
+  },
+  {
     version: "1.48.1",
     headline: "SMS Mark All As Read: after a run finishes, the inbox now scrolls back to the top instead of leaving you wherever the last thread happened to be.",
     highlights: [
       "Before: clicking Mark All As Read walked every unread thread, marking each one, then left the inbox scrolled to wherever the last marked thread sat in the list — usually somewhere in the middle. Users had to manually scroll back up to the most recent thread.",
-      "Now: after the unread toggle is restored, the messaging panel's inbox scroll container is snapped back to scrollTop=0 so the user lands on the newest thread. Done in the finally block so it runs even if the marking loop bails out mid-run."
+      "Now: after the unread toggle is restored, the messaging panel's inbox scroll container is snapped back to scrollTop=0 so the user lands on the newest thread. Done in the finally block so it runs even if the marking loop bails out mid-run.",
+      "NOTE: this change was reverted in v1.48.2 because the scroll call put the messaging panel into a stuck empty state. Keeping the entry here so the history reads continuous."
     ],
     sections: ["sms-mark-all-read"]
   },
