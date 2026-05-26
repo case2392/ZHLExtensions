@@ -390,6 +390,20 @@
         try { await setUnreadFilter(panel, !!toggleRestore.was); }
         catch (e) { console.warn(TAG, 'failed to restore unread toggle', e); }
       }
+      // Scroll the inbox back to the top so the user lands on the most
+      // recent thread, not wherever the marking loop happened to stop.
+      // Done AFTER restoring the unread toggle since flipping the filter
+      // re-renders the list and would undo an earlier scroll.
+      try {
+        const inboxAfter = findInbox(panel);
+        if (inboxAfter) {
+          const sc = findScrollContainer(inboxAfter);
+          if (sc) {
+            sc.scrollTop = 0;
+            console.log(TAG, 'scrolled inbox back to top');
+          }
+        }
+      } catch (e) { console.warn(TAG, 'scroll-to-top failed', e); }
       btn.disabled = false;
       btn.textContent = origText;
       hideOverlay(panel);

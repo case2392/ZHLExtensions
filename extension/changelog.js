@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.48.1",
+    headline: "SMS Mark All As Read: after a run finishes, the inbox now scrolls back to the top instead of leaving you wherever the last thread happened to be.",
+    highlights: [
+      "Before: clicking Mark All As Read walked every unread thread, marking each one, then left the inbox scrolled to wherever the last marked thread sat in the list — usually somewhere in the middle. Users had to manually scroll back up to the most recent thread.",
+      "Now: after the unread toggle is restored, the messaging panel's inbox scroll container is snapped back to scrollTop=0 so the user lands on the newest thread. Done in the finally block so it runs even if the marking loop bails out mid-run."
+    ],
+    sections: ["sms-mark-all-read"]
+  },
+  {
     version: "1.48.0",
     headline: "New \"5% Collections\" button on the Liabilities table — auto-applies the FHA 4000.1 5%-of-balance DTI rule to every non-medical collection in one click.",
     highlights: [
