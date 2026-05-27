@@ -121,24 +121,30 @@
     // contain pricing-results checkboxes (those would be the wrapper
     // that includes the table itself, so appending a button there
     // would land it below the table rather than in the header).
-    const seen = new Set();
-    const headers = [];
+    const collected = new Set();
     candidates.forEach(function (el) {
       let cur = el;
       while (cur && cur !== document.body) {
         const text = (cur.textContent || '').replace(/\s+/g, ' ').trim();
         if (BASE_LOAN_RE.test(text)) {
           if (cur.querySelector('input[data-cy="pricing-results-row-checkbox"]')) return;
-          if (!seen.has(cur)) {
-            seen.add(cur);
-            headers.push(cur);
-          }
+          collected.add(cur);
           return;
         }
         cur = cur.parentElement;
       }
     });
-    return headers;
+    // The walk-up may yield several NESTED ancestors per section
+    // (each wrapper between the title element and the section card
+    // could pass the test). Keep only the INNERMOST — drop any
+    // element that contains another element from the same set.
+    const arr = Array.from(collected);
+    return arr.filter(function (h) {
+      for (const other of arr) {
+        if (other !== h && h.contains(other)) return false;
+      }
+      return true;
+    });
   }
 
   function findSectionContainer(headerEl) {
@@ -235,19 +241,6 @@
     };
   }
 
-  function readBorrowerName() {
-    // Same heuristic as loan-comparison-pdf — pick the first
-    // "First Last [& First Last]" string on the page near the top.
-    const re = /^[A-Z][a-z\-']+(?:\s[A-Z]\.?)?\s[A-Z][a-z\-']+(?:\s(?:&|and)\s[A-Z][a-z\-']+(?:\s[A-Z]\.?)?\s[A-Z][a-z\-']+)?$/;
-    const els = document.querySelectorAll('a, button, span, p, h1, h2');
-    for (const el of els) {
-      const t = (el.textContent || '').trim();
-      if (!t || t.length > 80) continue;
-      if (re.test(t)) return t;
-    }
-    return '';
-  }
-
   function readLoProfile() {
     return new Promise(function (resolve) {
       try {
@@ -264,8 +257,18 @@
   }
 
   // ---- Worksheet rendering --------------------------------------
+  //
+  // Layout: 3 scenarios per page, stacked vertically. Each page repeats
+  // the same page-level header (loan-program-agnostic info that applies
+  // to every scenario in this LTV section — purchase price, down
+  // payment, loan amount — plus the LO contact box) and the same
+  // footer (timestamp + disclaimer). The per-scenario block focuses
+  // on the numbers that differ row-to-row: rate, points, monthly,
+  // closing costs, cash to close, breakeven.
 
-  function renderWorksheetHtml(scenarios, sectionMeta, eligibility, lo, borrowerName) {
+  const SCENARIOS_PER_PAGE = 3;
+
+  function renderWorksheetHtml(scenarios, sectionMeta, eligibility, lo) {
     const now = new Date();
     const dateStr = now.toLocaleString('en-US', {
       month: 'numeric', day: 'numeric', year: 'numeric',
@@ -290,181 +293,178 @@
     const purchasePrice = estimatedPurchasePrice(sectionMeta);
     const downPaymentAmt = estimatedDownPayment(sectionMeta, purchasePrice);
 
-    function scenarioPage(s, idx, total) {
-      // "Points" interpretation: positive points = borrower pays; negative
-      // = lender credit (rebate). Show whichever applies in plain English
-      // so the borrower understands which way the money flows.
-      const pointsLine = (function () {
-        if (!isFinite(s.pointsPct)) return '—';
-        const pctStr = (s.pointsPct >= 0 ? '+' : '') + s.pointsPct.toFixed(3) + '%';
-        const dollarStr = isFinite(s.priceDollar) ? fmtMoney(Math.abs(s.priceDollar)) : '';
-        if (s.pointsPct < 0) {
-          return pctStr + (dollarStr ? '  (lender credit of ' + dollarStr + ')' : '  (lender credit)');
-        }
-        if (s.pointsPct > 0) {
-          return pctStr + (dollarStr ? '  (cost of ' + dollarStr + ')' : '  (cost to buy down rate)');
-        }
-        return 'Par pricing (no points, no credit)';
-      })();
+    // Plain-English points line — same rule as the v1.49.7 layout.
+    function pointsLine(s) {
+      if (!isFinite(s.pointsPct)) return '—';
+      const pctStr = (s.pointsPct >= 0 ? '+' : '') + s.pointsPct.toFixed(3) + '%';
+      const dollarStr = isFinite(s.priceDollar) ? fmtMoney(Math.abs(s.priceDollar)) : '';
+      if (s.pointsPct < 0) {
+        return pctStr + (dollarStr ? ' (lender credit ' + dollarStr + ')' : ' (lender credit)');
+      }
+      if (s.pointsPct > 0) {
+        return pctStr + (dollarStr ? ' (cost ' + dollarStr + ')' : ' (cost)');
+      }
+      return 'Par pricing';
+    }
 
-      // Strip the front-end DTI from the handout — borrower doesn't
-      // need that on a comparison sheet. We DO show breakeven only if
-      // it's a real number (skip "0 Months" rows where the rate is at
-      // par, and parenthesized negatives where breakeven doesn't apply
-      // because of the lender credit).
-      const breakevenLine = (function () {
-        if (!s.breakeven) return '';
-        if (/^\(/.test(s.breakeven)) return ''; // (45) Months → lender credit path
-        if (/^0\s*Months?$/i.test(s.breakeven)) return '';
-        return s.breakeven;
-      })();
+    function breakevenLine(s) {
+      if (!s.breakeven) return '—';
+      if (/^\(/.test(s.breakeven)) return '—'; // (45) Months → lender credit path
+      if (/^0\s*Months?$/i.test(s.breakeven)) return '—';
+      return s.breakeven;
+    }
 
-      const programChip = escapeHtml(s.product || 'Loan');
-      const ltvLine = isFinite(sectionMeta.downPaymentPct) && isFinite(sectionMeta.ltvPct)
-        ? sectionMeta.downPaymentPct.toFixed(2).replace(/\.?0+$/, '') + '% down · ' +
-          sectionMeta.ltvPct.toFixed(2).replace(/\.?0+$/, '') + '% LTV'
-        : '';
+    function scenarioBlock(s, idx) {
+      return (
+        '<article class="sc">' +
+          '<header class="sc-hdr">' +
+            '<div class="sc-hdr-left">' +
+              '<span class="sc-num">Option ' + (idx + 1) + '</span>' +
+              '<span class="sc-program">' + escapeHtml(s.product || 'Loan') + '</span>' +
+            '</div>' +
+            '<div class="sc-rate">' + (isFinite(s.rate) ? fmtPct(s.rate, 3) : '—') + '</div>' +
+          '</header>' +
+          '<div class="sc-big">' +
+            '<div class="sc-big-cell">' +
+              '<div class="sc-big-label">Monthly payment</div>' +
+              '<div class="sc-big-value">' + fmtMoney(s.piti) + '</div>' +
+            '</div>' +
+            '<div class="sc-big-cell">' +
+              '<div class="sc-big-label">Cash to close</div>' +
+              '<div class="sc-big-value">' + fmtMoney(s.cashToFrom) + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<table class="sc-details">' +
+            '<tr>' +
+              '<th>Points</th><td>' + escapeHtml(pointsLine(s)) + '</td>' +
+              '<th>Closing costs</th><td>' + fmtMoney(s.closingCosts) + '</td>' +
+            '</tr>' +
+            '<tr>' +
+              '<th>Breakeven <span class="muted">(vs. par)</span></th><td>' + escapeHtml(breakevenLine(s)) + '</td>' +
+              '<th></th><td></td>' +
+            '</tr>' +
+          '</table>' +
+        '</article>'
+      );
+    }
 
+    // Chunk scenarios into pages of SCENARIOS_PER_PAGE.
+    const pageChunks = [];
+    for (let i = 0; i < scenarios.length; i += SCENARIOS_PER_PAGE) {
+      pageChunks.push(scenarios.slice(i, i + SCENARIOS_PER_PAGE));
+    }
+
+    const sectionInfoBits = [];
+    if (isFinite(purchasePrice))            sectionInfoBits.push('Purchase price ~' + fmtMoneyShort(purchasePrice));
+    if (isFinite(downPaymentAmt))           sectionInfoBits.push('Down payment ' + fmtMoneyShort(downPaymentAmt) +
+      (isFinite(sectionMeta.downPaymentPct) ? ' (' + sectionMeta.downPaymentPct.toFixed(2).replace(/\.?0+$/, '') + '%)' : ''));
+    if (isFinite(sectionMeta.baseLoanAmount)) sectionInfoBits.push('Loan amount ' + fmtMoneyShort(sectionMeta.baseLoanAmount));
+    if (isFinite(sectionMeta.ltvPct))         sectionInfoBits.push(sectionMeta.ltvPct.toFixed(3).replace(/\.?0+$/, '') + '% LTV');
+
+    const loBits = [];
+    if (lo.nmls)  loBits.push('NMLS #' + escapeHtml(lo.nmls));
+    if (lo.phone) loBits.push(escapeHtml(lo.phone));
+    if (lo.email) loBits.push(escapeHtml(lo.email));
+
+    function pageHtml(scs, pageIdx, totalPages) {
       return (
         '<section class="page">' +
           '<header class="page-hdr">' +
             '<div class="brand-bar"></div>' +
             '<div class="hdr-row">' +
               '<div class="hdr-left">' +
-                '<div class="eyebrow">Mortgage Loan Worksheet' +
-                  (total > 1 ? ' &nbsp;·&nbsp; Option ' + (idx + 1) + ' of ' + total : '') +
+                '<div class="eyebrow">Mortgage Rate Worksheet' +
+                  (totalPages > 1 ? ' &nbsp;·&nbsp; Page ' + (pageIdx + 1) + ' of ' + totalPages : '') +
                 '</div>' +
-                (borrowerName ? '<h1>' + escapeHtml(borrowerName) + '</h1>' : '<h1>Prepared for you</h1>') +
-                (ltvLine ? '<div class="hdr-sub">' + escapeHtml(ltvLine) + '</div>' : '') +
+                '<h1>Rate Options</h1>' +
+                (sectionInfoBits.length
+                  ? '<div class="hdr-sub">' + sectionInfoBits.map(escapeHtml).join(' &nbsp;·&nbsp; ') + '</div>'
+                  : '') +
               '</div>' +
-              '<div class="hdr-right">' +
-                '<div class="program-chip">' + programChip + '</div>' +
-                (isFinite(s.rate) ? '<div class="rate">' + fmtPct(s.rate, 3) + '</div>' : '') +
-              '</div>' +
+              (lo.name || loBits.length
+                ? '<div class="hdr-right lo-box">' +
+                    '<div class="lo-eyebrow">Your loan officer</div>' +
+                    '<div class="lo-name">' + escapeHtml(lo.name || '') + '</div>' +
+                    (loBits.length ? '<div class="lo-meta">' + loBits.join(' &nbsp;|&nbsp; ') + '</div>' : '') +
+                  '</div>'
+                : '') +
             '</div>' +
           '</header>' +
-
-          '<div class="big-grid">' +
-            '<div class="big-card">' +
-              '<div class="big-label">Estimated monthly payment</div>' +
-              '<div class="big-value">' + fmtMoney(s.piti) + '</div>' +
-              '<div class="big-foot">Principal &amp; interest, taxes, insurance, mortgage insurance</div>' +
-            '</div>' +
-            '<div class="big-card">' +
-              '<div class="big-label">Estimated cash to close</div>' +
-              '<div class="big-value">' + fmtMoney(s.cashToFrom) + '</div>' +
-              '<div class="big-foot">Down payment plus closing costs, net of any credits</div>' +
-            '</div>' +
+          '<div class="scenarios">' +
+            scs.map(function (s, j) { return scenarioBlock(s, pageIdx * SCENARIOS_PER_PAGE + j); }).join('') +
           '</div>' +
-
-          '<table class="details">' +
-            '<tbody>' +
-              (isFinite(purchasePrice)
-                ? '<tr><th>Purchase price</th><td>' + fmtMoneyShort(purchasePrice) + '</td></tr>'
-                : '') +
-              (isFinite(downPaymentAmt)
-                ? '<tr><th>Down payment</th><td>' + fmtMoneyShort(downPaymentAmt) +
-                  (isFinite(sectionMeta.downPaymentPct)
-                    ? '  <span class="muted">(' + sectionMeta.downPaymentPct.toFixed(2).replace(/\.?0+$/, '') + '%)</span>'
-                    : '') +
-                  '</td></tr>'
-                : '') +
-              (isFinite(sectionMeta.baseLoanAmount)
-                ? '<tr><th>Loan amount</th><td>' + fmtMoneyShort(sectionMeta.baseLoanAmount) + '</td></tr>'
-                : '') +
-              '<tr><th>Interest rate</th><td>' + fmtPct(s.rate, 3) + '</td></tr>' +
-              '<tr><th>Points</th><td>' + escapeHtml(pointsLine) + '</td></tr>' +
-              '<tr><th>Total closing costs</th><td>' + fmtMoney(s.closingCosts) + '</td></tr>' +
-              '<tr class="emphasis"><th>Cash to close</th><td>' + fmtMoney(s.cashToFrom) + '</td></tr>' +
-              (breakevenLine
-                ? '<tr><th>Breakeven on points <span class="muted">(vs. par rate)</span></th><td>' +
-                  escapeHtml(breakevenLine) + '</td></tr>'
-                : '') +
-            '</tbody>' +
-          '</table>' +
-
-          (lo.name || lo.phone || lo.email
-            ? '<div class="lo-card">' +
-                '<div class="lo-card-eyebrow">Your loan officer</div>' +
-                '<div class="lo-card-name">' + escapeHtml(lo.name || '') + '</div>' +
-                '<div class="lo-card-meta">' +
-                  (lo.nmls  ? '<span>NMLS #' + escapeHtml(lo.nmls)  + '</span>' : '') +
-                  (lo.phone ? '<span>' + escapeHtml(lo.phone) + '</span>' : '') +
-                  (lo.email ? '<span>' + escapeHtml(lo.email) + '</span>' : '') +
-                '</div>' +
-              '</div>'
-            : '') +
-
           '<footer class="page-foot">' +
             '<div>Generated ' + escapeHtml(dateStr) + '</div>' +
             '<div class="disclaimer">' +
               'Estimated figures based on current pricing. Mortgage interest rates can change daily — ' +
-              'sometimes hourly. Final numbers will be confirmed in your Loan Estimate. ' +
-              'Not a commitment to lend.' +
+              'sometimes hourly. Final numbers will be confirmed in your Loan Estimate. Not a commitment to lend.' +
             '</div>' +
           '</footer>' +
         '</section>'
       );
     }
 
-    const pages = scenarios.map(function (s, i) {
-      return scenarioPage(s, i, scenarios.length);
+    const pagesHtml = pageChunks.map(function (scs, i) {
+      return pageHtml(scs, i, pageChunks.length);
     }).join('');
 
     const css = (
       '@page { size: letter; margin: 0; }' +
       'html, body { margin: 0; padding: 0; background: #f1f5f9; color: #0f172a;' +
       ' font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }' +
-      '.page { box-sizing: border-box; width: 8.5in; min-height: 11in; padding: 0.55in 0.6in 0.5in;' +
+      '.page { box-sizing: border-box; width: 8.5in; min-height: 11in; padding: 0.5in 0.55in 0.45in;' +
       ' background: #fff; margin: 0 auto 14px; page-break-after: always;' +
       ' display: flex; flex-direction: column; position: relative; }' +
       '.page:last-child { page-break-after: auto; }' +
-      '.brand-bar { position: absolute; top: 0; left: 0; right: 0; height: 8px; background: #006aff; }' +
-      '.page-hdr { padding-top: 6px; padding-bottom: 18px; border-bottom: 1px solid #e2e8f0; }' +
+      '.brand-bar { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #006aff; }' +
+      '.page-hdr { padding-top: 4px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }' +
       '.hdr-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }' +
-      '.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;' +
-      ' color: #006aff; margin-bottom: 6px; }' +
-      '.hdr-left h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; color: #0f172a; }' +
-      '.hdr-sub { margin-top: 6px; font-size: 13px; color: #475569; }' +
-      '.hdr-right { text-align: right; }' +
-      '.program-chip { display: inline-block; background: #e0eaff; color: #003a99; font-weight: 600;' +
-      ' font-size: 12px; padding: 4px 10px; border-radius: 999px; letter-spacing: 0.02em; }' +
-      '.rate { margin-top: 8px; font-size: 28px; font-weight: 700; color: #006aff; letter-spacing: -0.02em; }' +
-      '.big-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 22px 0 24px; }' +
-      '.big-card { background: #fff; border: 2px solid #006aff; border-radius: 10px; padding: 18px 18px 14px; }' +
-      '.big-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;' +
-      ' color: #475569; }' +
-      '.big-value { margin-top: 4px; font-size: 36px; font-weight: 700; color: #006aff; letter-spacing: -0.02em; }' +
-      '.big-foot { margin-top: 6px; font-size: 11px; color: #475569; line-height: 1.4; }' +
-      '.details { width: 100%; border-collapse: collapse; margin-bottom: 18px; }' +
-      '.details th, .details td { padding: 11px 14px; border-bottom: 1px solid #e2e8f0;' +
-      ' font-size: 15px; vertical-align: middle; }' +
-      '.details th { text-align: left; font-weight: 500; color: #334155; width: 55%; }' +
-      '.details td { text-align: right; font-weight: 600; color: #0f172a; }' +
-      '.details tr.emphasis th, .details tr.emphasis td { font-size: 17px; font-weight: 700;' +
-      ' color: #006aff; background: #f0f6ff; }' +
-      '.details .muted { color: #64748b; font-weight: 400; font-size: 13px; }' +
-      '.lo-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #006aff;' +
-      ' border-radius: 6px; padding: 14px 16px; margin-bottom: 16px; }' +
-      '.lo-card-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;' +
+      '.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;' +
+      ' color: #006aff; margin-bottom: 4px; }' +
+      '.hdr-left h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: #0f172a; }' +
+      '.hdr-sub { margin-top: 4px; font-size: 12px; color: #475569; }' +
+      '.lo-box { text-align: right; font-size: 11px; color: #475569; max-width: 3.2in; }' +
+      '.lo-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;' +
       ' color: #006aff; }' +
-      '.lo-card-name { margin-top: 4px; font-size: 16px; font-weight: 700; color: #0f172a; }' +
-      '.lo-card-meta { margin-top: 4px; font-size: 13px; color: #475569; }' +
-      '.lo-card-meta span { margin-right: 14px; }' +
-      '.page-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid #e2e8f0;' +
-      ' font-size: 10px; color: #64748b; line-height: 1.5; }' +
-      '.page-foot .disclaimer { margin-top: 4px; }' +
-      '@media print {' +
-      ' html, body { background: #fff; }' +
-      ' .page { margin: 0; box-shadow: none; }' +
-      '}'
+      '.lo-name { margin-top: 2px; font-size: 13px; font-weight: 700; color: #0f172a; }' +
+      '.lo-meta { margin-top: 2px; font-size: 11px; color: #475569; }' +
+      '.scenarios { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }' +
+      '.sc { border: 1px solid #cbd5e1; border-left: 4px solid #006aff; border-radius: 8px;' +
+      ' padding: 12px 14px; page-break-inside: avoid; }' +
+      '.sc-hdr { display: flex; justify-content: space-between; align-items: baseline;' +
+      ' padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; margin-bottom: 10px; }' +
+      '.sc-hdr-left { display: flex; align-items: baseline; gap: 10px; }' +
+      '.sc-num { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;' +
+      ' color: #006aff; background: #e0eaff; padding: 3px 8px; border-radius: 999px; }' +
+      '.sc-program { font-size: 15px; font-weight: 700; color: #0f172a; }' +
+      '.sc-rate { font-size: 26px; font-weight: 700; color: #006aff; letter-spacing: -0.02em; }' +
+      '.sc-big { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }' +
+      '.sc-big-cell { background: #f0f6ff; border-radius: 6px; padding: 8px 12px; }' +
+      '.sc-big-label { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;' +
+      ' color: #475569; }' +
+      '.sc-big-value { margin-top: 2px; font-size: 22px; font-weight: 700; color: #006aff;' +
+      ' letter-spacing: -0.02em; }' +
+      '.sc-details { width: 100%; border-collapse: collapse; }' +
+      '.sc-details th { text-align: left; font-weight: 500; color: #475569; font-size: 11px;' +
+      ' padding: 4px 8px 4px 0; width: 22%; vertical-align: top; }' +
+      '.sc-details td { text-align: left; font-weight: 600; color: #0f172a; font-size: 12px;' +
+      ' padding: 4px 16px 4px 0; width: 28%; vertical-align: top; }' +
+      '.sc-details .muted { color: #94a3b8; font-weight: 400; font-size: 10px; }' +
+      '.page-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid #e2e8f0;' +
+      ' font-size: 9px; color: #64748b; line-height: 1.5; }' +
+      '.page-foot .disclaimer { margin-top: 2px; }' +
+      '@media print { html, body { background: #fff; } .page { margin: 0; box-shadow: none; } }'
     );
+
+    const titleSuffix = isFinite(sectionMeta.downPaymentPct)
+      ? sectionMeta.downPaymentPct.toFixed(2).replace(/\.?0+$/, '') + '% Down'
+      : 'Worksheet';
 
     return (
       '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-      '<title>Buyer Worksheet — ' + escapeHtml(borrowerName || (sectionMeta.downPaymentPct + '% Down')) + '</title>' +
+      '<title>Rate Worksheet — ' + escapeHtml(titleSuffix) + '</title>' +
       '<style>' + css + '</style></head>' +
-      '<body>' + pages +
+      '<body>' + pagesHtml +
       '<script>window.addEventListener("load", function(){ setTimeout(function(){ window.print(); }, 250); });<\/script>' +
       '</body></html>'
     );
@@ -477,9 +477,8 @@
     if (!rows.length) return;
     const sectionMeta = parseSectionMeta(headerEl);
     const eligibility = readEligibilityHeader();
-    const borrowerName = readBorrowerName();
     const lo = await readLoProfile();
-    const html = renderWorksheetHtml(rows, sectionMeta, eligibility, lo, borrowerName);
+    const html = renderWorksheetHtml(rows, sectionMeta, eligibility, lo);
     const win = window.open('about:blank', '_blank');
     if (!win) {
       alert('ZHL Buyer Worksheet: please allow popups for this site.');

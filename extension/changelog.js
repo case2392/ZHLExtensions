@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.8",
+    headline: "Print Buyer Worksheet: only ONE button per section now (was duplicating), title is no longer \"Pre-approval Letter,\" and the layout fits 3 options per page instead of 1.",
+    highlights: [
+      "Fixed duplicate buttons in each section header. The walk-up that finds the header bar matched several nested ancestors at once; now we keep only the innermost, so exactly one button lands in each LTV section header next to Base Loan Amount.",
+      "Dropped the borrower-name scrape. It was a heuristic regex and was matching the literal text \"Pre-approval Letter\" off some part of LOP's chrome, then rendering THAT as the h1. The handout now just says \"Rate Options\" under a \"Mortgage Rate Worksheet\" eyebrow, which matches what this tool actually is — a rate-shop comparison sheet, not a pre-approval.",
+      "Redesigned the layout to 3 scenarios per page. Page header (LTV info + LO contact) and footer (timestamp + disclaimer) print once per page; each scenario gets a compact card with rate, monthly payment, cash to close, points/credit, closing costs, and breakeven. With 1–3 selected you get one page; 4–6 fills two; etc."
+    ]
+  },
+  {
     version: "1.49.7",
     headline: "New: \"Print Buyer Worksheet\" button on the eligibility / pricing-results table — checks the rows you want, click once, get a Zillow-blue borrower handout.",
     highlights: [
