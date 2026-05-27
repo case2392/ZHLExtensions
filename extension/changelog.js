@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.7",
+    headline: "New: \"Print Buyer Worksheet\" button on the eligibility / pricing-results table — checks the rows you want, click once, get a Zillow-blue borrower handout.",
+    highlights: [
+      "On the pricing-results table (the rate-shop view with every available rate per LTV section), a \"Print Buyer Worksheet\" button appears in each LTV section header next to Base Loan Amount. Tick one or more rows in that section, click the button, and a new tab opens with a borrower-friendly handout — one scenario per page, single-column layout, Zillow-blue branded.",
+      "The handout leads with two big numbers (Estimated monthly payment, Estimated cash to close), then a clean details table with purchase price, down payment, loan amount, rate, points (with plain-English explanation of credit vs. cost), closing costs, and breakeven. DTI is intentionally omitted — the borrower doesn't need their qualifying ratio on a comparison sheet.",
+      "Auto-fires the print dialog so you can Save-as-PDF or send straight to the printer. Disabled state with hover-tooltip when nothing is checked in the section. Existing ZHL Comparison PDF on the saved-scenarios page is unaffected — this is a separate flow that works directly from the rate-shop table."
+    ]
+  },
+  {
     version: "1.49.6",
     headline: "Time-saved toast: \"(as of …)\" suffix now always includes the date (e.g. \"5/26 4:15 PM\"), not just the time.",
     highlights: [
