@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.14",
+    headline: "Copy LOP file: staged loans now expire after 24 hours so the \"Paste from staged\" picker stays current.",
+    highlights: [
+      "Anything staged more than 24h ago is dropped from chrome.storage on the next load and never shows up in the picker. A loan staged this morning is useful at 4 PM; one staged 3 days ago almost certainly isn't — and seeing it next to fresh stages was just noise.",
+      "Expiry runs on every load, so existing stale entries from before this update will be swept on the first next \"Paste from staged\" click."
+    ]
+  },
+  {
     version: "1.49.13",
     headline: "New: VA + non-spouse co-borrower warning — sticky red banner when a non-veteran co-borrower is on a VA loan without being the veteran's married spouse.",
     highlights: [

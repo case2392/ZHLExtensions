@@ -2511,12 +2511,35 @@
     return { ok: issues.length === 0, issues: issues };
   }
 
+  // Stages older than this are dropped from chrome.storage on the
+  // next load — keeps the "Paste from staged" picker tidy and
+  // prevents stale data from sitting around indefinitely. A loan
+  // staged this morning is useful at 4 PM; one staged 3 days ago
+  // almost certainly isn't, and showing it just clutters the list.
+  const STAGE_TTL_MS = 24 * 60 * 60 * 1000;
+
   function loadStages() {
     return new Promise(function (resolve) {
       try {
         chrome.storage.local.get([STORAGE_KEY], function (data) {
           const arr = (data && data[STORAGE_KEY]) || [];
-          resolve(Array.isArray(arr) ? arr : []);
+          if (!Array.isArray(arr)) return resolve([]);
+          const now = Date.now();
+          const fresh = arr.filter(function (s) {
+            const ts = Number(s && s.capturedAt) || 0;
+            return ts && (now - ts) < STAGE_TTL_MS;
+          });
+          // If we dropped anything, persist the trimmed list so
+          // expired stages don't keep getting filtered on every read.
+          if (fresh.length !== arr.length) {
+            try {
+              const payload = {};
+              payload[STORAGE_KEY] = fresh;
+              chrome.storage.local.set(payload, function () { resolve(fresh); });
+              return;
+            } catch (_) {}
+          }
+          resolve(fresh);
         });
       } catch (_) { resolve([]); }
     });
