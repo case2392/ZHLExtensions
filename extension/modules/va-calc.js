@@ -1868,7 +1868,60 @@
     function renderBody() {
       body.innerHTML = '';
       const result = calculate(state);
-      title.textContent = 'Residual income: ' + fmt(result.residualIncome);
+      // Title: residual income amount, with an inline pass/caution/
+      // fail badge styled like the FHA Manual Eligible chip so the LO
+      // can tell at a glance whether the borrower clears the VA table.
+      title.innerHTML = '';
+      const titleText = document.createElement('span');
+      titleText.textContent = 'Residual income: ' + fmt(result.residualIncome);
+      title.appendChild(titleText);
+      const effective = result.dtiOver41 && result.requirement120 != null
+        ? result.requirement120 : result.requirement;
+      if (effective != null && isFinite(result.residualIncome)) {
+        const delta = result.residualIncome - effective;
+        // delta < 0:   fail (red)
+        // 0 ≤ delta ≤ 200: caution (yellow) — passing but close enough
+        //                  that a tax / debt swing could flip them
+        // delta > 200: pass (green)
+        const status = delta < 0 ? 'fail' : (delta <= 200 ? 'caution' : 'pass');
+        const colors = status === 'pass'
+          ? { bg: '#dcfce7', border: '#16a34a', text: '#14532d', dot: '#16a34a' }
+          : status === 'fail'
+            ? { bg: '#fee2e2', border: '#dc2626', text: '#7f1d1d', dot: '#dc2626' }
+            : { bg: '#fef3c7', border: '#d97706', text: '#78350f', dot: '#d97706' };
+        const iconChar  = status === 'pass' ? '✓' : (status === 'fail' ? '✗' : '!');
+        const labelText = status === 'pass' ? 'Meets VA requirement'
+          : status === 'fail' ? 'Below VA requirement'
+          : 'Close to VA requirement';
+        const badge = document.createElement('span');
+        badge.style.cssText =
+          'display:inline-flex;align-items:center;gap:6px;' +
+          'margin-left:12px;padding:3px 10px 3px 4px;border-radius:999px;' +
+          'font-size:11px;font-weight:700;letter-spacing:0.02em;' +
+          'background:' + colors.bg + ';border:1px solid ' + colors.border + ';color:' + colors.text + ';' +
+          'vertical-align:middle;';
+        const iconEl = document.createElement('span');
+        iconEl.textContent = iconChar;
+        iconEl.style.cssText =
+          'display:inline-flex;align-items:center;justify-content:center;' +
+          'width:16px;height:16px;border-radius:50%;flex:0 0 auto;' +
+          'background:' + colors.dot + ';color:#fff;font-size:10px;font-weight:700;';
+        const labelEl = document.createElement('span');
+        const deltaStr = (delta >= 0 ? '+' : '−') + '$' +
+          Math.abs(delta).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        labelEl.textContent = labelText + ' (' + deltaStr + ')';
+        badge.appendChild(iconEl);
+        badge.appendChild(labelEl);
+        badge.title =
+          'Effective VA requirement: ' + fmt(effective) +
+          (result.dtiOver41 ? '  (120% of table — DTI > 41%)' : '  (table)') +
+          '\nResidual income: ' + fmt(result.residualIncome) +
+          '\nDelta vs requirement: ' + deltaStr +
+          (status === 'caution'
+            ? '\n\nWithin $200 of the requirement — keep an eye on tax / debt swings.'
+            : '');
+        title.appendChild(badge);
+      }
 
       addRow('Gross monthly income', fmt(state.grossIncome));
       addEditableRow('Non-Taxable Income (VA Disability, BAH, BAS, etc.)', state.nonTaxableIncome, 'Excluded from taxes', function (v) {

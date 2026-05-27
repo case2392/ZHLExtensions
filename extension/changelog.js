@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.10",
+    headline: "VA Residual Income Calc: title bar now shows a green ✓ / yellow ! / red ✗ chip telling you whether the borrower meets the VA table requirement.",
+    highlights: [
+      "Same visual language as the FHA Manual Eligibility badge — a colored pill next to the residual income number in the panel header. Green ✓ \"Meets VA requirement\" when residual clears the effective requirement by more than $200; yellow ! \"Close to VA requirement\" when residual is within $200 above the requirement (passing but a small tax or debt swing could flip them); red ✗ \"Below VA requirement\" when residual is under the requirement.",
+      "The effective requirement is the 120% bumped value when DTI > 41%, otherwise the base VA table value — same number the panel already showed in the bottom rows. The chip's tooltip spells out the exact residual, effective requirement (and which one it is), and the delta."
+    ]
+  },
+  {
     version: "1.49.9",
     headline: "Print Buyer Worksheet: fixed CSP error that prevented the print dialog from auto-firing.",
     highlights: [
