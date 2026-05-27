@@ -1295,6 +1295,17 @@
     return v.split(/[,\s]+/).filter(Boolean).length;
   }
 
+  // Count borrowers on the loan by counting visible marital-status
+  // selects (one per borrower, reliably present on every borrower
+  // tab). Falls back to 1 if none found.
+  function getBorrowerCount() {
+    let n = 0;
+    document.querySelectorAll('select[name="maritalStatus"]').forEach(function (sel) {
+      if (sel.offsetParent !== null) n++;
+    });
+    return Math.max(1, n);
+  }
+
   function getPropertyState() {
     const scope = findSectionScope('Subject property') || findSectionScope('Property information');
     let stateInp = null;
@@ -1524,7 +1535,15 @@
     const monthlyDebts = getMonthlyDebts();
     const piti = getProposedPITI();
     const married = /^(married|separated)$/.test(getMaritalStatus());
-    const familySize = 1 + (married ? 1 : 0) + getDependentCount();
+    // Household head count: every borrower on the loan counts as a
+    // household member. If the primary is married but their spouse
+    // ISN'T on the loan, add the spouse separately. With multiple
+    // borrowers we assume any "Married" status refers to one of the
+    // other borrowers (most common case), so we don't double-count —
+    // take the max of borrower count vs. solo-married (1+1).
+    const borrowerCount = getBorrowerCount();
+    const householdAdults = Math.max(borrowerCount, 1 + (married ? 1 : 0));
+    const familySize = householdAdults + getDependentCount();
     const state = getPropertyState();
     const region = regionFor(state);
     const loanAmount = getLoanAmount();

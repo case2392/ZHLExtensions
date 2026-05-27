@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.16",
+    headline: "VA Residual Income: family size now counts co-borrowers (was always 1 for the primary).",
+    highlights: [
+      "Family size used to be 1 + (married ? 1 : 0) + dependents — so a joint VA file with two unmarried borrowers showed family size 1 and used the wrong VA table requirement. Now we count visible marital-status selects (one per borrower) and take the max of borrower-count vs. solo-married, so two unmarried borrowers gives family size 2; a married primary with a co-borrower spouse still gives 2 (no double-counting); a solo married borrower with 1 dependent still gives 3."
+    ]
+  },
+  {
     version: "1.49.15",
     headline: "VA Residual Income Calc: the co-borrower now gets their own button when both borrowers are on the same tab (was only injecting on the primary).",
     highlights: [
