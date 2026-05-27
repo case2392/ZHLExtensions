@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.12",
+    headline: "VA Residual Income pass/fail chip is now on the main page next to Surviving spouse — no need to open the calc panel to see it.",
+    highlights: [
+      "Pulled the pass/caution/fail chips out of the residual income panel (both the title bar chip from v1.49.10 and the per-row dots from v1.49.11). The panel is back to its original look.",
+      "The same chip now sits on the borrower form, inline next to the \"Surviving spouse\" checkbox. Same logic — green ✓ \"Meets VA (120%) requirement\", yellow ! \"Close to VA requirement\" (within $200), red ✗ \"Below VA requirement\". Label says \"VA 120% requirement\" vs \"VA requirement\" depending on whether the current scenario's DTI clears the 41% threshold.",
+      "Live: recomputes whenever LOP re-renders or the LO edits income, debts, PITI, or scenario. Computed per-borrower from the form scope, so a veteran primary + non-veteran co-borrower file shows the chip on the veteran's side only. Hover the chip for the underlying residual / requirement / DTI numbers."
+    ]
+  },
+  {
     version: "1.49.11",
     headline: "VA Residual Income chip now explicitly accounts for the 120% rule based on the current scenario's DTI — labeled \"VA 120%\" or \"VA table\" so you can see which one is being tested.",
     highlights: [
