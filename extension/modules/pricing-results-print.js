@@ -465,7 +465,6 @@
       '<title>Rate Worksheet — ' + escapeHtml(titleSuffix) + '</title>' +
       '<style>' + css + '</style></head>' +
       '<body>' + pagesHtml +
-      '<script>window.addEventListener("load", function(){ setTimeout(function(){ window.print(); }, 250); });<\/script>' +
       '</body></html>'
     );
   }
@@ -487,6 +486,21 @@
     win.document.open();
     win.document.write(html);
     win.document.close();
+    // Trigger print from the OPENER side. The new window inherits the
+    // host page's CSP (operator.zillowhomeloans.com blocks inline
+    // scripts), so embedding a <script>window.print()</script> in the
+    // generated HTML fails with a CSP violation. Calling win.print()
+    // from here works because we're not running script INSIDE the new
+    // doc — we're poking its window object from the opener.
+    const firePrint = function () { try { win.print(); } catch (_) {} };
+    if (win.document.readyState === 'complete') {
+      setTimeout(firePrint, 250);
+    } else {
+      win.addEventListener('load', function () { setTimeout(firePrint, 250); });
+      // Belt-and-suspenders: some browsers fire load before our
+      // listener attaches when the document is already finished.
+      setTimeout(firePrint, 800);
+    }
     track('pricing_results_print', {
       rows: rows.length,
       downPaymentPct: sectionMeta.downPaymentPct,

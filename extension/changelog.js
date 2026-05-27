@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.9",
+    headline: "Print Buyer Worksheet: fixed CSP error that prevented the print dialog from auto-firing.",
+    highlights: [
+      "The generated worksheet HTML used an inline <script> tag to call window.print() after load. The new tab (about:blank) inherits LOP's Content Security Policy, which blocks inline scripts — so the print dialog never fired and the console logged a CSP violation. Now print is triggered from the opener side (no script inside the printed doc), which doesn't run afoul of CSP."
+    ]
+  },
+  {
     version: "1.49.8",
     headline: "Print Buyer Worksheet: only ONE button per section now (was duplicating), title is no longer \"Pre-approval Letter,\" and the layout fits 3 options per page instead of 1.",
     highlights: [
