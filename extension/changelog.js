@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.11",
+    headline: "VA Residual Income chip now explicitly accounts for the 120% rule based on the current scenario's DTI — labeled \"VA 120%\" or \"VA table\" so you can see which one is being tested.",
+    highlights: [
+      "When the scenario's DTI is over 41%, the title chip now says \"Meets/Close to/Below VA 120% requirement\" instead of just \"VA requirement\" — so it's obvious which rule is being applied.",
+      "Added a small \"120% rule\" / \"Base table\" tag next to the DTI row in the body, so you can confirm at a glance which tier the current DTI puts the borrower in.",
+      "Each requirement row now gets its own compact pass/caution/fail dot. The base \"VA table requirement\" row shows pass against the table value; the \"Required at 120%\" row shows pass against the 120% bumped value. Both visible at once so you can see whether you'd still pass if DTI dropped under 41% (and vice versa)."
+    ]
+  },
+  {
     version: "1.49.10",
     headline: "VA Residual Income Calc: title bar now shows a green ✓ / yellow ! / red ✗ chip telling you whether the borrower meets the VA table requirement.",
     highlights: [

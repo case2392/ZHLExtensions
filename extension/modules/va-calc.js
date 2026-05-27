@@ -1865,63 +1865,100 @@
       body.appendChild(row);
     }
 
-    function renderBody() {
-      body.innerHTML = '';
-      const result = calculate(state);
-      // Title: residual income amount, with an inline pass/caution/
-      // fail badge styled like the FHA Manual Eligible chip so the LO
-      // can tell at a glance whether the borrower clears the VA table.
-      title.innerHTML = '';
-      const titleText = document.createElement('span');
-      titleText.textContent = 'Residual income: ' + fmt(result.residualIncome);
-      title.appendChild(titleText);
-      const effective = result.dtiOver41 && result.requirement120 != null
-        ? result.requirement120 : result.requirement;
-      if (effective != null && isFinite(result.residualIncome)) {
-        const delta = result.residualIncome - effective;
-        // delta < 0:   fail (red)
-        // 0 ≤ delta ≤ 200: caution (yellow) — passing but close enough
-        //                  that a tax / debt swing could flip them
-        // delta > 200: pass (green)
-        const status = delta < 0 ? 'fail' : (delta <= 200 ? 'caution' : 'pass');
-        const colors = status === 'pass'
-          ? { bg: '#dcfce7', border: '#16a34a', text: '#14532d', dot: '#16a34a' }
-          : status === 'fail'
-            ? { bg: '#fee2e2', border: '#dc2626', text: '#7f1d1d', dot: '#dc2626' }
-            : { bg: '#fef3c7', border: '#d97706', text: '#78350f', dot: '#d97706' };
-        const iconChar  = status === 'pass' ? '✓' : (status === 'fail' ? '✗' : '!');
-        const labelText = status === 'pass' ? 'Meets VA requirement'
-          : status === 'fail' ? 'Below VA requirement'
-          : 'Close to VA requirement';
-        const badge = document.createElement('span');
+    // Build a small pass/caution/fail badge using the same visual
+    // language as the FHA Manual Eligibility chip. Used both for the
+    // big title-bar chip and for the smaller per-row dots that
+    // annotate "VA table requirement" / "Required at 120%".
+    function statusBadge(residual, requirement, opts) {
+      opts = opts || {};
+      const compact = !!opts.compact;
+      if (requirement == null || !isFinite(residual)) return null;
+      const delta = residual - requirement;
+      // delta < 0:        fail (red)
+      // 0 ≤ delta ≤ 200:  caution (yellow) — passing but close enough
+      //                    that a tax / debt swing could flip them
+      // delta > 200:      pass (green)
+      const status = delta < 0 ? 'fail' : (delta <= 200 ? 'caution' : 'pass');
+      const colors = status === 'pass'
+        ? { bg: '#dcfce7', border: '#16a34a', text: '#14532d', dot: '#16a34a' }
+        : status === 'fail'
+          ? { bg: '#fee2e2', border: '#dc2626', text: '#7f1d1d', dot: '#dc2626' }
+          : { bg: '#fef3c7', border: '#d97706', text: '#78350f', dot: '#d97706' };
+      const iconChar = status === 'pass' ? '✓' : (status === 'fail' ? '✗' : '!');
+      const deltaStr = (delta >= 0 ? '+' : '−') + '$' +
+        Math.abs(delta).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      const badge = document.createElement('span');
+      if (compact) {
+        // Just the colored circle + delta — fits beside a value cell.
+        badge.style.cssText =
+          'display:inline-flex;align-items:center;gap:5px;margin-left:8px;' +
+          'padding:1px 7px 1px 2px;border-radius:999px;' +
+          'font-size:10px;font-weight:700;letter-spacing:0.02em;' +
+          'background:' + colors.bg + ';border:1px solid ' + colors.border + ';' +
+          'color:' + colors.text + ';vertical-align:middle;';
+        const iconEl = document.createElement('span');
+        iconEl.textContent = iconChar;
+        iconEl.style.cssText =
+          'display:inline-flex;align-items:center;justify-content:center;' +
+          'width:12px;height:12px;border-radius:50%;flex:0 0 auto;' +
+          'background:' + colors.dot + ';color:#fff;font-size:8px;font-weight:700;';
+        badge.appendChild(iconEl);
+        const txt = document.createElement('span');
+        txt.textContent = deltaStr;
+        badge.appendChild(txt);
+      } else {
         badge.style.cssText =
           'display:inline-flex;align-items:center;gap:6px;' +
           'margin-left:12px;padding:3px 10px 3px 4px;border-radius:999px;' +
           'font-size:11px;font-weight:700;letter-spacing:0.02em;' +
-          'background:' + colors.bg + ';border:1px solid ' + colors.border + ';color:' + colors.text + ';' +
-          'vertical-align:middle;';
+          'background:' + colors.bg + ';border:1px solid ' + colors.border + ';' +
+          'color:' + colors.text + ';vertical-align:middle;';
         const iconEl = document.createElement('span');
         iconEl.textContent = iconChar;
         iconEl.style.cssText =
           'display:inline-flex;align-items:center;justify-content:center;' +
           'width:16px;height:16px;border-radius:50%;flex:0 0 auto;' +
           'background:' + colors.dot + ';color:#fff;font-size:10px;font-weight:700;';
-        const labelEl = document.createElement('span');
-        const deltaStr = (delta >= 0 ? '+' : '−') + '$' +
-          Math.abs(delta).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        labelEl.textContent = labelText + ' (' + deltaStr + ')';
         badge.appendChild(iconEl);
+        const labelEl = document.createElement('span');
+        const ruleName = opts.label || 'VA requirement';
+        const verb = status === 'pass' ? 'Meets'
+          : status === 'fail' ? 'Below' : 'Close to';
+        labelEl.textContent = verb + ' ' + ruleName + ' (' + deltaStr + ')';
         badge.appendChild(labelEl);
-        badge.title =
-          'Effective VA requirement: ' + fmt(effective) +
-          (result.dtiOver41 ? '  (120% of table — DTI > 41%)' : '  (table)') +
-          '\nResidual income: ' + fmt(result.residualIncome) +
-          '\nDelta vs requirement: ' + deltaStr +
-          (status === 'caution'
-            ? '\n\nWithin $200 of the requirement — keep an eye on tax / debt swings.'
-            : '');
-        title.appendChild(badge);
       }
+      badge.title =
+        (opts.tooltipLabel || 'VA requirement') + ': ' + fmt(requirement) +
+        '\nResidual income: ' + fmt(residual) +
+        '\nDelta: ' + deltaStr +
+        (status === 'caution'
+          ? '\n\nWithin $200 of the requirement — a small tax / debt swing could flip them.'
+          : status === 'fail'
+            ? '\n\nDoes not meet this requirement.'
+            : '');
+      return badge;
+    }
+
+    function renderBody() {
+      body.innerHTML = '';
+      const result = calculate(state);
+      // Title: residual income amount, with an inline pass/caution/
+      // fail badge. When the current scenario's DTI is over 41%, the
+      // effective requirement is the 120% bumped value (VA rule), so
+      // we test against THAT and the chip label says so explicitly.
+      title.innerHTML = '';
+      const titleText = document.createElement('span');
+      titleText.textContent = 'Residual income: ' + fmt(result.residualIncome);
+      title.appendChild(titleText);
+      const usesUplift = !!(result.dtiOver41 && result.requirement120 != null);
+      const effective = usesUplift ? result.requirement120 : result.requirement;
+      const titleBadge = statusBadge(result.residualIncome, effective, {
+        label: usesUplift ? 'VA 120% requirement' : 'VA requirement',
+        tooltipLabel: usesUplift
+          ? 'VA 120% requirement (DTI ' + (state.dti != null ? state.dti.toFixed(2) + '% > 41%' : 'over 41%') + ')'
+          : 'VA table requirement' + (state.dti != null ? ' (DTI ' + state.dti.toFixed(2) + '% ≤ 41%)' : '')
+      });
+      if (titleBadge) title.appendChild(titleBadge);
 
       addRow('Gross monthly income', fmt(state.grossIncome));
       addEditableRow('Non-Taxable Income (VA Disability, BAH, BAS, etc.)', state.nonTaxableIncome, 'Excluded from taxes', function (v) {
@@ -1955,11 +1992,44 @@
       const loanLabel = state.loanAmount ? fmt(state.loanAmount) : 'Unknown — assuming > $80k';
       addRow('Loan amount', loanLabel);
       if (state.dti != null) {
-        addRow('DTI', state.dti.toFixed(2) + '%');
+        const dtiRow = addRow('DTI', state.dti.toFixed(2) + '%');
+        // Visual flag for the 41% cutoff so the LO can see at a
+        // glance whether the 120% rule applies to the CURRENT
+        // scenario's DTI.
+        const dtiTag = document.createElement('span');
+        const over = state.dti > 41;
+        dtiTag.textContent = over ? '120% rule' : 'Base table';
+        dtiTag.title = over
+          ? 'DTI > 41% — VA requires residual income to be at least 120% of the table value.'
+          : 'DTI ≤ 41% — base VA table requirement applies.';
+        dtiTag.style.cssText =
+          'display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;' +
+          'font-size:10px;font-weight:700;letter-spacing:0.02em;vertical-align:middle;' +
+          (over
+            ? 'background:#fef3c7;border:1px solid #d97706;color:#78350f;'
+            : 'background:#e0f2fe;border:1px solid #0284c7;color:#075985;');
+        const dtiVal = dtiRow && dtiRow.querySelector('.rric-value');
+        if (dtiVal) dtiVal.appendChild(dtiTag);
       }
-      addRow('VA table requirement', result.requirement != null ? fmt(result.requirement) : '—', { emphasis: true });
+      const tableRow = addRow('VA table requirement',
+        result.requirement != null ? fmt(result.requirement) : '—', { emphasis: true });
+      if (result.requirement != null) {
+        const tableBadge = statusBadge(result.residualIncome, result.requirement, {
+          compact: true,
+          tooltipLabel: 'VA table requirement'
+        });
+        const tableVal = tableRow && tableRow.querySelector('.rric-value');
+        if (tableBadge && tableVal) tableVal.appendChild(tableBadge);
+      }
       if (result.dtiOver41 && result.requirement120 != null) {
-        addRow('Required at 120% (DTI > 41%)', fmt(result.requirement120), { emphasis: true });
+        const upliftRow = addRow('Required at 120% (DTI > 41%)',
+          fmt(result.requirement120), { emphasis: true });
+        const upliftBadge = statusBadge(result.residualIncome, result.requirement120, {
+          compact: true,
+          tooltipLabel: 'VA 120% requirement (DTI > 41%)'
+        });
+        const upliftVal = upliftRow && upliftRow.querySelector('.rric-value');
+        if (upliftBadge && upliftVal) upliftVal.appendChild(upliftBadge);
       }
 
       applyResults(state, result);
