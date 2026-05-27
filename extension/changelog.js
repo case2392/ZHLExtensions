@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.15",
+    headline: "VA Residual Income Calc: the co-borrower now gets their own button when both borrowers are on the same tab (was only injecting on the primary).",
+    highlights: [
+      "On joint files where the primary and co-borrower are rendered side-by-side on one tab (e.g. Jessica & Brandon both veterans), the formScope walk-up was finding the WHOLE tab pane as the ancestor with an Employment table — both borrowers' walks landed on the same scope, and the de-dup dropped the co-borrower's section. Now the walk requires the ancestor to contain exactly one veteranType select, so each borrower gets their own section. Falls back to the old wider behavior if no narrower ancestor exists (legacy tab layouts).",
+      "The inline \"Meets VA requirement\" chip next to Surviving Spouse also picks up the co-borrower automatically, since it iterates the same findMilitarySections() result."
+    ]
+  },
+  {
     version: "1.49.14",
     headline: "Copy LOP file: staged loans now expire after 24 hours so the \"Paste from staged\" picker stays current.",
     highlights: [

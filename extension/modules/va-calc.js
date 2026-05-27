@@ -2057,15 +2057,31 @@
       // narrow Military section is too small to scope the calc to.
       // The wider form root contains both, and gives us a clean
       // boundary between borrower-pair tabs.
+      //
+      // Pair-on-one-tab layouts (primary + co-borrower rendered
+      // side-by-side) require an extra constraint: the ancestor must
+      // contain THIS borrower's veteranType only, not both — otherwise
+      // both borrowers' walks land on the same outer container and
+      // the de-dup below drops the co-borrower's section. So we
+      // accept the FIRST ancestor that has an Employment table AND
+      // exactly one veteranType select. If no such ancestor exists
+      // (some legacy layouts), fall back to the wider one.
       let formScope = milSection;
+      let fallbackScope = null;
       let walker = milSection;
       while (walker && walker !== document.body) {
-        if (walker.querySelector('table[aria-label="Table for employments"]')) {
-          formScope = walker;
-          break;
+        const hasEmployment = !!walker.querySelector('table[aria-label="Table for employments"]');
+        if (hasEmployment) {
+          if (!fallbackScope) fallbackScope = walker;
+          const vtCount = walker.querySelectorAll('select[name="veteranType"]').length;
+          if (vtCount === 1) {
+            formScope = walker;
+            break;
+          }
         }
         walker = walker.parentElement;
       }
+      if (formScope === milSection && fallbackScope) formScope = fallbackScope;
       if (seen.has(formScope)) return;
       seen.add(formScope);
       // Anchor for button placement: the row container holding the
