@@ -498,6 +498,29 @@
       </div>
     </section>
 
+    <!-- ============== Module: VA + non-spouse co-borrower warning ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>VA + non-spouse co-borrower warning</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_vaNonSpouseWarning" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Watches the <strong>Product name</strong>, every borrower&rsquo;s <strong>Veteran type</strong>, and every borrower&rsquo;s <strong>Marital status</strong>. If the loan is VA, one borrower is a qualifying veteran (Regular military / National Guard or reserves), another is non-veteran, and any borrower is not marked <strong>Married</strong>, a sticky red banner appears across the top and the offending fields are outlined in red.</li>
+          <li>ZHL only allows a non-veteran co-borrower on a VA loan when they&rsquo;re the veteran&rsquo;s legally married spouse, or when they independently qualify for VA. Two unmarried unrelated parties (one veteran, one not) is an underwriting error &mdash; this warning catches it before it slips into application.</li>
+          <li>Banner auto-clears the moment the product is changed off VA, the co-borrower&rsquo;s veteran type is set to a qualifying value, or all borrowers are marked Married.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Copy LOP file ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

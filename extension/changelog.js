@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.13",
+    headline: "New: VA + non-spouse co-borrower warning — sticky red banner when a non-veteran co-borrower is on a VA loan without being the veteran's married spouse.",
+    highlights: [
+      "Same visual language as the FHA + Non-Permanent Resident Alien warning: sticky red banner across the top of the page, plus a red outline on the offending fields (the non-vet co-borrower's Veteran type and any borrower's Marital status that isn't Married).",
+      "Triggers when ALL of: (1) Product is VA, (2) at least one borrower is a qualifying veteran (Regular military / National Guard or reserves), (3) at least one OTHER borrower is non-veteran, AND (4) any borrower on the file isn't marked Married. ZHL only allows non-veteran co-borrowers on a VA loan when they're the veteran's legally married spouse, or when they independently qualify for VA themselves.",
+      "Banner auto-clears as soon as you fix the cause — change the product off VA, set the co-borrower to a qualifying veteran type, or mark both borrowers Married."
+    ]
+  },
+  {
     version: "1.49.12",
     headline: "VA Residual Income pass/fail chip is now on the main page next to Surviving spouse — no need to open the calc panel to see it.",
     highlights: [
