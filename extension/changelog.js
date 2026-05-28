@@ -13,7 +13,7 @@
 
 window.ZHL_CHANGELOG = [
   {
-    version: "1.49.25",
+    version: "1.50.0",
     headline: "New: VA Entitlement Calculator — next to Run Residual Income Calc. Enter the entitlement used and it shows the max $0-down loan, plus the down payment required above that.",
     highlights: [
       "Full entitlement (nothing used) → no VA county limit and $0 down at any loan amount (subject to lender/investor max). Partial entitlement → available guaranty = 25% × county limit − used, max $0-down loan = 4 × available, and down for a higher target = 25% × loan − available.",
