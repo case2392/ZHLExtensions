@@ -141,6 +141,24 @@
     "1.12.0": "FHA Collections / Disputed cumulative-cap badges on Liabilities."
   };
 
+  // Single source of truth: changelog.js is loaded as a content script
+  // right before this one (same manifest entry), so window.ZHL_CHANGELOG
+  // is available in our isolated world. Overlay its headlines onto the
+  // hard-coded map above so new releases automatically get a toast
+  // headline without anyone hand-copying it here. The hard-coded map
+  // stays as a fallback for old versions that have been trimmed out of
+  // changelog.js's visible list.
+  try {
+    const live = (typeof window !== 'undefined' && window.ZHL_CHANGELOG) || [];
+    if (Array.isArray(live)) {
+      live.forEach(function (entry) {
+        if (entry && entry.version && entry.headline && !CHANGELOG_HEADLINES[entry.version]) {
+          CHANGELOG_HEADLINES[entry.version] = entry.headline;
+        }
+      });
+    }
+  } catch (_) {}
+
   // Justin's Zall Wall — shown as a karma link at the bottom of the toast.
   const ZALL_WALL_URL = 'https://zallwall.zillowgroup.com/justinca';
 

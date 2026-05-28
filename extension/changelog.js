@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.22",
+    headline: "Update toast now reads its headline straight from the changelog, so every new version gets a real toast (the hard-coded list had drifted ~30 releases out of date).",
+    highlights: [
+      "The bottom-right 'What's new' toast used a hard-coded headline map inside update-toast.js that hadn't been updated since v1.47.2 — so recent versions showed a bland 'Updated from X to Y' (or you may have missed it entirely). changelog.js is now loaded as a content script right before the toast, and the toast overlays window.ZHL_CHANGELOG headlines onto its fallback map. New releases now surface their real headline automatically with no hand-copying.",
+      "Tip: reloading the unpacked extension doesn't re-run content scripts on already-open tabs — refresh the LOP / Gmail / Salesforce tab once after an update to see the toast."
+    ]
+  },
+  {
     version: "1.49.21",
     headline: "Add Co-Borrower to Salesforce button moved next to the co-borrower's name, so Resend Link stays put at the far right.",
     highlights: [
