@@ -26,6 +26,9 @@
   const ZHL_TIP = 'Built by Justin Case. Karma appreciated 💛';
   const MIN_SCORE = 640;
   const MAX_DTI = 50;
+  // VA manual-underwrite floor (ZHL): min score 660, max DTI 43%.
+  const VA_MIN_SCORE = 660;
+  const VA_MAX_DTI = 43;
 
   // The full Manual Underwriting guideline block surfaced in the badge
   // tooltip so the user can confirm fit without leaving the page.
@@ -62,6 +65,37 @@
     '',
     'NOTE: Compensating factors may only be used to exceed front end ratio limits. Manual UW\'s still have a max back end ratio.'
   ].join('\n');
+
+  // VA manual-UW guideline block (Non-IRRRL). Intentionally omits
+  // investor-specific credit-score overlays per ZHL — 660 is the floor.
+  const VA_GUIDELINES = [
+    'VA MANUAL UNDERWRITE (Non-IRRRL)',
+    '',
+    '• Minimum credit score for manual underwrite: 660.',
+    '• Maximum DTI ratio: 43%.',
+    '• Residual income must meet the VA table (VA Handbook Ch. 4, §9).',
+    '   If DTI > 41%, residual income must be at least 120% of the table requirement.',
+    '• Must meet all requirements of VA Handbook Chapter 4 and be eligible for guaranty by VA.',
+    '• Submit through LPA or DU; a copy of the findings (incl. "Refer" / "Manual Downgrade") must be in the file.',
+    '',
+    '   VA Handbook, Chapter 4'
+  ].join('\n');
+
+  // Which manual-UW program applies, based on the right-rail Product
+  // name. VA loans get the VA pill + VA analyzer; everything else
+  // (FHA, and Conv by default) uses the FHA path as before.
+  function getProductType() {
+    const txt = findRightRailValueText('Product name') || '';
+    if (/\bVA\b/i.test(txt)) return 'va';
+    if (/\bFHA\b/i.test(txt)) return 'fha';
+    return 'other';
+  }
+  function currentProgram() {
+    if (getProductType() === 'va') {
+      return { key: 'va', label: 'VA', minScore: VA_MIN_SCORE, maxDti: VA_MAX_DTI, guidelines: VA_GUIDELINES };
+    }
+    return { key: 'fha', label: 'FHA', minScore: MIN_SCORE, maxDti: MAX_DTI, guidelines: GUIDELINES };
+  }
 
   function isFullApplicationPage() {
     return location.pathname.indexOf('/loan-officer-portal/') !== -1
@@ -189,15 +223,16 @@
   }
 
   function paintBadge(badge, result) {
+    const prog = currentProgram();
     if (!result) {
       badge.style.background = '#f3f4f6';
       badge.style.borderColor = '#d1d5db';
       badge.style.color = '#374151';
-      badge.textContent = 'No credit pulled yet — FHA eligibility unknown';
-      badge.title = GUIDELINES + '\n\n' + ZHL_TIP;
+      badge.textContent = 'No credit pulled yet — ' + prog.label + ' eligibility unknown';
+      badge.title = prog.guidelines + '\n\n' + ZHL_TIP;
       return;
     }
-    const eligible = result.score >= MIN_SCORE;
+    const eligible = result.score >= prog.minScore;
     badge.innerHTML = '';
     const icon = document.createElement('span');
     icon.textContent = eligible ? '✓' : '✗';
@@ -207,7 +242,7 @@
       'font-size:11px;font-weight:700;' +
       'background:' + (eligible ? '#16a34a' : '#dc2626') + ';color:#fff;flex:0 0 auto;';
     const label = document.createElement('span');
-    label.textContent = eligible ? 'FHA Manual Eligible' : 'FHA Manual Ineligible';
+    label.textContent = eligible ? (prog.label + ' Manual Eligible') : (prog.label + ' Manual Ineligible');
     const score = document.createElement('span');
     score.textContent = '— mid ' + result.score;
     score.style.cssText = 'font-weight:500;opacity:0.85;';
@@ -223,16 +258,12 @@
       badge.style.borderColor = '#dc2626';
       badge.style.color = '#7f1d1d';
     }
-    // Tooltip layout:
-    //   1) The pass/fail vs 640 summary with the qualifying borrower
-    //   2) A heads-up about the PHH (680+) and Mr. Cooper (none) overlays
-    //      when the score is in the 640–679 grey zone where it'd pass
-    //      with most aggregators but not PHH
-    //   3) The full guidelines block from above
     const summary = eligible
-      ? 'Qualifying middle score ' + result.score + ' meets ZHL\'s FHA Manual UW floor of ' + MIN_SCORE + '.'
-      : 'Qualifying middle score ' + result.score + ' is below ZHL\'s FHA Manual UW floor of ' + MIN_SCORE + '.';
-    const overlayNote = (eligible && result.score < 680)
+      ? 'Qualifying middle score ' + result.score + ' meets ZHL\'s ' + prog.label + ' Manual UW floor of ' + prog.minScore + '.'
+      : 'Qualifying middle score ' + result.score + ' is below ZHL\'s ' + prog.label + ' Manual UW floor of ' + prog.minScore + '.';
+    // FHA-only investor overlay note (PHH 680 / Mr. Cooper). VA has no
+    // such investor credit-score language per ZHL.
+    const overlayNote = (prog.key === 'fha' && eligible && result.score < 680)
       ? '\n\nHeads up: PHH requires ≥ 680, so this file is eligible at Amerihome / PennyMac but NOT at PHH. Mr. Cooper does not allow manual UW at any score.'
       : '';
     badge.title =
@@ -240,7 +271,7 @@
       '\nQualifying borrower: ' + result.borrower +
       '\n(Middle of the three bureau scores per borrower; LOWER middle when there are multiple borrowers.)' +
       overlayNote +
-      '\n\n' + GUIDELINES +
+      '\n\n' + prog.guidelines +
       '\n\n' + ZHL_TIP;
   }
 
@@ -425,7 +456,10 @@
         addlIncome: !!persisted.addlIncome,
         residualIncomeVA: !!persisted.residualIncomeVA,
         noDiscretionaryDebt: !!persisted.noDiscretionaryDebt,
-        energyEfficient: !!persisted.energyEfficient
+        energyEfficient: !!persisted.energyEfficient,
+        // VA-path manual confirmations
+        vaHbCh4: !!persisted.vaHbCh4,
+        vaGuaranty: !!persisted.vaGuaranty
       }
     };
 
@@ -464,7 +498,7 @@
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;gap:10px;padding:16px 20px 10px;border-bottom:1px solid #e5e7eb;';
     const title = document.createElement('h3');
-    title.textContent = 'FHA Manual Underwrite Analysis';
+    title.textContent = currentProgram().label + ' Manual Underwrite Analysis';
     title.style.cssText = 'margin:0;font-size:16px;color:#0b5cab;flex:1;';
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '×';
@@ -489,6 +523,10 @@
   }
 
   function buildBody(body, state, rerender) {
+    // VA loans use a flat 660 / 43% / residual-income model — no FHA
+    // ratio tiers or compensating factors. Branch early.
+    if (currentProgram().key === 'va') { buildVaBody(body, state, rerender); return; }
+
     const d = state.data;
     const dti = d.dti;
     const dtiTiers = evaluateRatioTiers(dti);
@@ -690,6 +728,134 @@
     foot.innerHTML = 'Reference: HUD Handbook 4000.1 II.A.5.viii &nbsp;·&nbsp; ' +
       '<a href="https://zallwall.zillowgroup.com/justinca" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;text-decoration:underline;" data-zhl-karma-link="fha-manual-analyzer">💛 Drop me karma</a>';
     body.appendChild(foot);
+  }
+
+  // ---- VA manual-UW body -------------------------------------------------
+  function buildVaBody(body, state, rerender) {
+    const d = state.data;
+    const dti = d.dti;
+
+    // Residual income (auto via the VA Calc module's exposed API).
+    let residualResult = null;
+    try {
+      if (window.ZHL_VA_CALC_API && typeof window.ZHL_VA_CALC_API.computeResidualForPage === 'function') {
+        residualResult = window.ZHL_VA_CALC_API.computeResidualForPage();
+      }
+    } catch (e) { console.warn('[VA Analyzer] residual API call threw', e); }
+    const residualAuto = residualResult && typeof residualResult.passes === 'boolean';
+    const residualOk = residualAuto ? !!residualResult.passes : !!state.manualChecks.residualIncomeVA;
+
+    // ---- Top summary line ----
+    const summary = document.createElement('div');
+    summary.style.cssText = 'margin-bottom:14px;color:#374151;font-size:12.5px;';
+    const parts = [];
+    if (d.score) parts.push('Mid score <strong>' + d.score + '</strong>' + (d.qualifyingBorrower ? ' (' + d.qualifyingBorrower + ')' : ''));
+    if (dti.back != null) parts.push('Back-end DTI <strong>' + dti.back.toFixed(2) + '%</strong>');
+    if (d.piti != null) parts.push('PITI <strong>$' + fmtMoney(d.piti) + '</strong>');
+    summary.innerHTML = parts.join(' &middot; ') || 'No data found on this page.';
+    body.appendChild(summary);
+
+    // ---- Eligibility ----
+    addH(body, 'Eligibility');
+    const scoreOk = d.score != null && d.score >= VA_MIN_SCORE;
+    addCheck(body, {
+      ok: scoreOk,
+      label: 'Minimum credit score ≥ ' + VA_MIN_SCORE,
+      detail: d.score != null
+        ? ('Qualifying mid: ' + d.score + (scoreOk ? ' (passes)' : ' (below floor)'))
+        : 'No credit pulled yet'
+    });
+    const dtiOk = dti.back != null && dti.back <= VA_MAX_DTI;
+    addCheck(body, {
+      ok: dtiOk,
+      label: 'Maximum DTI ≤ ' + VA_MAX_DTI + '%',
+      detail: dti.back != null
+        ? ('Back-end DTI: ' + dti.back.toFixed(2) + '%' + (dtiOk ? ' (passes)' : ' (over the 43% manual cap)'))
+        : 'DTI not available — re-price the scenario'
+    });
+
+    // ---- Residual income ----
+    addH(body, 'Residual income');
+    if (residualAuto) {
+      addCheck(body, {
+        ok: residualResult.passes,
+        label: 'Residual income — VA tables' + (residualResult.dtiOver41 ? ' (DTI > 41% → 120% bump)' : ''),
+        detail: 'Computed residual: $' + fmtMoney(residualResult.residualIncome) +
+          ' vs requirement $' + fmtMoney(residualResult.requirementEffective) +
+          ' (' + (residualResult.region || 'unknown region') + ', family of ' + (residualResult.familySize || '?') + ')'
+      });
+    } else {
+      addManualCheck(body, state, 'residualIncomeVA',
+        'Residual income meets the VA table',
+        'VA Calc auto-evaluation unavailable — run the VA Residual Income Calc on the Liabilities section and tick this box if it passes.',
+        rerender);
+    }
+
+    // ---- Manual confirmations ----
+    addH(body, 'Manual confirmations');
+    addManualCheck(body, state, 'vaHbCh4',
+      'Meets all requirements of VA Handbook Chapter 4',
+      'Submitted through LPA or DU with findings in file; meets HB Ch. 4 manual-UW requirements.', rerender);
+    addManualCheck(body, state, 'vaGuaranty',
+      'Loan is eligible for guaranty by VA',
+      'Entitlement, occupancy, and program requirements confirmed.', rerender);
+
+    // ---- Recommendation ----
+    renderVaRecommendation(body, {
+      score: d.score,
+      dtiBack: dti.back,
+      scoreOk: scoreOk,
+      dtiOk: dtiOk,
+      residualOk: residualOk,
+      hbOk: !!state.manualChecks.vaHbCh4,
+      guarantyOk: !!state.manualChecks.vaGuaranty
+    });
+
+    // ---- Footer ----
+    const foot = document.createElement('div');
+    foot.style.cssText = 'margin-top:18px;padding-top:12px;border-top:1px dashed #e5e7eb;font-size:11.5px;color:#6b7280;text-align:center;';
+    foot.innerHTML = 'Reference: VA Handbook Ch. 4 &nbsp;·&nbsp; ZHL VA Eligibility Matrix (Non-IRRRL) &nbsp;·&nbsp; ' +
+      '<a href="https://zallwall.zillowgroup.com/justinca" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;text-decoration:underline;" data-zhl-karma-link="va-manual-analyzer">💛 Drop me karma</a>';
+    body.appendChild(foot);
+  }
+
+  function renderVaRecommendation(body, r) {
+    const box = document.createElement('div');
+    box.style.cssText = 'margin-top:16px;padding:12px 14px;border-radius:8px;border:1px solid;';
+    function lay(title, detail, color) {
+      box.style.background = color.bg;
+      box.style.borderColor = color.border;
+      box.style.color = color.fg;
+      const t = document.createElement('div');
+      t.style.cssText = 'font-weight:700;font-size:14px;margin-bottom:6px;';
+      t.textContent = title;
+      const dEl = document.createElement('div');
+      dEl.style.cssText = 'font-size:12.5px;line-height:1.5;';
+      dEl.innerHTML = detail;
+      box.appendChild(t);
+      box.appendChild(dEl);
+    }
+    const RED = { bg: '#fee2e2', border: '#dc2626', fg: '#7f1d1d' };
+    const AMBER = { bg: '#fef3c7', border: '#f59e0b', fg: '#78350f' };
+    const GREEN = { bg: '#dcfce7', border: '#16a34a', fg: '#14532d' };
+
+    if (!r.scoreOk) {
+      lay('✗ Does NOT qualify for VA Manual UW',
+        'Qualifying middle score is below the ' + VA_MIN_SCORE + ' minimum (' + (r.score != null ? r.score : 'unknown') + ').', RED);
+    } else if (!r.dtiOk) {
+      lay('✗ Does NOT qualify for VA Manual UW',
+        'Back-end DTI ' + (r.dtiBack != null ? r.dtiBack.toFixed(2) + '%' : 'unknown') + ' exceeds the ' + VA_MAX_DTI + '% manual-UW cap.', RED);
+    } else if (!r.residualOk) {
+      lay('⚠ Residual income not met',
+        'Score and DTI pass, but residual income must meet the VA table (≥ 120% of the requirement when DTI > 41%). Run the VA Residual Income Calc, then re-check.', AMBER);
+    } else if (!r.hbOk || !r.guarantyOk) {
+      lay('⚠ Confirm the manual items',
+        'Score ≥ ' + VA_MIN_SCORE + ', DTI ≤ ' + VA_MAX_DTI + '%, and residual income all pass. Confirm VA Handbook Ch. 4 requirements and VA guaranty eligibility above to complete.', AMBER);
+    } else {
+      lay('✓ Qualifies for VA Manual UW',
+        'Score ≥ ' + VA_MIN_SCORE + ', DTI ≤ ' + VA_MAX_DTI + '%, residual income meets the VA table, and the manual VA requirements are confirmed.', GREEN);
+    }
+    body.appendChild(box);
   }
 
   function renderRecommendation(body, state, tiers, verifiedCFs, noDiscretionaryDebtOk) {

@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.23",
+    headline: "Manual UW pill + analyzer now switch to VA on VA loans — VA Manual Eligible/Ineligible at a 660 floor, with a VA-specific analyzer (660 score, 43% DTI, residual income).",
+    highlights: [
+      "When the loan's Product name is VA, the Credit-section pill reads 'VA Manual Eligible / VA Manual Ineligible' against ZHL's 660 manual-UW floor (FHA loans still use 640).",
+      "The Analyze Manual UW button opens a VA-specific analysis: minimum credit score 660, maximum DTI 43%, and residual income via the VA table (auto-pulled from the VA Residual Income Calc; 120% of the requirement when DTI > 41%), plus manual confirmations for VA Handbook Ch. 4 and VA guaranty eligibility. No FHA ratio tiers or compensating factors on the VA path.",
+      "Per ZHL, the VA path intentionally leaves out investor-specific credit-score language — 660 is the floor, full stop."
+    ]
+  },
+  {
     version: "1.49.22",
     headline: "Update toast now reads its headline straight from the changelog, so every new version gets a real toast (the hard-coded list had drifted ~30 releases out of date).",
     highlights: [
