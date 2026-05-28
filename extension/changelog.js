@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.21",
+    headline: "Add Co-Borrower to Salesforce button moved next to the co-borrower's name, so Resend Link stays put at the far right.",
+    highlights: [
+      "v1.49.20 appended the button to the outer header row, but that row uses space-between with two items — adding a third pushed Resend Link into the middle. The button now appends inside the role-tag wrapper (right next to the name pill), so the outer row keeps its two children and Resend Link stays pinned at the far right where it's always been. Still a trailing append, so no header scramble / no refresh needed."
+    ]
+  },
+  {
     version: "1.49.20",
     headline: "Fix: the Add Co-Borrower to Salesforce button no longer jumbles the borrower header (no refresh needed).",
     highlights: [

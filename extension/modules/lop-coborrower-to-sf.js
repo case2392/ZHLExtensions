@@ -172,14 +172,21 @@
         if (btn.disabled) return;
         onClick(btn, coIdx);
       });
-      // Append to the END of the header Flex rather than inserting
-      // between React's existing children (the role tag + Resend Link).
-      // Inserting mid-list corrupts React's child reconciliation — on
-      // its next re-render React mis-places its own nodes and the row
-      // stays jumbled until a full remount (page refresh). A trailing
-      // node is left alone by React's diff, so the layout stays stable
-      // without a refresh.
-      flex.appendChild(btn);
+      // Placement: append the button to the END of the inner role-tag
+      // wrapper (the div holding the "Owein Heinieke · Co-borrower"
+      // pill), so it sits right next to the name. Two reasons:
+      //   1. The outer header Flex uses space-between with two
+      //      children (tag-wrapper + Resend Link). Adding a third
+      //      child there redistributes the row and shoves Resend Link
+      //      to the center. Keeping the outer Flex at two children
+      //      leaves Resend Link pinned at the far right where it was.
+      //   2. Appending at the END of a React-managed container (rather
+      //      than inserting mid-list) leaves React's child diff alone,
+      //      so the header doesn't scramble on the next re-render.
+      const tagSpan = flex.querySelector('[class*="StyledTag"]');
+      const tagWrap = tagSpan && tagSpan.parentElement;
+      if (tagWrap) tagWrap.appendChild(btn);
+      else flex.appendChild(btn); // fallback: trailing node on the outer Flex
     });
   }
 
