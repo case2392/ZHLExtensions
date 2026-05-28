@@ -1450,21 +1450,27 @@
   }
 
   function getZipCode() {
-    // 1. Label → sibling value.
-    const raw = getPanelText('Zip code') || getPanelText('Zip') || getPanelText('Zip Code') || getPanelText('ZIP');
-    let m = raw && /(\d{5})(?:-\d{4})?/.exec(raw);
-    if (m) return m[1];
-    // 2. Column layouts: the label and value aren't siblings, so walk
-    //    up from a "Zip code" label and scan its row/container for a
-    //    5-digit (optionally ZIP+4) value.
-    const els = document.querySelectorAll('div, span, td, th, p, dt, dd, li, label');
-    for (const el of els) {
+    // There can be more than one "Zip code" label on the page (the
+    // Addresses form has one whose value lives in an <input>, so its
+    // textContent has no digits). Iterate EVERY "Zip code" label and
+    // return the first one that has a real 5-digit value — that's the
+    // right-rail Loan Details row: <span>Zip code</span><p>27055</p>.
+    const labels = document.querySelectorAll('span, div, td, th, p, dt, dd, li, label');
+    for (const el of labels) {
       const t = normalizeText(el.textContent);
       if (t !== 'zip code' && t !== 'zip' && t !== 'zip code:' && t !== 'zip:') continue;
-      let node = el;
-      for (let i = 0; i < 4 && node; i++) {
-        const mm = /\b(\d{5})(?:-\d{4})?\b/.exec(node.textContent || '');
-        if (mm) return mm[1];
+      // Sibling value (<span> label → <p> value in the same row).
+      let sib = el.nextElementSibling;
+      while (sib && !sib.textContent.trim()) sib = sib.nextElementSibling;
+      if (sib) {
+        const m = /\b(\d{5})(?:-\d{4})?\b/.exec(sib.textContent || '');
+        if (m) return m[1];
+      }
+      // Otherwise scan the row/container.
+      let node = el.parentElement;
+      for (let i = 0; i < 3 && node; i++) {
+        const m = /\b(\d{5})(?:-\d{4})?\b/.exec(node.textContent || '');
+        if (m) return m[1];
         node = node.parentElement;
       }
     }
@@ -2214,21 +2220,23 @@
     // state
     const st = {
       zip: zip || '',
-      countyIdx: hintIdx,          // -1 = baseline
       units: units,
-      limitOverride: null,         // null = use county/units; number = manual
+      limitOverride: null,         // null = auto from ZIP/units; number = manual
       used: 0,
       target: pageLoan
     };
 
-    function baseCountyLimit() {
-      const tuple = st.countyIdx >= 0 ? VA_HIGH_COST_COUNTIES[st.countyIdx].lim : VA_BASELINE_LIMITS;
+    // Auto county loan limit from the ZIP (high-cost table) + unit count,
+    // else the 2026 baseline.
+    function autoLimit() {
+      const idx = highCostIndexForZip(st.zip);
+      const tuple = idx >= 0 ? VA_HIGH_COST_COUNTIES[idx].lim : VA_BASELINE_LIMITS;
       const i = Math.min(Math.max(st.units, 1), 4) - 1;
       return tuple[i];
     }
     function effLimit() {
       return (st.limitOverride != null && isFinite(st.limitOverride) && st.limitOverride > 0)
-        ? st.limitOverride : baseCountyLimit();
+        ? st.limitOverride : autoLimit();
     }
 
     const panel = document.createElement('div');
@@ -2277,7 +2285,7 @@
       return v;
     }
 
-    // Property ZIP (editable — drives the county pre-select)
+    // Property ZIP (editable — auto-fills the county loan limit)
     const zipVal = labeledRow('Property ZIP');
     const zipInput = document.createElement('input');
     zipInput.type = 'text';
@@ -2287,33 +2295,10 @@
     zipInput.addEventListener('input', function () {
       const m = /(\d{5})/.exec(zipInput.value || '');
       st.zip = m ? m[1] : (zipInput.value || '').trim();
-      const idx = highCostIndexForZip(st.zip);
-      if (idx >= 0) { st.countyIdx = idx; st.limitOverride = null; }
+      st.limitOverride = null; // re-derive the limit from the new ZIP
       render();
     });
     zipVal.appendChild(zipInput);
-
-    // County dropdown
-    const countyVal = labeledRow('County (loan limit)');
-    const countySel = document.createElement('select');
-    countySel.style.cssText = 'max-width:320px;font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;';
-    const baseOpt = document.createElement('option');
-    baseOpt.value = '-1';
-    baseOpt.textContent = 'Baseline — not a high-cost county';
-    countySel.appendChild(baseOpt);
-    VA_HIGH_COST_COUNTIES.forEach(function (c, i) {
-      const o = document.createElement('option');
-      o.value = String(i);
-      o.textContent = c.label;
-      countySel.appendChild(o);
-    });
-    countySel.value = String(st.countyIdx);
-    countySel.addEventListener('change', function () {
-      st.countyIdx = parseInt(countySel.value, 10);
-      st.limitOverride = null; // re-derive from the county
-      render();
-    });
-    countyVal.appendChild(countySel);
 
     // Units
     const unitsVal = labeledRow('Units');
@@ -2425,18 +2410,17 @@
       const matched = highCostIndexForZip(st.zip) >= 0;
       let lead;
       if (!zipOk) {
-        lead = 'Enter the property ZIP above, or pick the county directly.';
+        lead = 'Enter the property ZIP above, or type the county loan limit directly.';
       } else if (matched) {
-        lead = 'ZIP <strong>' + st.zip + '</strong> matched a high-cost county (pre-selected).';
+        lead = 'ZIP <strong>' + st.zip + '</strong> matched a high-cost county — limit auto-filled.';
       } else {
-        lead = 'ZIP <strong>' + st.zip + '</strong> isn\'t in the high-cost table — defaulted to baseline. If it\'s a high-cost county, pick it above.';
+        lead = 'ZIP <strong>' + st.zip + '</strong> isn\'t in the high-cost table — defaulted to baseline. If it\'s high-cost, edit the county loan limit above.';
       }
       note.innerHTML = lead +
         ' <a href="' + FHFA_LOOKUP_URL + '" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;">FHFA county limit lookup</a>';
     }
 
     function render() {
-      countySel.value = String(st.countyIdx);
       unitsSel.value = String(st.units);
       limitInput.value = String(Math.round(effLimit()));
       updateNote();

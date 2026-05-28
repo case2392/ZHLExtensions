@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.2",
+    headline: "VA Entitlement Calculator: ZIP now reads from LOP's Loan Details, county dropdown removed — just ZIP + an editable county loan limit.",
+    highlights: [
+      "Fixed ZIP detection. There are multiple 'Zip code' labels on the page (the Addresses form keeps its value in an <input>, so its text has no digits); the calculator was locking onto the wrong one. It now scans every 'Zip code' label and takes the first with a real 5-digit value — the right-rail Loan Details row.",
+      "Removed the county dropdown. The panel is now just an editable Property ZIP (auto-fills the limit from the 2026 high-cost table when it matches) and an editable County loan limit field you can type any value into. Unit count still adjusts the 1–4 unit limit, and the FHFA lookup link is right there."
+    ]
+  },
+  {
     version: "1.50.1",
     headline: "VA Entitlement Calculator: now reads the property ZIP reliably and shows an editable ZIP box.",
     highlights: [
