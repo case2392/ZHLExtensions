@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.5",
+    headline: "2% Grant PDF: fixed the state read — the loan header sometimes shows just the state (\"TX\") instead of \"City, ST\".",
+    highlights: [
+      "The eligibility check reported 'couldn't read the property state' on loans whose header chip is just a 2-letter state (e.g. TX) rather than 'City, ST'. It now anchors on the 'Open in Salesforce' header link and accepts either format, validated against the real state/territory list so it won't match stray two-letter words."
+    ]
+  },
+  {
     version: "1.50.4",
     headline: "New: 2% Grant PDF on the Scenarios page — a ZHL Comparison PDF that shows ZHL paying 2% of the loan toward the down payment, lowering cash to close.",
     highlights: [

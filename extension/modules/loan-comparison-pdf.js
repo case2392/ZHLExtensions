@@ -445,13 +445,40 @@
 
   // ---- Borrower / property header scraping ----------------------
 
-  // Property state (2-letter) from the loan header "City, ST" chip.
+  // Property state (2-letter) from the loan header. The header chip
+  // shows either "City, ST" or just "ST", so accept both — validated
+  // against the real state/territory list to avoid matching stray
+  // 2-letter words. Anchored on the "Open in Salesforce" link's
+  // container (the loan header) so we don't pick up a borrower
+  // address elsewhere.
+  var US_STATES = ('AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD ' +
+    'MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA ' +
+    'WA WV WI WY GU PR VI AS MP').split(' ');
+  function stateFromText(t) {
+    t = (t || '').replace(/\s+/g, ' ').trim();
+    const m = /,\s*([A-Z]{2})$/.exec(t);
+    if (m && US_STATES.indexOf(m[1]) !== -1) return m[1];
+    if (/^[A-Z]{2}$/.test(t) && US_STATES.indexOf(t) !== -1) return t;
+    return null;
+  }
   function readPropertyState() {
+    const anchor = document.querySelector('a[aria-label="Open in Salesforce"]');
+    let scope = anchor && anchor.parentElement;
+    for (let lvl = 0; lvl < 2 && scope; lvl++) {
+      const spans = scope.querySelectorAll('span');
+      for (const sp of spans) {
+        const st = stateFromText(sp.textContent);
+        if (st) return st;
+      }
+      scope = scope.parentElement;
+    }
+    // Fallback: a "City, ST" chip anywhere (specific enough to be safe;
+    // standalone two-letter strings are NOT matched here).
     const els = document.querySelectorAll('span, div, p');
     for (const el of els) {
       const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
       const m = /^[A-Za-z .'\-]{2,40},\s*([A-Z]{2})$/.exec(t);
-      if (m) return m[1].toUpperCase();
+      if (m && US_STATES.indexOf(m[1]) !== -1) return m[1];
     }
     return null;
   }
