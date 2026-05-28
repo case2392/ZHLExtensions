@@ -29,6 +29,10 @@
   // VA manual-underwrite floor (ZHL): min score 660, max DTI 43%.
   const VA_MIN_SCORE = 660;
   const VA_MAX_DTI = 43;
+  // Reference links surfaced on the VA manual-confirmation rows.
+  const ZHL_VA_MATRIX_URL = 'https://zhl.highspot.com/items/61117b5a34d6be5da10154b0#1';
+  // Direct VA Lender's Handbook Chapter 4 (Credit Underwriting).
+  const VA_HANDBOOK_CH4_URL = 'https://www.knowva.ebenefits.va.gov/system/templates/selfservice/va_ssnew/help/customer/locale/en-US/portal/554400000001018/content/554400000314662/VA-Pamphlet-VAP26-7-Chapter-04-Credit-Underwriting';
 
   // The full Manual Underwriting guideline block surfaced in the badge
   // tooltip so the user can confirm fit without leaving the page.
@@ -457,21 +461,26 @@
         residualIncomeVA: !!persisted.residualIncomeVA,
         noDiscretionaryDebt: !!persisted.noDiscretionaryDebt,
         energyEfficient: !!persisted.energyEfficient,
-        // VA-path manual confirmations
-        vaHbCh4: !!persisted.vaHbCh4,
+        // VA-path manual confirmations (Chapter 4 breakdown + guaranty)
+        vaAus: !!persisted.vaAus,
+        vaCredit: !!persisted.vaCredit,
+        vaMtgHistory: !!persisted.vaMtgHistory,
+        vaSeasoning: !!persisted.vaSeasoning,
+        vaIncome: !!persisted.vaIncome,
         vaGuaranty: !!persisted.vaGuaranty
       }
     };
 
     const panel = renderPanel(state);
-    // Time saved: ~3 min vs manually checking each manual-UW eligibility
-    // condition against FHA Handbook tables.
+    // Time saved: ~10 min vs manually walking the manual-UW matrix +
+    // residual tables + Chapter 4 / Handbook 4000.1 conditions by hand.
     if (window.__zhlTimeSaved) {
       const slot = document.createElement('div');
       slot.style.cssText = 'padding:0 16px 14px;';
       panel.appendChild(slot);
-      const mins = 3;
-      window.__zhlTimeSaved.record('fha-manual-eligible', mins).then(function (r) {
+      const mins = 10;
+      const tool = currentProgram().key === 'va' ? 'va-manual-eligible' : 'fha-manual-eligible';
+      window.__zhlTimeSaved.record(tool, mins).then(function (r) {
         slot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
       });
     }
@@ -791,14 +800,71 @@
         rerender);
     }
 
-    // ---- Manual confirmations ----
-    addH(body, 'Manual confirmations');
-    addManualCheck(body, state, 'vaHbCh4',
-      'Meets all requirements of VA Handbook Chapter 4',
-      'Submitted through LPA or DU with findings in file; meets HB Ch. 4 manual-UW requirements.', rerender);
-    addManualCheck(body, state, 'vaGuaranty',
+    // ---- VA Handbook Ch. 4 requirements (broken out) ----
+    addH(body, 'VA Handbook Ch. 4 requirements');
+
+    // 1. AUS findings — best-effort auto-detect (Refer / Manual Downgrade).
+    const ausText = detectAusManualFindings();
+    let ausOk;
+    if (ausText) {
+      ausOk = true;
+      addCheck(body, {
+        ok: true,
+        label: 'AUS run (DU/LPA) with Refer / Manual Downgrade findings',
+        detail: 'Detected on the page: "' + ausText + '". Keep a copy of the findings in the eFolder.'
+      });
+    } else {
+      ausOk = !!state.manualChecks.vaAus;
+      addVaManualCheck(body, state, 'vaAus',
+        'AUS run (DU/LPA) — findings in file ("Refer" / "Manual Downgrade")',
+        'Couldn\'t auto-detect an AUS recommendation on the page. Submit through DU or LPA — manual UW requires a "Refer" or a manual downgrade — and save the findings to the eFolder.',
+        rerender,
+        'How to verify: Run DU or LPA. A "Refer", "Refer/Eligible", or manual downgrade is required to manually underwrite. Confirm the AUS findings PDF is in the eFolder.');
+    }
+
+    // 2. Satisfactory credit.
+    const creditConfirmed = !!state.manualChecks.vaCredit;
+    addVaManualCheck(body, state, 'vaCredit',
+      'Satisfactory credit per Ch. 4',
+      'No unresolved derogatory credit; collections / judgments / charge-offs addressed per VA HB Ch. 4.',
+      rerender,
+      'How to verify: Review the credit report. Outstanding judgments must be paid or in a documented repayment plan; collections/charge-offs evaluated per Ch. 4. No major unresolved derogatory items.');
+
+    // 3. Mortgage / rental history (1×30×12).
+    const mtgConfirmed = !!state.manualChecks.vaMtgHistory;
+    addVaManualCheck(body, state, 'vaMtgHistory',
+      'Acceptable mortgage / rental history (1×30×12)',
+      'No more than one 30-day late in the last 12 months of housing payments.',
+      rerender,
+      'How to verify: Check the VOM/VOR or the credit report\'s housing tradeline for the last 12 months. More than one 30-day late (1×30×12) generally fails and requires a downgrade.');
+
+    // 4. Bankruptcy / foreclosure / short-sale seasoning.
+    const seasoningConfirmed = !!state.manualChecks.vaSeasoning;
+    addVaManualCheck(body, state, 'vaSeasoning',
+      'Bankruptcy / foreclosure / short-sale seasoning met',
+      'Required seasoning since any BK, foreclosure, or short sale has elapsed with re-established credit.',
+      rerender,
+      'How to verify: Confirm seasoning per Ch. 4 — e.g. Ch. 7 BK ≥ 2 yrs, Ch. 13 ≥ 12 mo of on-time payments, foreclosure ≥ 2 yrs — with re-established satisfactory credit since.');
+
+    // 5. Stable & reliable income.
+    const incomeConfirmed = !!state.manualChecks.vaIncome;
+    addVaManualCheck(body, state, 'vaIncome',
+      'Stable & reliable income verified (2-yr history / VOE)',
+      'Two-year employment/income history (or acceptable gap explanation) with likely continuance.',
+      rerender,
+      'How to verify: Review paystubs, W-2s, and the VOE for a 2-year history and likelihood of continuance. Document any employment gaps > 30 days.');
+
+    // ---- VA guaranty ----
+    addH(body, 'VA guaranty');
+    const guarantyConfirmed = !!state.manualChecks.vaGuaranty;
+    addVaManualCheck(body, state, 'vaGuaranty',
       'Loan is eligible for guaranty by VA',
-      'Entitlement, occupancy, and program requirements confirmed.', rerender);
+      'Entitlement (COE), occupancy, and program parameters confirmed.',
+      rerender,
+      'How to verify: Confirm the COE shows available entitlement, the veteran will occupy as a primary residence, and the loan meets VA program parameters so it\'s eligible for guaranty.');
+
+    const allManualOk = ausOk && creditConfirmed && mtgConfirmed &&
+      seasoningConfirmed && incomeConfirmed && guarantyConfirmed;
 
     // ---- Recommendation ----
     renderVaRecommendation(body, {
@@ -807,8 +873,7 @@
       scoreOk: scoreOk,
       dtiOk: dtiOk,
       residualOk: residualOk,
-      hbOk: !!state.manualChecks.vaHbCh4,
-      guarantyOk: !!state.manualChecks.vaGuaranty
+      manualOk: allManualOk
     });
 
     // ---- Footer ----
@@ -848,9 +913,9 @@
     } else if (!r.residualOk) {
       lay('⚠ Residual income not met',
         'Score and DTI pass, but residual income must meet the VA table (≥ 120% of the requirement when DTI > 41%). Run the VA Residual Income Calc, then re-check.', AMBER);
-    } else if (!r.hbOk || !r.guarantyOk) {
+    } else if (!r.manualOk) {
       lay('⚠ Confirm the manual items',
-        'Score ≥ ' + VA_MIN_SCORE + ', DTI ≤ ' + VA_MAX_DTI + '%, and residual income all pass. Confirm VA Handbook Ch. 4 requirements and VA guaranty eligibility above to complete.', AMBER);
+        'Score ≥ ' + VA_MIN_SCORE + ', DTI ≤ ' + VA_MAX_DTI + '%, and residual income all pass. Confirm the VA Handbook Ch. 4 requirements and VA guaranty eligibility above to complete.', AMBER);
     } else {
       lay('✓ Qualifies for VA Manual UW',
         'Score ≥ ' + VA_MIN_SCORE + ', DTI ≤ ' + VA_MAX_DTI + '%, residual income meets the VA table, and the manual VA requirements are confirmed.', GREEN);
@@ -1002,6 +1067,80 @@
   function fmtMoney(n) {
     if (n == null || !isFinite(n)) return '?';
     return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  // Best-effort read of the AUS recommendation anywhere on the page.
+  // Manual UW requires a "Refer" or a manual downgrade. Returns the
+  // matched finding text, or null when none is detectable.
+  function detectAusManualFindings() {
+    const body = (document.body && document.body.textContent) || '';
+    const re = /Refer\s*(?:\/|\s*with\s+Caution|\s)\s*(?:Eligible|Ineligible)?|Manual\s+Downgrade/i;
+    const m = re.exec(body);
+    if (!m) return null;
+    return m[0].replace(/\s+/g, ' ').trim();
+  }
+
+  // VA manual-confirmation row: a div (not a <label>) so the reference
+  // links don't toggle the checkbox. Shows a how-to-verify tooltip and
+  // inline ZHL Matrix + VA HB Ch. 4 links.
+  function addVaManualCheck(parent, state, key, label, detail, rerender, tooltip) {
+    const checked = !!state.manualChecks[key];
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:10px;padding:8px 10px;border-radius:6px;background:#f9fafb;margin-bottom:4px;align-items:flex-start;';
+    if (tooltip) row.title = tooltip;
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = checked;
+    cb.style.cssText = 'margin-top:4px;flex:0 0 auto;width:16px;height:16px;cursor:pointer;';
+    const toggle = function () {
+      state.manualChecks[key] = cb.checked;
+      manualChecksByLoan[loanKey()] = Object.assign({}, manualChecksByLoan[loanKey()] || {}, state.manualChecks);
+      rerender();
+    };
+    cb.addEventListener('change', toggle);
+
+    const txt = document.createElement('div');
+    txt.style.flex = '1';
+    const t1 = document.createElement('div');
+    t1.textContent = label;
+    t1.style.cssText = 'font-weight:600;color:#1f2937;cursor:pointer;';
+    // Clicking the label text toggles the checkbox (the row isn't a
+    // <label>, so we wire it manually — links below stay independent).
+    t1.addEventListener('click', function () { cb.checked = !cb.checked; toggle(); });
+    const t2 = document.createElement('div');
+    t2.textContent = detail;
+    t2.style.cssText = 'font-size:12px;color:#6b7280;margin-top:2px;';
+
+    // Reference links — open in a new tab; stop propagation so they
+    // never toggle the row.
+    const linksWrap = document.createElement('div');
+    linksWrap.style.cssText = 'margin-top:4px;display:flex;gap:14px;flex-wrap:wrap;';
+    function addLink(text, url) {
+      if (!url) return;
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = text;
+      a.style.cssText = 'font-size:11px;font-weight:600;color:#0b5cab;text-decoration:underline;';
+      a.addEventListener('click', function (e) { e.stopPropagation(); });
+      linksWrap.appendChild(a);
+    }
+    addLink('📄 ZHL VA Matrix', ZHL_VA_MATRIX_URL);
+    addLink('📖 VA HB Ch. 4', VA_HANDBOOK_CH4_URL);
+
+    const t3 = document.createElement('div');
+    t3.textContent = checked ? '✓ Confirmed' : 'Tap the box or label to confirm';
+    t3.style.cssText = 'font-size:11px;font-weight:700;color:' + (checked ? '#16a34a' : '#0b5cab') + ';margin-top:4px;';
+
+    txt.appendChild(t1);
+    txt.appendChild(t2);
+    if (linksWrap.children.length) txt.appendChild(linksWrap);
+    txt.appendChild(t3);
+    row.appendChild(cb);
+    row.appendChild(txt);
+    parent.appendChild(row);
   }
 
   function scan() {

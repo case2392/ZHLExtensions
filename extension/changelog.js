@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.24",
+    headline: "VA Manual analyzer: Chapter 4 broken into individual checks (AUS auto-detected), each with a how-to-verify tooltip + ZHL Matrix and VA HB Ch. 4 links. Manual analyzers now count as 10 min saved.",
+    highlights: [
+      "The single 'Meets all requirements of VA Handbook Chapter 4' box is now five line items: AUS findings (Refer / Manual Downgrade), satisfactory credit, mortgage/rental history (1×30×12), BK/foreclosure/short-sale seasoning, and stable income — plus the separate VA guaranty confirmation.",
+      "AUS findings auto-check when a 'Refer' / 'Manual Downgrade' recommendation is detected on the page; otherwise it falls back to a manual confirmation. Each manual item has a hover tooltip explaining exactly how to verify it, plus inline links to the ZHL VA Matrix and VA Handbook Chapter 4.",
+      "Both manual-UW analyzers (FHA and VA) now record 10 minutes saved per run instead of 3, and the VA run logs under its own va-manual-eligible telemetry event."
+    ]
+  },
+  {
     version: "1.49.23",
     headline: "Manual UW pill + analyzer now switch to VA on VA loans — VA Manual Eligible/Ineligible at a 660 floor, with a VA-specific analyzer (660 score, 43% DTI, residual income).",
     highlights: [
