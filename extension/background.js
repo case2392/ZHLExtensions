@@ -1471,5 +1471,61 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true;
   }
+  // Relay co-borrower data from the LOP Full Application page to the
+  // open Salesforce Lightning tab. We send the fill request to every
+  // lightning.force.com tab; each Salesforce content script verifies
+  // the open lead matches the primary borrower and only the matching
+  // one acts. We focus the matching tab so the LO lands on the filled
+  // New Contact modal.
+  if (msg && msg.type === "ZHL_ADD_COBORROWER_TO_SF") {
+    (async () => {
+      const payload = msg.payload || {};
+      let tabs = [];
+      try {
+        tabs = await chrome.tabs.query({
+          url: ["https://*.lightning.force.com/*", "https://*.my.salesforce.com/*"]
+        });
+      } catch (_) {}
+      if (!tabs || !tabs.length) {
+        sendResponse({ ok: false, reason: "No Salesforce tab is open" });
+        return;
+      }
+      let answered = false;
+      let pending = tabs.length;
+      const finish = (resp) => {
+        if (answered) return;
+        answered = true;
+        sendResponse(resp);
+      };
+      tabs.forEach((tab) => {
+        if (tab.id == null) { if (--pending === 0) finish({ ok: false, reason: "No matching Salesforce lead tab open" }); return; }
+        let done = false;
+        const onDone = (resp) => {
+          if (done) return;
+          done = true;
+          pending--;
+          const err = chrome.runtime.lastError && chrome.runtime.lastError.message;
+          if (!err && resp && resp.matched) {
+            // Focus the matching tab so the LO sees the filled modal.
+            try {
+              chrome.tabs.update(tab.id, { active: true });
+              if (tab.windowId != null) chrome.windows.update(tab.windowId, { focused: true });
+            } catch (_) {}
+            finish({ ok: !!resp.ok, reason: resp.reason });
+          } else if (pending === 0) {
+            finish({ ok: false, reason: "No matching Salesforce lead tab open" });
+          }
+        };
+        try {
+          chrome.tabs.sendMessage(tab.id, { type: "ZHL_SF_ADD_COBORROWER", payload: payload }, onDone);
+        } catch (_) {
+          onDone(null);
+        }
+      });
+      // Safety: if no tab ever answers, don't leave the LOP side hanging.
+      setTimeout(() => finish({ ok: false, reason: "Salesforce didn't respond — is the lead open?" }), 15000);
+    })();
+    return true;
+  }
   return false;
 });

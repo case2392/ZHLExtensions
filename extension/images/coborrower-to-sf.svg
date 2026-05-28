@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- LOP co-borrower header (left) -->
+  <rect x="14" y="20" width="150" height="78" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="22" y="30" width="84" height="14" rx="7" fill="#eef2ff"/>
+  <text x="28" y="40" font-size="7" font-weight="700" fill="#3730a3">👤 Owein Heinieke</text>
+  <text x="22" y="56" font-size="7" fill="#5C5868">Co-borrower · LOP</text>
+  <rect x="22" y="64" width="134" height="16" rx="4" fill="#006aff"/>
+  <text x="89" y="75" text-anchor="middle" font-size="7" font-weight="700" fill="#fff">Add Co-Borrower to Salesforce</text>
+
+  <!-- arrow -->
+  <path d="M170 60 H196" stroke="#006aff" stroke-width="2" fill="none"/>
+  <path d="M196 60 l-6 -4 v8 z" fill="#006aff"/>
+
+  <!-- Salesforce New Contact modal (right) -->
+  <rect x="204" y="14" width="142" height="192" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="204" y="14" width="142" height="22" rx="6" fill="#f3f3f3"/>
+  <text x="275" y="29" text-anchor="middle" font-size="9" font-weight="700" fill="#0f172a">New Contact</text>
+
+  <text x="214" y="50" font-size="7" fill="#5C5868">First Name</text>
+  <rect x="214" y="54" width="122" height="14" rx="3" fill="#fff" stroke="#c9c9c9"/>
+  <text x="219" y="64" font-size="7" fill="#0f172a">Owein</text>
+
+  <text x="214" y="80" font-size="7" fill="#5C5868">Last Name</text>
+  <rect x="214" y="84" width="122" height="14" rx="3" fill="#fff" stroke="#c9c9c9"/>
+  <text x="219" y="94" font-size="7" fill="#0f172a">Heinieke</text>
+
+  <text x="214" y="110" font-size="7" fill="#5C5868">Phone</text>
+  <rect x="214" y="114" width="122" height="14" rx="3" fill="#fff" stroke="#c9c9c9"/>
+  <text x="219" y="124" font-size="7" fill="#0f172a">(530) 848-7715</text>
+
+  <text x="214" y="140" font-size="7" fill="#5C5868">Email</text>
+  <rect x="214" y="144" width="122" height="14" rx="3" fill="#fff" stroke="#c9c9c9"/>
+  <text x="219" y="154" font-size="7" fill="#0f172a">oweinh@proton.me</text>
+
+  <text x="214" y="170" font-size="7" fill="#5C5868">Role</text>
+  <rect x="214" y="174" width="122" height="14" rx="3" fill="#eef6ff" stroke="#006aff"/>
+  <text x="219" y="184" font-size="7" font-weight="700" fill="#0b5cab">Co-Borrower</text>
+
+  <rect x="296" y="194" width="40" height="12" rx="3" fill="#0176d3"/>
+  <text x="316" y="203" text-anchor="middle" font-size="7" font-weight="700" fill="#fff">Next</text>
+</svg>

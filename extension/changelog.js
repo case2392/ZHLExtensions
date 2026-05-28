@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.19",
+    headline: "New: Add Co-Borrower to Salesforce — one click takes the co-borrower from LOP into a Salesforce New Contact.",
+    highlights: [
+      "Adds an 'Add Co-Borrower to Salesforce' button next to the co-borrower's Resend Link on the Full Application page. It reads the co-borrower's first name, last name, cell phone, and email.",
+      "The background worker finds your open Salesforce Lightning tab, confirms the lead matches the primary borrower by name, focuses it, clicks New Contact, and fills First / Last / Phone / Email with Role = Co-Borrower (Company auto-fills).",
+      "Stops before saving on purpose — the filled New Contact modal is left on screen so you review it and click Next / Save yourself. If no Salesforce tab is open or the lead doesn't match the borrower, you get an inline message and nothing is changed."
+    ]
+  },
+  {
     version: "1.49.18",
     headline: "Anonymous usage telemetry is now always on — the setup toggle is replaced with a locked \"Always on\" indicator.",
     highlights: [

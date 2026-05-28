@@ -823,6 +823,33 @@
       </div>
     </section>
 
+    <!-- ============== Module: Add Co-Borrower to Salesforce ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Add Co-Borrower to Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> + Salesforce</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_coborrowerToSf" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/coborrower-to-sf.svg" alt="LOP co-borrower header with an 'Add Co-Borrower to Salesforce' button, an arrow to a Salesforce New Contact modal pre-filled with First name, Last name, Phone, Email, and Role set to Co-Borrower." />
+        </div>
+        <ul class="module-features">
+          <li>Adds an <strong>Add Co-Borrower to Salesforce</strong> button next to the co-borrower&rsquo;s <em>Resend Link</em> on the Full Application page. Reads the co-borrower&rsquo;s first name, last name, cell phone, and email.</li>
+          <li>Switches to your open <strong>Salesforce</strong> tab, confirms the lead matches the primary borrower (by name), clicks <strong>New Contact</strong>, and fills First name / Last name / Phone / Email. Sets <strong>Role = Co-Borrower</strong>; Company auto-fills from the name.</li>
+          <li><strong>Stops before saving</strong> &mdash; the New Contact modal is left filled and on screen so you review it and click Next / Save yourself. Nothing is written to Salesforce automatically.</li>
+          <li>If no Salesforce tab is open, or the open lead doesn&rsquo;t match the borrower, you get an inline message and nothing is changed.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Anonymous Telemetry ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
