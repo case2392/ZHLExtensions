@@ -15,8 +15,10 @@ const FEATURE_KEYS = [
   "feature_autoMessagingTab",
   "feature_scenarioSort",
   "feature_pricingResultsPrint",
-  "feature_gmailDragAttachments",
-  "feature_telemetry"
+  "feature_gmailDragAttachments"
+  // feature_telemetry intentionally omitted — telemetry is always on
+  // (no toggle in the UI; isTelemetryEnabled() in background.js always
+  // returns true).
 ];
 
 // Gmail Tweaks covers both the Gmail mail.google.com fixes and the

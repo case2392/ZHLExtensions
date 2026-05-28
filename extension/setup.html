@@ -830,11 +830,9 @@
           <h2>Anonymous usage telemetry</h2>
           <p class="module-runs-on">Runs in: background — no page-level UI</p>
         </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_telemetry" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
+        <span title="Telemetry is always on — anonymous tool-usage counts only, no borrower PII." style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:13px;font-weight:600;white-space:nowrap;">
+          <span aria-hidden="true">🔒</span> Always on
+        </span>
       </div>
 
       <div class="module-body">
@@ -845,7 +843,7 @@
           <li>Sends a small event ping to the extension admin (Justin) when you use a tool — which feature, which version, when. Helps decide which modules to invest in.</li>
           <li>Identifies you by your work Gmail address (read once from the Google account button when you have Gmail open) so the admin can see who's using what without anything else to set up.</li>
           <li>No email contents, no SMS contents, no Salesforce record contents — just feature names and counts.</li>
-          <li>Toggle off any time. Events drop on the floor when disabled; nothing is sent.</li>
+          <li><strong>Always on.</strong> This is how the admin decides which modules to keep building and improving — since it carries no borrower PII (tool name + duration + work email only), it can't be turned off.</li>
         </ul>
       </div>
     </section>

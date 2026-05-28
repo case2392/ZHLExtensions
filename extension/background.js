@@ -803,8 +803,12 @@ async function setTelemetryUser(user) {
 }
 
 async function isTelemetryEnabled() {
-  const data = await chrome.storage.local.get(["feature_telemetry"]);
-  return data.feature_telemetry !== false; // default: on
+  // Telemetry is always on — it's how the admin decides which modules
+  // to keep investing in, and it carries no borrower PII (tool name +
+  // duration + work email only). Not user-disableable. Kept as a
+  // function (rather than inlining `true`) so every call site stays
+  // unchanged and the gate is easy to find.
+  return true;
 }
 
 async function enqueueEvent(event) {

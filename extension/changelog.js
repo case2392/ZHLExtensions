@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.18",
+    headline: "Anonymous usage telemetry is now always on — the setup toggle is replaced with a locked \"Always on\" indicator.",
+    highlights: [
+      "isTelemetryEnabled() in the background worker now always returns true, so telemetry can't be disabled (and re-enables for anyone who'd turned it off previously). It still carries no borrower PII — tool name, duration, and work email only.",
+      "The setup card's on/off switch is replaced with a locked \"🔒 Always on\" badge, and the \"Toggle off any time\" bullet now explains that it stays on because it's how the admin decides which modules to keep building."
+    ]
+  },
+  {
     version: "1.49.17",
     headline: "Walkthrough + setup: documented 5 features that were missing, and gave every setup card a screenshot.",
     highlights: [
