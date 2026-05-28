@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.20",
+    headline: "Fix: the Add Co-Borrower to Salesforce button no longer jumbles the borrower header (no refresh needed).",
+    highlights: [
+      "The button was inserted between React's existing header children (the co-borrower role tag and Resend Link). Inserting mid-list corrupts React's child reconciliation, so on its next re-render React mis-placed its own nodes and the header stayed scrambled until a full page refresh. The button is now appended to the end of the header row, which React's diff leaves alone — layout stays stable with no refresh."
+    ]
+  },
+  {
     version: "1.49.19",
     headline: "New: Add Co-Borrower to Salesforce — one click takes the co-borrower from LOP into a Salesforce New Contact.",
     highlights: [

@@ -162,8 +162,8 @@
         'display:inline-flex;align-items:center;justify-content:center;' +
         'background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;' +
         'cursor:pointer;font-family:Arial,Helvetica,sans-serif;font-weight:600;' +
-        'font-size:12px;line-height:1.2;padding:6px 12px;margin-right:10px;' +
-        'box-sizing:border-box;white-space:nowrap;';
+        'font-size:12px;line-height:1.2;padding:6px 12px;margin-left:10px;' +
+        'box-sizing:border-box;white-space:nowrap;flex:0 0 auto;';
       btn.addEventListener('mouseenter', function () { if (!btn.disabled) btn.style.background = '#0056d2'; });
       btn.addEventListener('mouseleave', function () { btn.style.background = btn.disabled ? '#94a3b8' : '#006aff'; });
       btn.addEventListener('click', function (e) {
@@ -172,8 +172,14 @@
         if (btn.disabled) return;
         onClick(btn, coIdx);
       });
-      // Sit just before the Resend Link button.
-      flex.insertBefore(btn, resend);
+      // Append to the END of the header Flex rather than inserting
+      // between React's existing children (the role tag + Resend Link).
+      // Inserting mid-list corrupts React's child reconciliation — on
+      // its next re-render React mis-places its own nodes and the row
+      // stays jumbled until a full remount (page refresh). A trailing
+      // node is left alone by React's diff, so the layout stays stable
+      // without a refresh.
+      flex.appendChild(btn);
     });
   }
 
