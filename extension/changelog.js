@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.3",
+    headline: "Add Co-Borrower to Salesforce: now matches the open lead in a Salesforce console (multiple lead tabs) instead of saying 'no matching tab.'",
+    highlights: [
+      "The lead-name match was too narrow — it only checked a couple of highlights selectors and missed the lead name in a Lightning console layout, so it reported 'No matching Salesforce lead tab open' even when the lead was right there. It now checks the visible record header, the active console workspace tab title, and the document title, scoped to VISIBLE nodes so it locks onto the ACTIVE lead (console apps keep inactive lead tabs mounted but hidden).",
+      "New Contact now clicks the visible (active-tab) button, so on a multi-lead console it acts on the lead you're looking at."
+    ]
+  },
+  {
     version: "1.50.2",
     headline: "VA Entitlement Calculator: ZIP now reads from LOP's Loan Details, county dropdown removed — just ZIP + an editable county loan limit.",
     highlights: [

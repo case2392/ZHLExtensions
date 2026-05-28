@@ -99,26 +99,54 @@
     const parts = target.split(' ').filter(Boolean);
     if (parts.length < 2) return false;
     const first = parts[0], last = parts[parts.length - 1];
-    // Lead name appears in the highlights-panel title.
-    const titles = deepQuerySelectorAll(document, 'records-highlights2 lightning-formatted-text, h1, .slds-page-header__title, records-highlights-details-item');
-    for (const t of titles) {
-      const txt = norm(t.textContent);
-      if (txt && txt.indexOf(first) !== -1 && txt.indexOf(last) !== -1) return true;
+    const hit = function (s) {
+      const txt = norm(s);
+      return txt && txt.indexOf(first) !== -1 && txt.indexOf(last) !== -1;
+    };
+    // 1. VISIBLE record header / highlights (the active console tab).
+    //    A Lightning console keeps inactive lead tabs mounted but
+    //    hidden, so scope to visible nodes to match the ACTIVE lead.
+    const headers = deepQuerySelectorAll(document,
+      'records-highlights2, records-highlights-details-item, lightning-formatted-text, ' +
+      'h1, .slds-page-header, .slds-page-header__title, .entityNameTitle, .uiOutputText');
+    for (const el of headers) {
+      if (!isVisible(el)) continue;
+      if (hit(el.textContent)) return true;
     }
-    // Fallback: document.title often is "<Name> | Lead | Salesforce".
-    const dt = norm(document.title);
-    if (dt.indexOf(first) !== -1 && dt.indexOf(last) !== -1) return true;
+    // 2. The active console workspace tab title ("<Name> | Lead").
+    const tabs = deepQuerySelectorAll(document,
+      '[role="tab"][aria-selected="true"], lightning-tab-bar a[title], a.tabHeader, [data-tab-name]');
+    for (const el of tabs) {
+      if (!isVisible(el)) continue;
+      const title = (el.getAttribute && (el.getAttribute('title') || el.getAttribute('data-tab-name'))) || el.textContent;
+      if (hit(title)) return true;
+    }
+    // 3. document.title fallback ("<Name> | Lead | Salesforce").
+    if (hit(document.title)) return true;
     return false;
+  }
+
+  function isVisible(el) {
+    if (!el) return false;
+    if (el.offsetParent !== null) return true; // fast path
+    // offsetParent is null for position:fixed and some shadow hosts even
+    // when visible — fall back to a box-size check.
+    try {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    } catch (_) { return false; }
   }
 
   // ---- New Contact flow -------------------------------------------------
   function findNewContactButton() {
-    const byName = deepQuerySelector(document, 'button[name="Lead.New_Contact"]');
-    if (byName) return byName;
-    // Fallback: a visible button whose text is exactly "New Contact".
+    // Prefer a VISIBLE button — in a console, hidden tabs keep their own
+    // New Contact button mounted, and we must click the active one.
+    const named = deepQuerySelectorAll(document, 'button[name="Lead.New_Contact"]');
+    for (const b of named) { if (isVisible(b)) return b; }
+    if (named.length) return named[0];
     const btns = deepQuerySelectorAll(document, 'button');
     for (const b of btns) {
-      if (b.offsetParent === null) continue;
+      if (!isVisible(b)) continue;
       if (norm(b.textContent) === 'new contact') return b;
     }
     return null;
