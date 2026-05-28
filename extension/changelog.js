@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.4",
+    headline: "New: 2% Grant PDF on the Scenarios page — a ZHL Comparison PDF that shows ZHL paying 2% of the loan toward the down payment, lowering cash to close.",
+    highlights: [
+      "Adds a '2% Grant PDF' button next to ZHL Comparison PDF. The generated doc mirrors the comparison PDF but adds a 'ZHL Grant — 2% of loan amount' credit line and a 'Cash to close after ZHL Grant' headline number.",
+      "Only clickable when ALL selected scenarios are Conf Home Ready 30 Yr Fixed with a loan amount of $350,000 or less, AND the property state is CA, DC, GA, PA, or TX. When it's not eligible the button is disabled and the hover tooltip says exactly why (wrong product, state not eligible, loan over $350k, or nothing selected)."
+    ]
+  },
+  {
     version: "1.50.3",
     headline: "Add Co-Borrower to Salesforce: now matches the open lead in a Salesforce console (multiple lead tabs) instead of saying 'no matching tab.'",
     highlights: [

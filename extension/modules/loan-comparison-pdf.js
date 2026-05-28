@@ -36,7 +36,14 @@
   console.log('[ZHL Loan Comparison PDF v' + VERSION + '] loaded');
 
   const BRANDED_PDF_BUTTON_ATTR = 'data-zhl-loan-comparison-pdf-btn';
+  const GRANT_PDF_BUTTON_ATTR = 'data-zhl-grant-pdf-btn';
   const STYLED_CARD_SELECTOR = '[class*="StyledCard-c11n"]';
+
+  // ZHL 2% Grant eligibility
+  const GRANT_PCT = 0.02;
+  const GRANT_MAX_LOAN = 350000;
+  const GRANT_ELIGIBLE_STATES = ['CA', 'DC', 'GA', 'PA', 'TX'];
+  const GRANT_PRODUCT_RE = /conf\s*home\s*ready\s*30\s*yr\s*fixed/i;
 
   // ---- Helpers --------------------------------------------------
 
@@ -438,6 +445,36 @@
 
   // ---- Borrower / property header scraping ----------------------
 
+  // Property state (2-letter) from the loan header "City, ST" chip.
+  function readPropertyState() {
+    const els = document.querySelectorAll('span, div, p');
+    for (const el of els) {
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      const m = /^[A-Za-z .'\-]{2,40},\s*([A-Z]{2})$/.exec(t);
+      if (m) return m[1].toUpperCase();
+    }
+    return null;
+  }
+
+  // Decide whether the 2% Grant PDF is allowed. Returns
+  // { ok, reason }. Requires: a selection, state in the eligible
+  // list, and EVERY selected scenario being Conf Home Ready 30 Yr
+  // Fixed with a loan amount ≤ $350k.
+  function evaluateGrantEligibility() {
+    const selected = findSelectedScenarios();
+    if (!selected.length) return { ok: false, reason: 'Select a Conf Home Ready 30 Yr Fixed scenario first.' };
+    const state = readPropertyState();
+    if (!state || GRANT_ELIGIBLE_STATES.indexOf(state) === -1) {
+      return { ok: false, reason: 'ZHL 2% Grant is only available in CA, DC, GA, PA, or TX' +
+        (state ? ' (this loan is in ' + state + ').' : ' — couldn\'t read the property state.') };
+    }
+    const wrongProduct = selected.some(function (s) { return !GRANT_PRODUCT_RE.test(s.title || ''); });
+    if (wrongProduct) return { ok: false, reason: 'Every selected scenario must be Conf Home Ready 30 Yr Fixed.' };
+    const overLimit = selected.some(function (s) { return !(isFinite(s.loanAmount) && s.loanAmount <= GRANT_MAX_LOAN); });
+    if (overLimit) return { ok: false, reason: 'Loan amount must be $350,000 or less for the 2% Grant.' };
+    return { ok: true, reason: '' };
+  }
+
   function readBorrowerNames() {
     // The loan header line at the top right of LOP shows the
     // primary borrower's name (with co-borrower joined by &). It's
@@ -485,49 +522,93 @@
     return null;
   }
 
+  function makeBrandedBtn(attr, label, onClick, ab) {
+    const cs = window.getComputedStyle(ab.anchor);
+    const padLeftPx = (parseFloat(cs.paddingLeft) || 20) + 8;
+    const padRightPx = (parseFloat(cs.paddingRight) || 20) + 8;
+    const btn = document.createElement('button');
+    btn.setAttribute(attr, '1');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.style.cssText =
+      'display:inline-flex;align-items:center;justify-content:center;' +
+      'background:#006aff;color:#fff;border:1px solid #006aff;' +
+      'border-radius:4px;cursor:pointer;margin-right:8px;' +
+      'font-family:' + (cs.fontFamily || 'Arial,Helvetica,sans-serif') + ';' +
+      'font-weight:' + (cs.fontWeight || '600') + ';' +
+      'font-size:' + (cs.fontSize || '14px') + ';' +
+      'line-height:' + (cs.lineHeight && cs.lineHeight !== 'normal' ? cs.lineHeight : '1.2') + ';' +
+      'padding:' + (cs.paddingTop || '10px') + ' ' + padRightPx + 'px ' + (cs.paddingBottom || '10px') + ' ' + padLeftPx + 'px;' +
+      'min-height:' + (cs.height || '36px') + ';' +
+      'box-sizing:border-box;';
+    btn.addEventListener('mouseenter', function () { if (!btn.disabled) btn.style.background = '#0056d2'; });
+    btn.addEventListener('mouseleave', function () { btn.style.background = btn.disabled ? '#94a3b8' : '#006aff'; });
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
   function ensureLoanComparisonPdfButton() {
     const generateBtn = findGeneratePdfButton();
     const existing = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+    const existingGrant = document.querySelector('[' + GRANT_PDF_BUTTON_ATTR + ']');
     if (!generateBtn) {
       if (existing) existing.remove();
+      if (existingGrant) existingGrant.remove();
       return;
     }
-    let btn = existing;
-    if (!btn) {
-      const ab = findActionBarFor(generateBtn);
-      if (ab && ab.container && ab.anchor) {
-        btn = document.createElement('button');
-        btn.setAttribute(BRANDED_PDF_BUTTON_ATTR, '1');
-        btn.type = 'button';
-        btn.textContent = 'ZHL Comparison PDF';
-        // Match LOP's wrapper button box so we sit at the same
-        // height. The 2-1 Buydown PDF button uses the same style.
-        const cs = window.getComputedStyle(ab.anchor);
-        const padLeftPx = (parseFloat(cs.paddingLeft) || 20) + 8;
-        const padRightPx = (parseFloat(cs.paddingRight) || 20) + 8;
-        btn.style.cssText =
-          'display:inline-flex;align-items:center;justify-content:center;' +
-          'background:#006aff;color:#fff;border:1px solid #006aff;' +
-          'border-radius:4px;cursor:pointer;margin-right:8px;' +
-          'font-family:' + (cs.fontFamily || 'Arial,Helvetica,sans-serif') + ';' +
-          'font-weight:' + (cs.fontWeight || '600') + ';' +
-          'font-size:' + (cs.fontSize || '14px') + ';' +
-          'line-height:' + (cs.lineHeight && cs.lineHeight !== 'normal' ? cs.lineHeight : '1.2') + ';' +
-          'padding:' + (cs.paddingTop || '10px') + ' ' + padRightPx + 'px ' + (cs.paddingBottom || '10px') + ' ' + padLeftPx + 'px;' +
-          'min-height:' + (cs.height || '36px') + ';' +
-          'box-sizing:border-box;';
-        btn.title = 'Generate a ZHL Loan Comparison PDF for selected scenarios.\n\nBuilt by Justin Case. Karma appreciated 💛';
-        btn.addEventListener('mouseenter', function () { if (!btn.disabled) btn.style.background = '#0056d2'; });
-        btn.addEventListener('mouseleave', function () { btn.style.background = btn.disabled ? '#94a3b8' : '#006aff'; });
-        btn.addEventListener('click', function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          onComparisonPdfClick();
-        });
-        ab.container.insertBefore(btn, ab.anchor);
+    const ab = findActionBarFor(generateBtn);
+    if (ab && ab.container && ab.anchor) {
+      if (!existing) {
+        ab.container.insertBefore(
+          makeBrandedBtn(BRANDED_PDF_BUTTON_ATTR, 'ZHL Comparison PDF', onComparisonPdfClick, ab),
+          ab.anchor);
+      }
+      if (!existingGrant) {
+        ab.container.insertBefore(
+          makeBrandedBtn(GRANT_PDF_BUTTON_ATTR, '2% Grant PDF', onGrantPdfClick, ab),
+          ab.anchor);
       }
     }
     updateButtonState();
+    updateGrantButtonState();
+  }
+
+  // Mirror LOP's own Generate PDF disabled state (stale pricing).
+  function isGenerateDisabled() {
+    const generateBtn = findGeneratePdfButton();
+    if (!generateBtn) return false;
+    if (generateBtn.disabled === true || generateBtn.getAttribute('aria-disabled') === 'true') return true;
+    let p = generateBtn.parentElement;
+    while (p && p !== document.body) {
+      if (p.tagName === 'BUTTON' && (p.disabled === true || p.getAttribute('aria-disabled') === 'true')) return true;
+      if (p.tagName !== 'BUTTON') break;
+      p = p.parentElement;
+    }
+    return false;
+  }
+
+  function updateGrantButtonState() {
+    const btn = document.querySelector('[' + GRANT_PDF_BUTTON_ATTR + ']');
+    if (!btn) return;
+    function disable(reason) {
+      btn.disabled = true;
+      btn.style.background = '#94a3b8';
+      btn.style.borderColor = '#94a3b8';
+      btn.style.cursor = 'not-allowed';
+      btn.title = reason + '\n\nBuilt by Justin Case. Karma appreciated 💛';
+    }
+    if (isGenerateDisabled()) { disable('Update the scenarios first — LOP\'s Generate PDF is disabled (stale pricing).'); return; }
+    const elig = evaluateGrantEligibility();
+    if (!elig.ok) { disable(elig.reason); return; }
+    btn.disabled = false;
+    btn.style.background = '#006aff';
+    btn.style.borderColor = '#006aff';
+    btn.style.cursor = 'pointer';
+    btn.title = 'Generate a ZHL 2% Grant comparison PDF — shows ZHL paying 2% of the loan toward the down payment, reducing cash to close.\n\nBuilt by Justin Case. Karma appreciated 💛';
   }
 
   function updateButtonState() {
@@ -570,7 +651,12 @@
 
   // ---- PDF rendering --------------------------------------------
 
-  function renderComparisonHtml(scenarios, lo, borrowerName) {
+  function renderComparisonHtml(scenarios, lo, borrowerName, opts) {
+    opts = opts || {};
+    const isGrant = !!opts.grant;
+    const grantFor = function (s) {
+      return (s && isFinite(s.loanAmount)) ? s.loanAmount * GRANT_PCT : 0;
+    };
     const now = new Date();
     const dateStr = now.toLocaleString('en-US', {
       month: 'numeric', day: 'numeric', year: 'numeric',
@@ -630,7 +716,21 @@
     rowsHtml += row('Total closing costs', function (s) { return fmtMoneyHtml(s.closingCosts); });
     rowsHtml += row('Seller credit', function (s) { return fmtMoneyHtml(s.sellerCredit); });
     rowsHtml += row('Estimated monthly cost (PITI)', function (s) { return fmtMoneyHtml(s.piti); }, { big: true });
-    rowsHtml += row('Cash (to) / from', function (s) { return fmtMoneyHtml(s.cashToFrom); }, { big: true });
+    if (isGrant) {
+      // Grant path: show ZHL covering 2% of the loan toward the down
+      // payment as a credit, then the reduced cash to close as the
+      // headline number.
+      rowsHtml += row('Cash (to) / from (before grant)', function (s) { return fmtMoneyHtml(s.cashToFrom); });
+      rowsHtml += row('ZHL Grant — 2% of loan amount', function (s) {
+        const g = grantFor(s);
+        return g > 0 ? '&minus;' + fmtMoneyHtml(g) : '&mdash;';
+      });
+      rowsHtml += row('Cash to close after ZHL Grant', function (s) {
+        return fmtMoneyHtml((isFinite(s.cashToFrom) ? s.cashToFrom : 0) - grantFor(s));
+      }, { big: true });
+    } else {
+      rowsHtml += row('Cash (to) / from', function (s) { return fmtMoneyHtml(s.cashToFrom); }, { big: true });
+    }
 
     // LO contact line
     const loSegs = [];
@@ -864,8 +964,13 @@
       ? '<div class="borrower">' + escapeHtml(borrowerName) + '</div>'
       : '<div class="borrower">' + scenarios.length + ' scenario' + (scenarios.length === 1 ? '' : 's') + '</div>';
 
+    const docTitle = isGrant ? 'ZHL 2% Grant' : 'Loan Comparison';
+    const h1Text = isGrant ? 'ZHL 2% Grant Comparison' : 'Loan Comparison';
+    const bannerText = isGrant
+      ? 'Includes a ZHL Grant equal to 2% of the loan amount applied toward your down payment, reducing your cash to close. Your actual rate, payment and costs could be higher: get an official loan estimate before choosing a loan.'
+      : 'Your actual rate, payment and costs could be higher: get an official loan estimate before choosing a loan.';
     return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-      '<title>Loan Comparison — ' + escapeHtml(dateStr) + '</title>' +
+      '<title>' + docTitle + ' — ' + escapeHtml(dateStr) + '</title>' +
       '<style>' +
       '@page { size: letter; margin: 0; }' +
       'body { font: 10pt/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1f2937; margin: 0; padding: 0.55in 0.7in; max-width: 8.5in; box-sizing: border-box; }' +
@@ -960,14 +1065,14 @@
       // Page 1
       '<header class="zhl-hdr">' +
         '<div>' +
-          '<h1>Loan Comparison</h1>' +
+          '<h1>' + escapeHtml(h1Text) + '</h1>' +
           borrowerLine +
         '</div>' +
         '<div class="brand-block">' +
           '<div class="issued">Issued ' + escapeHtml(dateStr) + '</div>' +
         '</div>' +
       '</header>' +
-      '<div class="banner">Your actual rate, payment and costs could be higher: get an official loan estimate before choosing a loan.</div>' +
+      '<div class="banner">' + escapeHtml(bannerText) + '</div>' +
       '<table class="cmp">' + rowsHtml + '</table>' +
       loBox +
       '<div class="compliance">' +
@@ -1041,6 +1146,42 @@
     const lo = await readLoProfile();
     const borrowerName = readBorrowerNames();
     const html = renderComparisonHtml(scenarios, lo, borrowerName);
+    openPrintWindow(html);
+  }
+
+  async function onGrantPdfClick() {
+    const btn = document.querySelector('[' + GRANT_PDF_BUTTON_ATTR + ']');
+    if (btn && btn.disabled) return;
+    if (!evaluateGrantEligibility().ok) return;
+    if (window.__zhlTimeSaved) window.__zhlTimeSaved.recordAndForget('loan-grant-pdf', 5);
+    const cards = findSelectedScenarioCards();
+    if (!cards.length) return;
+
+    const originalText = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.style.background = '#94a3b8';
+      btn.style.borderColor = '#94a3b8';
+      btn.style.cursor = 'wait';
+    }
+    const scenarios = [];
+    for (let i = 0; i < cards.length; i++) {
+      if (btn) btn.textContent = 'Reading ' + (i + 1) + ' / ' + cards.length + '…';
+      const data = readScenario(cards[i]);
+      try { data.closingDetail = await scrapeClosingDetail(cards[i]); }
+      catch (e) { data.closingDetail = null; }
+      scenarios.push(data);
+    }
+    if (btn) {
+      btn.textContent = originalText || '2% Grant PDF';
+      btn.style.background = '#006aff';
+      btn.style.borderColor = '#006aff';
+      btn.style.cursor = 'pointer';
+      btn.disabled = false;
+    }
+    const lo = await readLoProfile();
+    const borrowerName = readBorrowerNames();
+    const html = renderComparisonHtml(scenarios, lo, borrowerName, { grant: true });
     openPrintWindow(html);
   }
 
