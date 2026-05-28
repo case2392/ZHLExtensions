@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.25",
+    headline: "New: VA Entitlement Calculator — next to Run Residual Income Calc. Enter the entitlement used and it shows the max $0-down loan, plus the down payment required above that.",
+    highlights: [
+      "Full entitlement (nothing used) → no VA county limit and $0 down at any loan amount (subject to lender/investor max). Partial entitlement → available guaranty = 25% × county limit − used, max $0-down loan = 4 × available, and down for a higher target = 25% × loan − available.",
+      "County loan limit comes from the 2026 FHFA table (all 150+ above-baseline counties embedded, with 1/2/3/4-unit limits). The property ZIP pre-selects the county for the common metros; a county dropdown + editable limit field cover everything else, with an FHFA lookup link. Defaults to the 2026 baseline ($832,750 / $1,066,250 / $1,288,800 / $1,602,750).",
+      "Counts as 5 minutes saved per run."
+    ]
+  },
+  {
     version: "1.49.24",
     headline: "VA Manual analyzer: Chapter 4 broken into individual checks (AUS auto-detected), each with a how-to-verify tooltip + ZHL Matrix and VA HB Ch. 4 links. Manual analyzers now count as 10 min saved.",
     highlights: [

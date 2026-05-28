@@ -21,6 +21,101 @@
   const COLLECTIONS_5PCT_BUTTON_ID = 'rric-collections-5pct-button';
   const COLLECTIONS_5PCT_BUTTON_CLASS = 'rric-collections-5pct-button-cls';
   const COLLECTIONS_5PCT_PANEL_ID = 'rric-collections-5pct-summary';
+  // VA Entitlement Calculator
+  const ENTITLEMENT_BUTTON_CLASS = 'rric-entitlement-button-cls';
+  const ENTITLEMENT_PANEL_ID = 'rric-entitlement-panel';
+  // 2026 conforming loan limits (VA adopts FHFA). Each limit is a
+  // [1-unit, 2-unit, 3-unit, 4-unit] tuple.
+  const VA_BASELINE_LIMITS = [832750, 1066250, 1288800, 1602750];
+  const FHFA_LOOKUP_URL = 'https://www.fhfa.gov/data/conforming-loan-limit';
+
+  // Shared 2026 high-cost limit tuples (many counties share a value).
+  const _T_CEIL  = [1249125, 1599375, 1933200, 2402625]; // ceiling (150%)
+  const _T_NYC   = [1209750, 1548975, 1872225, 2326875];
+  const _T_MAUI  = [1299500, 1663600, 2010950, 2499100];
+
+  // All 2026 counties above the baseline, from FHFA (ZHL-provided).
+  // label = "ST — County"; lim = [1,2,3,4]-unit. Alaska + a couple of
+  // all-same states are collapsed to one entry for a usable dropdown.
+  const VA_HIGH_COST_COUNTIES = [
+    { label: 'UT — Grand County', lim: [839500, 1074700, 1299100, 1614450] },
+    { label: 'CT — Naugatuck Valley Planning Region', lim: [851000, 1089450, 1316900, 1636550] },
+    { label: 'CO — Denver metro (Adams, Arapahoe, Broomfield, Clear Creek, Denver, Douglas, Elbert, Gilpin, Jefferson, Park)', lim: [862500, 1104150, 1334700, 1658700] },
+    { label: 'CO — Boulder County', lim: [879750, 1126250, 1361350, 1691850] },
+    { label: 'CO — Grand County', lim: [883200, 1130650, 1366700, 1698500] },
+    { label: 'CA — Sonoma County', lim: [897000, 1148350, 1388050, 1725050] },
+    { label: 'CA — Santa Barbara County', lim: [941850, 1205750, 1457450, 1811300] },
+    { label: 'MA/NH — Boston metro (Essex, Middlesex, Norfolk, Plymouth, Suffolk, Rockingham NH, Strafford NH)', lim: [962550, 1232250, 1489500, 1851100] },
+    { label: 'CT — Greater Bridgeport / Western Connecticut Planning Region', lim: [977500, 1251400, 1512650, 1879850] },
+    { label: 'FL — Monroe County (Key West)', lim: [990150, 1267600, 1532200, 1904150] },
+    { label: 'CA — Monterey County', lim: [994750, 1273450, 1539350, 1913000] },
+    { label: 'CO — San Miguel County', lim: [994750, 1273450, 1539350, 1913000] },
+    { label: 'UT — Wayne County', lim: [997050, 1276400, 1542900, 1917450] },
+    { label: 'CA — San Luis Obispo County', lim: [1000500, 1280850, 1548250, 1924100] },
+    { label: 'CA — Napa County', lim: [1017750, 1302900, 1574900, 1957250] },
+    { label: 'TN — Nashville metro (Cannon, Cheatham, Davidson, Dickson, Hickman, Macon, Maury, Robertson, Rutherford, Smith, Sumner, Trousdale, Williamson, Wilson)', lim: [1029250, 1317650, 1592700, 1979350] },
+    { label: 'CA — Ventura County', lim: [1035000, 1325000, 1601600, 1990450] },
+    { label: 'WA — Seattle metro (King, Pierce, Snohomish)', lim: [1063750, 1361800, 1646100, 2045700] },
+    { label: 'CO — Moffat County', lim: [1089050, 1394200, 1685250, 2094350] },
+    { label: 'CO — Routt County', lim: [1089050, 1394200, 1685250, 2094350] },
+    { label: 'CO — Lake County', lim: [1092500, 1398600, 1690600, 2101000] },
+    { label: 'CO — Summit County', lim: [1092500, 1398600, 1690600, 2101000] },
+    { label: 'CA — San Diego County', lim: [1104000, 1413350, 1708400, 2123100] },
+    { label: 'UT — Summit County', lim: [1150000, 1472250, 1779600, 2211600] },
+    { label: 'UT — Wasatch County', lim: [1150000, 1472250, 1779600, 2211600] },
+    { label: 'CO — Garfield County', lim: _T_NYC },
+    { label: 'CO — Pitkin County (Aspen)', lim: _T_NYC },
+    { label: 'MD — Calvert County', lim: _T_NYC },
+    { label: 'NJ — North Jersey / NYC metro (Bergen, Essex, Hudson, Hunterdon, Middlesex, Monmouth, Morris, Ocean, Passaic, Somerset, Sussex, Union)', lim: _T_NYC },
+    { label: 'NY — NYC metro (Bronx, Kings, Nassau, New York, Putnam, Queens, Richmond, Rockland, Suffolk, Westchester)', lim: _T_NYC },
+    { label: 'PA — Pike County', lim: _T_NYC },
+    { label: 'VA — Madison County', lim: _T_NYC },
+    { label: 'AK — All boroughs / census areas', lim: _T_CEIL },
+    { label: 'CA — SF Bay Area (Alameda, Contra Costa, Marin, San Francisco, San Mateo)', lim: _T_CEIL },
+    { label: 'CA — Los Angeles County', lim: _T_CEIL },
+    { label: 'CA — Orange County', lim: _T_CEIL },
+    { label: 'CA — San Benito County', lim: _T_CEIL },
+    { label: 'CA — Santa Clara County', lim: _T_CEIL },
+    { label: 'CA — Santa Cruz County', lim: _T_CEIL },
+    { label: 'CO — Eagle County (Vail)', lim: _T_CEIL },
+    { label: 'DC — District of Columbia', lim: _T_CEIL },
+    { label: 'HI — Hawaii, Honolulu, Kauai Counties', lim: _T_CEIL },
+    { label: 'ID — Teton County', lim: _T_CEIL },
+    { label: 'MD — DC metro (Charles, Frederick, Montgomery, Prince George’s)', lim: _T_CEIL },
+    { label: 'MA — Dukes & Nantucket Counties', lim: _T_CEIL },
+    { label: 'VA — DC metro (Arlington, Clarke, Culpeper, Fairfax, Fauquier, Loudoun, Prince William, Rappahannock, Spotsylvania, Stafford, Warren + Alexandria/Fairfax/Falls Church/Fredericksburg/Manassas/Manassas Park cities)', lim: _T_CEIL },
+    { label: 'WV — Jefferson County', lim: _T_CEIL },
+    { label: 'WY — Teton County (Jackson)', lim: _T_CEIL },
+    { label: 'GU — Guam', lim: _T_CEIL },
+    { label: 'VI — U.S. Virgin Islands (St. Croix, St. John, St. Thomas)', lim: _T_CEIL },
+    { label: 'HI — Maui & Kalawao Counties', lim: _T_MAUI }
+  ];
+
+  // Best-effort ZIP-prefix → high-cost county index, ONLY for metros
+  // whose ZIP3 maps cleanly to a single county/limit. Used to
+  // pre-select the dropdown; the LO confirms and can pick any county.
+  // ZIP3s that straddle counties with different limits are omitted on
+  // purpose (they default to baseline, and the dropdown handles them).
+  const VA_ZIP3_HINT = (function () {
+    const idx = function (label) { return VA_HIGH_COST_COUNTIES.findIndex(function (c) { return c.label === label; }); };
+    const LA = idx('CA — Los Angeles County');
+    const OC = idx('CA — Orange County');
+    const SD = idx('CA — San Diego County');
+    const SCLARA = idx('CA — Santa Clara County');
+    const NYC = idx('NY — NYC metro (Bronx, Kings, Nassau, New York, Putnam, Queens, Richmond, Rockland, Suffolk, Westchester)');
+    const map = {};
+    // LA County
+    ['900','901','902','903','904','905','906','907','908','910','911','912','913','914','915','916','917','918'].forEach(function (z) { map[z] = LA; });
+    // Orange County
+    ['926','927','928'].forEach(function (z) { map[z] = OC; });
+    // San Diego County
+    ['919','920','921'].forEach(function (z) { map[z] = SD; });
+    // Santa Clara (San Jose)
+    ['950','951'].forEach(function (z) { map[z] = SCLARA; });
+    // NYC core (Manhattan/Bronx/Brooklyn/Queens/SI/Westchester/LI)
+    ['100','101','102','103','104','105','106','107','108','110','111','112','113','114','115','116','117','118','119'].forEach(function (z) { map[z] = NYC; });
+    return map;
+  })();
   const COLLECTIONS_BADGE_CLASS = 'rric-collections-badge-cls';
   const FHA_COLLECTION_CAP = 2000;
   const DISPUTED_BADGE_CLASS = 'rric-disputed-badge-cls';
@@ -1336,6 +1431,50 @@
     return total;
   }
 
+  // String value from a right-rail "Label  value" row (getPanelNumber's
+  // text-returning sibling — needed for ZIP, which can have a leading 0).
+  function getPanelText(label) {
+    const target = normalizeText(label);
+    const els = document.querySelectorAll('div, span, td, th, p, dt, dd, li, label');
+    for (const el of els) {
+      if (normalizeText(el.textContent) !== target) continue;
+      let sib = el.nextElementSibling;
+      while (sib && !sib.textContent.trim()) sib = sib.nextElementSibling;
+      if (sib && sib.textContent.trim()) return sib.textContent.replace(/\s+/g, ' ').trim();
+      if (el.parentElement) {
+        const leftover = (el.parentElement.textContent || '').replace(el.textContent || '', '').replace(/\s+/g, ' ').trim();
+        if (leftover) return leftover;
+      }
+    }
+    return null;
+  }
+
+  function getZipCode() {
+    const raw = getPanelText('Zip code') || getPanelText('Zip') || getPanelText('Zip Code');
+    if (!raw) return null;
+    const m = /(\d{5})(?:-\d{4})?/.exec(raw);
+    return m ? m[1] : null;
+  }
+
+  // Best-effort high-cost county INDEX from the ZIP (for dropdown
+  // pre-select). -1 = no confident match → baseline.
+  function highCostIndexForZip(zip) {
+    if (!zip) return -1;
+    const hit = VA_ZIP3_HINT[zip.slice(0, 3)];
+    return (typeof hit === 'number' && hit >= 0) ? hit : -1;
+  }
+
+  // Subject-property unit count (1–4); defaults to 1.
+  function getUnitCount() {
+    const labels = ['Number of units', 'Units', '# of units', 'Number of Units'];
+    for (const l of labels) {
+      const raw = getPanelText(l);
+      const n = raw ? parseInt((raw.match(/\d+/) || [])[0], 10) : NaN;
+      if (n >= 1 && n <= 4) return n;
+    }
+    return 1;
+  }
+
   function getPanelNumber(label) {
     const target = normalizeText(label);
     const els = document.querySelectorAll('div, span, td, th, p, dt, dd, li, label');
@@ -2046,6 +2185,235 @@
     showPanel(initialState);
   }
 
+  // ---- VA Entitlement Calculator ----------------------------------------
+  function showEntitlementPanel() {
+    const existing = document.getElementById(ENTITLEMENT_PANEL_ID);
+    if (existing) existing.remove();
+    const fontFamily = getPageFontFamily();
+
+    const zip = getZipCode();
+    const units = getUnitCount();
+    const hintIdx = highCostIndexForZip(zip);
+    const pageLoan = getLoanAmount() || 0;
+
+    // state
+    const st = {
+      countyIdx: hintIdx,          // -1 = baseline
+      units: units,
+      limitOverride: null,         // null = use county/units; number = manual
+      used: 0,
+      target: pageLoan
+    };
+
+    function baseCountyLimit() {
+      const tuple = st.countyIdx >= 0 ? VA_HIGH_COST_COUNTIES[st.countyIdx].lim : VA_BASELINE_LIMITS;
+      const i = Math.min(Math.max(st.units, 1), 4) - 1;
+      return tuple[i];
+    }
+    function effLimit() {
+      return (st.limitOverride != null && isFinite(st.limitOverride) && st.limitOverride > 0)
+        ? st.limitOverride : baseCountyLimit();
+    }
+
+    const panel = document.createElement('div');
+    panel.id = ENTITLEMENT_PANEL_ID;
+    panel.className = 'rric-panel';
+    if (fontFamily) panel.style.fontFamily = fontFamily;
+
+    const header = document.createElement('div');
+    header.className = 'rric-panel-header';
+    const title = document.createElement('div');
+    title.className = 'rric-panel-title';
+    title.textContent = 'VA Entitlement Calculator';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'rric-panel-close';
+    close.setAttribute('aria-label', 'Close');
+    close.textContent = '×';
+    close.addEventListener('click', function () { panel.remove(); });
+    header.appendChild(title);
+    header.appendChild(close);
+    panel.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'rric-panel-body';
+    panel.appendChild(body);
+
+    const out = document.createElement('div');
+
+    function money(n) {
+      if (n == null || !isFinite(n)) return '—';
+      const neg = n < 0;
+      return (neg ? '-' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
+    }
+
+    function labeledRow(labelText) {
+      const row = document.createElement('div');
+      row.className = 'rric-row';
+      const l = document.createElement('div');
+      l.className = 'rric-label';
+      l.textContent = labelText;
+      const v = document.createElement('div');
+      v.className = 'rric-value';
+      row.appendChild(l);
+      row.appendChild(v);
+      body.appendChild(row);
+      return v;
+    }
+
+    // County dropdown
+    const countyVal = labeledRow('County (loan limit)');
+    const countySel = document.createElement('select');
+    countySel.style.cssText = 'max-width:320px;font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;';
+    const baseOpt = document.createElement('option');
+    baseOpt.value = '-1';
+    baseOpt.textContent = 'Baseline — not a high-cost county';
+    countySel.appendChild(baseOpt);
+    VA_HIGH_COST_COUNTIES.forEach(function (c, i) {
+      const o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = c.label;
+      countySel.appendChild(o);
+    });
+    countySel.value = String(st.countyIdx);
+    countySel.addEventListener('change', function () {
+      st.countyIdx = parseInt(countySel.value, 10);
+      st.limitOverride = null; // re-derive from the county
+      render();
+    });
+    countyVal.appendChild(countySel);
+
+    // Units
+    const unitsVal = labeledRow('Units');
+    const unitsSel = document.createElement('select');
+    unitsSel.style.cssText = 'font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;';
+    [1, 2, 3, 4].forEach(function (u) {
+      const o = document.createElement('option');
+      o.value = String(u);
+      o.textContent = u + (u === 1 ? ' unit' : ' units');
+      unitsSel.appendChild(o);
+    });
+    unitsSel.value = String(st.units);
+    unitsSel.addEventListener('change', function () {
+      st.units = parseInt(unitsSel.value, 10);
+      st.limitOverride = null;
+      render();
+    });
+    unitsVal.appendChild(unitsSel);
+
+    // Editable resolved limit
+    const limitVal = labeledRow('County loan limit ($)');
+    const limitInput = document.createElement('input');
+    limitInput.type = 'text';
+    limitInput.style.cssText = 'font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;width:140px;text-align:right;';
+    limitInput.addEventListener('input', function () {
+      const n = parseMoney(limitInput.value);
+      st.limitOverride = isFinite(n) ? n : null;
+      renderOutputs();
+    });
+    limitVal.appendChild(limitInput);
+
+    // Entitlement used
+    const usedVal = labeledRow('Entitlement used by veteran ($)');
+    const usedInput = document.createElement('input');
+    usedInput.type = 'text';
+    usedInput.value = '0';
+    usedInput.style.cssText = 'font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;width:140px;text-align:right;';
+    usedInput.addEventListener('input', function () {
+      const n = parseMoney(usedInput.value);
+      st.used = isFinite(n) && n > 0 ? n : 0;
+      renderOutputs();
+    });
+    usedVal.appendChild(usedInput);
+
+    // Target loan
+    const targetVal = labeledRow('Target loan amount ($) — optional');
+    const targetInput = document.createElement('input');
+    targetInput.type = 'text';
+    targetInput.value = pageLoan ? String(Math.round(pageLoan)) : '';
+    targetInput.style.cssText = 'font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;width:140px;text-align:right;';
+    targetInput.addEventListener('input', function () {
+      const n = parseMoney(targetInput.value);
+      st.target = isFinite(n) && n > 0 ? n : 0;
+      renderOutputs();
+    });
+    targetVal.appendChild(targetInput);
+
+    body.appendChild(out);
+
+    function renderOutputs() {
+      const limit = effLimit();
+      const used = st.used;
+      const fullEntitlement = used <= 0;
+      const availableGuaranty = Math.max(0.25 * limit - used, 0);
+      const maxNoDown = availableGuaranty * 4;
+      const target = st.target;
+      const downForTarget = (target > 0) ? Math.max(0.25 * target - availableGuaranty, 0) : null;
+
+      const lines = [];
+      lines.push('<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #e5e7eb;"><span>Available guaranty (25% × limit − used)</span><strong>' +
+        (fullEntitlement ? 'Full entitlement' : money(availableGuaranty)) + '</strong></div>');
+
+      if (fullEntitlement) {
+        lines.push('<div style="margin-top:8px;padding:12px 14px;border-radius:8px;background:#dcfce7;border:1px solid #16a34a;color:#14532d;">' +
+          '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">No VA county limit — $0 down at any loan amount</div>' +
+          '<div style="font-size:12.5px;">Full entitlement (nothing used). Post-2020, there is no VA loan limit and no down payment is required at any loan amount, subject to lender / investor maximums and the borrower qualifying.</div></div>');
+      } else {
+        lines.push('<div style="margin-top:8px;padding:12px 14px;border-radius:8px;background:#f0f6ff;border:1px solid #006aff;color:#0b3a6b;">' +
+          '<div style="font-weight:700;font-size:14px;">Max loan with $0 down: ' + money(maxNoDown) + '</div>' +
+          '<div style="font-size:12px;margin-top:4px;">= 4 × available guaranty (' + money(availableGuaranty) + '). Reduced entitlement is capped by the county limit (' + money(limit) + ').</div></div>');
+      }
+
+      if (target > 0) {
+        const overMax = !fullEntitlement && target > maxNoDown;
+        lines.push('<div style="margin-top:8px;padding:12px 14px;border-radius:8px;background:' +
+          (downForTarget > 0 ? '#fef3c7;border:1px solid #d97706;color:#78350f' : '#dcfce7;border:1px solid #16a34a;color:#14532d') + ';">' +
+          '<div style="font-weight:700;font-size:14px;">Down payment for a ' + money(target) + ' loan: ' + money(downForTarget) + '</div>' +
+          '<div style="font-size:12px;margin-top:4px;">' +
+          (fullEntitlement
+            ? '$0 down (full entitlement, subject to lender / investor max).'
+            : (downForTarget > 0
+              ? 'Required = 25% × loan − available guaranty. This loan exceeds the $0-down max of ' + money(maxNoDown) + '.'
+              : 'Within the $0-down max of ' + money(maxNoDown) + ' — no down payment required.')) +
+          '</div></div>');
+      }
+      out.innerHTML = lines.join('');
+    }
+
+    function render() {
+      countySel.value = String(st.countyIdx);
+      unitsSel.value = String(st.units);
+      limitInput.value = String(Math.round(effLimit()));
+      renderOutputs();
+    }
+
+    // Footer: ZIP context + FHFA lookup
+    const footer = document.createElement('div');
+    footer.className = 'rric-panel-footer';
+    const note = document.createElement('div');
+    note.className = 'rric-panel-note';
+    note.innerHTML =
+      (zip ? 'Property ZIP <strong>' + zip + '</strong>' + (hintIdx >= 0 ? ' — pre-selected the matching county.' : ' — not in the high-cost table, defaulted to baseline; pick the county above if it\'s high-cost.') : 'No ZIP found on the page — pick the county above.') +
+      ' <a href="' + FHFA_LOOKUP_URL + '" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;">FHFA county limit lookup</a>';
+    footer.appendChild(note);
+    panel.appendChild(footer);
+
+    // Time-saved slot
+    const tsSlot = document.createElement('div');
+    tsSlot.style.cssText = 'padding:0 18px 14px;';
+    panel.appendChild(tsSlot);
+    if (window.__zhlTimeSaved) {
+      const mins = 5;
+      window.__zhlTimeSaved.record('va-entitlement-calc', mins).then(function (r) {
+        tsSlot.innerHTML = window.__zhlTimeSaved.renderHtml(mins, r.userTotal, r.globalTotal);
+      });
+    }
+
+    document.body.appendChild(panel);
+    render();
+    track('va_entitlement_open', { highCost: hintIdx >= 0, units: units });
+  }
+
   // Find every visible "Military service completed" anchor on the
   // page. Each borrower-pair tab has its own — we treat each as a
   // separate section so the button injection and the calc both scope
@@ -2150,6 +2518,22 @@
         runCalculator();
       });
       sec.anchor.appendChild(btn);
+
+      // Sibling button: VA Entitlement Calculator.
+      if (!sec.anchor.querySelector('.' + ENTITLEMENT_BUTTON_CLASS)) {
+        const entBtn = document.createElement('button');
+        entBtn.type = 'button';
+        entBtn.className = 'rric-button ' + ENTITLEMENT_BUTTON_CLASS;
+        entBtn.textContent = 'VA Entitlement Calc';
+        entBtn.title = 'Max purchase with $0 down for the veteran\'s remaining entitlement, and the down payment required above that.\n\n' + ZHL_TIP;
+        entBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          activeFormScope = scope;
+          showEntitlementPanel();
+        });
+        sec.anchor.appendChild(entBtn);
+      }
     }
   }
 
