@@ -239,6 +239,117 @@
     <h2><span class="icon">🏠</span> Loan Officer Portal</h2>
     <p class="runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
 
+    <!-- Pricing Exception Workflow -->
+    <div class="feature is-new" id="pricing-exception-workflow">
+      <div class="shot"><img src="images/pricing-exception-workflow.svg" alt="Pricing Exception Workflow modal branching into a locked (green) and unlocked (yellow) path, auto-computing PE dollars and points, with the generated email ready to open in Gmail." /></div>
+      <div class="body">
+        <h3>Pricing Exception Workflow</h3>
+        <div class="where">Loan toolbar &mdash; <strong>⚖ Pricing Exception Workflow</strong> button (near Copy LOP file / Stage / Paste from staged)</div>
+        <p>Walks your manager's PE submission checklist end-to-end and hands you a ready-to-send email at the end.</p>
+        <ul>
+          <li><strong>Branched flow</strong> &mdash; first asks whether the loan is locked, then runs the right prerequisite checks (locked: import pricing → Comp PE fields → no lock-diff alert → Comp LE in eFolder; unlocked: scenario assigned → Comp LE on tasks → enter ZHL + comp pricing).</li>
+          <li><strong>Auto-computes PE $ and points</strong> on the unlocked path: PE $ = (ZHL Box A − ZHL credits) − (Comp Box A − Comp credits); PE points = PE $ / loan amount × 100.</li>
+          <li><strong>&gt; 2.5 pts branch</strong> surfaces the three justification questions (reason for PE, borrower expectations, agent/partner relationship) and folds them into the email.</li>
+          <li><strong>Auto-fills</strong> price / loan amount / rate / loan type from the Loan Details rail, plus ZHL Box A and lender credits scraped from the Total closing costs popup. RM email auto-saves and pre-fills next time.</li>
+          <li><strong>Email output</strong> with editable subject + body, <em>Open in Gmail</em> (Gmail compose URL, not your OS mail client), and Copy body / Copy subject buttons.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Print Buyer Worksheet -->
+    <div class="feature is-new" id="pricing-results-print">
+      <div class="shot">
+        <svg viewBox="0 0 260 170" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="260" height="170" fill="#f1f5f9"/>
+          <rect x="20" y="18" width="220" height="26" rx="4" fill="#fff" stroke="#e2e8f0"/>
+          <text x="30" y="35" font="600 10px Arial" fill="#0f172a">3.50% Down Payment | 96.5% LTV</text>
+          <rect x="150" y="24" width="84" height="14" rx="7" fill="#006aff"/>
+          <text x="192" y="34" font="700 8px Arial" fill="#fff" text-anchor="middle">📄 Print Buyer Worksheet</text>
+          <rect x="40" y="56" width="180" height="100" rx="6" fill="#fff" stroke="#006aff" stroke-width="2"/>
+          <rect x="40" y="56" width="180" height="6" fill="#006aff"/>
+          <text x="52" y="80" font="700 9px Arial" fill="#006aff">FHA 30 Yr Fixed · 6.500%</text>
+          <rect x="52" y="88" width="74" height="30" rx="4" fill="#f0f6ff"/>
+          <text x="58" y="100" font="600 6px Arial" fill="#475569">MONTHLY PAYMENT</text>
+          <text x="58" y="112" font="700 11px Arial" fill="#006aff">$2,887.65</text>
+          <rect x="134" y="88" width="74" height="30" rx="4" fill="#f0f6ff"/>
+          <text x="140" y="100" font="600 6px Arial" fill="#475569">CASH TO CLOSE</text>
+          <text x="140" y="112" font="700 11px Arial" fill="#006aff">$25,432.04</text>
+          <text x="52" y="132" font="400 7px Arial" fill="#334155">Loan amount · $347,400</text>
+          <text x="52" y="144" font="400 7px Arial" fill="#334155">Points · −0.032% (lender credit)</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Print Buyer Worksheet</h3>
+        <div class="where">Pricing results / eligibility table &mdash; button in each LTV section header</div>
+        <p>Check one or more rows in a section, click the button, and a borrower-facing handout opens in a new tab &mdash; one scenario per page, Zillow-blue branded, auto-fires the print dialog.</p>
+        <ul>
+          <li><strong>Two big numbers</strong> up top &mdash; Estimated monthly payment + Estimated cash to close &mdash; the figures buyers actually anchor on.</li>
+          <li><strong>Clean details list</strong> &mdash; purchase price, down payment, loan amount, rate, points (plain-English "lender credit of $X" vs "cost of $X"), closing costs, breakeven. DTI is intentionally left off a borrower handout.</li>
+          <li><strong>3 scenarios per page</strong> so you can hand the buyer a side-by-side of the rate options you're discussing.</li>
+          <li>Pick <em>Save as PDF</em> in the print dialog, or send straight to the printer.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- VA + non-spouse co-borrower warning -->
+    <div class="feature is-new" id="va-non-spouse-warning">
+      <div class="shot">
+        <svg viewBox="0 0 260 170" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="260" height="170" fill="#f8fafc"/>
+          <rect x="0" y="0" width="260" height="34" fill="#b91c1c"/>
+          <rect x="0" y="30" width="260" height="4" fill="#7f1d1d"/>
+          <text x="130" y="16" font="700 9px Arial" fill="#fff" text-anchor="middle">⚠ VA INELIGIBLE CO-BORROWER</text>
+          <text x="130" y="27" font="500 7px Arial" fill="#fff" text-anchor="middle">non-veteran co-borrower must be the veteran's married spouse</text>
+          <rect x="20" y="52" width="105" height="48" rx="5" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+          <text x="28" y="66" font="600 8px Arial" fill="#0f172a">Veteran type</text>
+          <text x="28" y="80" font="500 8px Arial" fill="#7f1d1d">Non-military</text>
+          <rect x="135" y="52" width="105" height="48" rx="5" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+          <text x="143" y="66" font="600 8px Arial" fill="#0f172a">Marital status</text>
+          <text x="143" y="80" font="500 8px Arial" fill="#7f1d1d">Unmarried</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>VA + non-spouse co-borrower warning</h3>
+        <div class="where">Full application &mdash; sticky banner across the top</div>
+        <p>Catches a common VA underwriting error before it ships: a non-veteran co-borrower who isn't the veteran's married spouse.</p>
+        <ul>
+          <li><strong>Fires when</strong> the product is VA, one borrower is a qualifying veteran (Regular military / National Guard or reserves), another borrower is non-veteran, and any borrower isn't marked Married.</li>
+          <li><strong>Hard to miss</strong> &mdash; sticky red banner plus a red outline on the offending Veteran type and Marital status fields (same visual language as the FHA Non-Permanent Resident Alien warning).</li>
+          <li><strong>Auto-clears</strong> the moment you fix it: change the product off VA, set the co-borrower to a qualifying veteran type, or mark both borrowers Married.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ZHL Loan Comparison PDF -->
+    <div class="feature is-new" id="loan-comparison-pdf">
+      <div class="shot"><img src="images/loan-comparison-pdf.svg" alt="Borrower-facing loan comparison PDF with two columns showing loan amount, rate, points, monthly PITI, and closing costs, with a green savings callout at the bottom." /></div>
+      <div class="body">
+        <h3>ZHL Loan Comparison PDF</h3>
+        <div class="where">Pricing &amp; Scenarios → Scenarios review &mdash; <strong>ZHL Comparison PDF</strong> button next to Generate PDF</div>
+        <p>Generates a borrower-facing comparison PDF for every selected scenario via the browser's native Save-as-PDF flow.</p>
+        <ul>
+          <li>Mirrors LOP's standard comparison with a few changes: <strong>Seller credit</strong> on its own line, <strong>Credit score</strong> and <strong>DTI</strong> rows dropped, and <strong>Estimated monthly cost (PITI)</strong> + <strong>Cash (to)/from</strong> rendered bigger and bolder.</li>
+          <li><strong>Page 2 cost summary</strong> per scenario &mdash; monthly cost split into P&amp;I vs taxes/insurance/escrows, plus total closing costs, seller credit applied, net closing cost, down payment, and final cash to close.</li>
+          <li>Pick <em>Save as PDF</em> in the print dialog, or send straight to the printer.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Max purchase price (DTI) estimator -->
+    <div class="feature is-new" id="dti-max-estimator">
+      <div class="shot"><img src="images/dti-max-estimator.svg" alt="LOP Eligibility row with estimator pills showing the max purchase price that pushes back-end DTI to each program cap." /></div>
+      <div class="body">
+        <h3>Max purchase price estimator</h3>
+        <div class="where">Pricing &amp; Scenarios &mdash; pill in the Eligibility Details row</div>
+        <p>Shows the estimated max purchase price that would push back-end DTI to its program cap &mdash; Conv 49.99%, FHA 56.99%, VA 60%.</p>
+        <ul>
+          <li>One pill per priced loan type, side-by-side.</li>
+          <li>Reads the current scenario's PITI and back-end DTI plus monthly income and liabilities, then back-solves the price assuming taxes / HOI / MI scale linearly with purchase price (accurate to within 1&ndash;2%).</li>
+          <li>Hover the pill for the math behind it.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- Address copy -->
     <!-- Bulk-download completed-task documents -->
     <div class="feature is-new" id="task-bulk-download">

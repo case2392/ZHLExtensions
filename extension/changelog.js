@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.49.17",
+    headline: "Walkthrough + setup: documented 5 features that were missing, and gave every setup card a screenshot.",
+    highlights: [
+      "Five features were live (and toggleable in setup) but had no card on the walkthrough Tour: Pricing Exception Workflow, Print Buyer Worksheet, VA + non-spouse co-borrower warning, ZHL Loan Comparison PDF, and Max purchase price estimator. All five now have walkthrough cards in the Loan Officer Portal section and surface under New features.",
+      "Added screenshots to the two setup cards that were missing them (VA + non-spouse co-borrower warning, Print Buyer Worksheet) so every module card on the setup page now shows a visual.",
+      "Fixed the Print Buyer Worksheet setup copy to say three scenarios per page (it was still describing the original one-per-page layout)."
+    ]
+  },
+  {
     version: "1.49.16",
     headline: "VA Residual Income: family size now counts co-borrowers (was always 1 for the primary).",
     highlights: [
