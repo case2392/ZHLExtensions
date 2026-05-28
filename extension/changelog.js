@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.1",
+    headline: "VA Entitlement Calculator: now reads the property ZIP reliably and shows an editable ZIP box.",
+    highlights: [
+      "Fixed ZIP detection — the right-rail Zip code value isn't a direct sibling of its label, so the calculator was reporting 'No ZIP found.' It now walks up from the Zip label and reads the value out of the row.",
+      "Added an editable Property ZIP field at the top of the panel. Type or correct the ZIP and it re-derives the high-cost county pre-selection on the fly; the county dropdown + editable limit still override anything the ZIP can't pin down."
+    ]
+  },
+  {
     version: "1.50.0",
     headline: "New: VA Entitlement Calculator — next to Run Residual Income Calc. Enter the entitlement used and it shows the max $0-down loan, plus the down payment required above that.",
     highlights: [

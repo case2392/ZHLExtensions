@@ -1450,10 +1450,25 @@
   }
 
   function getZipCode() {
-    const raw = getPanelText('Zip code') || getPanelText('Zip') || getPanelText('Zip Code');
-    if (!raw) return null;
-    const m = /(\d{5})(?:-\d{4})?/.exec(raw);
-    return m ? m[1] : null;
+    // 1. Label → sibling value.
+    const raw = getPanelText('Zip code') || getPanelText('Zip') || getPanelText('Zip Code') || getPanelText('ZIP');
+    let m = raw && /(\d{5})(?:-\d{4})?/.exec(raw);
+    if (m) return m[1];
+    // 2. Column layouts: the label and value aren't siblings, so walk
+    //    up from a "Zip code" label and scan its row/container for a
+    //    5-digit (optionally ZIP+4) value.
+    const els = document.querySelectorAll('div, span, td, th, p, dt, dd, li, label');
+    for (const el of els) {
+      const t = normalizeText(el.textContent);
+      if (t !== 'zip code' && t !== 'zip' && t !== 'zip code:' && t !== 'zip:') continue;
+      let node = el;
+      for (let i = 0; i < 4 && node; i++) {
+        const mm = /\b(\d{5})(?:-\d{4})?\b/.exec(node.textContent || '');
+        if (mm) return mm[1];
+        node = node.parentElement;
+      }
+    }
+    return null;
   }
 
   // Best-effort high-cost county INDEX from the ZIP (for dropdown
@@ -2198,6 +2213,7 @@
 
     // state
     const st = {
+      zip: zip || '',
       countyIdx: hintIdx,          // -1 = baseline
       units: units,
       limitOverride: null,         // null = use county/units; number = manual
@@ -2260,6 +2276,22 @@
       body.appendChild(row);
       return v;
     }
+
+    // Property ZIP (editable — drives the county pre-select)
+    const zipVal = labeledRow('Property ZIP');
+    const zipInput = document.createElement('input');
+    zipInput.type = 'text';
+    zipInput.value = st.zip;
+    zipInput.placeholder = '5-digit ZIP';
+    zipInput.style.cssText = 'font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;width:120px;';
+    zipInput.addEventListener('input', function () {
+      const m = /(\d{5})/.exec(zipInput.value || '');
+      st.zip = m ? m[1] : (zipInput.value || '').trim();
+      const idx = highCostIndexForZip(st.zip);
+      if (idx >= 0) { st.countyIdx = idx; st.limitOverride = null; }
+      render();
+    });
+    zipVal.appendChild(zipInput);
 
     // County dropdown
     const countyVal = labeledRow('County (loan limit)');
@@ -2380,23 +2412,36 @@
       out.innerHTML = lines.join('');
     }
 
-    function render() {
-      countySel.value = String(st.countyIdx);
-      unitsSel.value = String(st.units);
-      limitInput.value = String(Math.round(effLimit()));
-      renderOutputs();
-    }
-
     // Footer: ZIP context + FHFA lookup
     const footer = document.createElement('div');
     footer.className = 'rric-panel-footer';
     const note = document.createElement('div');
     note.className = 'rric-panel-note';
-    note.innerHTML =
-      (zip ? 'Property ZIP <strong>' + zip + '</strong>' + (hintIdx >= 0 ? ' — pre-selected the matching county.' : ' — not in the high-cost table, defaulted to baseline; pick the county above if it\'s high-cost.') : 'No ZIP found on the page — pick the county above.') +
-      ' <a href="' + FHFA_LOOKUP_URL + '" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;">FHFA county limit lookup</a>';
     footer.appendChild(note);
     panel.appendChild(footer);
+
+    function updateNote() {
+      const zipOk = /^\d{5}$/.test(st.zip || '');
+      const matched = highCostIndexForZip(st.zip) >= 0;
+      let lead;
+      if (!zipOk) {
+        lead = 'Enter the property ZIP above, or pick the county directly.';
+      } else if (matched) {
+        lead = 'ZIP <strong>' + st.zip + '</strong> matched a high-cost county (pre-selected).';
+      } else {
+        lead = 'ZIP <strong>' + st.zip + '</strong> isn\'t in the high-cost table — defaulted to baseline. If it\'s a high-cost county, pick it above.';
+      }
+      note.innerHTML = lead +
+        ' <a href="' + FHFA_LOOKUP_URL + '" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;">FHFA county limit lookup</a>';
+    }
+
+    function render() {
+      countySel.value = String(st.countyIdx);
+      unitsSel.value = String(st.units);
+      limitInput.value = String(Math.round(effLimit()));
+      updateNote();
+      renderOutputs();
+    }
 
     // Time-saved slot
     const tsSlot = document.createElement('div');
