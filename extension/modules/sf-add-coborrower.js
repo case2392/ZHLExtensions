@@ -103,26 +103,54 @@
       const txt = norm(s);
       return txt && txt.indexOf(first) !== -1 && txt.indexOf(last) !== -1;
     };
+
     // 1. VISIBLE record header / highlights (the active console tab).
     //    A Lightning console keeps inactive lead tabs mounted but
     //    hidden, so scope to visible nodes to match the ACTIVE lead.
     const headers = deepQuerySelectorAll(document,
       'records-highlights2, records-highlights-details-item, lightning-formatted-text, ' +
-      'h1, .slds-page-header, .slds-page-header__title, .entityNameTitle, .uiOutputText');
+      'h1, .slds-page-header, .slds-page-header__title, .entityNameTitle, .uiOutputText, ' +
+      'records-entity-label, .entityNameTitle, .slds-media__body');
     for (const el of headers) {
       if (!isVisible(el)) continue;
       if (hit(el.textContent)) return true;
     }
-    // 2. The active console workspace tab title ("<Name> | Lead").
-    const tabs = deepQuerySelectorAll(document,
-      '[role="tab"][aria-selected="true"], lightning-tab-bar a[title], a.tabHeader, [data-tab-name]');
+
+    // 2. The console workspace tab strip. Tab labels like
+    //    "Edward Saleeby | Lead" live in the always-rendered tab bar.
+    //    Don't gate these on isVisible — the tab bar always has layout,
+    //    and offsetParent inside shadow DOM is unreliable. Prefer the
+    //    ACTIVE tab, but a name hit on any tab is still a valid match
+    //    (the LO reviews the filled modal before saving).
+    const tabSelector =
+      '[role="tab"][aria-selected="true"], [role="tab"], ' +
+      'lightning-tab-bar a[title], a.tabHeader, [data-tab-name], ' +
+      '.oneConsoleTab, .slds-context-bar__item, .slds-tabs_default__item, ' +
+      'li.tabItem, a.slds-tabs_default__link, span.title';
+    const tabs = deepQuerySelectorAll(document, tabSelector);
+    let activeHit = false, anyHit = false;
     for (const el of tabs) {
-      if (!isVisible(el)) continue;
       const title = (el.getAttribute && (el.getAttribute('title') || el.getAttribute('data-tab-name'))) || el.textContent;
-      if (hit(title)) return true;
+      if (!hit(title)) continue;
+      anyHit = true;
+      const isActive = (el.getAttribute && el.getAttribute('aria-selected') === 'true') ||
+        (el.className && /\b(slds-is-active|active|slds-active)\b/.test(String(el.className)));
+      if (isActive) { activeHit = true; break; }
     }
+    if (activeHit || anyHit) return true;
+
     // 3. document.title fallback ("<Name> | Lead | Salesforce").
     if (hit(document.title)) return true;
+
+    // 4. Last resort: any visible element whose own text (not counting
+    //    descendants) names the borrower. Catches header layouts the
+    //    selectors above miss. Still requires BOTH names, so it won't
+    //    fire on an unrelated lead.
+    const all = deepQuerySelectorAll(document, 'span, h1, h2, a, lightning-formatted-text');
+    for (const el of all) {
+      if (!isVisible(el)) continue;
+      if (hit(el.textContent)) return true;
+    }
     return false;
   }
 

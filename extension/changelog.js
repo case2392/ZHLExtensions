@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.9",
+    headline: "Add Co-Borrower to Salesforce: fixed the false \"No matching Salesforce lead tab open\" when the borrower's lead is clearly the active tab.",
+    highlights: [
+      "The Salesforce-side lead match leaned too heavily on finding a visible record-highlights node via deep-shadow traversal, so it would miss the open lead (e.g. 'Edward Saleeby | Lead') even when that console tab was active — reporting 'No matching Salesforce lead tab open.' Matching now also reads the console workspace tab strip (preferring the active tab, but accepting any tab whose label names the borrower), broadens the header selectors, and adds a visible-text last resort. It still requires BOTH the first and last name, so it won't fill the wrong lead.",
+      "When no lead matches, the button now shows the specific reason from Salesforce (e.g. 'This Salesforce tab is not Edward Saleeby') instead of the generic 'No matching Salesforce lead tab open,' so it's clear whether the tab isn't open vs. the lead wasn't recognized."
+    ]
+  },
+  {
     version: "1.50.8",
     headline: "Fixed the stuck grab/hand cursor — Scenario Sort no longer makes a giant page element draggable when there's only one scenario.",
     highlights: [

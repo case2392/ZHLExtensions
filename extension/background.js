@@ -1492,13 +1492,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       let answered = false;
       let pending = tabs.length;
+      // Remember the most useful non-match reason from the SF side so we
+      // can surface it (e.g. "This Salesforce tab is not Edward Saleeby")
+      // instead of a generic "no tab" message when nothing matched.
+      let lastReason = "";
       const finish = (resp) => {
         if (answered) return;
         answered = true;
         sendResponse(resp);
       };
+      const noMatch = () => finish({ ok: false, reason: lastReason || "No matching Salesforce lead tab open" });
       tabs.forEach((tab) => {
-        if (tab.id == null) { if (--pending === 0) finish({ ok: false, reason: "No matching Salesforce lead tab open" }); return; }
+        if (tab.id == null) { if (--pending === 0) noMatch(); return; }
         let done = false;
         const onDone = (resp) => {
           if (done) return;
@@ -1512,8 +1517,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               if (tab.windowId != null) chrome.windows.update(tab.windowId, { focused: true });
             } catch (_) {}
             finish({ ok: !!resp.ok, reason: resp.reason });
-          } else if (pending === 0) {
-            finish({ ok: false, reason: "No matching Salesforce lead tab open" });
+          } else {
+            if (resp && resp.reason) lastReason = resp.reason;
+            if (pending === 0) noMatch();
           }
         };
         try {
