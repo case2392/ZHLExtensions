@@ -244,13 +244,31 @@
   function classifyLiabilityFromReact(item) {
     const attrs = (item && item.attributes) || {};
     const type = String(attrs.type || '').toUpperCase().trim();
-    // Charge-offs and repossessions are excluded from the collections
-    // bucket per user clarification, even when LOP categorizes them as
-    // type=Unknown (which would otherwise route them to collections).
-    if (isChargeOff(attrs)) return [];
-    if (type === 'UNKNOWN') return ['unknown→collection'];
-    if (type === 'COLLECTION') return ['type:Collection'];
+    const isColl = isCollection(attrs);
+    // Pure charge-offs / repossessions are excluded from the
+    // collections bucket per user clarification. BUT a charge-off that
+    // was also submitted to / placed in collection IS a collection
+    // account and counts (the remarks say so), so only exclude
+    // charge-offs that aren't also collections.
+    if (isChargeOff(attrs) && !isColl) return [];
+    if (isColl) {
+      if (type === 'COLLECTION') return ['type:Collection'];
+      if (type === 'UNKNOWN') return ['unknown→collection'];
+      return ['remarks→collection'];
+    }
     return [];
+  }
+
+  // A collection account: LOP type Collection/Unknown, OR the credit
+  // bureau stamped a "submitted/placed/assigned to collection" phrase
+  // in the remarks (common on original-creditor tradelines that were
+  // charged off and sent to a collection agency).
+  function isCollection(attrs) {
+    if (!attrs) return false;
+    const type = String(attrs.type || '').toUpperCase().trim();
+    if (type === 'COLLECTION' || type === 'UNKNOWN') return true;
+    const remarks = String(attrs.remarks || '').toUpperCase();
+    return /SUBMITTED\s+TO\s+COLLECTION|PLACED\s+(?:FOR|IN|WITH)\s+COLLECTION|ASSIGNED\s+TO\s+COLLECTION|COLLECTION\s+ACCOUNT|\bIN\s+COLLECTION\b/.test(remarks);
   }
 
   function computeCollectionsFromItems(items) {
@@ -336,17 +354,15 @@
     const attrs = (item && item.attributes) || {};
     const disputedReason = isDisputed(attrs);
     if (!disputedReason) return [];
-    // Charge-offs and repossessions are excluded from the disputed
-    // bucket per user clarification ("Charge Offs do not count as
-    // collections or disputed accounts"), even when ACCT IN DISPUTE
-    // is stamped on the tradeline remarks.
-    if (isChargeOff(attrs)) return [];
+    const isColl = isCollection(attrs);
+    // Pure charge-offs are excluded from the disputed bucket per user
+    // clarification — UNLESS the account is also a collection (e.g.
+    // charged off AND submitted to collection), in which case it's a
+    // disputed collection and counts.
+    if (isChargeOff(attrs) && !isColl) return [];
     // Derogatory check: collection OR 30+day late in last 24mo.
-    // (These are the same buckets the FHA section header calls out;
-    // charge-offs would also be in this list but are exempt above.)
-    const type = String(attrs.type || '').toUpperCase().trim();
     const derog = [];
-    if (type === 'UNKNOWN' || type === 'COLLECTION') derog.push('collection');
+    if (isColl) derog.push('collection');
     const lateCount =
       (Number(attrs.thirtyDaysLateCount) || 0) +
       (Number(attrs.sixtyDaysLateCount) || 0) +

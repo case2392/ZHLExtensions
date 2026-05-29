@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.6",
+    headline: "FHA Collections / Disputed badges now catch charge-offs that were submitted to collection (e.g. an original-creditor account whose remarks say 'ACCT SUBMITTED TO COLLECTION').",
+    highlights: [
+      "A charge-off used to be dropped from both the Collections and Disputed totals. But a charge-off that was also placed/submitted to a collection agency IS a collection account — the badges missed those (e.g. the Verizon Wireless account) while correctly catching the separate collection-agency tradelines (LVNV Funding).",
+      "Detection now also reads the Remarks for 'submitted/placed/assigned to collection' (and 'collection account' / 'in collection'). A charge-off is only excluded when it isn't also a collection; once it's in collection it counts toward the $2k collections cap and, if 'ACCT IN DISPUTE' is stamped, the $1k disputed cap too."
+    ]
+  },
+  {
     version: "1.50.5",
     headline: "2% Grant PDF: fixed the state read — the loan header sometimes shows just the state (\"TX\") instead of \"City, ST\".",
     highlights: [
