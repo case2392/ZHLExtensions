@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.7",
+    headline: "5% Collections button now also updates charge-offs that were submitted to collection (e.g. the Verizon account), matching the Total Collections badge.",
+    highlights: [
+      "The badge already counted remarks-only collections after v1.50.6, but the 5% Collections button still only acted on type=Collection/Unknown rows, so it skipped the Verizon account. It now reuses the same React-probe collection determination (which reads the 'SUBMITTED TO COLLECTION' remark) and matches it to the liabilities table by payee + balance, so those accounts get the 5%-of-balance monthly payment too."
+    ]
+  },
+  {
     version: "1.50.6",
     headline: "FHA Collections / Disputed badges now catch charge-offs that were submitted to collection (e.g. an original-creditor account whose remarks say 'ACCT SUBMITTED TO COLLECTION').",
     highlights: [

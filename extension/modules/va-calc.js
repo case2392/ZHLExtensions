@@ -2818,8 +2818,37 @@
       const skipped = [];
       let detected = 0;
 
+      // Build a remarks-aware collection set from the React probe (same
+      // determination the Total Collections badge uses), so accounts
+      // that are collections ONLY by remarks — e.g. a charge-off whose
+      // remarks say "SUBMITTED TO COLLECTION" (Verizon) — get the 5%
+      // payment too, not just type=Collection/Unknown rows. Matched to
+      // DOM rows by payee + balance.
+      const collKey = function (payee, bal) {
+        return normalizeText(payee) + '|' + Math.round(Number(bal) || 0);
+      };
+      const reactCollKeys = new Set();
+      try {
+        await refreshReactCacheIfDue();
+        if (reactReadInFlight) { try { await reactReadInFlight; } catch (_) {} }
+        const tables = cachedReactTables || [];
+        for (const tbl of tables) {
+          const items = (tbl && tbl.read && tbl.read.items) || [];
+          for (const item of items) {
+            if (!classifyLiabilityFromReact(item).length) continue;
+            const attrs = (item && item.attributes) || {};
+            const payee = String(attrs.creditor || '');
+            const bal = Number(attrs.unpaidBalance) || 0;
+            if (bal <= 0 || isMedicalPayee(payee)) continue;
+            reactCollKeys.add(collKey(payee, bal));
+          }
+        }
+      } catch (_) {}
+
       for (const lib of liabilityRows) {
-        if (!isCollectionAccount(lib.accountType)) continue;
+        const isColl = isCollectionAccount(lib.accountType) ||
+          reactCollKeys.has(collKey(lib.payee, lib.balance));
+        if (!isColl) continue;
         detected++;
 
         if (isMedicalPayee(lib.payee)) {
