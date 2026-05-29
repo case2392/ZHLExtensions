@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.8",
+    headline: "Fixed the stuck grab/hand cursor — Scenario Sort no longer makes a giant page element draggable when there's only one scenario.",
+    highlights: [
+      "Scenario Sort's drag-to-reorder set cursor:grab + draggable on each scenario card's wrapper. With only ONE scenario, the wrapper-finder walked all the way up to a near-<body> ancestor, so the whole page showed the grab hand instead of the normal pointer. Drag-reorder now only turns on when there are 2+ scenario cards that share a common parent; otherwise any leftover drag styling is stripped. This removes the page-wide hand cursor LOs were seeing."
+    ]
+  },
+  {
     version: "1.50.7",
     headline: "5% Collections button now also updates charge-offs that were submitted to collection (e.g. the Verizon account), matching the Total Collections badge.",
     highlights: [

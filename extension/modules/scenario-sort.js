@@ -743,18 +743,25 @@
 
   function ensureDnd() {
     const wrappers = getCardWrappers();
+    // Drag-to-reorder only makes sense with 2+ cards that share a
+    // common parent. With a single card, findUniqueWrapper walks up to
+    // a huge near-<body> ancestor — making THAT draggable paints the
+    // grab/hand cursor across the entire page (the bug LOs reported).
+    // So require ≥2 wrappers AND a shared parent before enabling drag,
+    // and strip any drag styling we may have applied in a prior state.
+    if (wrappers.length < 2 || !commonParent(wrappers)) {
+      stripDnd();
+      return;
+    }
     wrappers.forEach(enableDragAndDrop);
     const parents = new Set();
     for (const w of wrappers) if (w.parentElement) parents.add(w.parentElement);
     parents.forEach(attachParentDropHandler);
   }
 
-  function tearDown() {
-    const bar = document.getElementById(TOOLBAR_ID);
-    if (bar) bar.remove();
-    // Strip draggable=true / cursor:grab from anything we tagged. Without
-    // this, navigating from the scenarios page to another LOP page leaves
-    // the hand cursor on whichever wrappers React keeps in memory.
+  // Remove every drag attribute / inline style we applied so no grab
+  // cursor or draggable flag is left behind.
+  function stripDnd() {
     document.querySelectorAll('[data-zhl-dnd]').forEach((el) => {
       el.removeAttribute('data-zhl-dnd');
       el.removeAttribute('draggable');
@@ -767,6 +774,15 @@
     document.querySelectorAll('[data-zhl-dnd-parent]').forEach((el) => {
       el.removeAttribute('data-zhl-dnd-parent');
     });
+  }
+
+  function tearDown() {
+    const bar = document.getElementById(TOOLBAR_ID);
+    if (bar) bar.remove();
+    // Strip draggable=true / cursor:grab from anything we tagged. Without
+    // this, navigating from the scenarios page to another LOP page leaves
+    // the hand cursor on whichever wrappers React keeps in memory.
+    stripDnd();
     // Also clear any alignment overrides we left on assigned wrapper /
     // its parent / sibling wrappers — same lingering-state risk.
     clearAssignedWrapperOverrides();
