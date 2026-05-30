@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.11",
+    headline: "Gmail drag: defensive force-draggable on attachment chips (experimental — covers the case where Gmail stopped marking chips draggable).",
+    highlights: [
+      "Targeted experiment for the Gmail → LOP drag failure where the cursor doesn't switch to the grab hand. The chip scanner now force-sets draggable=\"true\" on each detected attachment chip wrapper so native HTML5 drag will fire even if Gmail (or an intermediary) has stripped the attribute. The dragstart hijack was already at document capture phase, so that half of the experiment was already in place. If this doesn't restore drag, the remaining likely cause is Gmail's main-world code calling preventDefault on dragstart, which extensions cannot block — that would need to be raised with Gmail / IT."
+    ]
+  },
+  {
     version: "1.50.10",
     headline: "Fixed Gmail attachment drag dying instantly (no grab cursor, no drag) — the Reply All Button's drag-mask was firing on attachment drags and aborting them.",
     highlights: [

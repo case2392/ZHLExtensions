@@ -278,7 +278,8 @@
   // Capture phase on the document fires BEFORE any element-level
   // capture or bubble listeners deeper in the tree, so we modify
   // dataTransfer before Gmail's own dragstart logic finalizes its
-  // payload.
+  // payload — and so we run before any later handler can call
+  // preventDefault and cancel the drag.
   document.addEventListener('dragstart', function (e) {
     const info = findInfoFor(e.target);
     if (!info) return;
@@ -498,6 +499,15 @@
       // Eager prefetch — every chip we find, regardless of hover.
       prefetch(info);
       const draggable = el.closest('[draggable="true"]') || el;
+      // Defensive: if Gmail has stopped marking chips draggable (or
+      // some intermediary stripped it), force it back on so native
+      // HTML5 drag will fire on user mousedown+move. Harmless if
+      // already draggable.
+      try {
+        if (draggable.getAttribute('draggable') !== 'true') {
+          draggable.setAttribute('draggable', 'true');
+        }
+      } catch (_) {}
       if (seen.has(draggable)) return;
       if (!isVisible(draggable)) return;
       seen.add(draggable);
