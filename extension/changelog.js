@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.10",
+    headline: "Fixed Gmail attachment drag dying instantly (no grab cursor, no drag) — the Reply All Button's drag-mask was firing on attachment drags and aborting them.",
+    highlights: [
+      "The Reply All Button feature applied a display:none mask at dragstart capture phase to keep Gmail's More-row from expanding mid-drag. That mask is only meant for Gmail's CUSTOM mouse-based email drag (which doesn't fire dragstart), but it was also catching native HTML5 dragstart events — i.e. every attachment chip drag. Mutating the DOM at dragstart capture phase causes Chrome to abort the drag instantly, which is why the cursor stayed as a pointer and nothing happened. The mask now only triggers on the mousedown/mousemove path (Gmail email drags); attachment drags pass through untouched. Pre-existing bug; surfaced recently as Gmail tweaked its layout."
+    ]
+  },
+  {
     version: "1.50.9",
     headline: "Add Co-Borrower to Salesforce: fixed the false \"No matching Salesforce lead tab open\" when the borrower's lead is clearly the active tab.",
     highlights: [

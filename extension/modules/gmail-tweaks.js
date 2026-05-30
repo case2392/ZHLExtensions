@@ -226,7 +226,14 @@
     removeMask();
   };
 
-  document.addEventListener('dragstart', beginDrag, true);
+  // Gmail email drags are custom mouse-based (no dragstart), handled by
+  // the mousedown/mousemove path below. Native HTML5 dragstart events
+  // only come from things like attachment chips — for those, the mask
+  // is unnecessary AND harmful: mutating the DOM at dragstart capture
+  // phase causes Chrome to abort the drag instantly (cursor stays as
+  // pointer, no grab, no drop). So don't trigger beginDrag on dragstart.
+  // Keep dragend/drop bound so any stray dragActive state still gets
+  // cleared.
   document.addEventListener('dragend', endDrag, true);
   document.addEventListener('drop', endDrag, true);
 
