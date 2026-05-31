@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.13",
+    headline: "Copy LOP file: auto-dismiss the \"Select a City\" modal during pricing scenario paste when a ZIP maps to multiple municipalities.",
+    highlights: [
+      "When the staged ZIP code is shared by multiple cities (e.g. 28081 covers Centerview / Fisher Town / Glass / Kannapolis / Royal Oaks / Shady Brook), LOP popped a \"Select a City\" modal that blocked the rest of the pricing form paste and Run pricing. The paste now watches for the modal after writing propertyZIP, finds the row matching the staged city (state too when available), clicks the radio, and clicks Select. Falls back to leaving the modal open for the LO if no row matches — better than silently picking the wrong municipality on a real loan."
+    ]
+  },
+  {
     version: "1.50.12",
     headline: "Copy LOP file: capture & paste the HMDA \"demographic information provided through\" Select — and fall back to FaceToFace when the source was blank, so save validation doesn't bounce (which had been cascading into rolled-back credit consent).",
     highlights: [

@@ -1919,6 +1919,14 @@
     // source's addressZIP can carry a ZIP+4 ("30504-5682") which
     // causes a "Failed to run pricing" toast when submitted.
     writeF('propertyZIP', stripZipToFive(sp.addressZIP), 'propertyZIP');
+    // LOP may open a "Select a City" modal when the ZIP maps to
+    // multiple municipalities. Dismiss it by selecting the matching
+    // city before continuing — otherwise the modal blocks the rest
+    // of the form writes and Run pricing.
+    const cityPickerResult = await dismissCityPickerIfPresent(sp.addressCity, sp.addressState);
+    if (cityPickerResult.opened) {
+      console.log('[Copy LOP][pricing] City picker handled:', cityPickerResult);
+    }
     writeF('propertyCity', sp.addressCity, 'propertyCity');
     writeF('propertyCountyName', sp.addressCountyName, 'propertyCountyName');
     writeF('propertyState', sp.addressState, 'propertyState');
@@ -2007,6 +2015,93 @@
     await wait(150);
     console.groupEnd();
   }
+
+  // After writing the ZIP into LOP's pricing form, LOP may open a
+  // "Select a City" modal when the ZIP code maps to multiple
+  // municipalities (e.g. 28081 → Centerview / Fisher Town / Glass /
+  // Kannapolis / Royal Oaks / Shady Brook). Paste then stalls
+  // because the modal blocks the form and the subsequent city /
+  // county / state writes have no effect until it's dismissed.
+  // Look for the modal, pick the row matching the staged city
+  // (state too, when available), click its radio, and click Select.
+  // Falls back to the first row only when no city match is found
+  // AND no targetCity was provided — otherwise leaves the modal
+  // open so the LO can pick correctly (better than silently picking
+  // the wrong municipality on a real loan).
+  async function dismissCityPickerIfPresent(targetCity, targetState) {
+    const dialog = await waitForCondition(function () {
+      const dialogs = document.querySelectorAll('section[role="dialog"][aria-modal="true"]');
+      for (const d of dialogs) {
+        const h = d.querySelector('h4');
+        if (h && /select a city/i.test(h.textContent || '')) return d;
+      }
+      return null;
+    }, 1800);
+    if (!dialog) return { opened: false };
+
+    console.group('[Copy LOP][pricing] dismissCityPickerIfPresent');
+    console.log('Modal opened. Matching against city="' + (targetCity || '') + '", state="' + (targetState || '') + '"');
+    const want = String(targetCity || '').trim().toLowerCase();
+    const wantState = String(targetState || '').trim().toLowerCase();
+    const rows = Array.prototype.slice.call(dialog.querySelectorAll('tbody tr'));
+    let chosen = null;
+    let chosenCity = '';
+    for (const row of rows) {
+      const cells = row.querySelectorAll('td');
+      if (cells.length < 4) continue;
+      const cityText = (cells[1].textContent || '').trim().toLowerCase();
+      const stateText = (cells[3].textContent || '').trim().toLowerCase();
+      if (cityText === want && (!wantState || stateText === wantState)) {
+        chosen = row;
+        chosenCity = (cells[1].textContent || '').trim();
+        console.log('Matched row:', chosenCity);
+        break;
+      }
+    }
+    if (!chosen && !want && rows.length) {
+      chosen = rows[0];
+      const cells = chosen.querySelectorAll('td');
+      chosenCity = cells.length >= 2 ? (cells[1].textContent || '').trim() : '(first)';
+      console.warn('No target city provided; falling back to first row:', chosenCity);
+    }
+    if (!chosen) {
+      console.warn('No row matched "' + targetCity + '" — leaving modal open for LO to pick.');
+      console.groupEnd();
+      return { opened: true, selected: false, reason: 'no-match' };
+    }
+    const radio = chosen.querySelector('input[type="radio"]');
+    if (radio) {
+      try {
+        const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked');
+        if (desc && desc.set) desc.set.call(radio, true); else radio.checked = true;
+        radio.dispatchEvent(new Event('click', { bubbles: true }));
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+        radio.dispatchEvent(new Event('input', { bubbles: true }));
+        radio.click();
+      } catch (e) {
+        console.warn('Radio click threw', e);
+      }
+      await wait(140);
+    }
+    const selectBtn = await waitForCondition(function () {
+      const btns = dialog.querySelectorAll('footer button');
+      for (const b of btns) {
+        if (!b.disabled && /^select\s*$/i.test((b.textContent || '').trim())) return b;
+      }
+      return null;
+    }, 1500);
+    if (!selectBtn) {
+      console.warn('Select button did not enable; modal still open');
+      console.groupEnd();
+      return { opened: true, selected: false, reason: 'select-button-disabled' };
+    }
+    selectBtn.click();
+    await wait(180);
+    console.log('Selected:', chosenCity);
+    console.groupEnd();
+    return { opened: true, selected: true, city: chosenCity };
+  }
+
   function parseLockDays(s) {
     if (!s) return '';
     const m = String(s).match(/(\d+)\s*days?/i);
