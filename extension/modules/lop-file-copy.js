@@ -142,6 +142,84 @@
     return false;
   }
 
+  // ---- Demographics "provided through" sweep -----------------------
+  // The HMDA "The demographic information was provided through" Select
+  // on the Government Monitoring page is a required field. When it's
+  // unset on save, LOP's validation rejects the page — which has been
+  // observed to cascade and prevent credit consent from committing on
+  // the brand-new co-borrower section.
+  //
+  // Two stable native <select> names:
+  //   primaryBorrower.collection.method
+  //   coBorrower.collection.method
+  // Option values: Email, FaceToFace, Fax, Internet, Mail, Telephone.
+  //
+  // These ARE captured by findAllNamedFields when present, but many
+  // older source loans never had them filled — so a normal stage→paste
+  // round-trip leaves the destination empty. We capture explicitly,
+  // and on paste fall back to "FaceToFace" if the source was blank so
+  // the form validates and the broader save (incl. credit consent)
+  // can commit. FaceToFace is the most common LO collection method
+  // for a synchronous call/meeting with the borrower; the LO can
+  // override on the page after paste if it should be something else.
+  const DEMOGRAPHIC_COLLECTION_METHOD_NAMES = [
+    'primaryBorrower.collection.method',
+    'coBorrower.collection.method'
+  ];
+  const DEMOGRAPHIC_COLLECTION_METHOD_FALLBACK = 'FaceToFace';
+
+  function findDemographicCollectionMethodSelects(doc) {
+    doc = doc || document;
+    const found = [];
+    DEMOGRAPHIC_COLLECTION_METHOD_NAMES.forEach(function (name) {
+      const el = doc.querySelector('select[name="' + name + '"]');
+      if (el) found.push({ name: name, control: el });
+    });
+    return found;
+  }
+
+  function captureDemographicCollectionMethod(doc) {
+    return findDemographicCollectionMethodSelects(doc).map(function (e) {
+      return { name: e.name, value: e.control.value || '' };
+    });
+  }
+
+  async function pasteDemographicCollectionMethod(records) {
+    const elements = findDemographicCollectionMethodSelects(document);
+    if (!elements.length) return { wrote: 0, found: 0, fallbacks: 0 };
+    // Index source records by name so we tolerate borrower-count
+    // mismatches (source had 1 borrower, dest has 2, etc.).
+    const byName = {};
+    (records || []).forEach(function (r) { byName[r.name] = r; });
+    let wrote = 0;
+    let fallbacks = 0;
+    for (const el of elements) {
+      const rec = byName[el.name];
+      let value = rec && rec.value;
+      if (!value) {
+        // Source was blank — fall back so the page validates on save.
+        value = DEMOGRAPHIC_COLLECTION_METHOD_FALLBACK;
+        fallbacks++;
+      }
+      // Skip if destination already matches.
+      if (el.control.value === value) continue;
+      // Skip if the option isn't in this destination's <select>.
+      const hasOption = Array.prototype.some.call(el.control.options, function (o) { return o.value === value; });
+      if (!hasOption) {
+        console.warn('[Copy LOP] Demographics collection.method option not available on dest:', el.name, value);
+        continue;
+      }
+      try {
+        setReactSelectValue(el.control, value);
+        wrote++;
+        console.log('[Copy LOP] Demographics collection.method set:', el.name, '→', value, rec && rec.value ? '(from source)' : '(fallback FaceToFace — source was blank)');
+      } catch (e) {
+        console.warn('[Copy LOP] Demographics collection.method set failed', el.name, e);
+      }
+    }
+    return { wrote: wrote, found: elements.length, fallbacks: fallbacks };
+  }
+
   function findSectionScope(el) {
     let cur = el;
     while (cur && cur !== document.body) {
@@ -1088,6 +1166,12 @@
     console.log('Captured', fields.length, 'fields (', excluded, 'excluded as Loan & Property /',
       totalSeen - excluded - fields.length, 'other skipped).');
 
+    // Demographics collection.method — captured explicitly so we
+    // can fall back to a safe default on paste if the source was
+    // blank (the field is HMDA-required for save to pass).
+    const demographicCollectionMethod = captureDemographicCollectionMethod(document);
+    console.log('Demographics collection.method capture:', demographicCollectionMethod);
+
     const tableData = readTableData(document);
     console.group('Table data');
     Object.keys(tableData).forEach(function (k) {
@@ -1157,7 +1241,8 @@
       tableData: tableData,
       realEstateDetails: realEstateDetails,
       liabilityEdits: liabilityEdits,
-      pricingScenario: pricingScenario
+      pricingScenario: pricingScenario,
+      demographicCollectionMethod: demographicCollectionMethod
     };
     console.log('Full stage record:', stage);
     console.groupEnd();
@@ -3550,6 +3635,14 @@
       // Give React time to re-render before the next pass.
       await new Promise(function (r) { setTimeout(r, 250); });
     }
+
+    // Demographics collection.method — explicit pass after the
+    // general field paste. Falls back to FaceToFace if source was
+    // blank so LOP's save validation doesn't bounce the page (which
+    // had been cascading into rolled-back credit consent).
+    const demographicResult = await pasteDemographicCollectionMethod(stage.demographicCollectionMethod || []);
+    console.log('[Copy LOP] Demographics collection.method paste:', demographicResult);
+    totalWrote += demographicResult.wrote;
 
     // Surface borrower-section count mismatch so the LO knows
     // when they need to add a co-borrower (or remove one) on the

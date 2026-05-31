@@ -13,6 +13,13 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.50.12",
+    headline: "Copy LOP file: capture & paste the HMDA \"demographic information provided through\" Select — and fall back to FaceToFace when the source was blank, so save validation doesn't bounce (which had been cascading into rolled-back credit consent).",
+    highlights: [
+      "Stage from this file / Paste from staged now explicitly captures the two collection.method <select>s on the Government Monitoring page (primaryBorrower.collection.method and coBorrower.collection.method) — HMDA-required fields the LO is often left blank on the source loan, which then blocks save validation on the destination. When source was blank, paste falls back to FaceToFace (the most common LO method) so the page validates and the rest of the save flow — including credit consent commit on the brand-new co-borrower section — actually persists. LO can override on the page after paste if a different collection method should apply."
+    ]
+  },
+  {
     version: "1.50.11",
     headline: "Gmail drag: defensive force-draggable on attachment chips (experimental — covers the case where Gmail stopped marking chips draggable).",
     highlights: [
