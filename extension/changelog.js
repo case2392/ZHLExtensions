@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.0",
+    headline: "NEW: auto-paste PA Contact ID when cloning an Unqualified Salesforce Lead — no more remembering and manually pasting it onto every new lead.",
+    highlights: [
+      "When you click Clone on a Lead, the extension grabs the source lead's PA Contact ID and stashes it. The clone-confirmation modal (\"Are you sure you want to copy this lead?\") gets a brand-blue banner explaining what's about to happen, plus the ID itself rendered in monospace as a manual fallback in case the auto-paste doesn't land. Once the new lead opens, the extension waits for the details panel to render, clicks the pencil next to PA Contact ID, sets the value, and clicks Save — with a green confirmation toast on the new lead. Skips silently if the new lead already has a PA Contact ID set (won't overwrite). 5-minute TTL on the stashed value; cleared after success.",
+      "Why this matters: PA Contact ID is what syncs the agent's FUB lead with the Salesforce lead. Forgetting to copy it onto every clone breaks that sync — this removes the manual step entirely."
+    ]
+  },
+  {
     version: "1.50.13",
     headline: "Copy LOP file: auto-dismiss the \"Select a City\" modal during pricing scenario paste when a ZIP maps to multiple municipalities.",
     highlights: [
