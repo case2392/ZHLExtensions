@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.2",
+    headline: "Clone PA Contact ID: full-width modal banner, grey processing overlay during auto-paste, and a more thorough Save sequence so the inline edit actually commits.",
+    highlights: [
+      "Confirmation-modal banner now spans the full modal width (inserted above the inner slds-grid instead of inside the right-side message column), and the empty 3-of-12 leading column is collapsed so the \"Are you sure...\" text aligns flush left below the banner.",
+      "Auto-paste now shows a full-viewport grey overlay (same style as Copy LOP File and SMS Mark All Read) with progress text: Opening the field → Typing value → Saving. Removes any ambiguity about what the extension is doing.",
+      "Save did not always commit because Lightning's inline-edit needs the input to be marked \"dirty\" before the SaveEdit button accepts the click. The paste now focuses the input, sets the value, fires keydown/keyup, blurs to commit, waits 400ms for state to settle, and verifies the Save button isn't disabled before clicking it with a realistic pointer-event sequence (pointerdown / mousedown / pointerup / mouseup / click). After the click it waits for the inline edit to actually disappear before declaring success — so a partial save no longer reports as ✓ in the toast."
+    ]
+  },
+  {
     version: "1.51.1",
     headline: "Clone PA Contact ID: fixed the \"new lead already has the same ID\" false positive (was reading from the hidden source workspace tab) and tightened the confirmation-modal banner layout so it lines up with the message.",
     highlights: [

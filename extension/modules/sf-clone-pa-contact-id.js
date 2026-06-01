@@ -162,7 +162,7 @@
     banner.setAttribute(BANNER_ATTR, '1');
     banner.style.cssText =
       'background:#eff6ff;border-left:4px solid #006aff;border-radius:4px;' +
-      'padding:8px 12px;margin:0 0 8px 0;font:12px/1.4 Arial,Helvetica,sans-serif;' +
+      'padding:9px 12px;margin:0 0 10px 0;font:12px/1.4 Arial,Helvetica,sans-serif;' +
       'color:#0b3a73;';
     const head = document.createElement('div');
     head.style.cssText = 'font-weight:700;margin-bottom:3px;';
@@ -177,14 +177,101 @@
     banner.appendChild(head);
     banner.appendChild(body);
     banner.appendChild(idLine);
-    // Insert into the statusContainer (the 9-of-12 column that holds
-    // the "Are you sure..." message) so the banner lines up with the
-    // message rather than introducing an offset from the empty 3-of-12
-    // column to its left. Falls back to prepending on the modal if
-    // statusContainer can't be found.
-    const sc = modal.querySelector ? modal.querySelector('.statusContainer') : null;
-    const target = sc || modal;
-    target.insertBefore(banner, target.firstChild);
+    // Insert at the c-clone-request level — ABOVE the inner slds-grid —
+    // so the banner spans the full modal width instead of being
+    // constrained to the message's 9-of-12 column. Also collapse the
+    // empty 3-of-12 leading column so the "Are you sure..." text
+    // aligns flush left below the banner.
+    const grid = modal.querySelector ? modal.querySelector(':scope > .slds-grid, .slds-grid.slds-gutters') : null;
+    if (grid && grid.parentElement === modal) {
+      modal.insertBefore(banner, grid);
+    } else {
+      modal.insertBefore(banner, modal.firstChild);
+    }
+    try {
+      const emptyCol = modal.querySelector('.slds-col.slds-size_3-of-12');
+      if (emptyCol && !(emptyCol.textContent || '').trim()) {
+        emptyCol.style.display = 'none';
+      }
+    } catch (_) {}
+  }
+
+  // ---- Full-viewport progress overlay (matches lop-file-copy /
+  //      sms-mark-all-read style) -----------------------------------
+  const PROGRESS_ID = 'zhl-pa-clone-progress';
+  function showProgress(text, sub) {
+    let overlay = document.getElementById(PROGRESS_ID);
+    if (overlay) { updateProgress(text, sub); return overlay; }
+    overlay = document.createElement('div');
+    overlay.id = PROGRESS_ID;
+    overlay.style.cssText = [
+      'position:fixed', 'top:0', 'left:0', 'right:0', 'bottom:0',
+      'background:rgba(255,255,255,0.92)',
+      'z-index:2147483647',
+      'display:flex', 'flex-direction:column',
+      'align-items:center', 'justify-content:center',
+      'gap:14px',
+      'font:600 15px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif',
+      'color:#0b5cab', 'text-align:center',
+      'pointer-events:all', 'cursor:wait',
+      'padding:24px'
+    ].join(';');
+    const spinner = document.createElement('div');
+    spinner.style.cssText = [
+      'width:36px', 'height:36px',
+      'border:4px solid #cfe1f5',
+      'border-top-color:#006aff',
+      'border-radius:50%',
+      'animation:zhl-pa-clone-spin 0.8s linear infinite'
+    ].join(';');
+    const msg = document.createElement('div');
+    msg.setAttribute('data-zhl-pa-msg', '1');
+    msg.textContent = text || 'Working…';
+    const subEl = document.createElement('div');
+    subEl.setAttribute('data-zhl-pa-sub', '1');
+    subEl.style.cssText = 'font:500 12px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#6b7280;max-width:340px;';
+    subEl.textContent = sub || '';
+    overlay.appendChild(spinner);
+    overlay.appendChild(msg);
+    overlay.appendChild(subEl);
+    document.body.appendChild(overlay);
+    if (!document.getElementById('zhl-pa-clone-spin-style')) {
+      const style = document.createElement('style');
+      style.id = 'zhl-pa-clone-spin-style';
+      style.textContent = '@keyframes zhl-pa-clone-spin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(style);
+    }
+    return overlay;
+  }
+  function updateProgress(text, sub) {
+    const overlay = document.getElementById(PROGRESS_ID);
+    if (!overlay) return;
+    if (text != null) {
+      const m = overlay.querySelector('[data-zhl-pa-msg]');
+      if (m) m.textContent = text;
+    }
+    if (sub != null) {
+      const s = overlay.querySelector('[data-zhl-pa-sub]');
+      if (s) s.textContent = sub;
+    }
+  }
+  function hideProgress() {
+    const o = document.getElementById(PROGRESS_ID);
+    if (o) o.remove();
+  }
+
+  // Realistic click for Lightning buttons that don't react to a
+  // bare .click() — fire pointerdown/mousedown/pointerup/mouseup
+  // before the click, mirroring a real user press.
+  function realClick(el) {
+    try {
+      const opts = { bubbles: true, cancelable: true, composed: true, view: window };
+      el.dispatchEvent(new PointerEvent('pointerdown', opts));
+      el.dispatchEvent(new MouseEvent('mousedown', opts));
+      el.dispatchEvent(new PointerEvent('pointerup', opts));
+      el.dispatchEvent(new MouseEvent('mouseup', opts));
+    } catch (_) {}
+    try { el.click(); } catch (_) {}
   }
 
   // ---- Bottom-right toast for the new-lead side ------------------
@@ -270,41 +357,86 @@
     }
 
     console.log('[ZHL Clone PA] Auto-pasting PA Contact ID', pending.paContactId, 'into new lead', currentLeadId);
-    pencil.click();
-    await wait(300);
+    showProgress('Auto-pasting PA Contact ID…', 'Opening the field for edit on the new lead.');
+
+    realClick(pencil);
+    await wait(350);
 
     const input = await waitFor(function () {
       return deepQuerySelector(document, 'input[name="PA_Contact_ID__c"]');
-    }, 5000);
+    }, 6000);
     if (!input) {
       console.warn('[ZHL Clone PA] Edit input did not appear after pencil click.');
+      hideProgress();
       showToast('PA Contact ID auto-paste failed — please paste manually: ' + pending.paContactId, true);
       return;
     }
 
+    updateProgress('Typing value…', 'Setting the input to ' + pending.paContactId + '.');
+    // Focus, set, and commit through Lightning's reactive layer.
+    // The native value setter + input/change is usually enough, but
+    // some Lightning inline-edits need a focus + key sequence + blur
+    // before they accept the value as "dirty" and enable Save.
+    try { input.focus(); } catch (_) {}
     setNativeInputValue(input, pending.paContactId);
-    await wait(180);
+    try {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'End', bubbles: true }));
+    } catch (_) {}
+    await wait(120);
+    try { input.blur(); } catch (_) {}
+    await wait(400);
 
+    updateProgress('Saving…', 'Clicking the Save button on the inline edit.');
     const saveBtn = await waitFor(function () {
       const btns = deepQuerySelectorAll(document, 'button[name="SaveEdit"]');
-      for (const b of btns) { if (isVisible(b)) return b; }
+      for (const b of btns) {
+        if (!isVisible(b)) continue;
+        if (b.disabled) continue;
+        if ((b.getAttribute('aria-disabled') || '').toLowerCase() === 'true') continue;
+        return b;
+      }
       // Fallback: a brand button labeled "Save" inside the inline-edit footer.
       const brands = deepQuerySelectorAll(document, 'button.slds-button_brand');
       for (const b of brands) {
         if (!isVisible(b)) continue;
+        if (b.disabled) continue;
         if ((b.textContent || '').trim() === 'Save') return b;
       }
       return null;
-    }, 4000);
+    }, 6000);
     if (!saveBtn) {
-      console.warn('[ZHL Clone PA] Save button not found after value set.');
+      console.warn('[ZHL Clone PA] Save button not found (or stayed disabled) after value set.');
+      hideProgress();
       showToast('PA Contact ID was filled but Save not found — click Save manually.', true);
       return;
     }
-    saveBtn.click();
-    console.log('[ZHL Clone PA] PA Contact ID saved.');
-    showToast('✓ PA Contact ID auto-pasted: ' + pending.paContactId, false);
-    clearStash();
+    realClick(saveBtn);
+    // Wait for the inline edit to commit — the SaveEdit button
+    // disappears from the DOM (or the edit footer collapses) once
+    // the save lands. Verify before clearing the stash so a failed
+    // save doesn't get reported as success.
+    const committed = await waitFor(function () {
+      // Heuristic: if the input is gone OR the readonly value now
+      // matches what we set, the save committed.
+      const stillEditing = deepQuerySelector(document, 'input[name="PA_Contact_ID__c"]');
+      if (!stillEditing) return true;
+      const current = readPaContactId();
+      if (current === pending.paContactId) return true;
+      return null;
+    }, 6000);
+
+    hideProgress();
+    if (committed) {
+      console.log('[ZHL Clone PA] PA Contact ID saved.');
+      showToast('✓ PA Contact ID auto-pasted: ' + pending.paContactId, false);
+      clearStash();
+    } else {
+      console.warn('[ZHL Clone PA] Save click fired but the edit did not commit. Likely needs a manual Save click.');
+      showToast('PA Contact ID filled but did not save — click Save to commit: ' + pending.paContactId, true);
+      // Don't clear stash — the next page nav (or page reload) can
+      // retry if the value still isn't there.
+    }
   }
 
   // ---- URL change watcher (Lightning console SPA) ----------------
