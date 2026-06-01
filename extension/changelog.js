@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.4",
+    category: "improvement",
+    headline: "Add Co-Borrower to Salesforce button now always appears on the co-borrower's row — greyed out with a hover explanation when required fields (legal name + cell or email) are still missing, instead of silently disappearing.",
+    highlights: [
+      "Previously the button anchored on the co-borrower's \"Resend Link\" button, which LOP doesn't render until the email is filled. The button now anchors on the co-borrower's section header itself, so it's always visible. When the co-borrower is missing a legal first name, last name, or both cell phone AND email, the button shows in grey with a not-allowed cursor and a tooltip explaining exactly which field is missing. The moment the LO fills the missing field, the next scan tick re-enables the button — no refresh needed."
+    ]
+  },
+  {
     version: "1.51.3",
     category: "fix",
     headline: "Clone PA Contact ID modal: closed the transparent gap between the body and the Cancel / OK footer.",

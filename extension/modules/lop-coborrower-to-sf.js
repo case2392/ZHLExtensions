@@ -48,9 +48,7 @@
     };
   }
 
-  // The co-borrower's "Resend Link" button carries
-  // data-cy="resend-dashboard-link-button-<idx>". idx maps directly to
-  // the matching [data-cy="personal-info-section-<idx>"] block.
+  // Borrower personal-info-section: [data-cy="personal-info-section-<idx>"].
   function sectionForIndex(idx) {
     return document.querySelector('[data-cy="personal-info-section-' + idx + '"]');
   }
@@ -66,15 +64,6 @@
       if (cy !== 'personal-info-section-' + coIdx) return s;
     }
     return null;
-  }
-
-  function isCoborrowerResendBtn(btn) {
-    const cy = btn.getAttribute('data-cy') || '';
-    if (!/^resend-dashboard-link-button-\d+$/.test(cy)) return false;
-    // The header Flex around the button carries the borrower's role tag.
-    const flex = btn.parentElement;
-    const txt = ((flex && flex.textContent) || '').toLowerCase();
-    return txt.indexOf('co-borrower') !== -1 || txt.indexOf('coborrower') !== -1;
   }
 
   function onClick(btn, coIdx) {
@@ -141,52 +130,97 @@
 
   function ensureButtons() {
     if (!isOnFullApp()) return;
-    const resendBtns = document.querySelectorAll('button[data-cy^="resend-dashboard-link-button-"]');
-    resendBtns.forEach(function (resend) {
-      if (!isCoborrowerResendBtn(resend)) return;
-      if (resend.offsetParent === null) return;
-      const flex = resend.parentElement;
-      if (!flex) return;
-      if (flex.querySelector('[' + BTN_ATTR + ']')) return;
-      const cy = resend.getAttribute('data-cy') || '';
-      const m = /resend-dashboard-link-button-(\d+)/.exec(cy);
-      const coIdx = m ? m[1] : '1';
+    // Iterate over personal-info-sections directly rather than the
+    // Resend Link button. The Resend Link doesn't always render
+    // (e.g. when the co-borrower's email is blank LOP hides / disables
+    // it) — so anchoring on the section's own header keeps our button
+    // present regardless, just disabled when prerequisites are missing.
+    const sections = document.querySelectorAll('[data-cy^="personal-info-section-"]');
+    sections.forEach(function (section) {
+      if (section.offsetParent === null) return;
+      const cy = section.getAttribute('data-cy') || '';
+      const m = /personal-info-section-(\d+)/.exec(cy);
+      const coIdx = m ? m[1] : null;
+      if (coIdx == null) return;
+      // Only mount on co-borrower sections. The header's role tag
+      // ("Primary borrower" vs "Co-borrower") lives in a StyledTag
+      // element near the top of the section.
+      const tagSpan = section.querySelector('[class*="StyledTag"]');
+      if (!tagSpan) return;
+      const tagText = (tagSpan.textContent || '').toLowerCase();
+      if (tagText.indexOf('co-borrower') === -1 && tagText.indexOf('coborrower') === -1) return;
+      const tagWrap = tagSpan.parentElement;
+      const headerFlex = tagWrap && tagWrap.parentElement;
+      if (!tagWrap || !headerFlex) return;
 
-      const btn = document.createElement('button');
-      btn.setAttribute(BTN_ATTR, '1');
-      btn.type = 'button';
-      btn.textContent = 'Add Co-Borrower to Salesforce';
-      btn.title = 'Open New Contact on the matching Salesforce lead and fill the co-borrower in.\n\n' + ZHL_TIP;
-      // Mirror the Resend Link text-button feel but make it clearly ours.
-      btn.style.cssText =
-        'display:inline-flex;align-items:center;justify-content:center;' +
-        'background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;' +
-        'cursor:pointer;font-family:Arial,Helvetica,sans-serif;font-weight:600;' +
-        'font-size:12px;line-height:1.2;padding:6px 12px;margin-left:10px;' +
-        'box-sizing:border-box;white-space:nowrap;flex:0 0 auto;';
-      btn.addEventListener('mouseenter', function () { if (!btn.disabled) btn.style.background = '#0056d2'; });
-      btn.addEventListener('mouseleave', function () { btn.style.background = btn.disabled ? '#94a3b8' : '#006aff'; });
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (btn.disabled) return;
-        onClick(btn, coIdx);
-      });
-      // Placement: append the button to the END of the inner role-tag
-      // wrapper (the div holding the "Owein Heinieke · Co-borrower"
-      // pill), so it sits right next to the name. Two reasons:
-      //   1. The outer header Flex uses space-between with two
-      //      children (tag-wrapper + Resend Link). Adding a third
-      //      child there redistributes the row and shoves Resend Link
-      //      to the center. Keeping the outer Flex at two children
-      //      leaves Resend Link pinned at the far right where it was.
-      //   2. Appending at the END of a React-managed container (rather
-      //      than inserting mid-list) leaves React's child diff alone,
-      //      so the header doesn't scramble on the next re-render.
-      const tagSpan = flex.querySelector('[class*="StyledTag"]');
-      const tagWrap = tagSpan && tagSpan.parentElement;
-      if (tagWrap) tagWrap.appendChild(btn);
-      else flex.appendChild(btn); // fallback: trailing node on the outer Flex
+      // Read the co-borrower's current values so we can decide
+      // enabled/disabled state.
+      const co = readBorrowerFromSection(section) || {};
+      const missing = [];
+      if (!co.first) missing.push('legal first name');
+      if (!co.last) missing.push('legal last name');
+      if (!co.cell && !co.email) missing.push('cell phone or email');
+      const enabled = missing.length === 0;
+
+      let btn = tagWrap.querySelector('[' + BTN_ATTR + ']');
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.setAttribute(BTN_ATTR, '1');
+        btn.type = 'button';
+        btn.textContent = 'Add Co-Borrower to Salesforce';
+        // Mirror the Resend Link text-button feel but make it clearly ours.
+        btn.style.cssText =
+          'display:inline-flex;align-items:center;justify-content:center;' +
+          'background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;' +
+          'cursor:pointer;font-family:Arial,Helvetica,sans-serif;font-weight:600;' +
+          'font-size:12px;line-height:1.2;padding:6px 12px;margin-left:10px;' +
+          'box-sizing:border-box;white-space:nowrap;flex:0 0 auto;';
+        btn.addEventListener('mouseenter', function () {
+          if (!btn.disabled) btn.style.background = '#0056d2';
+        });
+        btn.addEventListener('mouseleave', function () {
+          btn.style.background = btn.disabled ? '#cbd5e1' : '#006aff';
+        });
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (btn.disabled) return;
+          onClick(btn, btn.dataset.zhlCoidx || coIdx);
+        });
+        // Placement: append at the END of the role-tag wrapper. This
+        // keeps the outer header Flex (tag-wrapper + Resend Link) at
+        // two children so Resend Link stays pinned at far right when
+        // it's present, and appending at the END of a React-managed
+        // container leaves React's child diff alone so the header
+        // doesn't scramble on the next re-render.
+        tagWrap.appendChild(btn);
+      }
+
+      // Track the co-borrower index in case sections reorder.
+      btn.dataset.zhlCoidx = coIdx;
+
+      // Refresh enabled / styling / tooltip on every scan so the
+      // button reflects the latest form state (the LO can type a
+      // missing email and it should re-enable without a refresh).
+      const ZHL_TIP_BASE = 'Built by Justin Case. Karma appreciated 💛';
+      if (enabled) {
+        btn.disabled = false;
+        btn.style.background = '#006aff';
+        btn.style.borderColor = '#006aff';
+        btn.style.color = '#fff';
+        btn.style.cursor = 'pointer';
+        btn.style.opacity = '1';
+        btn.title = 'Open New Contact on the matching Salesforce lead and fill the co-borrower in.\n\n' + ZHL_TIP_BASE;
+      } else {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e1';
+        btn.style.borderColor = '#cbd5e1';
+        btn.style.color = '#475569';
+        btn.style.cursor = 'not-allowed';
+        btn.style.opacity = '0.85';
+        const reason = 'Cannot send to Salesforce yet — missing: ' + missing.join(', ') + '.\n\nFill the field(s) above and the button will enable.\n\n' + ZHL_TIP_BASE;
+        btn.title = reason;
+      }
     });
   }
 
