@@ -194,6 +194,25 @@
         emptyCol.style.display = 'none';
       }
     } catch (_) {}
+    // The modal's inner content container is hard-coded to
+    // height: 250px in Salesforce's markup. Our banner adds enough
+    // vertical content that the footer (Cancel / OK) detaches from
+    // the body and a transparent strip appears between them — you
+    // can see the page underneath through the gap. Grow the inner
+    // container so the layout reflows cleanly.
+    try {
+      let inner = null;
+      let cur = modal.parentElement;
+      for (let i = 0; i < 10 && cur; i++, cur = cur.parentElement) {
+        const h = cur.style && cur.style.height;
+        if (h && /250px/.test(h)) { inner = cur; break; }
+      }
+      if (inner) {
+        inner.style.height = 'auto';
+        inner.style.maxHeight = 'none';
+        inner.style.minHeight = '250px';
+      }
+    } catch (_) {}
   }
 
   // ---- Full-viewport progress overlay (matches lop-file-copy /

@@ -13,7 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.3",
+    category: "fix",
+    headline: "Clone PA Contact ID modal: closed the transparent gap between the body and the Cancel / OK footer.",
+    highlights: [
+      "Salesforce's clone-confirmation modal hard-codes its inner content container to height:250px. Our banner pushed the total content past that height, so the footer detached from the body and a transparent strip appeared between them showing the page underneath. The injection now grows the inner container to height:auto (with a 250px min-height) when the banner is inserted, so the body, banner, message, and footer all stack flush."
+    ]
+  },
+  {
     version: "1.51.2",
+    category: "fix",
     headline: "Clone PA Contact ID: full-width modal banner, grey processing overlay during auto-paste, and a more thorough Save sequence so the inline edit actually commits.",
     highlights: [
       "Confirmation-modal banner now spans the full modal width (inserted above the inner slds-grid instead of inside the right-side message column), and the empty 3-of-12 leading column is collapsed so the \"Are you sure...\" text aligns flush left below the banner.",
