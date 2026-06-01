@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.1",
+    headline: "Clone PA Contact ID: fixed the \"new lead already has the same ID\" false positive (was reading from the hidden source workspace tab) and tightened the confirmation-modal banner layout so it lines up with the message.",
+    highlights: [
+      "When two Lead workspace tabs are open in a Lightning Console (the source and the new clone), Lightning keeps both mounted in the DOM but only one is visible at a time. The auto-paste check was finding the FIRST \"PA Contact ID\" label in the deep query — which could be the hidden source tab — and seeing its value match the captured one, then skipping the paste on the actually-blank new lead. The reader now filters by visibility so it only ever reads the active workspace tab's value.",
+      "The confirmation-modal banner is now inserted inside the same .statusContainer column as the \"Are you sure...\" message, so it lines up with the message instead of getting offset by the inner 3-of-12 empty grid column. Padding and font sizes also trimmed to fit the modal's fixed height cleanly."
+    ]
+  },
+  {
     version: "1.51.0",
     headline: "NEW: auto-paste PA Contact ID when cloning an Unqualified Salesforce Lead — no more remembering and manually pasting it onto every new lead.",
     highlights: [

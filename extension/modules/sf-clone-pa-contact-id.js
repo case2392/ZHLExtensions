@@ -99,15 +99,20 @@
   function isOnLeadPage() { return /\/lightning\/r\/Lead\//.test(location.pathname); }
 
   // ---- Read the PA Contact ID off the current lead ----------------
+  // CRITICAL: Lightning Console keeps inactive workspace tabs mounted
+  // in the DOM but hidden. If two Lead tabs are open (source + new
+  // clone), a naïve deep-query returns the FIRST matching label —
+  // which can be the source tab even when we mean to read the new
+  // active tab. Filter by visibility so we only ever read the active
+  // workspace tab's value.
   function readPaContactId() {
-    // The value sits inside a labeled .slds-form-element whose label
-    // span says "PA Contact ID". The value is a <lightning-formatted-text>.
     const labels = deepQuerySelectorAll(document, '.test-id__field-label, span.test-id__field-label, label');
     for (const lbl of labels) {
       const txt = (lbl.textContent || '').trim();
       if (txt !== 'PA Contact ID') continue;
       const container = lbl.closest && lbl.closest('.slds-form-element');
       if (!container) continue;
+      if (!isVisible(container)) continue; // skip hidden workspace tabs
       const valEl = container.querySelector('lightning-formatted-text, .test-id__field-value, output');
       if (!valEl) continue;
       const value = (valEl.textContent || '').trim();
@@ -157,22 +162,29 @@
     banner.setAttribute(BANNER_ATTR, '1');
     banner.style.cssText =
       'background:#eff6ff;border-left:4px solid #006aff;border-radius:4px;' +
-      'padding:10px 14px;margin:0 0 12px 0;font:13px/1.45 Arial,Helvetica,sans-serif;' +
+      'padding:8px 12px;margin:0 0 8px 0;font:12px/1.4 Arial,Helvetica,sans-serif;' +
       'color:#0b3a73;';
     const head = document.createElement('div');
-    head.style.cssText = 'font-weight:700;margin-bottom:4px;';
+    head.style.cssText = 'font-weight:700;margin-bottom:3px;';
     head.textContent = 'ZHL Extension — auto-paste on clone';
     const body = document.createElement('div');
-    body.style.cssText = 'margin-bottom:6px;';
-    body.textContent = 'ZHL Extension will attempt to auto-paste the PA Contact ID onto the new lead. Please verify to confirm. This is how the Agent’s FUB lead and your SF lead sync.';
+    body.style.cssText = 'margin-bottom:5px;';
+    body.textContent = 'ZHL Extension will attempt to auto-paste the PA Contact ID onto the new lead. Please verify to confirm — this is how the Agent’s FUB lead and your SF lead sync.';
     const idLine = document.createElement('div');
     idLine.style.cssText = 'background:#fff;border:1px solid #cbd5e1;border-radius:4px;' +
-      'padding:6px 10px;font:600 12px/1.3 ui-monospace,Menlo,monospace;color:#0f172a;';
+      'padding:5px 8px;font:600 11px/1.3 ui-monospace,Menlo,monospace;color:#0f172a;';
     idLine.textContent = 'PA Contact ID (in case the paste did not work): ' + (paId || '(none on this lead)');
     banner.appendChild(head);
     banner.appendChild(body);
     banner.appendChild(idLine);
-    modal.insertBefore(banner, modal.firstChild);
+    // Insert into the statusContainer (the 9-of-12 column that holds
+    // the "Are you sure..." message) so the banner lines up with the
+    // message rather than introducing an offset from the empty 3-of-12
+    // column to its left. Falls back to prepending on the modal if
+    // statusContainer can't be found.
+    const sc = modal.querySelector ? modal.querySelector('.statusContainer') : null;
+    const target = sc || modal;
+    target.insertBefore(banner, target.firstChild);
   }
 
   // ---- Bottom-right toast for the new-lead side ------------------
