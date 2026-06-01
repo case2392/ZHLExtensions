@@ -809,7 +809,16 @@
           btnSecondary('No — not locked', 'zhl-pe-no') +
         '</div>';
       body.querySelector('#zhl-pe-yes').addEventListener('click', function () {
-        workflowState.locked = true; goTo('L-import-pricing');
+        workflowState.locked = true;
+        // If we couldn't auto-detect a ZG# on the page, prompt the
+        // LO for it before continuing — the locked path uses the ZG#
+        // for snip filenames and the eventual email, so catching it
+        // here keeps the whole workflow ID-correct from the start.
+        if (!workflowState.zgNumber) {
+          goTo('L-zg-prompt');
+        } else {
+          goTo('L-import-pricing');
+        }
       });
       body.querySelector('#zhl-pe-no').addEventListener('click', function () {
         workflowState.locked = false; goTo('U-assigned-scenario');
@@ -817,6 +826,56 @@
     },
 
     // --------- LOCKED PATH ----------------------------------------------
+    // Prompt for ZG# when auto-detection failed. The locked path threads
+    // the ZG# through snip filenames and the eventual email — without it
+    // the whole flow downstream uses the LOP UUID instead of the real
+    // Encompass loan number, which is what the RM expects to see.
+    'L-zg-prompt': function (body) {
+      body.innerHTML =
+        '<h4 style="margin:0 0 8px;font-size:15px;color:#111827;">Enter the ZG # to continue</h4>' +
+        '<p style="margin:0 0 14px;color:#6b7280;font-size:12px;">We couldn\'t find a ZG # on this page automatically. Please enter it below — the locked-path workflow uses it for snip filenames and the PE request email.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;">' +
+          '<input id="zhl-pe-zg-in" type="text" placeholder="ZGxxxxxxxxx" autocomplete="off" spellcheck="false" ' +
+            'style="padding:8px 10px;font:600 13px ui-monospace,Menlo,monospace;color:#0f172a;' +
+            'border:1px solid #cbd5e1;border-radius:4px;background:#fff;outline:none;" />' +
+          '<div id="zhl-pe-zg-err" style="display:none;color:#b91c1c;font-size:11px;font-weight:600;"></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">' +
+          btnPrimary('Continue', 'zhl-pe-zg-continue') +
+        '</div>';
+      const input = body.querySelector('#zhl-pe-zg-in');
+      const cont = body.querySelector('#zhl-pe-zg-continue');
+      const err = body.querySelector('#zhl-pe-zg-err');
+      try { input.focus(); } catch (_) {}
+      function submit() {
+        const raw = (input.value || '').trim();
+        if (!raw) {
+          err.style.display = 'block';
+          err.textContent = 'ZG # is required to continue.';
+          return;
+        }
+        // Normalize: strip leading # and uppercase. Accept either
+        // "ZG001260248246" or "#ZG001260248246".
+        const normalized = raw.replace(/^#/, '').toUpperCase();
+        if (!/^ZG\d{6,}$/.test(normalized)) {
+          err.style.display = 'block';
+          err.textContent = 'Doesn\'t look like a valid ZG # — expected format is ZG followed by at least 6 digits (e.g. ZG001260248246).';
+          return;
+        }
+        err.style.display = 'none';
+        workflowState.zgNumber = normalized;
+        goTo('L-import-pricing');
+      }
+      cont.addEventListener('click', submit);
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        // Clear the error the moment they start typing again.
+        if (err.style.display !== 'none' && e.key.length === 1) {
+          err.style.display = 'none';
+        }
+      });
+    },
+
     'L-import-pricing': makeCheckStep(
       'Have you imported current pricing?',
       'Import current pricing in Encompass before submitting the PE request.',

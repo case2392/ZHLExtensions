@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.5",
+    category: "improvement",
+    headline: "Pricing Exception Workflow now prompts for the ZG # when the loan is locked and the extension can't auto-detect one — so the rest of the locked-path flow uses the real Encompass loan number instead of the LOP UUID.",
+    highlights: [
+      "When you pick \"Yes — locked\" on the first step of the Pricing Exception Workflow, the extension now checks whether it could find a ZG # on the page. If it couldn't, a new step asks you to enter it before continuing. Validates the format (ZG followed by 6+ digits), normalizes the leading # and casing, and threads the captured value through the rest of the workflow so snip filenames and the eventual PE email both use the right loan number. Enter-to-submit is wired."
+    ]
+  },
+  {
     version: "1.51.4",
     category: "improvement",
     headline: "Add Co-Borrower to Salesforce button now always appears on the co-borrower's row — greyed out with a hover explanation when required fields (legal name + cell or email) are still missing, instead of silently disappearing.",
