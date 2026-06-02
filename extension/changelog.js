@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.53.0",
+    category: "feature",
+    headline: "NEW: Scenario Snapshot — one-click capture of every field on a scenario card for app-support tickets. No more scrolling and stitching multiple screenshots.",
+    highlights: [
+      "Adds a Snapshot button under every scenario card on the Pricing & Scenarios → Scenarios page. Clicking it opens a clean, single-viewport modal listing every label/value row from the card — title, Purchase/Refi subtitle, ASSIGNED TO LOAN / RE-PRICE status, Priced: timestamp, and every field below. Modal includes a Print button that opens a print-formatted new tab and auto-fires the print dialog (save as PDF for the ticket attachment or send straight to a printer), and a Copy as text button that writes a plain-text version to the clipboard with labels padded into fixed columns so it pastes cleanly into a Slack code block or ticket body.",
+      "Built in response to a request from the App Support team — they couldn't get a full valid snapshot of a scenario when LOs submitted tickets, and were forced to ask for repeat scroll-and-stitch screenshots. This eliminates that loop."
+    ],
+    sections: ["scenario-snapshot"]
+  },
+  {
     version: "1.52.6",
     category: "improvement",
     headline: "2% Grant PDF: added MD, NJ, and VA to the eligible-states list — eligible set is now CA, DC, GA, MD, NJ, PA, TX, VA.",

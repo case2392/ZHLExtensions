@@ -149,6 +149,57 @@
       </div>
     </section>
 
+    <!-- ============== Module: Scenario Snapshot ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Scenario Snapshot</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal/pricing-and-scenarios/scenarios</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_scenarioSnapshot" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
+            <rect width="360" height="220" fill="#f3f4f6"/>
+            <rect x="34" y="22" width="292" height="176" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+            <rect x="34" y="22" width="292" height="44" rx="8" fill="#0b3a73"/>
+            <rect x="34" y="56" width="292" height="10" fill="#0b3a73"/>
+            <text x="50" y="38" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#006aff" letter-spacing="1.2">SCENARIO SNAPSHOT</text>
+            <text x="50" y="54" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#fff">Conf Home Ready 30 Yr Fixed</text>
+            <text x="50" y="84" font-family="Arial,sans-serif" font-size="8" fill="#475569">Loan purpose</text>
+            <text x="310" y="84" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">Purchase</text>
+            <line x1="50" y1="90" x2="310" y2="90" stroke="#f1f5f9"/>
+            <text x="50" y="104" font-family="Arial,sans-serif" font-size="8" fill="#475569">Total loan amount</text>
+            <text x="310" y="104" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">$291,000.00</text>
+            <line x1="50" y1="110" x2="310" y2="110" stroke="#f1f5f9"/>
+            <text x="50" y="124" font-family="Arial,sans-serif" font-size="8" fill="#475569">Interest rate</text>
+            <text x="310" y="124" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">6.750%</text>
+            <line x1="50" y1="130" x2="310" y2="130" stroke="#f1f5f9"/>
+            <text x="50" y="144" font-family="Arial,sans-serif" font-size="8" fill="#475569">DTI</text>
+            <text x="310" y="144" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">37.55% / 45.77%</text>
+            <rect x="170" y="160" width="60" height="22" rx="3" fill="#fff" stroke="#cbd5e1"/>
+            <text x="200" y="174" font-family="Arial,sans-serif" font-size="8" font-weight="600" fill="#0f172a" text-anchor="middle">Copy as text</text>
+            <rect x="236" y="160" width="40" height="22" rx="3" fill="#0b3a73"/>
+            <text x="256" y="174" font-family="Arial,sans-serif" font-size="8" font-weight="600" fill="#fff" text-anchor="middle">Print</text>
+            <rect x="282" y="160" width="40" height="22" rx="3" fill="#006aff"/>
+            <text x="302" y="174" font-family="Arial,sans-serif" font-size="8" font-weight="600" fill="#fff" text-anchor="middle">Close</text>
+          </svg>
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Snapshot</strong> button under every scenario card on the Pricing &amp; Scenarios → Scenarios page. Clicking it opens a clean single-viewport modal that lists every label / value on the card — so the LO can capture one screenshot instead of scrolling and stitching multiple.</li>
+          <li>Modal includes the scenario title, the <strong>Purchase / Refinance</strong> subtitle, the <strong>ASSIGNED TO LOAN / RE-PRICE</strong> status badge, and the <strong>Priced:</strong> timestamp at the top so support tickets carry the freshness context with them.</li>
+          <li><strong>Print</strong> opens a print-formatted new tab and auto-triggers the print dialog — saves as PDF for ticket attachments or sends straight to a printer.</li>
+          <li><strong>Copy as text</strong> writes a plain-text version to the clipboard, labels padded into fixed columns so it reads cleanly when pasted into a Slack code block or a ticket body.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Scenario Sort ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
