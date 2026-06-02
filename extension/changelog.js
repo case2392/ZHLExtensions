@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.52.3",
+    category: "improvement",
+    headline: "Hard Pull Guardrail card added to the Setup page and the Walkthrough page so it's discoverable like every other module.",
+    highlights: [
+      "Setup page now lists Hard Pull Guardrail as its own module card with an enable / disable toggle. Walkthrough page has a matching what's-new entry with the warning-dialog mockup so a new install (or anyone reviewing what's running) can see exactly what the guardrail does and how to turn it off if they want."
+    ]
+  },
+  {
     version: "1.52.2",
     category: "improvement",
     headline: "Hard Pull Guardrail flipped from default-off to default-on for the author's personal install. Other users continue to receive whatever version they already have until live updates resume.",

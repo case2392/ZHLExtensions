@@ -525,6 +525,48 @@
       </div>
     </section>
 
+    <!-- ============== Module: Hard Pull Guardrail ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Hard Pull Guardrail</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_hardPullGuardrail" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
+            <rect width="360" height="220" fill="#f3f4f6"/>
+            <rect x="40" y="28" width="280" height="164" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+            <circle cx="62" cy="56" r="11" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+            <text x="62" y="60" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#92400e" text-anchor="middle">!</text>
+            <text x="82" y="60" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#92400e">Hard pull may be outside ZHL guidance</text>
+            <text x="58" y="86" font-family="Arial,sans-serif" font-size="9" fill="#334155">Worst soft score: <tspan font-weight="700" fill="#0b3a73">687</tspan> &#183; DU: <tspan font-weight="700" fill="#0b3a73">Approve/Eligible</tspan></text>
+            <rect x="58" y="100" width="244" height="46" rx="4" fill="#fffbeb" stroke="#f59e0b" stroke-width="1"/>
+            <text x="66" y="115" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#78350f">ZHL guidance</text>
+            <text x="66" y="128" font-family="Arial,sans-serif" font-size="7.5" fill="#78350f">Soft &gt; 620 + DU approved &#8594; pull soft, not hard,</text>
+            <text x="66" y="138" font-family="Arial,sans-serif" font-size="7.5" fill="#78350f">unless reaching for an LLPA pricing tier (680&#8211;719).</text>
+            <rect x="158" y="160" width="68" height="20" rx="3" fill="#fff" stroke="#cbd5e1"/>
+            <text x="192" y="174" font-family="Arial,sans-serif" font-size="9" font-weight="600" fill="#0f172a" text-anchor="middle">Cancel</text>
+            <rect x="232" y="160" width="76" height="20" rx="3" fill="#b45309"/>
+            <text x="270" y="174" font-family="Arial,sans-serif" font-size="9" font-weight="600" fill="#fff" text-anchor="middle">Proceed</text>
+          </svg>
+        </div>
+        <ul class="module-features">
+          <li>When the Pull Credit dialog opens and <strong>Hard</strong> is selected, the toolkit reads the worst soft qualifying score across borrowers + the most recent non-error DU result and compares them against ZHL&rsquo;s guidance matrix.</li>
+          <li><strong>Fires when</strong> the soft score is greater than 620 <em>and</em> DU shows approval &mdash; <em>unless</em> the soft falls in the 680&ndash;719 optional pricing window (reaching for an LLPA tier improvement at 700 / 720).</li>
+          <li><strong>Not a hard stop</strong> &mdash; shows the full matrix in a confirmation dialog with two buttons: <strong>Cancel</strong> (keeps the Pull Credit dialog open) or <strong>Proceed with Hard Pull anyway</strong> (re-fires the click). LO override is logged so usage / override rates can be reviewed later.</li>
+          <li>If the score / DU combination falls within guidance, the dialog never appears &mdash; Pull Credit fires normally without any extra friction.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Copy LOP file ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

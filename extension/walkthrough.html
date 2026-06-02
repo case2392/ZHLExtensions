@@ -320,6 +320,39 @@
       </div>
     </div>
 
+    <!-- Hard Pull Guardrail -->
+    <div class="feature is-new" id="hard-pull-guardrail">
+      <div class="shot">
+        <svg viewBox="0 0 260 170" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="260" height="170" fill="#f8fafc"/>
+          <rect x="20" y="14" width="220" height="140" rx="6" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+          <circle cx="36" cy="36" r="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+          <text x="36" y="40" font="700 11px Arial" fill="#92400e" text-anchor="middle">!</text>
+          <text x="52" y="40" font="700 8.5px Arial" fill="#92400e">Hard pull may be outside guidance</text>
+          <text x="32" y="62" font="500 7.5px Arial" fill="#334155">Worst soft: <tspan font="700 7.5px Arial" fill="#0b3a73">687</tspan>  &#183;  DU: <tspan font="700 7.5px Arial" fill="#0b3a73">Approve/Eligible</tspan></text>
+          <rect x="32" y="72" width="196" height="34" rx="3" fill="#fffbeb" stroke="#f59e0b" stroke-width="0.8"/>
+          <text x="40" y="84" font="700 7px Arial" fill="#78350f">ZHL guidance</text>
+          <text x="40" y="94" font="500 6.5px Arial" fill="#78350f">Soft &gt; 620 + DU approved &#8594; pull soft instead,</text>
+          <text x="40" y="102" font="500 6.5px Arial" fill="#78350f">unless reaching for 700 / 720 LLPA tier.</text>
+          <rect x="116" y="120" width="54" height="18" rx="3" fill="#fff" stroke="#cbd5e1"/>
+          <text x="143" y="132" font="600 7.5px Arial" fill="#0f172a" text-anchor="middle">Cancel</text>
+          <rect x="174" y="120" width="54" height="18" rx="3" fill="#b45309"/>
+          <text x="201" y="132" font="600 7.5px Arial" fill="#fff" text-anchor="middle">Proceed</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>Hard Pull Guardrail</h3>
+        <div class="where">Full application &mdash; Pull Credit dialog, when Hard is selected</div>
+        <p>Catches accidentally-too-early hard pulls before they happen. Reads the worst soft qualifying score across borrowers + the most recent non-error DU result against ZHL&rsquo;s guidance matrix; if the combination indicates a soft pull should be used instead, the click on <strong>Pull credit</strong> is intercepted and a confirmation dialog surfaces.</p>
+        <ul>
+          <li><strong>Fires when</strong> the soft score is greater than 620 <em>and</em> DU shows approval &mdash; outside the 680&ndash;719 LLPA optional-pricing window (reaching for the 700 / 720 tier improvement).</li>
+          <li><strong>Shows the full matrix</strong> in the confirmation dialog so the LO can see exactly which row their loan lands on.</li>
+          <li><strong>Not a hard stop.</strong> The dialog has two buttons: <strong>Cancel</strong> (keeps Pull Credit open) or <strong>Proceed with Hard Pull anyway</strong> (re-fires the click bypassing the guardrail).</li>
+          <li>If the score / DU combination is within guidance, nothing fires &mdash; Pull Credit behaves exactly as it did before.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- ZHL Loan Comparison PDF -->
     <div class="feature is-new" id="loan-comparison-pdf">
       <div class="shot"><img src="images/loan-comparison-pdf.svg" alt="Borrower-facing loan comparison PDF with two columns showing loan amount, rate, points, monthly PITI, and closing costs, with a green savings callout at the bottom." /></div>
