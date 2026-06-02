@@ -1,8 +1,5 @@
 // ZHL Productivity Pack module — feature key: feature_hardPullGuardrail
 //
-// HIDDEN / PREVIEW FEATURE — disabled by default. Enable in Setup or
-// via: chrome.storage.local.set({ feature_hardPullGuardrail: true })
-//
 // Hard Pull Guardrail: when the LO opens LOP's Pull Credit dialog and
 // selects "Hard," this module checks the worst soft credit score
 // across borrowers + the most recent DU result against ZHL's hard-pull
@@ -259,8 +256,11 @@
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get([__ZHL_FEATURE_KEY], function (data) {
-      // Default OFF (hidden / preview feature). Must be explicitly enabled.
-      if (data[__ZHL_FEATURE_KEY] !== true) return;
+      // Default ON. Setting feature_hardPullGuardrail:false in
+      // chrome.storage.local disables it. Matches the gate pattern
+      // used by other LOP modules (fha-flip-rule, va-non-spouse-
+      // warning, etc.) so the toggle behavior is consistent.
+      if (data[__ZHL_FEATURE_KEY] === false) return;
       __zhlRunModule();
     });
   }

@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.52.2",
+    category: "improvement",
+    headline: "Hard Pull Guardrail flipped from default-off to default-on for the author's personal install. Other users continue to receive whatever version they already have until live updates resume.",
+    highlights: [
+      "Feature gate changed from 'must be explicitly true' to 'skip only if explicitly false' — matches the pattern other LOP modules use. Behavior of the guardrail itself is unchanged from v1.52.1: intercepts the click on Pull Credit when pullType=Hard, reads the worst soft qualifying score across borrowers + the most recent non-error DU result, and only fires a warning when soft is greater than 620 with DU approved and the score is outside the 680-719 LLPA optional-pricing window. Not a hard stop — the warning has a Proceed-Anyway path."
+    ]
+  },
+  {
     version: "1.52.1",
     category: "fix",
     headline: "NEW (hidden / preview): Hard Pull Guardrail — warns the LO when a Hard credit pull is outside ZHL's guidance matrix, with the matrix shown right in the confirmation dialog. Default OFF — enable in chrome.storage with feature_hardPullGuardrail:true.",
