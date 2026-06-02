@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.8",
+    category: "fix",
+    headline: "Calc Student Loans: clamp the computed monthly payment to $1 — LOP's form rejects anything below that, and small balances at 0.5% were calculating to e.g. $0.89.",
+    highlights: [
+      "On a $178 balance × 0.5% the formula returned $0.89, which LOP's liability edit form rejected with \"Monthly payment must be greater than or equal to $1\" — and the row never saved. The computed value is now floored at $1 so the row commits cleanly. Math is unchanged for any balance ≥ $200 at the 0.5% programs (FHA/LPA/Conventional)."
+    ]
+  },
+  {
     version: "1.51.7",
     category: "fix",
     headline: "DTI Max Estimator: the Est. max figure no longer shifts when the products panel is expanded vs. collapsed.",

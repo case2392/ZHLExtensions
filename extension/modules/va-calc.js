@@ -3468,7 +3468,12 @@
         continue;
       }
 
-      const computed = Math.round(lib.balance * calc.rate * 100) / 100;
+      // LOP's liability edit form enforces "Monthly payment must
+      // be greater than or equal to $1" — a small balance × 0.5%
+      // can compute to e.g. $0.89, which LOP rejects with a
+      // validation error and the row never saves. Clamp to the
+      // form's floor so the row commits cleanly.
+      const computed = Math.max(1, Math.round(lib.balance * calc.rate * 100) / 100);
       try { paymentInput.focus(); } catch (_) {}
       setReactInputValue(paymentInput, computed.toFixed(2));
       await waitMs(150);
