@@ -408,7 +408,12 @@
   function updateSelectAllLabel() {
     const btn = document.getElementById(TOOLBAR_ID + '-select-all-btn');
     if (!btn) return;
-    const boxes = findScenarioCheckboxes();
+    // Mirror toggleSelectAll: only the SELECTABLE (unassigned) boxes
+    // count toward the all-checked flip. Otherwise the label would
+    // stay stuck on "Select all" forever because the assigned card's
+    // checkbox is excluded — and "every" over an excluded box would
+    // never report true.
+    const boxes = findSelectableScenarioCheckboxes();
     if (boxes.length === 0) {
       btn.textContent = 'Select all';
       return;
@@ -422,10 +427,34 @@
     return Array.from(document.querySelectorAll('input[name="selectScenario"]'));
   }
 
+  // The assigned-to-loan card's checkbox should be excluded from
+  // Select all. It can't be deleted alongside the unassigned cards
+  // (you'd have to unassign it first), AND empirically toggling it
+  // through our Select all puts LOP into a UI state where the
+  // assigned card disappears after the surrounding scenarios get
+  // deleted — even though the assigned scenario is still saved on
+  // the backend (it reappears on refresh). Filter it out and the
+  // delete flow leaves the assigned card visible the way it should.
+  function isCheckboxOnAssignedCard(cb) {
+    const cards = getScenarioCardElements();
+    if (!cards.length) return false;
+    for (const card of cards) {
+      if (!card.contains(cb)) continue;
+      const wrapper = findUniqueWrapper(card, cards);
+      return isAssignedWrapper(wrapper);
+    }
+    return false;
+  }
+  function findSelectableScenarioCheckboxes() {
+    return findScenarioCheckboxes().filter(function (cb) {
+      return !isCheckboxOnAssignedCard(cb);
+    });
+  }
+
   function toggleSelectAll() {
-    const boxes = findScenarioCheckboxes();
+    const boxes = findSelectableScenarioCheckboxes();
     if (boxes.length === 0) {
-      flashStatus('No scenario checkboxes found');
+      flashStatus('No selectable scenarios found');
       return;
     }
     const anyUnchecked = boxes.some((cb) => !cb.checked);

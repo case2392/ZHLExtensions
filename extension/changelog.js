@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.6",
+    category: "fix",
+    headline: "Scenario Sort \"Select all\" now skips the assigned-to-loan card — fixes the bug where deleting the surrounding scenarios also hid the assigned card from view until refresh.",
+    highlights: [
+      "Clicking Select all and then deleting put LOP into a UI state where the assigned-to-loan card disappeared alongside the deleted ones, even though it was still saved on the backend (refresh brought it back). Root cause: our Select all clicked the assigned card's checkbox along with the others, and LOP's React state didn't handle that combination cleanly when the surrounding scenarios were then removed. The assigned card can't actually be deleted alongside the others anyway (you'd have to unassign it first), so Select all now filters it out — clicking still selects every UNASSIGNED scenario, but the assigned card's state is left alone, and the post-delete view shows the assigned card right where it should be."
+    ]
+  },
+  {
     version: "1.51.5",
     category: "improvement",
     headline: "Pricing Exception Workflow now prompts for the ZG # when the loan is locked and the extension can't auto-detect one — so the rest of the locked-path flow uses the real Encompass loan number instead of the LOP UUID.",
