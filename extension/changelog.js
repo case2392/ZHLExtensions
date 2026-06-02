@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.52.5",
+    category: "improvement",
+    headline: "Hard Pull Guardrail now reads LPA in addition to DU, and treats EITHER AUS approval (DU Approve* or LPA Accept*) as sufficient to suggest a soft pull.",
+    highlights: [
+      "Previously the guardrail only inspected the DU panel and looked for 'Approve' — and the comment block referenced a 'DU Deny' that doesn't actually exist (DU's non-approval is 'Refer/Eligible' or 'Refer/Ineligible'). Both halves fixed: the AUS reader is now generalized to find the most recent non-error status by label (DU or LPA), the decision logic treats either DU starting with 'Approve' OR LPA starting with 'Accept' as approval, and the warning dialog shows BOTH AUS statuses in its detected-state line so the LO can see exactly what triggered it. Telemetry events now carry both du and lpa fields for downstream analysis. Behavior unchanged when the score is below 620 or in the 680-719 LLPA optional-pricing window."
+    ],
+    sections: ["hard-pull-guardrail"]
+  },
+  {
     version: "1.52.4",
     category: "fix",
     headline: "Hard Pull Guardrail now sorts to the top of the Walkthrough's New section the way every other recent feature does.",

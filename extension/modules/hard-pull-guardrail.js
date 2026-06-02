@@ -12,15 +12,21 @@
 // guardrail is about catching the absent-minded case, not blocking
 // legitimate edge cases.
 //
-// Guidance matrix encoded:
-//   No soft on file            → Hard OK
-//   Soft < 620                 → Hard OK
-//   Soft 620-679 + DU Approval → WARN  (use soft instead)
-//   Soft 620-679 + DU Deny     → Hard OK
-//   Soft 680-699               → Optional Hard (LLPA at 700 — no warn)
-//   Soft 700-719               → Optional Hard (LLPA at 720 — no warn)
-//   Soft ≥ 720 + DU Approval   → WARN  (no benefit; already top tier)
-//   Soft ≥ 720 + DU Deny       → Hard OK
+// Guidance matrix encoded — "approval" means EITHER DU starts with
+// "Approve" (Approve/Eligible, Approve/Ineligible) OR LPA starts with
+// "Accept" (Accept, Accept/Eligible). If either AUS is approving, a
+// soft pull is sufficient. "Refer" / "Refer/Eligible" / "Refer/
+// Ineligible" do NOT count as approval (this is what the matrix calls
+// "Deny").
+//
+//   No soft on file                        → Hard OK
+//   Soft < 620                             → Hard OK
+//   Soft 620-679 + ANY AUS approval        → WARN  (use soft instead)
+//   Soft 620-679 + both AUS Refer/none     → Hard OK
+//   Soft 680-699                           → Optional Hard (LLPA at 700 — no warn)
+//   Soft 700-719                           → Optional Hard (LLPA at 720 — no warn)
+//   Soft ≥ 720 + ANY AUS approval          → WARN  (no benefit; already top tier)
+//   Soft ≥ 720 + both AUS Refer/none       → Hard OK
 
 (function () {
   'use strict';
@@ -82,30 +88,31 @@
     return worst;
   }
 
-  // ---- AUS / DU status --------------------------------------------
-  // Most recent DU result appears as the first <button> under the DU
-  // <li> in the AUS panel. Format: "Approve/Eligible - 5/30/2026 4:58 PM"
-  // The header status badge ([data-cy="DesktopUnderwriter-status"])
-  // reflects the most recent run including errors. We prefer the
-  // most recent NON-ERROR result so a freshly-errored re-run doesn't
-  // mask the LO's actual standing.
-  function readMostRecentDuStatus() {
-    // Find the DU <li> by scanning for the inner "DU" label.
+  // ---- AUS readers (DU + LPA) -------------------------------------
+  // Most recent AUS result appears as the first <button> under the
+  // matching <li> in the AUS panel. Format:
+  //   DU:  "Approve/Eligible - 5/30/2026 4:58 PM"
+  //   LPA: "Accept/Eligible - 5/30/2026 3:55 PM" (or just "Accept")
+  // The header status badge reflects the most recent run INCLUDING
+  // errors. We prefer the most recent NON-ERROR result so a
+  // freshly-errored re-run doesn't mask the LO's actual standing.
+  function readMostRecentAusStatus(label) {
     const labels = document.querySelectorAll('span');
-    let duLi = null;
+    let li = null;
     for (const span of labels) {
       const txt = (span.textContent || '').trim();
-      if (txt !== 'DU') continue;
-      const li = span.closest('li');
-      if (li) { duLi = li; break; }
+      if (txt !== label) continue;
+      const parent = span.closest('li');
+      if (parent) { li = parent; break; }
     }
-    if (!duLi) return null;
-    const historyButtons = duLi.querySelectorAll('button');
+    if (!li) return null;
+    const historyButtons = li.querySelectorAll('button');
     for (const btn of historyButtons) {
       const txt = (btn.textContent || '').trim();
-      // Skip the "Select" / "See More" action buttons.
+      // Skip action buttons.
       if (/^(select|selected|see more|choose action)$/i.test(txt)) continue;
       // Result lines look like "Approve/Eligible - 5/30/2026 4:58 PM"
+      // or "Accept - 6/1/2026 12:05 PM"
       const m = txt.match(/^([A-Za-z/\s]+?)\s+-\s+\d/);
       if (!m) continue;
       const status = m[1].trim();
@@ -114,30 +121,37 @@
     }
     return null;
   }
+  function readMostRecentDuStatus()  { return readMostRecentAusStatus('DU'); }
+  function readMostRecentLpaStatus() { return readMostRecentAusStatus('LPA'); }
 
   // ---- Decision logic ---------------------------------------------
-  function shouldWarnOnHardPull(softScore, duStatus) {
+  // "Approval" = DU starts with "Approve" OR LPA starts with "Accept".
+  // If either AUS is approving the file, a soft pull is sufficient.
+  function isAusApproval(duStatus, lpaStatus) {
+    const duApproved  = !!(duStatus  && /^approve/i.test(duStatus));
+    const lpaApproved = !!(lpaStatus && /^accept/i.test(lpaStatus));
+    return duApproved || lpaApproved;
+  }
+  function shouldWarnOnHardPull(softScore, duStatus, lpaStatus) {
     if (softScore == null) return false;          // No soft → can't second-guess
     if (softScore < 620) return false;            // Hard appropriate
     // Optional pricing windows — hard might pick up LLPA tier improvement,
-    // so don't warn even with DU approval.
+    // so don't warn even with an approval.
     if (softScore >= 680 && softScore <= 719) return false;
-    // 620-679 OR 720+: warn ONLY when DU shows approval.
-    if (!duStatus) return false;                  // No DU read → can't warn confidently
-    const isApproval = /^approve/i.test(duStatus);
-    return isApproval;
+    // 620-679 OR 720+: warn when ANY AUS is approving.
+    if (!duStatus && !lpaStatus) return false;    // No AUS read → can't warn confidently
+    return isAusApproval(duStatus, lpaStatus);
   }
 
-  function buildReason(softScore, duStatus) {
-    const parts = [];
-    parts.push('Worst soft score across borrowers: <b>' + softScore + '</b>');
-    parts.push('Most recent DU result: <b>' + (duStatus || 'unknown') + '</b>');
-    return parts.join(' &nbsp;·&nbsp; ');
+  function buildReason(softScore, duStatus, lpaStatus) {
+    return 'Worst soft score across borrowers: <b>' + softScore + '</b>' +
+           ' &nbsp;·&nbsp; DU: <b>' + (duStatus || 'unknown') + '</b>' +
+           ' &nbsp;·&nbsp; LPA: <b>' + (lpaStatus || 'unknown') + '</b>';
   }
 
   // ---- Warning dialog ---------------------------------------------
   const DIALOG_ID = 'zhl-hard-pull-guardrail-dialog';
-  function showWarningDialog(softScore, duStatus, onProceed, onCancel) {
+  function showWarningDialog(softScore, duStatus, lpaStatus, onProceed, onCancel) {
     const existing = document.getElementById(DIALOG_ID);
     if (existing) existing.remove();
 
@@ -163,9 +177,9 @@
         '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:100px;background:#fef3c7;color:#92400e;font-weight:700;font-size:16px;">!</span>' +
         '<h3 style="margin:0;font:700 17px/1.2 inherit;color:#92400e;">Hard pull may be outside ZHL guidance</h3>' +
       '</div>' +
-      '<div style="font:13px/1.45 inherit;color:#334155;margin-bottom:12px;">' + buildReason(softScore, duStatus) + '</div>' +
+      '<div style="font:13px/1.45 inherit;color:#334155;margin-bottom:12px;">' + buildReason(softScore, duStatus, lpaStatus) + '</div>' +
       '<div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;padding:10px 12px;font:12px/1.5 inherit;color:#78350f;margin-bottom:14px;">' +
-        '<b>ZHL guidance:</b> Hard credit should not be pulled prior to VPA when the soft credit score is greater than 620 and DU is approved — unless it\'s an edge case (e.g. pricing improvement at the 680→700 or 700→720 LLPA tier).' +
+        '<b>ZHL guidance:</b> Hard credit should not be pulled prior to VPA when the soft credit score is greater than 620 and either DU is approved or LPA is accepted — unless it\'s an edge case (e.g. pricing improvement at the 680→700 or 700→720 LLPA tier).' +
       '</div>' +
       '<div style="overflow:hidden;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:16px;">' +
         '<table style="width:100%;border-collapse:collapse;font:11.5px/1.4 inherit;">' +
@@ -176,8 +190,8 @@
         '<tbody>' +
           row('No soft on file', 'Hard', '#dcfce7') +
           row('Less than 620', 'Hard', '#fed7aa') +
-          row('Higher than 620 + DU Approval', 'Soft', '#dcfce7') +
-          row('Higher than 620 + DU Deny', 'Hard', '#fed7aa') +
+          row('Higher than 620 + DU Approval or LPA Accept', 'Soft', '#dcfce7') +
+          row('Higher than 620 + both DU &amp; LPA Refer', 'Hard', '#fed7aa') +
           row('Optional 680–699 (near 700 LLPA)', 'Hard for pricing', '#fef9c3') +
           row('Optional 700–719 (near 720 LLPA)', 'Hard for pricing', '#fef9c3') +
         '</tbody></table>' +
@@ -225,11 +239,12 @@
     const pullTypeSelect = dialog.querySelector('select[name="pullType"]');
     if (!pullTypeSelect || pullTypeSelect.value !== 'Hard') return;
 
-    const softScore = readWorstSoftScore();
-    const duStatus = readMostRecentDuStatus();
-    console.log('[ZHL Hard Pull Guardrail] Hard pull intercepted. Worst soft=' + softScore + ', DU=' + duStatus);
+    const softScore  = readWorstSoftScore();
+    const duStatus   = readMostRecentDuStatus();
+    const lpaStatus  = readMostRecentLpaStatus();
+    console.log('[ZHL Hard Pull Guardrail] Hard pull intercepted. Worst soft=' + softScore + ', DU=' + duStatus + ', LPA=' + lpaStatus);
 
-    if (!shouldWarnOnHardPull(softScore, duStatus)) {
+    if (!shouldWarnOnHardPull(softScore, duStatus, lpaStatus)) {
       console.log('[ZHL Hard Pull Guardrail] Within guidance — allowing pull.');
       return;
     }
@@ -238,10 +253,10 @@
     e.stopImmediatePropagation();
     e.stopPropagation();
 
-    showWarningDialog(softScore, duStatus,
+    showWarningDialog(softScore, duStatus, lpaStatus,
       function onProceed() {
         console.log('[ZHL Hard Pull Guardrail] LO confirmed override — proceeding.');
-        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'proceed', softScore: softScore, du: duStatus } }); } catch (_) {}
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'proceed', softScore: softScore, du: duStatus, lpa: lpaStatus } }); } catch (_) {}
         window[SKIP_FLAG] = true;
         try { btn.click(); } finally {
           setTimeout(function () { window[SKIP_FLAG] = false; }, 1500);
@@ -249,7 +264,7 @@
       },
       function onCancel() {
         console.log('[ZHL Hard Pull Guardrail] LO cancelled — Pull credit dialog stays open.');
-        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'cancel', softScore: softScore, du: duStatus } }); } catch (_) {}
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'cancel', softScore: softScore, du: duStatus, lpa: lpaStatus } }); } catch (_) {}
       });
   }, true);
 })();
