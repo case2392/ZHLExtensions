@@ -141,7 +141,20 @@
         const piti = parseMoney(pitiText);
         const dtiBack = parseBackDti(dtiText);
         if (!isFinite(piti) || piti <= 0) return;
-        out.push({ product: product, piti: piti, dtiBack: dtiBack });
+        // Is this row the LO's currently-selected scenario? Used so
+        // the max-PP estimate stays stable when the products panel
+        // expands (collapsed view renders only the selected row; the
+        // expanded view renders ~30 rate options including buydowns
+        // with much lower PITI that would otherwise win "best per
+        // type" and shift the estimate by tens of thousands).
+        const checkbox = tr.querySelector('input[type="checkbox"], input[type="radio"]');
+        const ariaSelected = tr.getAttribute && tr.getAttribute('aria-selected');
+        const cls = (tr.className || '') + '';
+        const isSelected =
+          (checkbox && checkbox.checked) ||
+          ariaSelected === 'true' ||
+          /\bselected\b|\bhighlight(ed)?\b|\bis-active\b/i.test(cls);
+        out.push({ product: product, piti: piti, dtiBack: dtiBack, isSelected: !!isSelected });
       });
     });
     return out;
@@ -218,10 +231,21 @@
     const fixedHoiMonthly = hoiRate > 0 ? 0 : (form.yearlyHoiAmount / 12);
     const currentLtv = ((currentPP - dpAmount) / currentPP) * 100;
 
-    // Group by loan type, pick the row with the lowest PITI per
-    // group (the most-generous product for max-PP purposes).
+    // Group by loan type. Prefer the SELECTED row (the rate the LO
+    // is actually working with). The previous behavior of picking
+    // the lowest-PITI row per group was correct only when the
+    // products panel was collapsed (which renders only the selected
+    // row anyway). When expanded, the panel renders ~30 rate options
+    // including buydown rows whose PITI is well below the selected
+    // rate's — those would otherwise win "best per type" and the
+    // max-PP figure would shift by tens of thousands the moment the
+    // user expanded the panel. Falling back to the old behavior when
+    // no row reports as selected (e.g., the collapsed view sometimes
+    // ships a row without an interactive checkbox).
+    const selectedRows = rows.filter(function (r) { return r.isSelected; });
+    const sourceRows = selectedRows.length > 0 ? selectedRows : rows;
     const best = {};
-    rows.forEach(function (r) {
+    sourceRows.forEach(function (r) {
       const type = classifyLoanType(r.product);
       if (!type || !DTI_CAPS.hasOwnProperty(type)) return;
       if (!best[type] || r.piti < best[type].piti) best[type] = r;

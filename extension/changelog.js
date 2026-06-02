@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.7",
+    category: "fix",
+    headline: "DTI Max Estimator: the Est. max figure no longer shifts when the products panel is expanded vs. collapsed.",
+    highlights: [
+      "The collapsed products panel renders only the LO's selected rate row; the expanded panel renders ~30 rate options including buydown rows with much lower PITI. The previous \"lowest PITI per loan type\" pick let those buydown rows win once the panel expanded, which moved the Est. max figure by tens of thousands. The estimator now pins to the SELECTED row (checked / aria-selected / highlighted) so the figure stays stable regardless of whether the products panel is open or closed. Falls back to the old behavior only if no row reports as selected in the DOM (collapsed views without an interactive checkbox)."
+    ]
+  },
+  {
     version: "1.51.6",
     category: "fix",
     headline: "Scenario Sort \"Select all\" now skips the assigned-to-loan card — fixes the bug where deleting the surrounding scenarios also hid the assigned card from view until refresh.",
