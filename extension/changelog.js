@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.52.6",
+    category: "improvement",
+    headline: "2% Grant PDF: added MD, NJ, and VA to the eligible-states list — eligible set is now CA, DC, GA, MD, NJ, PA, TX, VA.",
+    highlights: [
+      "Per product update from the 2% Grant program owners, Maryland, New Jersey, and Virginia are now in scope. GRANT_ELIGIBLE_STATES constant updated, the disabled-button tooltip naming the eligible states updated to match, and the Setup + Walkthrough descriptions updated so the docs stay in sync. No other behavior changed — every other gate (Conf Home Ready 30 Yr Fixed product, ≤ $350k loan amount, all selected scenarios must qualify) still applies."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.52.5",
     category: "improvement",
     headline: "Hard Pull Guardrail now reads LPA in addition to DU, and treats EITHER AUS approval (DU Approve* or LPA Accept*) as sufficient to suggest a soft pull.",

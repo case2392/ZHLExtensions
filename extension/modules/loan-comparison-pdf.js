@@ -42,7 +42,7 @@
   // ZHL 2% Grant eligibility
   const GRANT_PCT = 0.02;
   const GRANT_MAX_LOAN = 350000;
-  const GRANT_ELIGIBLE_STATES = ['CA', 'DC', 'GA', 'PA', 'TX'];
+  const GRANT_ELIGIBLE_STATES = ['CA', 'DC', 'GA', 'MD', 'NJ', 'PA', 'TX', 'VA'];
   const GRANT_PRODUCT_RE = /conf\s*home\s*ready\s*30\s*yr\s*fixed/i;
 
   // ---- Helpers --------------------------------------------------
@@ -492,7 +492,7 @@
     if (!selected.length) return { ok: false, reason: 'Select a Conf Home Ready 30 Yr Fixed scenario first.' };
     const state = readPropertyState();
     if (!state || GRANT_ELIGIBLE_STATES.indexOf(state) === -1) {
-      return { ok: false, reason: 'ZHL 2% Grant is only available in CA, DC, GA, PA, or TX' +
+      return { ok: false, reason: 'ZHL 2% Grant is only available in CA, DC, GA, MD, NJ, PA, TX, or VA' +
         (state ? ' (this loan is in ' + state + ').' : ' — couldn\'t read the property state.') };
     }
     const wrongProduct = selected.some(function (s) { return !GRANT_PRODUCT_RE.test(s.title || ''); });
