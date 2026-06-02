@@ -123,16 +123,28 @@
 
   // ---- Read pricing-results table rows --------------------------
 
+  // Module-level cache of the last-known SELECTED PITI per loan
+  // type. Populated whenever the products panel is collapsed
+  // (rendering only the selected row), and used to identify the
+  // same row when the panel is expanded (where ~30 rate options
+  // are visible and a naïve lowest-PITI pick would otherwise land
+  // on a deep-buydown row instead of the one the LO is actually
+  // pricing at). Cleared implicitly on page navigation since the
+  // module reloads.
+  const selectedPitiCache = {}; // { CONV: 1584.44, FHA: ..., VA: ... }
+
   function readPricingRows() {
     const out = [];
     const tables = document.querySelectorAll('table[aria-label="Table of selectable rate quote options"]');
     tables.forEach(function (table) {
-      const rows = table.querySelectorAll('tbody tr');
-      rows.forEach(function (tr) {
+      const trs = Array.from(table.querySelectorAll('tbody tr'));
+      // Extract per-row data first so we can both (a) update the
+      // selected-PITI cache when this table is collapsed to a
+      // single row and (b) push the same data into the output.
+      const tableRows = [];
+      trs.forEach(function (tr) {
         const tds = tr.querySelectorAll('td');
         if (tds.length < 8) return;
-        // Header row has <p>Select</p> / <p>Loan product</p> etc.
-        // Skip if first product-name cell is the header text.
         const productCell = tds[2];
         const product = (productCell && productCell.textContent || '').trim();
         if (!product || /^Loan product$/i.test(product)) return;
@@ -141,12 +153,6 @@
         const piti = parseMoney(pitiText);
         const dtiBack = parseBackDti(dtiText);
         if (!isFinite(piti) || piti <= 0) return;
-        // Is this row the LO's currently-selected scenario? Used so
-        // the max-PP estimate stays stable when the products panel
-        // expands (collapsed view renders only the selected row; the
-        // expanded view renders ~30 rate options including buydowns
-        // with much lower PITI that would otherwise win "best per
-        // type" and shift the estimate by tens of thousands).
         const checkbox = tr.querySelector('input[type="checkbox"], input[type="radio"]');
         const ariaSelected = tr.getAttribute && tr.getAttribute('aria-selected');
         const cls = (tr.className || '') + '';
@@ -154,8 +160,18 @@
           (checkbox && checkbox.checked) ||
           ariaSelected === 'true' ||
           /\bselected\b|\bhighlight(ed)?\b|\bis-active\b/i.test(cls);
-        out.push({ product: product, piti: piti, dtiBack: dtiBack, isSelected: !!isSelected });
+        tableRows.push({ product: product, piti: piti, dtiBack: dtiBack, isSelected: !!isSelected });
       });
+      // Collapsed view = single rendered row per table. That row is
+      // by definition the LO's selected scenario. Cache its PITI
+      // by loan type so we can identify the same row when the LO
+      // expands the products panel.
+      if (tableRows.length === 1) {
+        const r = tableRows[0];
+        const type = classifyLoanType(r.product);
+        if (type) selectedPitiCache[type] = r.piti;
+      }
+      for (const r of tableRows) out.push(r);
     });
     return out;
   }
@@ -231,24 +247,39 @@
     const fixedHoiMonthly = hoiRate > 0 ? 0 : (form.yearlyHoiAmount / 12);
     const currentLtv = ((currentPP - dpAmount) / currentPP) * 100;
 
-    // Group by loan type. Prefer the SELECTED row (the rate the LO
-    // is actually working with). The previous behavior of picking
-    // the lowest-PITI row per group was correct only when the
-    // products panel was collapsed (which renders only the selected
-    // row anyway). When expanded, the panel renders ~30 rate options
-    // including buydown rows whose PITI is well below the selected
-    // rate's — those would otherwise win "best per type" and the
-    // max-PP figure would shift by tens of thousands the moment the
-    // user expanded the panel. Falling back to the old behavior when
-    // no row reports as selected (e.g., the collapsed view sometimes
-    // ships a row without an interactive checkbox).
-    const selectedRows = rows.filter(function (r) { return r.isSelected; });
-    const sourceRows = selectedRows.length > 0 ? selectedRows : rows;
+    // Group by loan type and pick which row represents the LO's
+    // selected scenario. Three-tier fallback:
+    //   1. Match against the cached PITI from the collapsed view
+    //      (most reliable — collapsed view always renders only
+    //      the selected row).
+    //   2. Match by row.isSelected (checkbox / aria-selected /
+    //      selected class — works for some LOP layouts).
+    //   3. Fall back to lowest PITI per type (original behavior).
+    // Without the cache, expanding the products panel was making
+    // the estimate jump by tens of thousands because the lowest
+    // PITI in the expanded view is a deep-buydown rate the LO
+    // isn't actually using.
     const best = {};
-    sourceRows.forEach(function (r) {
-      const type = classifyLoanType(r.product);
-      if (!type || !DTI_CAPS.hasOwnProperty(type)) return;
-      if (!best[type] || r.piti < best[type].piti) best[type] = r;
+    Object.keys(DTI_CAPS).forEach(function (type) {
+      const typeRows = rows.filter(function (r) {
+        return classifyLoanType(r.product) === type;
+      });
+      if (typeRows.length === 0) return;
+      // Tier 1: cached selected PITI
+      const cached = selectedPitiCache[type];
+      if (cached !== undefined) {
+        const match = typeRows.find(function (r) {
+          return Math.abs(r.piti - cached) < 0.01;
+        });
+        if (match) { best[type] = match; return; }
+      }
+      // Tier 2: row marked isSelected in the DOM
+      const flagged = typeRows.find(function (r) { return r.isSelected; });
+      if (flagged) { best[type] = flagged; return; }
+      // Tier 3: lowest PITI (original behavior)
+      let lowest = typeRows[0];
+      for (const r of typeRows) if (r.piti < lowest.piti) lowest = r;
+      best[type] = lowest;
     });
 
     const out = [];

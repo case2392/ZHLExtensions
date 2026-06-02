@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.51.9",
+    category: "fix",
+    headline: "DTI Max Estimator now caches the selected PITI from the collapsed products view — so expanding the panel no longer shifts the Est. max figure (the 1.51.7 fix didn't catch this LOP layout).",
+    highlights: [
+      "v1.51.7 tried to detect the selected row via DOM markers (checkbox, aria-selected, class). On some LOP layouts none of those signals are present on the highlighted row, so we fell through to lowest-PITI per type — letting a deep-buydown row win in the expanded view and shifting Est. max by tens of thousands. The estimator now caches the PITI from the collapsed view (which by definition renders only the selected row) and uses that PITI to identify the same row when the panel is expanded. Three-tier fallback in order: cached PITI match → existing isSelected DOM markers → lowest PITI (original behavior, last resort). Net result: Est. max stays the same regardless of whether the products panel is open or closed."
+    ]
+  },
+  {
     version: "1.51.8",
     category: "fix",
     headline: "Calc Student Loans: clamp the computed monthly payment to $1 — LOP's form rejects anything below that, and small balances at 0.5% were calculating to e.g. $0.89.",
