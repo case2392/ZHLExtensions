@@ -858,6 +858,58 @@
     return !!link;
   }
 
+  // Reads the phone number out of Salesforce's hover preview after we've
+  // dispatched the hover. The preview's DOM puts the value in
+  // <span class="uiOutputPhone">+13125557890</span> inside
+  // .forceHighlightsPreviewStencil. We match by name so we pick the right
+  // preview when multiple are visible (the user has both borrower and
+  // co-borrower hover cards open simultaneously, etc.).
+  async function tryReadPhoneFromHoverPreview(name, timeoutMs) {
+    timeoutMs = timeoutMs || 3500;
+    const wantedName = String(name || '').trim().toLowerCase();
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const previews = deepQuerySelectorAll(document, '.forceHighlightsPreviewStencil');
+      for (const preview of previews) {
+        // Match preview to the right contact by name. If we have no name
+        // hint, take the first preview's first phone.
+        if (wantedName) {
+          const titleLink = preview.querySelector('h2 a, .primaryField a, a[title]');
+          const previewName = ((titleLink && (titleLink.getAttribute('title') || titleLink.textContent)) || '').trim().toLowerCase();
+          if (!previewName || previewName !== wantedName) continue;
+        }
+        // Mobile is listed before Phone, but the SF UI gives both the same
+        // <span class="uiOutputPhone"> wrapper. Take the first one with
+        // enough digits to be a real number.
+        const spans = preview.querySelectorAll('span.uiOutputPhone, .uiOutputPhone');
+        for (const span of spans) {
+          const raw = (span.textContent || '').trim();
+          const digits = raw.replace(/\D/g, '');
+          if (digits.length >= 10) return digits;
+        }
+      }
+      await new Promise(function (r) { setTimeout(r, 150); });
+    }
+    return null;
+  }
+
+  // Combined entry point used when the API lookup fails: dispatch the
+  // hover, wait for SF's preview, read the phone out of it, and call
+  // addParticipant directly. If we can't get a phone within the timeout,
+  // fall back to the existing manual-copy toast.
+  async function tryAddViaHover(role, name, recordId, reason, panel) {
+    const link = findRecordLinkForRole(role);
+    if (link) dispatchHover(link);
+    const phoneDigits = await tryReadPhoneFromHoverPreview(name, 3500);
+    if (phoneDigits) {
+      const ok = await addParticipant(panel, phoneDigits);
+      if (ok) return true;
+    }
+    // Couldn't auto-add via the preview — show the manual fallback toast.
+    showHoverFallback(role, name, recordId, reason);
+    return false;
+  }
+
   // ---- Button injection -------------------------------------------------
 
   // Inline styles so the buttons render correctly even when injected into
@@ -974,12 +1026,15 @@
         }
         if (!phoneToUse) phoneToUse = fallbackPhone;
         if (!phoneToUse) {
-          b.textContent = orig;
-          b.disabled = false;
           const reason = needsReload
             ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
             : (lookupError || 'No phone returned from Salesforce.');
-          showHoverFallback('buyersAgent', leadCtx.buyersAgent && leadCtx.buyersAgent.name, contactId, reason);
+          b.textContent = 'Reading from contact preview…';
+          const okViaHover = await tryAddViaHover('buyersAgent', leadCtx.buyersAgent && leadCtx.buyersAgent.name, contactId, reason, panel);
+          b.textContent = orig;
+          b.disabled = false;
+          if (okViaHover) { rememberAddedRecord('buyersAgent', contactId); schedule(); }
+          try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_buyers_agent', props: { ok: okViaHover, viaHover: true } }); } catch (_) {}
           return;
         }
         b.textContent = 'Adding…';
@@ -1006,12 +1061,15 @@
         const lookup = await fetchContactPhone(id);
         const phone = typeof lookup === 'string' ? lookup : null;
         if (!phone) {
-          b.textContent = orig;
-          b.disabled = false;
           const reason = (lookup && lookup.reloadNeeded)
             ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
             : (lookup && lookup.error ? lookup.error : 'No phone returned from Salesforce.');
-          showHoverFallback('borrower', name, id, reason);
+          b.textContent = 'Reading from contact preview…';
+          const okViaHover = await tryAddViaHover('borrower', name, id, reason, panel);
+          b.textContent = orig;
+          b.disabled = false;
+          if (okViaHover) { rememberAddedRecord('borrower', id); schedule(); }
+          try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_borrower', props: { ok: okViaHover, viaHover: true } }); } catch (_) {}
           return;
         }
         b.textContent = 'Adding…';
@@ -1035,12 +1093,15 @@
         const lookup = await fetchContactPhone(id);
         const phone = typeof lookup === 'string' ? lookup : null;
         if (!phone) {
-          b.textContent = orig;
-          b.disabled = false;
           const reason = (lookup && lookup.reloadNeeded)
             ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
             : (lookup && lookup.error ? lookup.error : 'No phone returned from Salesforce.');
-          showHoverFallback('coBorrower', name, id, reason);
+          b.textContent = 'Reading from contact preview…';
+          const okViaHover = await tryAddViaHover('coBorrower', name, id, reason, panel);
+          b.textContent = orig;
+          b.disabled = false;
+          if (okViaHover) { rememberAddedRecord('coBorrower', id); schedule(); }
+          try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_coborrower', props: { ok: okViaHover, viaHover: true } }); } catch (_) {}
           return;
         }
         b.textContent = 'Adding…';
@@ -1064,13 +1125,16 @@
         const lookup = await fetchUserPhone(id);
         const phone = typeof lookup === 'string' ? lookup : null;
         if (!phone) {
-          b.textContent = orig;
-          b.disabled = false;
           const reason = (lookup && lookup.reloadNeeded)
             ? 'This tab is stale (ZHL Pack updated in the background). Reload to re-enable auto-fetch.'
             : ((lookup && lookup.error ? lookup.error : 'No phone returned from Salesforce.') +
                ' Make sure the LO has a Phone or Mobile populated on their User record.');
-          showHoverFallback('loanOfficer', name, id, reason);
+          b.textContent = 'Reading from contact preview…';
+          const okViaHover = await tryAddViaHover('loanOfficer', name, id, reason, panel);
+          b.textContent = orig;
+          b.disabled = false;
+          if (okViaHover) { rememberAddedRecord('loanOfficer', id); schedule(); }
+          try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'sms_add_loan_officer', props: { ok: okViaHover, viaHover: true } }); } catch (_) {}
           return;
         }
         b.textContent = 'Adding…';

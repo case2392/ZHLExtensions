@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.52.0",
+    category: "improvement",
+    headline: "SMS Quick-Add: when the Salesforce API lookup fails, read the phone directly out of the hover preview that opens and add the participant automatically — instead of asking the LO to copy it manually.",
+    highlights: [
+      "All four Quick-Add buttons (Add Borrower, Add Co-Borrower, Add Buyer's Agent, Add Loan Officer) now have a stronger fallback when the SF REST lookup can't return a phone (stale tab after extension update, permission edge case, etc.). The buttons still dispatch the hover so SF's preview card opens — but instead of stopping there with a 'copy from here' toast, the extension reads the phone straight out of <span class=\"uiOutputPhone\"> inside the preview and adds it as a participant directly. Matches by contact name so the right preview is picked when multiple are open at once. If the preview still can't be read within ~3.5s, falls back to the existing manual-copy toast."
+    ]
+  },
+  {
     version: "1.51.9",
     category: "fix",
     headline: "DTI Max Estimator now caches the selected PITI from the collapsed products view — so expanding the panel no longer shifts the Est. max figure (the 1.51.7 fix didn't catch this LOP layout).",
