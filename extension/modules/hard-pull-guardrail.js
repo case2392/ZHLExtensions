@@ -12,12 +12,17 @@
 // guardrail is about catching the absent-minded case, not blocking
 // legitimate edge cases.
 //
-// Guidance matrix encoded — "approval" means EITHER DU starts with
-// "Approve" (Approve/Eligible, Approve/Ineligible) OR LPA starts with
-// "Accept" (Accept, Accept/Eligible). If either AUS is approving, a
-// soft pull is sufficient. "Refer" / "Refer/Eligible" / "Refer/
-// Ineligible" do NOT count as approval (this is what the matrix calls
-// "Deny").
+// Guidance matrix encoded — "approval" means EITHER:
+//   DU  starts with "Approve" → "Approve/Eligible" or "Approve/Ineligible"
+//   LPA starts with "Accept"  → "Accept" or "Accept/Eligible"
+// If either AUS is approving, a soft pull is sufficient.
+//
+// Non-approval ("Deny" in ZHL's matrix language):
+//   DU  → "Refer/Eligible" or "Refer/Ineligible"
+//   LPA → "Refer" (no /Eligible suffix on LPA)
+// Error rows are skipped — the reader walks back to the most recent
+// non-error result so a freshly-errored re-run doesn't mask the LO's
+// actual standing.
 //
 //   No soft on file                        → Hard OK
 //   Soft < 620                             → Hard OK
