@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.52.4",
+    category: "fix",
+    headline: "Hard Pull Guardrail now sorts to the top of the Walkthrough's New section the way every other recent feature does.",
+    highlights: [
+      "The walkthrough's New-features list sorts cards by the newest version that touches each card's id (via the sections array in changelog.js). The Hard Pull Guardrail's entry wasn't carrying a sections array, so it was falling to the bottom of the list with the untagged cards. Added sections:[\"hard-pull-guardrail\"] to v1.52.1 — and since 1.52.1 is the newest version that touches any walkthrough card, the Guardrail now lands first."
+    ]
+  },
+  {
     version: "1.52.3",
     category: "improvement",
     headline: "Hard Pull Guardrail card added to the Setup page and the Walkthrough page so it's discoverable like every other module.",
@@ -34,7 +42,8 @@ window.ZHL_CHANGELOG = [
     headline: "NEW (hidden / preview): Hard Pull Guardrail — warns the LO when a Hard credit pull is outside ZHL's guidance matrix, with the matrix shown right in the confirmation dialog. Default OFF — enable in chrome.storage with feature_hardPullGuardrail:true.",
     highlights: [
       "Module intercepts the click on LOP's Pull Credit dialog when pullType=Hard, reads the worst soft qualifying score across borrowers + the most recent non-error DU result, and applies ZHL's guidance: warns when soft is greater than 620 + DU shows approval, UNLESS the score is in the 680-719 LLPA optional-pricing window. The warning shows the full matrix as a compact table and gives the LO two buttons — Cancel (keeps the Pull Credit dialog open) or Proceed Anyway (re-fires the click bypassing our handler). Not a hard stop. Built behind feature_hardPullGuardrail (default off) so it can ride along quietly while leadership decides scope and rollout policy."
-    ]
+    ],
+    sections: ["hard-pull-guardrail"]
   },
   {
     version: "1.52.0",
