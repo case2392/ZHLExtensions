@@ -13,6 +13,14 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.52.1",
+    category: "fix",
+    headline: "NEW (hidden / preview): Hard Pull Guardrail — warns the LO when a Hard credit pull is outside ZHL's guidance matrix, with the matrix shown right in the confirmation dialog. Default OFF — enable in chrome.storage with feature_hardPullGuardrail:true.",
+    highlights: [
+      "Module intercepts the click on LOP's Pull Credit dialog when pullType=Hard, reads the worst soft qualifying score across borrowers + the most recent non-error DU result, and applies ZHL's guidance: warns when soft is greater than 620 + DU shows approval, UNLESS the score is in the 680-719 LLPA optional-pricing window. The warning shows the full matrix as a compact table and gives the LO two buttons — Cancel (keeps the Pull Credit dialog open) or Proceed Anyway (re-fires the click bypassing our handler). Not a hard stop. Built behind feature_hardPullGuardrail (default off) so it can ride along quietly while leadership decides scope and rollout policy."
+    ]
+  },
+  {
     version: "1.52.0",
     category: "improvement",
     headline: "SMS Quick-Add: when the Salesforce API lookup fails, read the phone directly out of the hover preview that opens and add the participant automatically — instead of asking the LO to copy it manually.",
