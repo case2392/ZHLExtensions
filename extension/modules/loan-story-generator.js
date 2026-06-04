@@ -492,11 +492,39 @@
     { key: 'credit',     label: 'Credit Notes',               builder: function (b) { return buildCreditNotes(b); } }
   ];
 
-  function openModal() {
+  // The employment-incomes-table inside each employment row's expanded
+  // edit panel is only mounted in the DOM when the row is expanded. If
+  // the LO clicks Generate Loan Story while rows are collapsed, the
+  // income breakdown comes back empty. Preflight by clicking the
+  // chevron-down on each collapsed row so React mounts the income
+  // table before we read it.
+  async function expandCollapsedEmployments(borrowers) {
+    let clickedAny = false;
+    for (const b of borrowers) {
+      const sec = findEmploymentSection(b.idx);
+      if (!sec) continue;
+      const table = sec.querySelector('table[aria-label="Table for employments"]');
+      if (!table) continue;
+      table.querySelectorAll('svg[class*="IconChevronDown"]').forEach(function (svg) {
+        const td = svg.closest('td');
+        if (!td) return;
+        try { td.click(); clickedAny = true; } catch (_) {}
+      });
+    }
+    if (clickedAny) {
+      await new Promise(function (r) { setTimeout(r, 260); });
+    }
+  }
+
+  async function openModal() {
     const existing = document.getElementById(MODAL_ID);
     if (existing) existing.remove();
 
     const borrowers = discoverBorrowers();
+    // Make sure the inner income tables are mounted before we read.
+    try { await expandCollapsedEmployments(borrowers); } catch (e) {
+      console.warn('[ZHL Loan Story] expand preflight failed', e);
+    }
 
     const overlay = document.createElement('div');
     overlay.id = MODAL_ID;

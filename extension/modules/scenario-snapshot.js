@@ -295,6 +295,11 @@
   // Generic 2-child Flex row: a Flex container whose children resolve
   // to exactly 2 text-bearing branches (label, value). Used by Payment
   // breakdown, Cash to/from, Detailed cost summary line items.
+  //
+  // Important: we must REJECT high-level containers that happen to have
+  // 2 large children (e.g., the Detailed cost summary's outer Flex
+  // wrapping the "Loan costs" block and the "Other costs" block).
+  // Otherwise those get smushed into a giant label/value glob.
   function looksLikeKVRow(el) {
     if (!el || el.tagName !== 'DIV') return false;
     if (!/Flex-c11n/.test(el.className || '')) return false;
@@ -303,7 +308,23 @@
     });
     if (kids.length < 2) return false;
     const withText = kids.filter(function (c) { return visibleText(c); });
-    return withText.length === 2;
+    if (withText.length !== 2) return false;
+    // Reject when either side has text long enough to look like a section
+    // of nested rows rather than a single value (~80 char threshold —
+    // longest legit values are dual-tier APR comparisons around 50 chars).
+    const t0 = visibleText(withText[0]);
+    const t1 = visibleText(withText[1]);
+    if (t0.length > 80 || t1.length > 80) return false;
+    // Reject if the row contains a separator or table (structural content,
+    // not a flat label/value pair).
+    if (el.querySelector('[role="separator"], [class*="StyledDivider"], table')) return false;
+    // Reject if either side contains its OWN row-like Flex descendant —
+    // a sign that we're at a container level, not a leaf row.
+    for (const side of withText) {
+      const nestedFlex = side.querySelectorAll('[class*="Flex-c11n"]');
+      if (nestedFlex.length >= 2) return false;
+    }
+    return true;
   }
 
   function extractKVRow(el) {
@@ -312,6 +333,23 @@
     });
     if (kids.length < 2) return null;
     return { label: visibleText(kids[0]), value: visibleText(kids[kids.length - 1]) };
+  }
+
+  // Many section headers in the Detailed cost summary and Cash to/from
+  // dialogs are rendered as a <span> inside a Spacer <div>, not as <p>.
+  // The Spacer uses a stable per-dialog "sc-XXXX-N" class (where N=0/1/2
+  // for various header levels) we can pattern-match.
+  function looksLikeSpacerHeader(el) {
+    if (!el || el.tagName !== 'DIV') return false;
+    const cls = el.className || '';
+    if (!/Spacer-c11n/.test(cls)) return false;
+    // Stable per-dialog header-class patterns observed:
+    //   sc-7e7c7851-1   Detailed cost summary major section (Loan costs / Other costs / Credits)
+    //   sc-7e7c7851-2   Detailed cost summary sub-section (Lender costs / Fees you cannot shop for / etc.)
+    //   sc-7e7c7851-3   Detailed cost summary section total
+    //   sc-66fe4c72-0   Cash to/from major section (Upfront costs / Deductions / etc.)
+    //   sc-66fe4c72-1   Cash to/from totals row wrapper
+    return /sc-7e7c7851-[123]|sc-66fe4c72-[01]/.test(cls);
   }
 
   function parseDialogBody(dialog) {
@@ -388,6 +426,30 @@
       if (looksLikeComplianceRow(child)) {
         const r = extractComplianceRow(child);
         if (r) { out.push({ type: 'kv', label: r.label, value: r.value }); continue; }
+      }
+
+      // Section header rendered as a Spacer-DIV wrapping a span (used by
+      // Detailed cost summary + Cash to/from for "Loan costs", "Other
+      // costs", "Lender costs", "Upfront costs", etc.). Detect the
+      // header BEFORE the generic KV match — otherwise the totals-row
+      // wrapper sc-7e7c7851-3 / sc-66fe4c72-1 (which contains a normal
+      // 2-child Flex inside) would be matched by both rules; we want
+      // the inner KV row, so we descend rather than emit a header for
+      // total wrappers. We treat -1/-2/-0 as headers and totals (-3, -1)
+      // as transparent wrappers (just descend).
+      if (looksLikeSpacerHeader(child)) {
+        const cls = child.className || '';
+        const t = visibleText(child);
+        // For "totals" wrappers (sc-7e7c7851-3 / sc-66fe4c72-1), descend
+        // to extract the inner KV row rather than emit the wrapper text.
+        if (/sc-7e7c7851-3|sc-66fe4c72-1/.test(cls)) {
+          walkDialog(child, out, depth + 1);
+          continue;
+        }
+        if (t && t.length < 60) {
+          out.push({ type: 'subheader', text: t });
+          continue;
+        }
       }
 
       // Generic 2-child Flex KV row
@@ -594,6 +656,51 @@
     });
   }
 
+  // Render a styled facsimile of the scenario card. Looks like the
+  // actual LOP card the snapshot came from, so the printout includes
+  // the visual context. Used in both the print view and the modal.
+  function renderScenarioCardFacsimile(title, subtitle, status, priced, fields) {
+    const statusCls = status === 'ASSIGNED TO LOAN' ? 'assigned'
+                    : status === 'RE-PRICE'         ? 'reprice'
+                    : '';
+    let rows = '';
+    fields.forEach(function (f) {
+      rows +=
+        '<div class="lcrow">' +
+          '<span class="l">' + escHtml(f.label) + '</span>' +
+          '<span class="v">' + escHtml(f.value) + '</span>' +
+        '</div>';
+    });
+    return (
+      '<div class="lop-card-fac">' +
+        (status
+          ? '<div class="lop-card-bar ' + statusCls + '">' + (statusCls === 'assigned' ? '✓ ' : '') + escHtml(status) + '</div>'
+          : '') +
+        '<div class="lop-card-inner">' +
+          '<div class="lop-card-title">' + escHtml(title) + '</div>' +
+          (subtitle ? '<div class="lop-card-sub">' + escHtml(subtitle) + '</div>' : '') +
+          (priced ? '<div class="lop-card-priced">Priced: ' + escHtml(priced) + '</div>' : '') +
+          '<div class="lop-card-rows">' + rows + '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // CSS for the scenario card facsimile, shared between print view + modal.
+  const LOP_CARD_CSS =
+    '.lop-card-fac{width:280px;margin:0 auto 18px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.05);page-break-inside:avoid;}' +
+    '.lop-card-bar{padding:7px 8px;font:700 10.5px inherit;letter-spacing:0.5px;text-align:center;}' +
+    '.lop-card-bar.assigned{background:#15803d;color:#fff;}' +
+    '.lop-card-bar.reprice{background:#fee2e2;color:#991b1b;}' +
+    '.lop-card-inner{padding:12px 16px 14px;}' +
+    '.lop-card-title{font:700 14px inherit;color:#0f172a;text-align:center;}' +
+    '.lop-card-sub{font:700 11.5px inherit;color:#0b5cab;text-align:center;margin-top:3px;}' +
+    '.lop-card-priced{font:500 10px inherit;color:#6b7280;text-align:center;margin:2px 0 10px;}' +
+    '.lop-card-rows{border-top:1px solid #e5e7eb;padding-top:6px;}' +
+    '.lop-card-rows .lcrow{display:flex;justify-content:space-between;gap:10px;padding:2px 0;font:500 10.5px inherit;}' +
+    '.lop-card-rows .lcrow .l{color:#475569;}' +
+    '.lop-card-rows .lcrow .v{color:#0f172a;font-weight:700;text-align:right;}';
+
   // Print path opens a separate window with print-formatted CSS and
   // triggers window.print() so the LO can save as PDF / send to a
   // printer without our modal's overlay interfering.
@@ -603,11 +710,6 @@
       alert('Print blocked by your browser\'s popup setting. Allow popups for LOP, or use Copy as text.');
       return;
     }
-    let mainRows = '';
-    fields.forEach(function (f) {
-      mainRows += '<tr><td>' + escHtml(f.label) + '</td><td>' + escHtml(f.value) + '</td></tr>';
-    });
-
     function renderDialogSection(d) {
       const parts = [];
       parts.push('<div class="dialog-section">');
@@ -635,22 +737,15 @@
     let dialogsHtml = '';
     (dialogs || []).forEach(function (d) { dialogsHtml += renderDialogSection(d); });
 
+    const cardHtml = renderScenarioCardFacsimile(title, subtitle, status, priced, fields);
+
     w.document.open();
     w.document.write(
       '<!doctype html><html><head><meta charset="utf-8"><title>Scenario Snapshot — ' + escHtml(title) + '</title>' +
       '<style>' +
         'body{font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#0f172a;padding:32px;max-width:680px;margin:0 auto;}' +
-        '.eyebrow{font:700 10px/1.2 inherit;color:#006aff;text-transform:uppercase;letter-spacing:1.3px;margin-bottom:6px;}' +
-        'h1{font:700 19px/1.25 inherit;color:#0b3a73;margin:0 0 4px;}' +
-        '.subtitle{font:500 13px/1.4 inherit;color:#334155;margin-bottom:8px;}' +
-        '.meta{margin:8px 0 14px;font:500 11.5px inherit;color:#475569;}' +
-        '.status{display:inline-block;padding:2px 8px;border-radius:100px;font:700 10px inherit;letter-spacing:1px;margin-right:8px;}' +
-        '.status.assigned{background:#dcfce7;color:#065f46;}' +
-        '.status.reprice{background:#fee2e2;color:#991b1b;}' +
-        'table{width:100%;border-collapse:collapse;margin-top:6px;}' +
-        'td{padding:6px 4px;border-bottom:1px solid #e5e7eb;font-size:12px;}' +
-        'td:first-child{color:#475569;}' +
-        'td:last-child{color:#0f172a;font-weight:600;text-align:right;}' +
+        '.eyebrow{font:700 10px/1.2 inherit;color:#006aff;text-transform:uppercase;letter-spacing:1.3px;margin-bottom:6px;text-align:center;}' +
+        LOP_CARD_CSS +
         '.dialog-section{margin-top:18px;padding-top:14px;border-top:2px solid #cbd5e1;page-break-inside:avoid;}' +
         '.dialog-section h2{font:700 14px inherit;color:#0b3a73;margin:0 0 6px;}' +
         '.dialog-section h3{font:700 12.5px inherit;color:#1e293b;margin:8px 0 4px;}' +
@@ -660,18 +755,13 @@
         '.dialog-section .kv{display:flex;justify-content:space-between;gap:14px;padding:4px 0;border-bottom:1px solid #f1f5f9;}' +
         '.dialog-section .kv .k{color:#475569;font-size:11.5px;}' +
         '.dialog-section .kv .v{color:#0f172a;font-size:11.5px;font-weight:600;text-align:right;}' +
-        '.dialog-section table.dtab th, .dialog-section table.dtab td{text-align:left;font-size:11px;padding:3px 6px;}' +
+        '.dialog-section table.dtab{width:100%;border-collapse:collapse;margin:4px 0;}' +
+        '.dialog-section table.dtab th, .dialog-section table.dtab td{text-align:left;font-size:11px;padding:3px 6px;border-bottom:1px solid #f1f5f9;}' +
         '.footer{margin-top:22px;font:400 10.5px inherit;color:#94a3b8;text-align:right;}' +
         '@media print { body { padding:18px; } .dialog-section { page-break-inside:avoid; } }' +
       '</style></head><body>' +
       '<div class="eyebrow">Scenario Snapshot</div>' +
-      '<h1>' + escHtml(title) + '</h1>' +
-      (subtitle ? '<div class="subtitle">' + escHtml(subtitle) + '</div>' : '') +
-      '<div class="meta">' +
-        (status ? '<span class="status ' + (status === 'ASSIGNED TO LOAN' ? 'assigned' : 'reprice') + '">' + escHtml(status) + '</span>' : '') +
-        (priced ? 'Priced: ' + escHtml(priced) : '') +
-      '</div>' +
-      '<table><tbody>' + mainRows + '</tbody></table>' +
+      cardHtml +
       dialogsHtml +
       '<div class="footer">Captured via ZHL Productivity Pack v' + escHtml(VERSION) + ' &middot; ' + escHtml(ZHL_TIP) + '</div>' +
       '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},300);});<\/script>' +

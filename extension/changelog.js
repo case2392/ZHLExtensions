@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.56.1",
+    category: "improvement",
+    headline: "Scenario Snapshot: Detailed cost summary now parses cleanly; printout shows a card facsimile at the top. Loan Story now auto-expands collapsed employment rows so income-type breakdown actually reads.",
+    highlights: [
+      "Detailed cost summary parsing rewritten. The previous version mis-detected the outer Flex container (wrapping 'Loan costs' and 'Other costs' blocks) as a single KV row, which produced a giant text glob. The KV detector now rejects containers whose label or value text exceeds 80 chars, contains a separator/divider, or has multiple nested Flex descendants — so only true leaf-level rows match.",
+      "Section headers in Detailed cost summary and Cash to/from were rendered as <span> inside Spacer <div> wrappers (not <p>), so the old <p>-only header detection missed them. Added a Spacer-DIV header detector keyed on the stable per-dialog class patterns (sc-7e7c7851-1 / -2 / -3 for Detailed cost summary; sc-66fe4c72-0 / -1 for Cash to/from). 'Total'-row wrappers (-3, -1) descend transparently so the inner KV row gets emitted instead of the wrapper text.",
+      "Print view now leads with a styled scenario-card facsimile — green ASSIGNED TO LOAN bar (or red RE-PRICE), centered title, Purchase / loan amount subtitle, Priced timestamp, divider, and all field rows in the same label / value layout as the original LOP card. The detail-dialog sections follow below. The visual context is on every printout.",
+      "Loan Story for Encompass now expands any collapsed employment rows before reading. The inner employment-incomes-table is only mounted in the DOM when the row is expanded — previously the breakdown came back empty if rows were collapsed, so B2 with Overtime + Bonus showed up as just '$X/mo' instead of 'Has overtime + bonus on top of base'. The preflight clicks every chevron-down icon and waits ~260ms for React to mount the income tables, then reads."
+    ],
+    sections: ["scenario-snapshot", "loan-story-generator"]
+  },
+  {
     version: "1.56.0",
     category: "improvement",
     headline: "Scenario Snapshot now lives in the 3-dots menu next to View details and captures EVERY detail dialog — Points, P&I, Closing costs, Cash to/from — into one snapshot. Loan Story now reads income-type breakdown (Base only vs. Base + OT + Bonus).",
