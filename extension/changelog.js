@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.54.0",
+    category: "feature",
+    headline: "NEW: Send VPA Email from Salesforce — one-click pre-filled Gmail draft on Pre-Approval leads. No OAuth, no Connected App, no test-user cap.",
+    highlights: [
+      "Adds a Send VPA Email button to the Salesforce Lead / Contact action bar. The button stays disabled until the lead reaches the Pre-Approval path stage. One click scrapes the borrower name, email, purchase price, co-borrower (with hover-card email extraction), and Buyer's Agent (with hover-card email extraction), then opens a pre-filled Gmail compose tab — To, CC, Subject, and Body all populated with the standard VPA congratulations email.",
+      "Uses the public Gmail compose URL (mail.google.com/mail/u/0/?view=cm&fs=1&...) instead of the Gmail API — so no OAuth client, no Connected App enrollment, no per-user verification. The LO attaches the Verified Pre-Approval PDF to the draft manually before sending. Folds the standalone SFGmail proof-of-concept into the main toolkit with one less moving part."
+    ],
+    sections: ["sf-vpa-email"]
+  },
+  {
     version: "1.53.0",
     category: "feature",
     headline: "NEW: Scenario Snapshot — one-click capture of every field on a scenario card for app-support tickets. No more scrolling and stitching multiple screenshots.",

@@ -385,6 +385,33 @@
       </div>
     </section>
 
+    <!-- ============== Module: Send VPA Email from Salesforce ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Send VPA Email from Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.salesforce.com</code> &mdash; Lead / Contact pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_sfVpaEmail" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sf-vpa-email.svg" alt="Salesforce Lead page on the left with the borrower's name, email, and purchase price; an arrow points to a Gmail New Message window on the right that's pre-filled with To, Subject, and a body draft, with the Send button highlighted." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Send VPA Email</strong> button to the Lead / Contact action bar &mdash; activates once the lead reaches the <em>Pre-Approval</em> stage.</li>
+          <li>One click scrapes <strong>borrower name, email, purchase price, co-borrower, and agent</strong> off the page &mdash; including hover-card email extraction for the co-borrower and Buyer&rsquo;s Agent.</li>
+          <li>Opens a <strong>pre-filled Gmail compose tab</strong> with To / CC / Subject / Body ready &mdash; the LO attaches the Verified Pre-Approval PDF and clicks Send.</li>
+          <li><strong>No OAuth, no Connected App, no per-user enrollment.</strong> Uses the public Gmail compose URL, so rollout is just flipping this toggle. No Google verification, no 100-user test cap.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: SMS Mark All As Read ============== -->
     <section class="module-card" data-module>
       <div class="module-head">

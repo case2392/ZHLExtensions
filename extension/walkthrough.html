@@ -394,6 +394,22 @@
       </div>
     </div>
 
+    <!-- Send VPA Email from Salesforce -->
+    <div class="feature is-new" id="sf-vpa-email">
+      <div class="shot"><img src="images/sf-vpa-email.svg" alt="Salesforce lead with Send VPA Email button on the left, an arrow to a pre-filled Gmail New Message window on the right with To, Subject, and body draft filled and a green Send button." /></div>
+      <div class="body">
+        <h3>Send VPA Email from Salesforce</h3>
+        <div class="where">Salesforce Lead / Contact page action bar &mdash; <strong>Send VPA Email</strong> button (activates on the Pre-Approval stage)</div>
+        <p>One-click pre-filled Gmail draft for the standard Verified Pre-Approval congratulations email. Folds the standalone SFGmail proof-of-concept into the main toolkit with no Connected App and no per-user OAuth enrollment.</p>
+        <ul>
+          <li><strong>Scrapes the page for you.</strong> Borrower name, email, purchase price, co-borrower, and Buyer&rsquo;s Agent &mdash; pulled straight off the Lead / Contact layout. Co-borrower and agent emails are extracted by triggering the SF hover preview card and reading the mailto link it surfaces.</li>
+          <li><strong>Pre-fills the whole draft.</strong> Gmail compose opens in a new tab with To = borrower, CC = co-borrower + agent, Subject = &ldquo;Congratulations &mdash; You&rsquo;re Pre-Approved at Zillow Home Loans&rdquo;, and the standard VPA body populated with the borrower&rsquo;s name and purchase price.</li>
+          <li><strong>No OAuth, no Google verification, no test-user cap.</strong> Uses the public Gmail compose URL (mail.google.com/mail/u/0/?view=cm&amp;fs=1&amp;&hellip;) instead of the Gmail API. Rollout is just flipping the Setup toggle &mdash; no Connected App setup, no Google Cloud project, no scopes to approve.</li>
+          <li><strong>Attach the VPA PDF manually before sending.</strong> The compose URL approach can&rsquo;t carry attachments, so the LO drops the pre-approval letter into the draft the same way they would for any other email. Everything else is filled out.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- ZHL Loan Comparison PDF -->
     <div class="feature is-new" id="loan-comparison-pdf">
       <div class="shot"><img src="images/loan-comparison-pdf.svg" alt="Borrower-facing loan comparison PDF with two columns showing loan amount, rate, points, monthly PITI, and closing costs, with a green savings callout at the bottom." /></div>

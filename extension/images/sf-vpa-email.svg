@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eff6ff"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+  </defs>
+  <rect width="360" height="220" fill="url(#bg)"/>
+
+  <!-- Salesforce card -->
+  <g transform="translate(20,30)">
+    <rect width="160" height="160" rx="10" fill="#fff" stroke="#0b5cab" stroke-width="2"/>
+    <rect width="160" height="22" rx="10" fill="#0b5cab"/>
+    <text x="80" y="16" font-family="Arial,sans-serif" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">SALESFORCE LEAD</text>
+    <text x="14" y="48" font-family="Arial,sans-serif" font-size="9" fill="#6b7280">Name</text>
+    <text x="14" y="62" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#111827">Tracey Smith</text>
+    <text x="14" y="84" font-family="Arial,sans-serif" font-size="9" fill="#6b7280">Email</text>
+    <text x="14" y="98" font-family="Arial,sans-serif" font-size="10" fill="#111827">tracey@example.com</text>
+    <text x="14" y="120" font-family="Arial,sans-serif" font-size="9" fill="#6b7280">Purchase Price</text>
+    <text x="14" y="134" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#10b981">$425,000</text>
+    <rect x="14" y="148" width="132" height="0.5" fill="#e5e7eb"/>
+    <!-- Button -->
+    <g transform="translate(14,151)">
+      <rect width="132" height="6" rx="3" fill="#0b5cab"/>
+    </g>
+  </g>
+
+  <!-- Arrow -->
+  <g transform="translate(195,100)">
+    <path d="M 0 10 L 18 10 L 18 0 L 32 15 L 18 30 L 18 20 L 0 20 Z" fill="#006aff"/>
+  </g>
+
+  <!-- Gmail compose card -->
+  <g transform="translate(240,30)">
+    <rect width="100" height="160" rx="10" fill="#fff" stroke="#10b981" stroke-width="2"/>
+    <rect width="100" height="22" rx="10" fill="#10b981"/>
+    <text x="50" y="16" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">NEW MESSAGE</text>
+    <text x="10" y="42" font-family="Arial,sans-serif" font-size="8" fill="#6b7280">To</text>
+    <rect x="10" y="46" width="80" height="8" rx="2" fill="#eff6ff"/>
+    <text x="10" y="68" font-family="Arial,sans-serif" font-size="8" fill="#6b7280">Subject</text>
+    <rect x="10" y="72" width="80" height="8" rx="2" fill="#eff6ff"/>
+    <rect x="10" y="92" width="80" height="3" rx="1" fill="#cbd5e1"/>
+    <rect x="10" y="100" width="70" height="3" rx="1" fill="#cbd5e1"/>
+    <rect x="10" y="108" width="75" height="3" rx="1" fill="#cbd5e1"/>
+    <rect x="10" y="116" width="65" height="3" rx="1" fill="#cbd5e1"/>
+    <rect x="10" y="124" width="78" height="3" rx="1" fill="#cbd5e1"/>
+    <!-- Send button -->
+    <rect x="10" y="138" width="40" height="14" rx="3" fill="#10b981"/>
+    <text x="30" y="148" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">Send</text>
+  </g>
+</svg>

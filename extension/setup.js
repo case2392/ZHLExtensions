@@ -11,6 +11,7 @@ const FEATURE_KEYS = [
   "feature_buydownCalc",
   "feature_callerId",
   "feature_smsAddParticipants",
+  "feature_sfVpaEmail",
   "feature_autoCallDetailsTab",
   "feature_autoMessagingTab",
   "feature_scenarioSort",
