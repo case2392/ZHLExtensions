@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.55.0",
+    category: "feature",
+    headline: "NEW: Generate Loan Story for Encompass — auto-drafts the five ZG-Loan-Story sections from the LOP file in an editable modal with per-section Copy buttons.",
+    highlights: [
+      "Adds a Generate Loan Story for Encompass button to the Full Application subnav, next to the existing Copy LOP file / PE Workflow buttons. The button stays disabled until a hard credit pull is on file (per the Hard score grid in the Credit section) — tooltip explains why. Once activated, one click opens a modal with five editable textareas — Property Notes, Borrower Notes, Employment / Income Notes, Asset Notes, Credit Notes — each populated from the file and each with its own Copy button.",
+      "Auto-surfaces what processors actually use: property type / PUD / construction-status / state, FTHB from Declarations, per-borrower employment timeline with current and prior employer dates, gift fund totals and sources, liabilities the LO has flagged for payoff or excluded from DTI, and callouts when the collections 5% rule or FHA / DU / LPA / VA student-loan calc method needs to be verified. Reuses logic from the existing Collections and student-loan calculator modules where possible.",
+      "Voice is medium — one short sentence per insight, terse enough to skim but specific enough to be useful. Every textarea is editable so the LO can type over the auto-draft, add bullets the file can't tell us (main point of contact, loan goals, non-borrowing spouse), then Copy and paste into the matching Encompass field. Nothing is committed automatically — the modal just hands you text."
+    ],
+    sections: ["loan-story-generator"]
+  },
+  {
     version: "1.54.0",
     category: "feature",
     headline: "NEW: Send VPA Email from Salesforce — one-click pre-filled Gmail draft on Pre-Approval leads. No OAuth, no Connected App, no test-user cap.",

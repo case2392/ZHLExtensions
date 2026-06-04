@@ -645,6 +645,33 @@
       </div>
     </section>
 
+    <!-- ============== Module: Generate Loan Story for Encompass ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Generate Loan Story for Encompass</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> &mdash; Full Application page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_loanStoryGenerator" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/loan-story-generator.svg" alt="Modal titled Loan Story for Encompass with five editable sections (Property Notes, Borrower Notes, Employment / Income Notes, Asset Notes, Credit Notes) and a blue Copy button on each section." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Generate Loan Story for Encompass</strong> button next to the existing Copy LOP file / PE Workflow buttons in the Full Application subnav. <strong>Activates only after a hard credit pull is on file</strong> &mdash; stays disabled before that with a tooltip explaining why.</li>
+          <li>Reads the full file and drafts the five Encompass ZG-Loan-Story sections in a modal: <strong>Property Notes, Borrower Notes, Employment / Income Notes, Asset Notes, Credit Notes</strong>. Each section gets an editable textarea and its own Copy button so you paste them one at a time into the matching Encompass field.</li>
+          <li>Auto-surfaces the things processors actually want to know: PUD / under-construction property, FTHB flag, borrower employment timeline with current / previous employer dates, gift fund totals and sources, liabilities the LO has flagged for payoff or excluded from DTI, and a callout when collections / student-loan handling needs verification.</li>
+          <li><strong>Editable by design.</strong> The auto-draft is a starting point &mdash; type over anything, add bullets the file can&rsquo;t tell us (point-of-contact, loan goals, NBS), then Copy and paste into Encompass.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Copy LOP file ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
