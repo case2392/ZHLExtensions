@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.56.2",
+    category: "improvement",
+    headline: "Send VPA Email now produces the full HTML-formatted email — same big blue Congratulations headline, Zillow / Bonus icons, branded bullet lists, and disclaimer footnote as the original SFGmail proof-of-concept. No more plain text.",
+    highlights: [
+      "Gmail compose URLs only carry plain text in &body=, which is why the previous version was sending the VPA out as flat unstyled text. The fix follows the same belt-and-suspenders pattern the Pricing Exception Workflow uses: the click handler builds the full HTML body, stashes it in chrome.storage.local under zhlVpaPendingPaste (TTL 60 s), and copies HTML + plain to the clipboard. The compose URL still opens with the plain body as a final fallback.",
+      "New companion content script — modules/gmail-vpa-paste.js — runs on mail.google.com, polls for the pending paste once the new compose tab loads, finds Gmail's contenteditable body, and replaces the plain content with the formatted HTML via document.execCommand('insertHTML'). Verify-and-retry loop handles Gmail's URL-driven body fill landing AFTER our paste (re-pastes up to 6 times across 3 seconds). On verified success, the storage entry is cleared so no other compose tab picks it up.",
+      "HTML body is a faithful port of the original SFGmail templates/vpa-template.html — same wording, same Calibri 14.5px / line-height 1.5 styling, same inline images for What's Next and Don't Forget (drive.google.com/uc?export=view URLs), same blue Congratulations <h1>, same agent name styled red and bold, same disclaimer at 10px italic gray. LO name + email pulled from Setup's LO Profile (lo_name, lo_email); Zillow webpage link reads lo_zillow_url (omits the line if unset)."
+    ],
+    sections: ["sf-vpa-email"]
+  },
+  {
     version: "1.56.1",
     category: "improvement",
     headline: "Scenario Snapshot: Detailed cost summary now parses cleanly; printout shows a card facsimile at the top. Loan Story now auto-expands collapsed employment rows so income-type breakdown actually reads.",

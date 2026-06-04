@@ -332,19 +332,157 @@
     const cc = [lead.coBorrowerEmail, lead.agentEmail].filter(Boolean);
     if (cc.length) params.set('cc', cc.join(','));
     params.set('su', buildSubject(lead, loName));
+    // Plain-text body included as a belt-and-suspenders fallback. The
+    // companion content script (gmail-vpa-paste.js) replaces it with the
+    // formatted HTML once the compose tab loads. If both that and the
+    // clipboard fallback fail, the LO at least has the plain wording in
+    // the body to send.
     params.set('body', buildBody(lead, loName));
     return GMAIL_COMPOSE_BASE + '&' + params.toString();
   }
 
-  // Pull the configured LO name from chrome.storage.local. Same key used by
-  // the Pricing Exception Workflow and other branded-output modules.
-  function getLoName() {
+  // ----- HTML body --------------------------------------------------
+  //
+  // Faithful HTML port of the original SFGmail templates/vpa-template.html.
+  // Same wording / structure / inline styles / image URLs — only the
+  // placeholders get substituted in. Stashed in chrome.storage.local so
+  // gmail-vpa-paste.js (the companion Gmail content script) can paste it
+  // into the compose body once the new tab loads.
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function buildAgentHtml(lead) {
+    const name = escHtml(lead.agentName || '[AGENT NAME]');
+    if (lead.agentEmail) {
+      return '<a href="mailto:' + escHtml(lead.agentEmail) + '" style="color: #cc0000; font-weight: bold; text-decoration: none;">' + name + '</a>';
+    }
+    return '<span style="color: #cc0000; font-weight: bold;">' + name + '</span>';
+  }
+
+  function buildLoHtml(loName, loEmail) {
+    const name = escHtml(loName || 'Justin Case');
+    if (loEmail) {
+      return '<a href="mailto:' + escHtml(loEmail) + '" style="color: #1a73e8; font-weight: bold; text-decoration: none;">' + name + '</a>';
+    }
+    return '<span style="color: #1a73e8; font-weight: bold;">' + name + '</span>';
+  }
+
+  function buildBodyHtml(lead, loName, loEmail, zillowUrl) {
+    const greeting  = escHtml(buildGreeting(lead));
+    const amount    = escHtml(lead.amount || '[AMOUNT]');
+    const agentHtml = buildAgentHtml(lead);
+    const loHtml    = buildLoHtml(loName, loEmail);
+    const zillowLine = zillowUrl
+      ? '&nbsp; You can also click here to view my <a href="' + escHtml(zillowUrl) + '" style="color: #1a73e8; text-decoration: underline;">Zillow Webpage</a>!'
+      : '';
+
+    return (
+      '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
+
+      '<h1 style="color: #1a73e8; font-size: 26px; font-weight: bold; margin-bottom: 16px;">Congratulations ' + greeting + '!</h1>' +
+
+      '<p>I\'m excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to <span style="color: #1a73e8; font-weight: bold; text-decoration: underline;">' + amount + '</span> at Zillow Home Loans!&nbsp; Please find your preapproval letter attached, a copy of your appraisal waiver certificate, and my profile.' + zillowLine + '</p>' +
+
+      '<p><strong>This is a significant milestone on your homebuying journey.&nbsp; Now, armed with the Verified Pre-Approval, you\'re one step closer to finding your dream home!</strong></p>' +
+
+      '<p><strong>Feel free to reach out to me if you have any questions or need assistance moving forward. I\'m here to help make your homeownership dreams a reality.</strong></p>' +
+
+      '<br/>' +
+
+      '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 4px;">' +
+        '<tr>' +
+          '<td style="vertical-align: middle; padding-right: 8px;">' +
+            '<img src="https://drive.google.com/uc?export=view&id=1DfbFqOFCz3OnUUPxHoNnVh3JIUzjAitV" alt="Zillow" width="36" height="36" style="display: block;"/>' +
+          '</td>' +
+          '<td style="vertical-align: middle;">' +
+            '<span style="color: #1a73e8; font-size: 22px; font-weight: bold; font-style: italic;">What\'s Next?</span>' +
+          '</td>' +
+        '</tr>' +
+      '</table>' +
+
+      '<ul style="margin: 8px 0 16px 0; padding-left: 24px;">' +
+        '<li style="margin-bottom: 6px;">Continue to stay in touch with your Loan Officer, ' + loHtml + ' and your Real Estate Agent, ' + agentHtml + '.</li>' +
+        '<li style="margin-bottom: 6px;">Continue to pay all bills on time.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not open any new lines of credit nor acquire new debt.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not increase balances on your current credit obligations.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not make changes to your employment outside of promotions or simply moving physical locations.</li>' +
+        '<li style="margin-bottom: 6px;">Avoid any unnecessary movement of monies between accounts.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not dimmish your savings or assets required for your home purchase.</li>' +
+      '</ul>' +
+
+      '<br/>' +
+
+      '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 4px;">' +
+        '<tr>' +
+          '<td style="vertical-align: middle; padding-right: 8px;">' +
+            '<img src="https://drive.google.com/uc?export=view&id=1XWel1Mh3_SbuGxz4tb0jF_4iQqMP2TdV" alt="Bonus" width="40" height="50" style="display: block;"/>' +
+          '</td>' +
+          '<td style="vertical-align: middle;">' +
+            '<span style="color: #1a73e8; font-size: 22px; font-weight: bold; font-style: italic;">Don\'t Forget</span>' +
+          '</td>' +
+        '</tr>' +
+      '</table>' +
+
+      '<ul style="margin: 8px 0 16px 0; padding-left: 24px;">' +
+        '<li style="margin-bottom: 6px;">No Cost Appraisal &ndash; By financing with Zillow Home Loans and working with a Zillow Premier Agent partner, Zillow Home Loans will cover the cost of your appraisal*.</li>' +
+        '<li style="margin-bottom: 6px;">Very comfortable 21-Day closings</li>' +
+      '</ul>' +
+
+      '<p style="font-size: 20px; font-weight: bold; font-style: italic; margin: 20px 0;">Congratulations again ' + greeting + ', and best of luck with your home search!</p>' +
+
+      '<p style="font-size: 10px; color: #666666; font-style: italic; line-height: 1.4;">* *While the appraisal fee will appear as a loan cost on your initial disclosures, your final disclosure will show Zillow Home Loans covering the cost. Offer available on initial appraisal for purchase and refinance transactions only, where an appraisal is required by Zillow Home Loans. Zillow Home Loans must order appraisal. Appraisal fee will not be charged to the borrower when the loan closes with Zillow Home Loans. Offer does not apply to any subsequent appraisal, including re-inspections, desk reviews, etc. Zillow Home Loans, in its sole discretion, reserves the right to change or end promotion at any time.</p>' +
+
+      '</div>'
+    );
+  }
+
+  // Pull the configured LO name / email / Zillow URL from chrome.storage.
+  // Same key the Pricing Exception Workflow and other branded-output
+  // modules read from.
+  function getLoSettings() {
     return new Promise(function (resolve) {
       try {
-        chrome.storage.local.get(['lo_name'], function (data) {
-          resolve((data && data.lo_name) || '');
+        chrome.storage.local.get(['lo_name', 'lo_email', 'lo_zillow_url'], function (data) {
+          resolve({
+            loName:    (data && data.lo_name)        || '',
+            loEmail:   (data && data.lo_email)       || '',
+            zillowUrl: (data && data.lo_zillow_url)  || ''
+          });
         });
-      } catch (_) { resolve(''); }
+      } catch (_) { resolve({ loName: '', loEmail: '', zillowUrl: '' }); }
+    });
+  }
+  function getLoName() { return getLoSettings().then(function (s) { return s.loName; }); }
+
+  // Stash the HTML body in chrome.storage.local so the Gmail companion
+  // content script (gmail-vpa-paste.js) can pick it up after the compose
+  // tab loads, and copy HTML + plain to the clipboard as a Ctrl+V fallback.
+  function stashAndClip(html, plain) {
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.set({
+          zhlVpaPendingPaste: { html: html, plain: plain, ts: Date.now() }
+        }, function () {
+          // Also write to clipboard as a manual paste fallback. Some
+          // browsers require this to happen inside a user gesture, which
+          // the click handler is.
+          try {
+            const data = [new ClipboardItem({
+              'text/html':  new Blob([html],  { type: 'text/html'  }),
+              'text/plain': new Blob([plain], { type: 'text/plain' })
+            })];
+            navigator.clipboard.write(data).then(resolve, function () {
+              navigator.clipboard.writeText(plain).then(resolve, resolve);
+            });
+          } catch (_) {
+            try { navigator.clipboard.writeText(plain).then(resolve, resolve); }
+            catch (__) { resolve(); }
+          }
+        });
+      } catch (_) { resolve(); }
     });
   }
 
@@ -397,13 +535,22 @@
     const button = event.currentTarget;
     try {
       setButtonState(button, 'loading');
-      const [lead, loName] = await Promise.all([scrapeLeadData(), getLoName()]);
+      const [lead, settings] = await Promise.all([scrapeLeadData(), getLoSettings()]);
       if (!lead.email) {
         setButtonState(button, 'error', 'No email found');
         showToast('No email address visible on this lead. Make sure the Email field is showing on the page.', 'error');
         return;
       }
-      const url = buildComposeUrl(lead, loName);
+      // Build HTML + plain bodies and stash both. The Gmail companion
+      // content script (gmail-vpa-paste.js) reads chrome.storage.local
+      // once the compose tab loads and replaces the plain body with the
+      // formatted HTML. The clipboard fallback covers cases where the
+      // auto-paste fails (Ctrl+V).
+      const html  = buildBodyHtml(lead, settings.loName, settings.loEmail, settings.zillowUrl);
+      const plain = buildBody(lead, settings.loName);
+      await stashAndClip(html, plain);
+
+      const url = buildComposeUrl(lead, settings.loName);
       // Plain window.open with just _blank — no windowFeatures string — so
       // browsers open it as a normal tab in the LO's current Gmail session
       // (matches the Pricing Exception Workflow's behavior). Passing a
@@ -411,7 +558,7 @@
       try { window.open(url, '_blank'); }
       catch (_) { window.location.href = url; }
       setButtonState(button, 'success');
-      showToast('VPA draft opened in Gmail. Attach the pre-approval PDF before sending.', 'success');
+      showToast('VPA draft opened in Gmail with formatting. Attach the pre-approval PDF before sending.', 'success');
     } catch (e) {
       console.error('[ZHL VPA] click error', e);
       setButtonState(button, 'error', 'Error');
