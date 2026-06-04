@@ -100,12 +100,35 @@ loadLoProfile();
 // on every Intro Email draft. Same auto-save-on-input pattern as the LO
 // Profile fields.
 const IA_FIELDS = ['insurance_agent_name', 'insurance_agent_company', 'insurance_agent_phone', 'insurance_agent_email'];
+// Default insurance agent. New installs see these pre-filled in Setup
+// (not as placeholder hints — as actual editable values) so clicking
+// Insurance Intro for the first time before touching Setup still sends
+// a fully-populated draft. Kept in sync with KARSON_DEFAULTS in
+// sf-intro-email.js.
+const IA_DEFAULTS = {
+  insurance_agent_name:    'Karson Carter',
+  insurance_agent_company: 'Goosehead Insurance',
+  insurance_agent_phone:   '(336) 596-3603',
+  insurance_agent_email:   'Karson.carter@goosehead.com'
+};
 async function loadInsuranceAgent() {
   const data = await chrome.storage.local.get(IA_FIELDS);
+  const seeds = {};
   document.querySelectorAll('input[data-ia-field]').forEach((input) => {
     const key = input.dataset.iaField;
-    if (data[key] != null) input.value = data[key];
+    if (data[key] != null && data[key] !== '') {
+      input.value = data[key];
+    } else {
+      // First time seeing this field — seed with the canonical default
+      // AND write it to storage so the Intro Email module reads it.
+      const def = IA_DEFAULTS[key] || '';
+      input.value = def;
+      if (def) seeds[key] = def;
+    }
   });
+  if (Object.keys(seeds).length) {
+    try { await chrome.storage.local.set(seeds); } catch (_) {}
+  }
 }
 const iaSaveTimers = {};
 document.querySelectorAll('input[data-ia-field]').forEach((input) => {

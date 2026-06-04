@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.59.3",
+    category: "improvement",
+    headline: "Intro Email: Karson Carter / Goosehead Insurance is now the real default insurance agent — fully populated on first click, even if Setup is never opened.",
+    highlights: [
+      "Insurance Agent fields in Setup now seed with Karson Carter / Goosehead Insurance / (336) 596-3603 / Karson.carter@goosehead.com on first load (as actual editable values, not placeholder hints). Seeds are written to chrome.storage.local on first Setup visit, so the Intro Email module sees them on next read.",
+      "Module-side fallback added too: getLoSettings() falls back to the same Karson defaults when the four IA storage keys are empty. So clicking Insurance Intro on a brand-new install, before ever opening Setup, sends a fully-populated draft with Karson auto-CC'd — no '[Insurance Agent Name]' brackets, no missing CC.",
+      "If you want a different agent, type over the values in Setup → Send Intro Email from Salesforce → Default homeowners insurance agent. Your changes save on input as before and override Karson on subsequent sends."
+    ],
+    sections: ["sf-intro-email"]
+  },
+  {
     version: "1.59.2",
     category: "bugfix",
     headline: "Scenario Snapshot: lead source capture now actually fires (was clicking the wrong element + .click() not triggering React Router).",

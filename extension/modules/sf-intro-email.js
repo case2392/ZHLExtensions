@@ -293,6 +293,17 @@
 
   // ----- Settings + stash ------------------------------------------
 
+  // Default insurance agent — used when the LO hasn't configured their
+  // own agent in Setup yet. Lets a brand-new install of the extension
+  // send a fully-populated Insurance Intro on the very first click,
+  // without requiring a trip to the Setup page first.
+  const KARSON_DEFAULTS = {
+    name:    'Karson Carter',
+    company: 'Goosehead Insurance',
+    phone:   '(336) 596-3603',
+    email:   'Karson.carter@goosehead.com'
+  };
+
   function getLoSettings() {
     return new Promise(function (resolve) {
       try {
@@ -305,13 +316,19 @@
             loName:    (data && data.lo_name)                 || '',
             loEmail:   (data && data.lo_email)                || '',
             loNmls:    (data && data.lo_nmls)                 || '',
-            iaName:    (data && data.insurance_agent_name)    || '',
-            iaCompany: (data && data.insurance_agent_company) || '',
-            iaPhone:   (data && data.insurance_agent_phone)   || '',
-            iaEmail:   (data && data.insurance_agent_email)   || ''
+            iaName:    (data && data.insurance_agent_name)    || KARSON_DEFAULTS.name,
+            iaCompany: (data && data.insurance_agent_company) || KARSON_DEFAULTS.company,
+            iaPhone:   (data && data.insurance_agent_phone)   || KARSON_DEFAULTS.phone,
+            iaEmail:   (data && data.insurance_agent_email)   || KARSON_DEFAULTS.email
           });
         });
-      } catch (_) { resolve({ loName: '', loEmail: '', loNmls: '', iaName: '', iaCompany: '', iaPhone: '', iaEmail: '' }); }
+      } catch (_) {
+        resolve({
+          loName: '', loEmail: '', loNmls: '',
+          iaName: KARSON_DEFAULTS.name, iaCompany: KARSON_DEFAULTS.company,
+          iaPhone: KARSON_DEFAULTS.phone, iaEmail: KARSON_DEFAULTS.email
+        });
+      }
     });
   }
 
