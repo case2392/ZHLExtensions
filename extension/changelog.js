@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.59.4",
+    category: "improvement",
+    headline: "Copy LOP file panel: buttons no longer mid-word-wrap on narrow viewports. 'Stage from this file' renamed 'Copy Old LOP', 'Paste from staged' renamed 'Paste New LOP'.",
+    highlights: [
+      "Panel now uses flex-wrap with a row-gap so the whole row breaks cleanly to a second line on narrow viewports — buttons stay full-width on their own line instead of cramming and wrapping their text mid-label. Added white-space:nowrap to the Copy Old LOP, Paste New LOP, Pricing Exception Workflow, and Generate Loan Story for Encompass buttons so each label always renders on one line.",
+      "Button text renamed: Stage from this file → Copy Old LOP, Paste from staged → Paste New LOP. Reads more obviously as a directional copy-then-paste pair. Modal copy that referenced the old names ('click Stage from this file first' / 'click Paste from staged') updated to match."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.59.3",
     category: "improvement",
     headline: "Intro Email: Karson Carter / Goosehead Insurance is now the real default insurance agent — fully populated on first click, even if Setup is never opened.",

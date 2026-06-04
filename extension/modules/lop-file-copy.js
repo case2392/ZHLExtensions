@@ -4121,9 +4121,11 @@
     if (subnav) {
       // Inline in the subnav, after the last existing link
       // (typically Premier Agent). Margin pushes it off the link
-      // text a little so it doesn't feel glued on.
+      // text a little so it doesn't feel glued on. flex-wrap lets the
+      // panel break to a second row gracefully when the viewport is
+      // narrow — better than buttons individually wrapping text.
       panel.style.cssText =
-        'display:inline-flex;gap:8px;align-items:center;margin-left:24px;' +
+        'display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;row-gap:6px;margin-left:24px;' +
         'font:13px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2937;';
     } else {
       // Fallback: pinned to the top-center as a fixed overlay
@@ -4144,20 +4146,20 @@
 
     const stageBtn = document.createElement('button');
     stageBtn.type = 'button';
-    stageBtn.textContent = 'Stage from this file';
+    stageBtn.textContent = 'Copy Old LOP';
     stageBtn.style.cssText =
       'background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;' +
-      'padding:6px 12px;font-weight:600;cursor:pointer;font-size:13px;';
+      'padding:6px 12px;font-weight:600;cursor:pointer;font-size:13px;white-space:nowrap;';
     stageBtn.addEventListener('mouseenter', function () { stageBtn.style.background = '#0056d2'; });
     stageBtn.addEventListener('mouseleave', function () { stageBtn.style.background = '#006aff'; });
     stageBtn.addEventListener('click', onStageClick);
 
     const pasteBtn = document.createElement('button');
     pasteBtn.type = 'button';
-    pasteBtn.textContent = 'Paste from staged';
+    pasteBtn.textContent = 'Paste New LOP';
     pasteBtn.style.cssText =
       'background:#fff;color:#006aff;border:1px solid #006aff;border-radius:4px;' +
-      'padding:6px 12px;font-weight:600;cursor:pointer;font-size:13px;';
+      'padding:6px 12px;font-weight:600;cursor:pointer;font-size:13px;white-space:nowrap;';
     pasteBtn.addEventListener('mouseenter', function () { pasteBtn.style.background = '#eef6ff'; });
     pasteBtn.addEventListener('mouseleave', function () { pasteBtn.style.background = '#fff'; });
     pasteBtn.addEventListener('click', onPasteClick);
@@ -4229,7 +4231,7 @@
       '</p>' +
       creditLine +
       tableSummary +
-      '<p style="margin-top:14px;color:#374151;font-size:13px;">Now open the destination loan, navigate to Full Application, and click <strong>Paste from staged</strong>.</p>' +
+      '<p style="margin-top:14px;color:#374151;font-size:13px;">Now open the destination loan, navigate to Full Application, and click <strong>Paste New LOP</strong>.</p>' +
       '<div style="text-align:right;margin-top:14px;"><button id="zhl-modal-close" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button></div>',
       function (p) { p.querySelector('#zhl-modal-close').addEventListener('click', removeModal); }
     );
@@ -4239,7 +4241,7 @@
     const stages = await loadStages();
     if (!stages.length) {
       showModal('<h3 style="margin:0 0 8px;font-size:16px;color:#dc2626;">Nothing staged yet</h3>' +
-        '<p>Open the source loan\'s Full Application and click <strong>Stage from this file</strong> first.</p>' +
+        '<p>Open the source loan\'s Full Application and click <strong>Copy Old LOP</strong> first.</p>' +
         '<div style="text-align:right;margin-top:14px;"><button id="zhl-modal-close" style="background:#006aff;color:#fff;border:1px solid #006aff;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;">OK</button></div>',
         function (p) { p.querySelector('#zhl-modal-close').addEventListener('click', removeModal); });
       return;

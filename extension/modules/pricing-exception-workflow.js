@@ -622,7 +622,8 @@
       'border-radius:4px',
       'font:600 12px/1.2 Arial, Helvetica, sans-serif',
       'cursor:pointer',
-      'vertical-align:middle'
+      'vertical-align:middle',
+      'white-space:nowrap'
     ].join(';');
     btn.textContent = '⚖ Pricing Exception Workflow';
     btn.addEventListener('mouseenter', function () { btn.style.background = '#fef3c7'; });
