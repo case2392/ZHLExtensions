@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.57.2",
+    category: "improvement",
+    headline: "Pricing Exception Workflow: removed the 'Copy body only' and 'Copy subject only' buttons. Open in Gmail already handles both reliably.",
+    highlights: [
+      "Open in Gmail + copy body auto-pastes the formatted HTML body into the new compose tab, copies it to the clipboard as a Ctrl+V fallback, AND includes the plain-text body in the compose URL as a last-resort fallback — all three paths covered by the primary button. The two secondary copy buttons were leftover from before the auto-paste flow was solid; with auto-paste working consistently they're dead clicks taking up UI real estate. Removed."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.57.1",
     category: "improvement",
     headline: "Setup brand mark + VPA email now use the new Zillow logo and brand-typed 'Zillow Home Loans' wordmark. Accent color updated to the cobalt sampled from the brand PNG (#0E35C4).",

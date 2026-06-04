@@ -1151,8 +1151,6 @@
         '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">' +
           btnPrimary('Open in Gmail + copy body', 'zhl-pe-mailto') +
           (s.locked === true ? '' : btnSecondary('Capture scenario snip', 'zhl-pe-snip')) +
-          btnSecondary('Copy body only', 'zhl-pe-copy-body') +
-          btnSecondary('Copy subject only', 'zhl-pe-copy-subj') +
         '</div>' +
         // Time-saved tracker — appears once the user reaches the email
         // step (i.e. they've completed the workflow).
@@ -1294,20 +1292,6 @@
           btn.disabled = false; btn.textContent = origText;
         }
         stashThenOpen();
-      });
-      body.querySelector('#zhl-pe-copy-body').addEventListener('click', function () {
-        read();
-        persistRmEmail();
-        persistLoName();
-        const rebuilt = buildEmail(workflowState);
-        const plain   = body.querySelector('#pe-body').value;
-        copyHtmlAndPlain(this, rebuilt.html, plain);
-      });
-      body.querySelector('#zhl-pe-copy-subj').addEventListener('click', function () {
-        const e = read();
-        persistRmEmail();
-        persistLoName();
-        flashCopy(this, e.subject);
       });
     }
   };
