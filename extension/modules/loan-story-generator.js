@@ -192,38 +192,113 @@
   // Employment / Income Notes
   // -------------------------------------------------------------------
   //
-  // We read each borrower's employment table. Each row's visible cells
-  // include: Type, Employer, Start Date, End Date, Income/yr, Income/mo,
-  // Source. We can't easily expand collapsed rows without driving the
-  // DOM, so v1 reports what's in the row + flags secondary income from
-  // a follow-on Type column if present.
+  // Each borrower's employments-section-N has a "Table for employments"
+  // where tbody children alternate between data rows and edit-panel rows
+  // (the latter being a single <td colspan="10"> that wraps the expanded
+  // edit form, including a nested "employment-incomes-table" with the
+  // Base / Overtime / Bonus / Commission / Military / Other breakdown
+  // and per-type Monthly amount).
+  //
+  // The income-type table sits in the DOM even when the row appears
+  // collapsed in the UI (it's just hidden), so we can read each type's
+  // Monthly amount span — an empty span means that type isn't used.
   // -------------------------------------------------------------------
-  function readEmploymentRows(borrowerIdx) {
+
+  // Read the income-type breakdown from an edit-panel TR. Returns an
+  // array of { type, monthly } for every income type with a non-empty
+  // Monthly amount cell.
+  function readIncomeBreakdown(editPanelTr) {
+    if (!editPanelTr) return [];
+    const t = editPanelTr.querySelector('table[aria-label="employment-incomes-table"]');
+    if (!t) return [];
+    const out = [];
+    t.querySelectorAll(':scope > tbody > tr').forEach(function (tr) {
+      const cells = tr.querySelectorAll(':scope > td');
+      if (cells.length < 4) return;
+      // Income-type label sits in the first cell, in the first <span>
+      // child (the rest of the row is form controls).
+      const labelEl = cells[0].querySelector('span');
+      const label = labelEl ? (labelEl.textContent || '').trim() : '';
+      if (!label) return;
+      // Monthly amount sits in the last cell as a single <span>. If
+      // empty, this income type isn't in use for this employment row.
+      const lastSpans = cells[cells.length - 1].querySelectorAll('span');
+      let monthly = '';
+      for (const s of lastSpans) {
+        const t = (s.textContent || '').trim();
+        if (t) { monthly = t; break; }
+      }
+      if (monthly) out.push({ type: label, monthly: monthly });
+    });
+    return out;
+  }
+
+  // Walk the outer employments table for a borrower, pairing each data
+  // row with its edit-panel sibling to capture the income breakdown.
+  function readEmploymentRecords(borrowerIdx) {
     const sec = findEmploymentSection(borrowerIdx);
     if (!sec) return [];
     const table = sec.querySelector('table[aria-label="Table for employments"]')
                || sec.querySelector('table');
     if (!table) return [];
-    const rows = [];
-    table.querySelectorAll('tbody > tr').forEach(function (tr) {
-      if (tr.getAttribute('data-cy') === 'add-entity-container') return;
-      const cells = $$('td', tr).map(txt);
-      if (!cells.length) return;
-      // Heuristic column order based on the screenshot: caret, Type, Employer,
-      // Start Date, End Date, Income/yr, Income/mo, Source, [actions]
-      const row = {
-        type: cells[1] || '',          // "Current" / "Previous"
-        employer: cells[2] || '',
-        startDate: cells[3] || '',
-        endDate: cells[4] || '',
-        incomeYr: cells[5] || '',
-        incomeMo: cells[6] || '',
-        source: cells[7] || ''
-      };
-      // Only keep rows that look real
-      if (row.employer || row.type) rows.push(row);
-    });
-    return rows;
+    const tbody = table.querySelector(':scope > tbody');
+    if (!tbody) return [];
+
+    const trs = Array.from(tbody.children).filter(function (n) { return n.tagName === 'TR'; });
+    const out = [];
+    for (let i = 0; i < trs.length; i++) {
+      const tr = trs[i];
+      if (tr.getAttribute('data-cy') === 'add-entity-container') continue;
+      const cells = Array.from(tr.querySelectorAll(':scope > td'));
+      if (!cells.length) continue;
+      // Skip edit-panel rows (single <td colspan="10">) — they're consumed
+      // by the preceding data row's pair-up logic, not standalone.
+      if (cells.length === 1 && cells[0].getAttribute('colspan')) continue;
+
+      const cellText = cells.map(function (c) {
+        return (c.textContent || '').replace(/\s+/g, ' ').trim();
+      });
+      // Column order: [chevron, status-icon, Type, Employer, Start, End,
+      // Income/yr, Income/mo, Source, actions]
+      const type     = cellText[2] || '';
+      const employer = cellText[3] || '';
+      // Skip totals row (no employer name, no type)
+      if (!employer && !type) continue;
+
+      // Edit panel is the next TR (when expanded — DOM present even when
+      // visually collapsed).
+      const editTr = trs[i + 1];
+      const breakdown = (editTr && editTr.querySelectorAll(':scope > td').length === 1)
+        ? readIncomeBreakdown(editTr)
+        : [];
+
+      out.push({
+        type: type,
+        employer: employer,
+        startDate: cellText[4] || '',
+        endDate:   cellText[5] || '',
+        incomeYr:  cellText[6] || '',
+        incomeMo:  cellText[7] || '',
+        source:    cellText[8] || '',
+        breakdown: breakdown
+      });
+    }
+    return out;
+  }
+
+  // Format the income breakdown as a short phrase for the loan story.
+  //   Only Base                 → "Base income only"
+  //   Base + Overtime + Bonus   → "Has overtime + bonus on top of base"
+  //   Self-employed / no base   → "{Types listed}"
+  function describeIncomeBreakdown(breakdown) {
+    if (!breakdown || !breakdown.length) return '';
+    const types = breakdown.map(function (b) { return b.type; });
+    const isBase = function (t) { return /^base$/i.test(t); };
+    const hasBase = types.some(isBase);
+    const nonBase = types.filter(function (t) { return !isBase(t); });
+    if (hasBase && nonBase.length === 0) return 'Base income only';
+    if (hasBase && nonBase.length > 0) return 'Has ' + nonBase.join(' + ').toLowerCase() + ' on top of base';
+    return 'Income types: ' + types.join(', ');
   }
 
   function buildEmploymentNotes(borrowers) {
@@ -232,38 +307,37 @@
 
     borrowers.forEach(function (b, i) {
       const tag = 'B' + (i + 1);
-      const rows = readEmploymentRows(b.idx);
-      if (!rows.length) {
-        out.push(tag + ': no employment records on file.');
-        return;
-      }
-      const current = rows.filter(function (r) { return /current/i.test(r.type); });
-      const prior   = rows.filter(function (r) { return /previous|prior/i.test(r.type); });
+      const recs = readEmploymentRecords(b.idx);
+      if (!recs.length) { out.push(tag + ': no employment on file.'); return; }
+
+      const current = recs.filter(function (r) { return /current/i.test(r.type); });
+      const prior   = recs.filter(function (r) { return /previous|prior/i.test(r.type); });
 
       current.forEach(function (r) {
-        const piece = [tag, 'current employer', r.employer || '(unnamed)'].join(' — ');
-        const meta = [];
-        if (r.startDate) meta.push('start ' + r.startDate);
-        if (r.incomeMo) meta.push('income ' + r.incomeMo + '/mo');
-        out.push(piece + (meta.length ? ' (' + meta.join(', ') + ').' : '.'));
+        let line = tag + ': ' + (r.employer || '(unnamed)');
+        if (r.startDate) line += ', current since ' + r.startDate;
+        line += '.';
+        const phrase = describeIncomeBreakdown(r.breakdown);
+        const total = r.incomeMo || '';
+        if (phrase) {
+          line += ' ' + phrase;
+          if (total) {
+            line += /only$/i.test(phrase)
+              ? ' (' + total + '/mo)'
+              : ' (' + total + '/mo total)';
+          }
+          line += '.';
+        } else if (total) {
+          line += ' ' + total + '/mo.';
+        }
+        out.push(line);
       });
 
-      // Prior employment flagged when current is < 24 months — we can't
-      // reliably compute tenure from string dates here, so we just list
-      // any prior records present so the processor sees the timeline.
+      // Prior employments — just list dates, no income detail
       prior.forEach(function (r) {
         const window = [r.startDate, r.endDate].filter(Boolean).join(' → ');
         out.push(tag + ' prior: ' + (r.employer || '(unnamed)') + (window ? ' (' + window + ')' : '') + '.');
       });
-
-      // Heuristic: if any row has Income/yr present and a meaningful
-      // Income/mo that diverges from a flat /12, suggests bonus/comm/OT
-      // is part of the income calc. We can't see the income-type
-      // breakdown without expanding the row, so flag for review.
-      const hasIncome = rows.some(function (r) { return r.incomeYr || r.incomeMo; });
-      if (hasIncome) {
-        out.push(tag + ' income — review for variable components (commission / OT / bonus) on expanded employment record.');
-      }
     });
 
     return out.join('\n');

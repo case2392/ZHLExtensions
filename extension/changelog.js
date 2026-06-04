@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.56.0",
+    category: "improvement",
+    headline: "Scenario Snapshot now lives in the 3-dots menu next to View details and captures EVERY detail dialog — Points, P&I, Closing costs, Cash to/from — into one snapshot. Loan Story now reads income-type breakdown (Base only vs. Base + OT + Bonus).",
+    highlights: [
+      "Scenario Snapshot moved from under-card button to a 'Snapshot' menuitem inside the 3-dots overflow menu, next to 'View details'. Cleaner card layout — no extra button at the bottom of every scenario.",
+      "Snapshot now opens each of the four blue-link detail dialogs in sequence (Points / Price → Adjustments and compliance · Monthly P&I / PITI → Payment breakdown · Total closing costs → Detailed cost summary · Cash (to)/from → Cash (to)/from breakdown), parses every label / value / tab panel / table inside, and closes the dialog before moving to the next. The single resulting snapshot now includes every piece of data behind those links — Breakeven, full Compliance section (Investor Eligibility, HPML, QM block, HOEPA block), Payment breakdown line items, full Closing costs hierarchy (Loan costs / Other costs / Credits with all sub-sections), and Cash to/from breakdown (Upfront costs, Deductions, Total). Copy as text and Print both pick up all of it.",
+      "Loan Story for Encompass now reads the employment-incomes-table inside each expanded employment row. Output reflects only the income types actually present: 'Base income only ($X/mo)' when there's only base, or 'Has overtime + bonus on top of base ($X/mo total)' when there are non-base components. Replaces the v1 generic 'review for variable components' callout."
+    ],
+    sections: ["scenario-snapshot", "loan-story-generator"]
+  },
+  {
     version: "1.55.1",
     category: "improvement",
     headline: "Send VPA Email: subject + body now match the original SFGmail template exactly, and the draft opens in a new tab instead of a popup window.",
