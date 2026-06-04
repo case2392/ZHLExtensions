@@ -306,7 +306,7 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
 
   // Brand asset URLs + styled "Zillow Home Loans" span (kept in sync with
   // sf-vpa-email.js DEFAULT_BODY_HTML_TMPL).
-  const __ZHL_LOGO_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/Zillow%20Logo.png';
+  const __ZHL_LOGO_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/logo%20no%20border.png';
   const __ZHL_TEXT_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/ZIllow%20Home%20Loans%20Text.png';
   const __ZHL_BRAND = '<span style="font-family: Georgia, \'Times New Roman\', serif; color: #0E35C4; font-weight: bold;">Zillow Home Loans</span>';
 

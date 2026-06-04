@@ -437,7 +437,7 @@
   // accessible from the recipient's Gmail client. The %20 in the URL is
   // an encoded space; the "ZIllow" filename has a capital I (matches the
   // file committed to main).
-  const ZHL_LOGO_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/Zillow%20Logo.png';
+  const ZHL_LOGO_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/logo%20no%20border.png';
   const ZHL_TEXT_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/ZIllow%20Home%20Loans%20Text.png';
 
   // "Zillow Home Loans" inline brand styling — bold serif in the cobalt
