@@ -26,16 +26,12 @@ html, body {
 
 .brand-mark {
   width: 56px; height: 56px;
-  background: #fff;
-  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255,255,255,0.35);
-  overflow: hidden;
 }
 .brand-mark img {
-  width: 44px;
+  width: 56px;
   height: auto;
   display: block;
 }
