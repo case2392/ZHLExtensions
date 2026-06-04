@@ -13,6 +13,20 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.58.1",
+    category: "improvement",
+    headline: "Intro Email: greeting now includes co-borrower, insurance agent is a Setup config that auto-CCs on every draft, borrower phone + email + Property Street/City/State/Zip + Purchase Price added. Button renamed 'Insurance Intro'.",
+    highlights: [
+      "Greeting placeholder changed: was {First Name} (always primary only). Default body now uses {Greeting} which expands to 'Ryan & Timmy' when there's a co-borrower and 'Ryan' otherwise — same pattern as the VPA email greeting. {First Name} still works for cases where you want only the primary's first name.",
+      "Insurance Agent is now a Setup configuration block, not a hardcoded Karson Carter / Goosehead block. New fields under the Intro Email card: agent name, agency/company, agent phone, agent email. Email is auto-CC'd on every Intro Email draft (alongside the co-borrower). Default body template uses {Insurance Agent Name / Company / Phone / Email} placeholders.",
+      "Borrower Information block at the bottom of the body now includes phone + email for both borrower and co-borrower. New placeholders: {Borrower Phone}, {Borrower Email}, {Co-Borrower Phone}, {Co-Borrower Email}. Pulled from the Contact Roles related list during the same scrape that gets the names.",
+      "Property Address scraping rewritten: was looking for a single 'Property Address' field that doesn't exist on most Opportunities. Now reads Property Street / City / State / Zip individually and combines into 'Street, City, State Zip'. Falls back to the single-field lookup if the split fields aren't present.",
+      "New {Purchase Price} placeholder reads from the Opportunity's Purchase Price field — available for templates that mention loan amount.",
+      "Button text changed from 'Send Intro Email' to 'Insurance Intro' so the intent is obvious in the Opportunity action ribbon."
+    ],
+    sections: ["sf-intro-email"]
+  },
+  {
     version: "1.58.0",
     category: "feature",
     headline: "NEW: Send Intro Email from Salesforce — pre-filled disclosures-signed intro draft for the borrower(s) on every Opportunity, customizable subject + body from Setup.",

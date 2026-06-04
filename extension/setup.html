@@ -488,15 +488,42 @@
           <p class="vpa-helper">Customize the subject line and body. Click a placeholder chip below to insert it at your cursor &mdash; chips get replaced with real data when the email is sent. Pulls <strong>Loan Officer name / email / NMLS</strong> from the LO Profile card at the top of this page. Property Address / Loan Number / Close Date are scraped from the Opportunity; if any aren't visible they stay as <code>[bracketed]</code> placeholders for you to fill in.</p>
 
           <div class="vpa-placeholders">
-            <span class="placeholder-tag" data-insert="{First Name}" title="Primary borrower's first name">{First Name}</span>
+            <span class="placeholder-tag" data-insert="{Greeting}" title="Borrower's first name, or 'First & Co-First' when there's a co-borrower">{Greeting}</span>
+            <span class="placeholder-tag" data-insert="{First Name}" title="Primary borrower's first name only">{First Name}</span>
             <span class="placeholder-tag" data-insert="{Borrower Name}" title="Primary borrower's full name">{Borrower Name}</span>
+            <span class="placeholder-tag" data-insert="{Borrower Phone}" title="Primary borrower's phone (from Contact Roles)">{Borrower Phone}</span>
+            <span class="placeholder-tag" data-insert="{Borrower Email}" title="Primary borrower's email (from Contact Roles)">{Borrower Email}</span>
             <span class="placeholder-tag" data-insert="{Co-Borrower Name}" title="Co-borrower full name (n/a if no co-borrower)">{Co-Borrower Name}</span>
-            <span class="placeholder-tag" data-insert="{Property Address}" title="Subject property address from the Opportunity">{Property Address}</span>
+            <span class="placeholder-tag" data-insert="{Co-Borrower Phone}" title="Co-borrower phone">{Co-Borrower Phone}</span>
+            <span class="placeholder-tag" data-insert="{Co-Borrower Email}" title="Co-borrower email">{Co-Borrower Email}</span>
+            <span class="placeholder-tag" data-insert="{Property Address}" title="Property Street + City + State + Zip from the Opportunity">{Property Address}</span>
             <span class="placeholder-tag" data-insert="{Loan Number}" title="Loan / ZG number from the Opportunity">{Loan Number}</span>
             <span class="placeholder-tag" data-insert="{Closing Date}" title="Close Date from the Opportunity">{Closing Date}</span>
+            <span class="placeholder-tag" data-insert="{Purchase Price}" title="Purchase Price from the Opportunity">{Purchase Price}</span>
             <span class="placeholder-tag" data-insert="{LO Name}" title="Your name (from LO Profile)">{LO Name}</span>
             <span class="placeholder-tag" data-insert="{LO Email}" title="Your email (from LO Profile)">{LO Email}</span>
             <span class="placeholder-tag" data-insert="{NMLS}" title="Your NMLS # (from LO Profile)">{NMLS}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Name}" title="From the Insurance Agent block below">{Insurance Agent Name}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Company}" title="From the Insurance Agent block below">{Insurance Agent Company}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Phone}" title="From the Insurance Agent block below">{Insurance Agent Phone}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Email}" title="From the Insurance Agent block below — also auto-CC'd on every Intro Email">{Insurance Agent Email}</span>
+          </div>
+
+          <h3 style="margin-top: 18px;">Default homeowners insurance agent</h3>
+          <p class="vpa-helper">Set once, used on every Intro Email. The agent&rsquo;s email is <strong>auto-CC&rsquo;d</strong> on every draft so you don&rsquo;t have to remember to add them. The body template includes their contact info via the <code>{Insurance Agent Name / Company / Phone / Email}</code> placeholders.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px;">
+            <label class="vpa-label" style="margin-top:0;">Agent name
+              <input type="text" data-ia-field="insurance_agent_name" placeholder="e.g. Karson Carter" autocomplete="off" />
+            </label>
+            <label class="vpa-label" style="margin-top:0;">Agency / company
+              <input type="text" data-ia-field="insurance_agent_company" placeholder="e.g. Goosehead Insurance" autocomplete="off" />
+            </label>
+            <label class="vpa-label" style="margin-top:0;">Agent phone
+              <input type="tel" data-ia-field="insurance_agent_phone" placeholder="e.g. (336) 596-3603" autocomplete="off" />
+            </label>
+            <label class="vpa-label" style="margin-top:0;">Agent email (auto-CC'd)
+              <input type="email" data-ia-field="insurance_agent_email" placeholder="e.g. karson.carter@goosehead.com" autocomplete="off" />
+            </label>
           </div>
 
           <label class="vpa-label">Subject line

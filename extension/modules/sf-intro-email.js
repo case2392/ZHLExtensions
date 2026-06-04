@@ -138,16 +138,16 @@
   // Georgia serif + cobalt (#0E35C4) treatment for consistency.
   const DEFAULT_BODY_HTML_TMPL = (
     '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
-      '<p>Hi {First Name},</p>' +
+      '<p>Hi {Greeting},</p>' +
       '<p>Great news &mdash; your initial disclosures are signed and your file is officially moving. Here\'s what to expect over the next several days so nothing catches you off guard.</p>' +
       '<p><strong>1. Initial underwriting review.</strong> Your file goes into an early underwriter review so we can get ahead of any conditions before they become time crunches later. The goal is to surface anything we need from you now, while we have runway, rather than at the closing table.</p>' +
       '<p><strong>2. Loan processor introduction.</strong> One of our processors will reach out shortly to introduce themselves and become your day-to-day point of contact for documentation. They\'ll let you know if anything additional is needed beyond what you\'ve already provided. I\'m still quarterbacking the whole file, so don\'t worry &mdash; you\'re not getting handed off, just adding a teammate.</p>' +
-      '<p><strong>3. Homeowners insurance.</strong> This is the one item I\'d ask you to start on this week. You\'ll need a homeowners insurance policy in place before we can close, and quotes can take a few days to come back. I\'ve cc\'d <strong>Karson Carter</strong> with Goosehead Insurance on this email &mdash; she\'s excellent and can shop multiple carriers for you to find the best coverage and rate. Feel free to reply all or reach her directly:</p>' +
+      '<p><strong>3. Homeowners insurance.</strong> This is the one item I\'d ask you to start on this week. You\'ll need a homeowners insurance policy in place before we can close, and quotes can take a few days to come back. I\'ve cc\'d <strong>{Insurance Agent Name}</strong> with {Insurance Agent Company} on this email &mdash; she/he can shop multiple carriers for you to find the best coverage and rate. Feel free to reply all or reach her/him directly:</p>' +
       '<p style="margin-left: 24px;">' +
-        '<strong>Karson Carter</strong><br>' +
-        'Goosehead Insurance<br>' +
-        '(336) 596-3603<br>' +
-        '<a href="mailto:Karson.carter@goosehead.com" style="color: #0E35C4;">Karson.carter@goosehead.com</a>' +
+        '<strong>{Insurance Agent Name}</strong><br>' +
+        '{Insurance Agent Company}<br>' +
+        '{Insurance Agent Phone}<br>' +
+        '<a href="mailto:{Insurance Agent Email}" style="color: #0E35C4;">{Insurance Agent Email}</a>' +
       '</p>' +
       '<p>Once you have a policy selected, just let me know so we can coordinate the rest.</p>' +
       '<p>If any questions come up between now and closing, text or call me anytime &mdash; that\'s what I\'m here for. We\'ll keep this moving.</p>' +
@@ -159,7 +159,11 @@
       '<p style="font-size: 12px; color: #4b5563;">' +
         '<strong>Borrower Information</strong><br>' +
         'Borrower: {Borrower Name}<br>' +
+        'Phone: {Borrower Phone}<br>' +
+        'Email: {Borrower Email}<br>' +
         'Co-Borrower: {Co-Borrower Name}<br>' +
+        'Phone: {Co-Borrower Phone}<br>' +
+        'Email: {Co-Borrower Email}<br>' +
         'Property Address: {Property Address}<br>' +
         'Loan Number: {Loan Number}<br>' +
         'Estimated Closing Date: {Closing Date}' +
@@ -194,31 +198,59 @@
   function substituteAll(tmpl, ctx, htmlSafe) {
     const enc = htmlSafe ? escHtml : function (s) { return s == null ? '' : String(s); };
     return String(tmpl || '')
-      .replace(/\{First Name\}/g,        enc(ctx.firstName))
-      .replace(/\{Borrower Name\}/g,     enc(ctx.borrowerName))
-      .replace(/\{Co-Borrower Name\}/g,  enc(ctx.coBorrowerName))
-      .replace(/\{Property Address\}/g,  enc(ctx.propertyAddress))
-      .replace(/\{Loan Number\}/g,       enc(ctx.loanNumber))
-      .replace(/\{Closing Date\}/g,      enc(ctx.closingDate))
-      .replace(/\{LO Name\}/g,           enc(ctx.loName))
-      .replace(/\{LO Email\}/g,          enc(ctx.loEmail))
-      .replace(/\{NMLS\}/g,              enc(ctx.loNmls));
+      .replace(/\{Greeting\}/g,                enc(ctx.greeting))
+      .replace(/\{First Name\}/g,              enc(ctx.firstName))
+      .replace(/\{Borrower Name\}/g,           enc(ctx.borrowerName))
+      .replace(/\{Borrower Phone\}/g,          enc(ctx.borrowerPhone))
+      .replace(/\{Borrower Email\}/g,          enc(ctx.borrowerEmail))
+      .replace(/\{Co-Borrower Name\}/g,        enc(ctx.coBorrowerName))
+      .replace(/\{Co-Borrower Phone\}/g,       enc(ctx.coBorrowerPhone))
+      .replace(/\{Co-Borrower Email\}/g,       enc(ctx.coBorrowerEmail))
+      .replace(/\{Property Address\}/g,        enc(ctx.propertyAddress))
+      .replace(/\{Loan Number\}/g,             enc(ctx.loanNumber))
+      .replace(/\{Closing Date\}/g,            enc(ctx.closingDate))
+      .replace(/\{Purchase Price\}/g,          enc(ctx.purchasePrice))
+      .replace(/\{LO Name\}/g,                 enc(ctx.loName))
+      .replace(/\{LO Email\}/g,                enc(ctx.loEmail))
+      .replace(/\{NMLS\}/g,                    enc(ctx.loNmls))
+      .replace(/\{Insurance Agent Name\}/g,    enc(ctx.iaName))
+      .replace(/\{Insurance Agent Company\}/g, enc(ctx.iaCompany))
+      .replace(/\{Insurance Agent Phone\}/g,   enc(ctx.iaPhone))
+      .replace(/\{Insurance Agent Email\}/g,   enc(ctx.iaEmail));
   }
 
   function buildContext(borrowers, settings, fields) {
-    const primaryFull = borrowers.primary ? borrowers.primary.name : '';
+    const primary = borrowers.primary;
+    const co      = borrowers.coBorrower;
+    const primaryFull = primary ? primary.name : '';
     const primaryParsed = parseFullName(primaryFull);
-    const coFull = borrowers.coBorrower ? borrowers.coBorrower.name : '';
+    const coFull = co ? co.name : '';
+    const coParsed = parseFullName(coFull);
+    // Greeting addresses BOTH borrowers when there's a co-borrower
+    // ("Ryan & Timmy") and just the primary first name otherwise ("Ryan").
+    const greeting = co
+      ? primaryParsed.first + ' & ' + coParsed.first
+      : (primaryParsed.first || '[First Name]');
     return {
-      firstName:       primaryParsed.first || '[First Name]',
-      borrowerName:    primaryFull || '[Borrower Name]',
-      coBorrowerName:  coFull || 'n/a',
-      propertyAddress: fields.propertyAddress || '[Property Address]',
-      loanNumber:      fields.loanNumber || '[Loan Number]',
-      closingDate:     fields.closingDate || '[Closing Date]',
-      loName:          settings.loName || 'Justin Case',
-      loEmail:         settings.loEmail || '',
-      loNmls:          settings.loNmls || ''
+      greeting:          greeting,
+      firstName:         primaryParsed.first || '[First Name]',
+      borrowerName:      primaryFull   || '[Borrower Name]',
+      borrowerPhone:     (primary && primary.phone) || '',
+      borrowerEmail:     (primary && primary.email) || '',
+      coBorrowerName:    coFull        || 'n/a',
+      coBorrowerPhone:   (co && co.phone) || 'n/a',
+      coBorrowerEmail:   (co && co.email) || 'n/a',
+      propertyAddress:   fields.propertyAddress || '[Property Address]',
+      loanNumber:        fields.loanNumber      || '[Loan Number]',
+      closingDate:       fields.closingDate     || '[Closing Date]',
+      purchasePrice:     fields.purchasePrice   || '[Purchase Price]',
+      loName:            settings.loName  || 'Justin Case',
+      loEmail:           settings.loEmail || '',
+      loNmls:            settings.loNmls  || '',
+      iaName:            settings.iaName    || '[Insurance Agent Name]',
+      iaCompany:         settings.iaCompany || '[Insurance Agent Company]',
+      iaPhone:           settings.iaPhone   || '[Insurance Agent Phone]',
+      iaEmail:           settings.iaEmail   || ''
     };
   }
 
@@ -230,7 +262,7 @@
   // copy is unavailable.
   function buildPlainBody(ctx) {
     return [
-      'Hi ' + ctx.firstName + ',',
+      'Hi ' + ctx.greeting + ',',
       '',
       'Great news — your initial disclosures are signed and your file is officially moving. Here\'s what to expect over the next several days so nothing catches you off guard.',
       '',
@@ -238,12 +270,12 @@
       '',
       '2. Loan processor introduction. One of our processors will reach out shortly to introduce themselves and become your day-to-day point of contact for documentation. I\'m still quarterbacking the whole file — just adding a teammate.',
       '',
-      '3. Homeowners insurance. You\'ll need a homeowners insurance policy in place before we can close. I\'ve cc\'d Karson Carter with Goosehead Insurance — she can shop multiple carriers for you.',
+      '3. Homeowners insurance. You\'ll need a homeowners insurance policy in place before we can close. I\'ve cc\'d ' + ctx.iaName + ' with ' + ctx.iaCompany + ' — she/he can shop multiple carriers for you.',
       '',
-      '   Karson Carter',
-      '   Goosehead Insurance',
-      '   (336) 596-3603',
-      '   Karson.carter@goosehead.com',
+      '   ' + ctx.iaName,
+      '   ' + ctx.iaCompany,
+      '   ' + ctx.iaPhone,
+      '   ' + ctx.iaEmail,
       '',
       'If any questions come up between now and closing, text or call me anytime.',
       '',
@@ -255,7 +287,11 @@
       '———————————————',
       'Borrower Information',
       'Borrower: '         + ctx.borrowerName,
+      'Phone: '            + ctx.borrowerPhone,
+      'Email: '            + ctx.borrowerEmail,
       'Co-Borrower: '      + ctx.coBorrowerName,
+      'Phone: '            + ctx.coBorrowerPhone,
+      'Email: '            + ctx.coBorrowerEmail,
       'Property Address: ' + ctx.propertyAddress,
       'Loan Number: '      + ctx.loanNumber,
       'Estimated Closing Date: ' + ctx.closingDate
@@ -267,14 +303,22 @@
   function getLoSettings() {
     return new Promise(function (resolve) {
       try {
-        chrome.storage.local.get(['lo_name', 'lo_email', 'lo_nmls'], function (data) {
+        chrome.storage.local.get([
+          'lo_name', 'lo_email', 'lo_nmls',
+          'insurance_agent_name', 'insurance_agent_company',
+          'insurance_agent_phone', 'insurance_agent_email'
+        ], function (data) {
           resolve({
-            loName:  (data && data.lo_name)  || '',
-            loEmail: (data && data.lo_email) || '',
-            loNmls:  (data && data.lo_nmls)  || ''
+            loName:    (data && data.lo_name)                 || '',
+            loEmail:   (data && data.lo_email)                || '',
+            loNmls:    (data && data.lo_nmls)                 || '',
+            iaName:    (data && data.insurance_agent_name)    || '',
+            iaCompany: (data && data.insurance_agent_company) || '',
+            iaPhone:   (data && data.insurance_agent_phone)   || '',
+            iaEmail:   (data && data.insurance_agent_email)   || ''
           });
         });
-      } catch (_) { resolve({ loName: '', loEmail: '', loNmls: '' }); }
+      } catch (_) { resolve({ loName: '', loEmail: '', loNmls: '', iaName: '', iaCompany: '', iaPhone: '', iaEmail: '' }); }
     });
   }
 
@@ -347,7 +391,7 @@
         setTimeout(function () { setButtonState(button, 'default'); }, 4000);
         break;
       default:
-        button.textContent = '✉ Send Intro Email';
+        button.textContent = '✉ Insurance Intro';
         button.title = '';
     }
   }
@@ -373,10 +417,25 @@
         getBodyHtmlTmpl()
       ]);
 
+      // Property address is split across Property Street / City / State /
+      // Zip on the Opportunity. Combine them into "Street, City, State Zip"
+      // when present; fall back to a single-field lookup otherwise.
+      const street = scrapeFieldByLabels(['Property Street', 'Property Street Address']);
+      const city   = scrapeFieldByLabels(['Property City']);
+      const state  = scrapeFieldByLabels(['Property State']);
+      const zip    = scrapeFieldByLabels(['Property Zip/Postal Code', 'Property Zip', 'Property Postal Code']);
+      let propertyAddress = '';
+      if (street && city && state) {
+        propertyAddress = street + ', ' + city + ', ' + state + (zip ? ' ' + zip : '');
+      } else {
+        propertyAddress = scrapeFieldByLabels(['Property Address', 'Subject Property Address']);
+      }
+
       const fields = {
-        propertyAddress: scrapeFieldByLabels(['Property Address', 'Subject Property Address', 'Property Street Address']),
+        propertyAddress: propertyAddress,
         loanNumber:      scrapeFieldByLabels(['Loan Number', 'ZG Number', 'Encompass Loan Number']),
-        closingDate:     scrapeFieldByLabels(['Close Date', 'Closing Date', 'Estimated Close Date'])
+        closingDate:     scrapeFieldByLabels(['Close Date', 'Closing Date', 'Estimated Close Date']),
+        purchasePrice:   scrapeFieldByLabels(['Purchase Price', 'Loan Amount'])
       };
 
       const ctx     = buildContext(borrowers, settings, fields);
@@ -386,16 +445,22 @@
 
       await stashAndClip(html, plain);
 
+      // CC: co-borrower (if present) AND the configured insurance agent
+      // so the LO doesn't have to remember to add them manually.
       const cc = [];
       if (borrowers.coBorrower && borrowers.coBorrower.email) cc.push(borrowers.coBorrower.email);
+      if (settings.iaEmail) cc.push(settings.iaEmail);
       const url = buildComposeUrl(borrowers.primary.email, cc, subject, plain);
 
       try { window.open(url, '_blank'); }
       catch (_) { window.location.href = url; }
 
       setButtonState(button, 'success');
-      const coNote = borrowers.coBorrower ? ' (CC: co-borrower)' : '';
-      showToast('Intro draft opened in Gmail with formatting' + coNote + '. Add Karson Carter to CC before sending if you want her on the email.', 'success');
+      const ccParts = [];
+      if (borrowers.coBorrower) ccParts.push('co-borrower');
+      if (settings.iaEmail) ccParts.push('insurance agent');
+      const ccNote = ccParts.length ? ' (CC: ' + ccParts.join(' + ') + ')' : '';
+      showToast('Intro draft opened in Gmail with formatting' + ccNote + '.', 'success');
     } catch (e) {
       console.error('[ZHL Intro] click error', e);
       setButtonState(button, 'error', 'Error');

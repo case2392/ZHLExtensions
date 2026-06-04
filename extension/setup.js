@@ -96,6 +96,30 @@ document.querySelectorAll('input[data-lo-field]').forEach((input) => {
 });
 loadLoProfile();
 
+// Insurance Agent defaults — used by the Intro Email module and auto-CC'd
+// on every Intro Email draft. Same auto-save-on-input pattern as the LO
+// Profile fields.
+const IA_FIELDS = ['insurance_agent_name', 'insurance_agent_company', 'insurance_agent_phone', 'insurance_agent_email'];
+async function loadInsuranceAgent() {
+  const data = await chrome.storage.local.get(IA_FIELDS);
+  document.querySelectorAll('input[data-ia-field]').forEach((input) => {
+    const key = input.dataset.iaField;
+    if (data[key] != null) input.value = data[key];
+  });
+}
+const iaSaveTimers = {};
+document.querySelectorAll('input[data-ia-field]').forEach((input) => {
+  input.addEventListener('input', () => {
+    const key = input.dataset.iaField;
+    clearTimeout(iaSaveTimers[key]);
+    iaSaveTimers[key] = setTimeout(async () => {
+      await chrome.storage.local.set({ [key]: input.value.trim() });
+      showStatus('Insurance agent saved');
+    }, 400);
+  });
+});
+loadInsuranceAgent();
+
 // "Pull from Salesforce" button — asks the SW to fetch the current user's
 // Name / Email / Phone from chatter/users/me and (best effort) NMLS from
 // a User custom field discovered via describe. Only fills inputs that
@@ -483,16 +507,16 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
 
   const LOCAL_DEFAULT_BODY_HTML = (
     '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
-      '<p>Hi {First Name},</p>' +
+      '<p>Hi {Greeting},</p>' +
       '<p>Great news &mdash; your initial disclosures are signed and your file is officially moving. Here\'s what to expect over the next several days so nothing catches you off guard.</p>' +
       '<p><strong>1. Initial underwriting review.</strong> Your file goes into an early underwriter review so we can get ahead of any conditions before they become time crunches later. The goal is to surface anything we need from you now, while we have runway, rather than at the closing table.</p>' +
       '<p><strong>2. Loan processor introduction.</strong> One of our processors will reach out shortly to introduce themselves and become your day-to-day point of contact for documentation. They\'ll let you know if anything additional is needed beyond what you\'ve already provided. I\'m still quarterbacking the whole file, so don\'t worry &mdash; you\'re not getting handed off, just adding a teammate.</p>' +
-      '<p><strong>3. Homeowners insurance.</strong> This is the one item I\'d ask you to start on this week. You\'ll need a homeowners insurance policy in place before we can close, and quotes can take a few days to come back. I\'ve cc\'d <strong>Karson Carter</strong> with Goosehead Insurance on this email &mdash; she\'s excellent and can shop multiple carriers for you to find the best coverage and rate. Feel free to reply all or reach her directly:</p>' +
+      '<p><strong>3. Homeowners insurance.</strong> This is the one item I\'d ask you to start on this week. You\'ll need a homeowners insurance policy in place before we can close, and quotes can take a few days to come back. I\'ve cc\'d <strong>{Insurance Agent Name}</strong> with {Insurance Agent Company} on this email &mdash; she/he can shop multiple carriers for you to find the best coverage and rate. Feel free to reply all or reach her/him directly:</p>' +
       '<p style="margin-left: 24px;">' +
-        '<strong>Karson Carter</strong><br>' +
-        'Goosehead Insurance<br>' +
-        '(336) 596-3603<br>' +
-        '<a href="mailto:Karson.carter@goosehead.com" style="color: #0E35C4;">Karson.carter@goosehead.com</a>' +
+        '<strong>{Insurance Agent Name}</strong><br>' +
+        '{Insurance Agent Company}<br>' +
+        '{Insurance Agent Phone}<br>' +
+        '<a href="mailto:{Insurance Agent Email}" style="color: #0E35C4;">{Insurance Agent Email}</a>' +
       '</p>' +
       '<p>Once you have a policy selected, just let me know so we can coordinate the rest.</p>' +
       '<p>If any questions come up between now and closing, text or call me anytime &mdash; that\'s what I\'m here for. We\'ll keep this moving.</p>' +
@@ -501,7 +525,11 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
       '<p style="font-size: 12px; color: #4b5563;">' +
         '<strong>Borrower Information</strong><br>' +
         'Borrower: {Borrower Name}<br>' +
+        'Phone: {Borrower Phone}<br>' +
+        'Email: {Borrower Email}<br>' +
         'Co-Borrower: {Co-Borrower Name}<br>' +
+        'Phone: {Co-Borrower Phone}<br>' +
+        'Email: {Co-Borrower Email}<br>' +
         'Property Address: {Property Address}<br>' +
         'Loan Number: {Loan Number}<br>' +
         'Estimated Closing Date: {Closing Date}' +
