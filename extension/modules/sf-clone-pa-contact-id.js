@@ -484,7 +484,8 @@
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.get([__ZHL_FEATURE_KEY], function (data) {
+    chrome.storage.local.get([__ZHL_FEATURE_KEY, 'zhl_kill_switch'], function (data) {
+      if (data.zhl_kill_switch === true) return;
       if (data[__ZHL_FEATURE_KEY] === false) return;
       __zhlRunModule();
     });
