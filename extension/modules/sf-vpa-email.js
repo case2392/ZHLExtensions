@@ -10,10 +10,15 @@
 (function () {
   'use strict';
 
+  const VERSION = '1.1';
   const BUTTON_ID = 'zhl-vpa-send-email-btn';
   const TOAST_ID = 'zhl-vpa-toast';
   const RECORD_URL_PATTERN = /\/lightning\/r\/(Lead|Contact)\/([a-zA-Z0-9]{15,18})\/view/;
-  const GMAIL_COMPOSE_BASE = 'https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1';
+  // Use the same compose URL pattern as the Pricing Exception Workflow.
+  // Drop the u/0/ segment and tf=1 — those force a specific account and a
+  // standalone popup window respectively. We want a normal tab in the LO's
+  // current Gmail session.
+  const GMAIL_COMPOSE_BASE = 'https://mail.google.com/mail/?view=cm&fs=1';
 
   function getRecordInfo() {
     const match = window.location.pathname.match(RECORD_URL_PATTERN);
@@ -243,56 +248,104 @@
     };
   }
 
+  // Greeting used inside the body: "FirstName" or "FirstName & CoFirstName"
   function buildGreeting(lead) {
     const first = lead.firstName || 'there';
     if (lead.coBorrowerFirstName) return `${first} & ${lead.coBorrowerFirstName}`;
     return first;
   }
 
-  function buildSubject(lead) {
-    return `Congratulations ${buildGreeting(lead)}! You're Pre-Approved at Zillow Home Loans`;
+  // Full names used in the subject line. Mirrors the original SFGmail
+  // buildFullNames helper:
+  //   Same last name:  "Tracey & Andrew Smith"
+  //   Different last:  "Tracey Smith & Andrew Jones"
+  //   Solo:            "Tracey Smith"
+  function buildFullNames(lead) {
+    const first = lead.firstName || '';
+    const last  = lead.lastName  || '';
+    if (lead.coBorrowerFirstName) {
+      const coFirst = lead.coBorrowerFirstName;
+      const coLast  = lead.coBorrowerLastName || '';
+      const sameLast = last && coLast && last.toLowerCase() === coLast.toLowerCase();
+      if (sameLast) return `${first} & ${coFirst} ${last}`;
+      const coFull = coLast ? `${coFirst} ${coLast}` : coFirst;
+      return `${first} ${last} & ${coFull}`;
+    }
+    return [first, last].filter(Boolean).join(' ');
   }
 
-  function buildBody(lead) {
+  // Subject line — matches the original SFGmail default exactly:
+  //   "Verified Pre-Approval for {fullNames} - Up to {amount}! - {LOName} from Zillow Home Loans"
+  function buildSubject(lead, loName) {
+    const fullNames = buildFullNames(lead) || lead.firstName || '';
+    const amount    = lead.amount || '';
+    const lo        = loName || 'Justin Case';
+    return `Verified Pre-Approval for ${fullNames} - Up to ${amount}! - ${lo} from Zillow Home Loans`;
+  }
+
+  // Body — plain-text faithful port of templates/vpa-template.html from the
+  // original SFGmail proof-of-concept. Gmail compose URLs only carry plain
+  // text, so the HTML formatting is dropped but the wording and structure
+  // is preserved exactly.
+  function buildBody(lead, loName) {
     const greeting = buildGreeting(lead);
-    const amount = lead.amount || '[AMOUNT]';
-    const agent = lead.agentName || '[AGENT NAME]';
+    const amount   = lead.amount    || '[AMOUNT]';
+    const agent    = lead.agentName || '[AGENT NAME]';
+    const lo       = loName         || 'Justin Case';
     return [
       `Congratulations ${greeting}!`,
       '',
-      `I'm excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to ${amount} at Zillow Home Loans! Please find your pre-approval letter attached, a copy of your appraisal waiver certificate, and my profile.`,
+      `I'm excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to ${amount} at Zillow Home Loans!  Please find your preapproval letter attached, a copy of your appraisal waiver certificate, and my profile.`,
       '',
-      `This is a significant milestone on your homebuying journey. Now, armed with the Verified Pre-Approval, you're one step closer to finding your dream home!`,
+      `This is a significant milestone on your homebuying journey.  Now, armed with the Verified Pre-Approval, you're one step closer to finding your dream home!`,
       '',
       `Feel free to reach out to me if you have any questions or need assistance moving forward. I'm here to help make your homeownership dreams a reality.`,
       '',
-      `What's Next?`,
-      `  • Stay in touch with me and your Real Estate Agent, ${agent}.`,
-      `  • Continue to pay all bills on time.`,
-      `  • Do NOT open any new lines of credit or acquire new debt.`,
-      `  • Do NOT increase balances on your current credit obligations.`,
-      `  • Do NOT make changes to your employment outside of promotions or location moves.`,
-      `  • Avoid any unnecessary movement of monies between accounts.`,
-      `  • Do NOT diminish your savings or assets required for your home purchase.`,
       '',
-      `Don't Forget:`,
-      `  • No-Cost Appraisal — By financing with Zillow Home Loans and working with a Zillow Premier Agent partner, ZHL will cover the cost of your appraisal*.`,
-      `  • Very comfortable 21-day closings.`,
+      `What's Next?`,
+      '',
+      `  • Continue to stay in touch with your Loan Officer, ${lo} and your Real Estate Agent, ${agent}.`,
+      `  • Continue to pay all bills on time.`,
+      `  • Do Not open any new lines of credit nor acquire new debt.`,
+      `  • Do Not increase balances on your current credit obligations.`,
+      `  • Do Not make changes to your employment outside of promotions or simply moving physical locations.`,
+      `  • Avoid any unnecessary movement of monies between accounts.`,
+      `  • Do Not dimmish your savings or assets required for your home purchase.`,
+      '',
+      '',
+      `Don't Forget`,
+      '',
+      `  • No Cost Appraisal – By financing with Zillow Home Loans and working with a Zillow Premier Agent partner, Zillow Home Loans will cover the cost of your appraisal*.`,
+      `  • Very comfortable 21-Day closings`,
+      '',
       '',
       `Congratulations again ${greeting}, and best of luck with your home search!`,
       '',
-      `* While the appraisal fee will appear as a loan cost on your initial disclosures, your final disclosure will show Zillow Home Loans covering the cost. Offer available on initial appraisal for purchase and refinance transactions only, where an appraisal is required by Zillow Home Loans. Zillow Home Loans must order the appraisal. Appraisal fee will not be charged to the borrower when the loan closes with Zillow Home Loans. Offer does not apply to any subsequent appraisal, including re-inspections, desk reviews, etc. Zillow Home Loans, in its sole discretion, reserves the right to change or end this promotion at any time.`
+      '',
+      `* *While the appraisal fee will appear as a loan cost on your initial disclosures, your final disclosure will show Zillow Home Loans covering the cost. Offer available on initial appraisal for purchase and refinance transactions only, where an appraisal is required by Zillow Home Loans. Zillow Home Loans must order appraisal. Appraisal fee will not be charged to the borrower when the loan closes with Zillow Home Loans. Offer does not apply to any subsequent appraisal, including re-inspections, desk reviews, etc. Zillow Home Loans, in its sole discretion, reserves the right to change or end promotion at any time.`
     ].join('\n');
   }
 
-  function buildComposeUrl(lead) {
+  function buildComposeUrl(lead, loName) {
     const params = new URLSearchParams();
     if (lead.email) params.set('to', lead.email);
     const cc = [lead.coBorrowerEmail, lead.agentEmail].filter(Boolean);
     if (cc.length) params.set('cc', cc.join(','));
-    params.set('su', buildSubject(lead));
-    params.set('body', buildBody(lead));
+    params.set('su', buildSubject(lead, loName));
+    params.set('body', buildBody(lead, loName));
     return GMAIL_COMPOSE_BASE + '&' + params.toString();
+  }
+
+  // Pull the configured LO name from chrome.storage.local. Same key used by
+  // the Pricing Exception Workflow and other branded-output modules.
+  function getLoName() {
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.get(['lo_name'], function (data) {
+          resolve((data && data.lo_name) || '');
+        });
+      } catch (_) { resolve(''); }
+    });
   }
 
   function showToast(message, variant) {
@@ -344,14 +397,19 @@
     const button = event.currentTarget;
     try {
       setButtonState(button, 'loading');
-      const lead = await scrapeLeadData();
+      const [lead, loName] = await Promise.all([scrapeLeadData(), getLoName()]);
       if (!lead.email) {
         setButtonState(button, 'error', 'No email found');
         showToast('No email address visible on this lead. Make sure the Email field is showing on the page.', 'error');
         return;
       }
-      const url = buildComposeUrl(lead);
-      window.open(url, '_blank', 'noopener');
+      const url = buildComposeUrl(lead, loName);
+      // Plain window.open with just _blank — no windowFeatures string — so
+      // browsers open it as a normal tab in the LO's current Gmail session
+      // (matches the Pricing Exception Workflow's behavior). Passing a
+      // features string causes a standalone popup window in many browsers.
+      try { window.open(url, '_blank'); }
+      catch (_) { window.location.href = url; }
       setButtonState(button, 'success');
       showToast('VPA draft opened in Gmail. Attach the pre-approval PDF before sending.', 'success');
     } catch (e) {

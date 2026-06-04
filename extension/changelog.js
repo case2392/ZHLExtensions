@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.55.1",
+    category: "improvement",
+    headline: "Send VPA Email: subject + body now match the original SFGmail template exactly, and the draft opens in a new tab instead of a popup window.",
+    highlights: [
+      "Subject is back to the canonical 'Verified Pre-Approval for {fullNames} - Up to {amount}! - {LO Name} from Zillow Home Loans' wording — with co-borrower name handling that collapses 'Tracey Smith & Andrew Smith' into 'Tracey & Andrew Smith' when last names match. Pulls the LO name from the Setup page's LO Profile.",
+      "Body is a faithful plain-text port of the original VPA HTML template — same wording, same bullet order, same disclaimer footnote — only the HTML formatting / images are dropped (since Gmail compose URLs can't carry HTML). Gmail's signature will still render normally below the draft.",
+      "Compose tab now opens in a regular browser tab in the LO's current Gmail session, not a standalone popup window. Matches how the Pricing Exception Workflow opens Gmail — same URL pattern (mail.google.com/mail/?view=cm&fs=1) and same plain window.open(url, '_blank') call (no windowFeatures string, which was what was triggering the popup behavior)."
+    ],
+    sections: ["sf-vpa-email"]
+  },
+  {
     version: "1.55.0",
     category: "feature",
     headline: "NEW: Generate Loan Story for Encompass — auto-drafts the five ZG-Loan-Story sections from the LOP file in an editable modal with per-section Copy buttons.",
