@@ -12,6 +12,7 @@ const FEATURE_KEYS = [
   "feature_callerId",
   "feature_smsAddParticipants",
   "feature_sfVpaEmail",
+  "feature_sfIntroEmail",
   "feature_loanStoryGenerator",
   "feature_autoCallDetailsTab",
   "feature_autoMessagingTab",
@@ -457,6 +458,150 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
       chrome.storage.local.set({
         vpa_subject_tmpl:    subjectInput.value,
         vpa_body_html_tmpl:  bodyEditor.innerHTML
+      }, function () { setStatus('Reset to default'); });
+    });
+  }
+})();
+
+// ---------------------------------------------------------------------------
+// Intro Email template editor — mirrors the VPA editor, different storage
+// keys (intro_subject_tmpl, intro_body_html_tmpl) and a different default
+// body. Defaults come from window.__ZHL_INTRO_DEFAULT_* (set by
+// sf-intro-email.js); a local fallback below keeps the Setup page
+// self-contained.
+// ---------------------------------------------------------------------------
+(function initIntroTemplateEditor() {
+  const subjectInput = document.getElementById('intro-subject-tmpl');
+  const bodyEditor   = document.getElementById('intro-body-tmpl');
+  const resetBtn     = document.getElementById('intro-reset-btn');
+  const statusEl     = document.getElementById('intro-status');
+  const toolbar      = bodyEditor && bodyEditor.previousElementSibling;
+  const tags         = subjectInput && subjectInput.closest('.vpa-email-config').querySelectorAll('.vpa-placeholders .placeholder-tag');
+  if (!subjectInput || !bodyEditor) return;
+
+  const LOCAL_DEFAULT_SUBJECT = 'Disclosures signed — here\'s what happens next';
+
+  const LOCAL_DEFAULT_BODY_HTML = (
+    '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
+      '<p>Hi {First Name},</p>' +
+      '<p>Great news &mdash; your initial disclosures are signed and your file is officially moving. Here\'s what to expect over the next several days so nothing catches you off guard.</p>' +
+      '<p><strong>1. Initial underwriting review.</strong> Your file goes into an early underwriter review so we can get ahead of any conditions before they become time crunches later. The goal is to surface anything we need from you now, while we have runway, rather than at the closing table.</p>' +
+      '<p><strong>2. Loan processor introduction.</strong> One of our processors will reach out shortly to introduce themselves and become your day-to-day point of contact for documentation. They\'ll let you know if anything additional is needed beyond what you\'ve already provided. I\'m still quarterbacking the whole file, so don\'t worry &mdash; you\'re not getting handed off, just adding a teammate.</p>' +
+      '<p><strong>3. Homeowners insurance.</strong> This is the one item I\'d ask you to start on this week. You\'ll need a homeowners insurance policy in place before we can close, and quotes can take a few days to come back. I\'ve cc\'d <strong>Karson Carter</strong> with Goosehead Insurance on this email &mdash; she\'s excellent and can shop multiple carriers for you to find the best coverage and rate. Feel free to reply all or reach her directly:</p>' +
+      '<p style="margin-left: 24px;">' +
+        '<strong>Karson Carter</strong><br>' +
+        'Goosehead Insurance<br>' +
+        '(336) 596-3603<br>' +
+        '<a href="mailto:Karson.carter@goosehead.com" style="color: #0E35C4;">Karson.carter@goosehead.com</a>' +
+      '</p>' +
+      '<p>Once you have a policy selected, just let me know so we can coordinate the rest.</p>' +
+      '<p>If any questions come up between now and closing, text or call me anytime &mdash; that\'s what I\'m here for. We\'ll keep this moving.</p>' +
+      '<p>Best,<br>{LO Name}<br>Mortgage Loan Officer | <span style="font-family: Georgia, \'Times New Roman\', serif; color: #0E35C4; font-weight: bold;">Zillow Home Loans</span><br>NMLS #{NMLS}</p>' +
+      '<hr style="border: none; border-top: 1px solid #d1d5db; margin: 16px 0;">' +
+      '<p style="font-size: 12px; color: #4b5563;">' +
+        '<strong>Borrower Information</strong><br>' +
+        'Borrower: {Borrower Name}<br>' +
+        'Co-Borrower: {Co-Borrower Name}<br>' +
+        'Property Address: {Property Address}<br>' +
+        'Loan Number: {Loan Number}<br>' +
+        'Estimated Closing Date: {Closing Date}' +
+      '</p>' +
+    '</div>'
+  );
+
+  function getDefaultSubject() {
+    try { return window.__ZHL_INTRO_DEFAULT_SUBJECT || LOCAL_DEFAULT_SUBJECT; }
+    catch (_) { return LOCAL_DEFAULT_SUBJECT; }
+  }
+  function getDefaultBodyHtml() {
+    try { return window.__ZHL_INTRO_DEFAULT_BODY_HTML || LOCAL_DEFAULT_BODY_HTML; }
+    catch (_) { return LOCAL_DEFAULT_BODY_HTML; }
+  }
+
+  chrome.storage.local.get(['intro_subject_tmpl', 'intro_body_html_tmpl'], function (data) {
+    subjectInput.value   = (data && data.intro_subject_tmpl)   || getDefaultSubject();
+    bodyEditor.innerHTML = (data && data.intro_body_html_tmpl) || getDefaultBodyHtml();
+  });
+
+  let statusTimer = null;
+  function setStatus(text, isError) {
+    if (!statusEl) return;
+    statusEl.textContent = text || '';
+    statusEl.classList.toggle('error', !!isError);
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 1800);
+  }
+
+  let subjectTimer = null;
+  subjectInput.addEventListener('input', function () {
+    clearTimeout(subjectTimer);
+    subjectTimer = setTimeout(function () {
+      chrome.storage.local.set({ intro_subject_tmpl: subjectInput.value.trim() }, function () {
+        setStatus('Subject saved');
+      });
+    }, 400);
+  });
+
+  let bodyTimer = null;
+  bodyEditor.addEventListener('input', function () {
+    clearTimeout(bodyTimer);
+    bodyTimer = setTimeout(function () {
+      chrome.storage.local.set({ intro_body_html_tmpl: bodyEditor.innerHTML }, function () {
+        setStatus('Body saved');
+      });
+    }, 600);
+  });
+
+  if (toolbar && toolbar.classList && toolbar.classList.contains('vpa-body-toolbar')) {
+    toolbar.addEventListener('click', function (e) {
+      const btn = e.target.closest('.vpa-tb');
+      if (!btn) return;
+      e.preventDefault();
+      const cmd = btn.getAttribute('data-cmd');
+      if (!cmd) return;
+      bodyEditor.focus();
+      if (cmd === 'createLink') {
+        const url = window.prompt('Enter URL:');
+        if (url) document.execCommand('createLink', false, url);
+      } else {
+        document.execCommand(cmd, false, null);
+      }
+      chrome.storage.local.set({ intro_body_html_tmpl: bodyEditor.innerHTML });
+    });
+  }
+
+  if (tags && tags.length) {
+    tags.forEach(function (tag) {
+      tag.addEventListener('click', function () {
+        const code = tag.getAttribute('data-insert') || tag.textContent.trim();
+        const active = document.activeElement;
+        if (active === subjectInput) {
+          const start = subjectInput.selectionStart || subjectInput.value.length;
+          const end   = subjectInput.selectionEnd   || start;
+          const before = subjectInput.value.slice(0, start);
+          const after  = subjectInput.value.slice(end);
+          subjectInput.value = before + code + after;
+          const pos = before.length + code.length;
+          subjectInput.setSelectionRange(pos, pos);
+          subjectInput.dispatchEvent(new Event('input', { bubbles: true }));
+          subjectInput.focus();
+        } else {
+          bodyEditor.focus();
+          document.execCommand('insertText', false, code);
+          bodyEditor.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', function () {
+      if (!window.confirm('Reset the Intro Email subject and body to the default template? Your customizations will be replaced.')) return;
+      subjectInput.value   = getDefaultSubject();
+      bodyEditor.innerHTML = getDefaultBodyHtml();
+      chrome.storage.local.set({
+        intro_subject_tmpl:   subjectInput.value,
+        intro_body_html_tmpl: bodyEditor.innerHTML
       }, function () { setStatus('Reset to default'); });
     });
   }

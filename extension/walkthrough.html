@@ -410,6 +410,22 @@
       </div>
     </div>
 
+    <!-- Send Intro Email from Salesforce -->
+    <div class="feature is-new" id="sf-intro-email">
+      <div class="shot"><img src="images/sf-vpa-email.svg" alt="Salesforce Opportunity page on the left with Contact Roles list; arrow to a pre-filled Gmail compose window on the right with the disclosures-signed intro email body." /></div>
+      <div class="body">
+        <h3>Send Intro Email from Salesforce</h3>
+        <div class="where">Salesforce Opportunity action ribbon &mdash; <strong>Send Intro Email</strong> button</div>
+        <p>One-click pre-filled Gmail draft for the &ldquo;disclosures signed &mdash; here&rsquo;s what happens next&rdquo; introduction email to the borrowers. Sits in the same action-ribbon slot as Send VPA Email but on the Opportunity record instead of the Lead.</p>
+        <ul>
+          <li><strong>Scrapes the Opportunity for you.</strong> Borrower + co-borrower (name + email) come from the Contact Roles related list; Close Date and Loan Number come from the highlights panel. Property Address is grabbed too when it&rsquo;s visible; if it isn&rsquo;t, the placeholder stays in brackets for you to fill in.</li>
+          <li><strong>Pre-fills the whole draft.</strong> Gmail compose opens with To = borrower, CC = co-borrower (when present), Subject = &ldquo;Disclosures signed &mdash; here&rsquo;s what happens next&rdquo;, and the full HTML body populated from the customizable template &mdash; three numbered steps (initial UW review, processor intro, homeowners insurance), the homeowners insurance agent block (Karson Carter / Goosehead by default), your signature with NMLS, and the Borrower Information summary block at the bottom.</li>
+          <li><strong>Editable from Setup.</strong> Setup &rarr; Send Intro Email from Salesforce &rarr; Intro Email template lets you customize the subject and the body. Same placeholder chips as the VPA editor (<code>{First Name}</code>, <code>{Borrower Name}</code>, <code>{Co-Borrower Name}</code>, <code>{Property Address}</code>, <code>{Loan Number}</code>, <code>{Closing Date}</code>, <code>{LO Name}</code>, <code>{LO Email}</code>, <code>{NMLS}</code>). Reset to default brings the original template back.</li>
+          <li><strong>No OAuth, no Connected App.</strong> Uses the public Gmail compose URL + the Gmail companion content script for the auto-HTML-paste &mdash; same pattern as the VPA email and Pricing Exception Workflow.</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- Generate Loan Story for Encompass -->
     <div class="feature is-new" id="loan-story-generator">
       <div class="shot"><img src="images/loan-story-generator.svg" alt="Loan Story for Encompass modal with five editable sections (Property, Borrower, Employment/Income, Asset, Credit Notes) and a Copy button on each section." /></div>

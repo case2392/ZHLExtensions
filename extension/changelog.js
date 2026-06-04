@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.58.0",
+    category: "feature",
+    headline: "NEW: Send Intro Email from Salesforce — pre-filled disclosures-signed intro draft for the borrower(s) on every Opportunity, customizable subject + body from Setup.",
+    highlights: [
+      "Adds a Send Intro Email button to the Opportunity action ribbon — same slot as Send VPA Email is on the Lead / Contact pages. Only on Opportunity records (URL matches /lightning/r/Opportunity/...).",
+      "Scrapes the Borrower + Co-Borrower from the Contact Roles related list (name + email) and reads Close Date + Loan Number from the Opportunity highlights panel. Property Address grabbed from the page when visible; falls back to a [Property Address] bracket placeholder otherwise. Buyer's Agent role is ignored — only borrower-role contacts get pulled.",
+      "Opens a Gmail compose tab with To = primary borrower email, CC = co-borrower email (when present), subject + body populated from the customizable template. The Gmail companion content script (modules/gmail-intro-paste.js) auto-pastes the formatted HTML body once compose loads — same belt-and-suspenders pattern as the VPA email (HTML stash in chrome.storage.local under zhlIntroPendingPaste, clipboard fallback, plain body in the compose URL as last-resort).",
+      "Setup → Send Intro Email from Salesforce → Intro Email template panel mirrors the VPA editor: subject input, rich body editor (B/I/U + lists + link + clear), clickable placeholder chips ({First Name}, {Borrower Name}, {Co-Borrower Name}, {Property Address}, {Loan Number}, {Closing Date}, {LO Name}, {LO Email}, {NMLS}), Reset to default, saved-status indicator. Stored under intro_subject_tmpl and intro_body_html_tmpl.",
+      "Default body matches the LO's intro template: three numbered steps (initial UW review, processor intro, homeowners insurance), Karson Carter / Goosehead Insurance contact block, signature with NMLS, and the Borrower Information summary block at the bottom. 'Zillow Home Loans' mention styled in the brand Georgia serif cobalt (#0E35C4) — same treatment as the VPA email body."
+    ],
+    sections: ["sf-intro-email"]
+  },
+  {
     version: "1.57.3",
     category: "bugfix",
     headline: "Loan Story button now only appears on Full Application — was leaking onto Premier Agent / Tasks / etc.",

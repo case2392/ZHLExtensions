@@ -458,6 +458,75 @@
       </div>
     </section>
 
+    <!-- ============== Module: Send Intro Email from Salesforce ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Send Intro Email from Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> &mdash; Opportunity pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_sfIntroEmail" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sf-vpa-email.svg" alt="Salesforce Opportunity page on the left with the borrower's Contact Roles list; arrow points to a Gmail compose window pre-filled with the disclosures-signed intro email." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Send Intro Email</strong> button to the Opportunity action ribbon &mdash; same slot as the Send VPA Email button on Leads / Contacts.</li>
+          <li>Scrapes the <strong>Borrower + Co-Borrower</strong> from the Contact Roles related list (name + email), plus <strong>Close Date</strong> and <strong>Loan Number</strong> from the Opportunity highlights.</li>
+          <li>Opens a pre-filled Gmail compose tab with To = borrower, CC = co-borrower, subject + body populated from the customizable template below. The Gmail companion content script auto-pastes the formatted HTML body once compose loads.</li>
+          <li><strong>No OAuth, no Connected App.</strong> Uses the same public Gmail compose URL pattern as the VPA email and Pricing Exception Workflow.</li>
+        </ul>
+
+        <div class="vpa-email-config">
+          <h3>Intro Email template</h3>
+          <p class="vpa-helper">Customize the subject line and body. Click a placeholder chip below to insert it at your cursor &mdash; chips get replaced with real data when the email is sent. Pulls <strong>Loan Officer name / email / NMLS</strong> from the LO Profile card at the top of this page. Property Address / Loan Number / Close Date are scraped from the Opportunity; if any aren't visible they stay as <code>[bracketed]</code> placeholders for you to fill in.</p>
+
+          <div class="vpa-placeholders">
+            <span class="placeholder-tag" data-insert="{First Name}" title="Primary borrower's first name">{First Name}</span>
+            <span class="placeholder-tag" data-insert="{Borrower Name}" title="Primary borrower's full name">{Borrower Name}</span>
+            <span class="placeholder-tag" data-insert="{Co-Borrower Name}" title="Co-borrower full name (n/a if no co-borrower)">{Co-Borrower Name}</span>
+            <span class="placeholder-tag" data-insert="{Property Address}" title="Subject property address from the Opportunity">{Property Address}</span>
+            <span class="placeholder-tag" data-insert="{Loan Number}" title="Loan / ZG number from the Opportunity">{Loan Number}</span>
+            <span class="placeholder-tag" data-insert="{Closing Date}" title="Close Date from the Opportunity">{Closing Date}</span>
+            <span class="placeholder-tag" data-insert="{LO Name}" title="Your name (from LO Profile)">{LO Name}</span>
+            <span class="placeholder-tag" data-insert="{LO Email}" title="Your email (from LO Profile)">{LO Email}</span>
+            <span class="placeholder-tag" data-insert="{NMLS}" title="Your NMLS # (from LO Profile)">{NMLS}</span>
+          </div>
+
+          <label class="vpa-label">Subject line
+            <input id="intro-subject-tmpl" type="text" placeholder="Disclosures signed — here's what happens next" />
+          </label>
+
+          <label class="vpa-label">Email body
+            <span class="vpa-helper-inline">Edit like a Word document. Default includes the three-step intro, the homeowners insurance agent info, your signature, and the bottom Borrower Information summary block.</span>
+          </label>
+          <div class="vpa-body-toolbar">
+            <button type="button" class="vpa-tb" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" class="vpa-tb" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" class="vpa-tb" data-cmd="underline" title="Underline"><u>U</u></button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="insertUnorderedList" title="Bullet list">&bull; List</button>
+            <button type="button" class="vpa-tb" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="createLink" title="Insert link">&#128279; Link</button>
+            <button type="button" class="vpa-tb" data-cmd="removeFormat" title="Clear formatting">&times; Clear</button>
+          </div>
+          <div id="intro-body-tmpl" class="vpa-body-editor" contenteditable="true"></div>
+
+          <div class="vpa-config-row">
+            <button id="intro-reset-btn" type="button" class="secondary">Reset to default template</button>
+            <span id="intro-status" class="vpa-status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============== Module: SMS Mark All As Read ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
