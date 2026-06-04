@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.59.0",
+    category: "improvement",
+    headline: "Scenario Snapshot: now also grabs Lead source info (LSH record, hierarchy, Marksman, Incentive program) from the Pricing tab. Modal opens with the scenario card facsimile at the top. Copy writes rich HTML + plain so paste looks clean everywhere.",
+    highlights: [
+      "Lead source capture added. When Snapshot is triggered from the Scenarios tab, the module now navigates over to the Pricing sibling tab under a grey progress overlay, clicks the 'Lead source information' trigger, parses the popover (LSH record / Lead source hierarchy / Marksman pricing / Incentive program), closes it, then navigates back to Scenarios. Same Snapshot triggered from the Pricing tab does the capture in place. Same grey-overlay treatment the Copy LOP file and SMS Mark All As Read modules use for background work.",
+      "Scenario card facsimile is now in the snapshot modal — green ASSIGNED TO LOAN bar (or red RE-PRICE), centered title, subtitle, Priced timestamp, divider, and all field rows in the same label / value layout as the live LOP card. The previous header + flat field list duplicated the same info; now the facsimile IS the header. Detail dialog sections (Adjustments / Payment breakdown / Closing costs / Cash to/from / Lead source) follow below.",
+      "Copy now writes BOTH a rich HTML version and the plain-text version to the clipboard via ClipboardItem. Paste targets that support HTML (Outlook, Word, Slack, ticket bodies with WYSIWYG) get the styled card facsimile + dialog sections. Targets that only support plain text get the existing fixed-column padded text. Same one-click paste, different rendering per destination.",
+      "Modal now opens with all data already rendered — capture happens under the page-level grey overlay before the modal builds, so there's no in-modal spinner / no enabling buttons after async work. Cleaner flow + less perceived latency."
+    ],
+    sections: ["scenario-snapshot"]
+  },
+  {
     version: "1.58.2",
     category: "improvement",
     headline: "Intro Email: drop the in-template signature block. Gmail's own signature adds itself to every compose tab — having ours in the body too was producing duplicates.",

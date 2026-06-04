@@ -168,6 +168,55 @@
     return lines.join('\n');
   }
 
+  // Build an HTML version of the snapshot for the clipboard, so when
+  // the LO pastes into Outlook / Word / Slack / a ticket body, they
+  // get the styled card facsimile + dialog sections instead of just
+  // monospace text. ClipboardItem multi-format: paste targets pick
+  // whichever format they support.
+  function buildHtmlSnapshot(title, subtitle, status, priced, fields, dialogs) {
+    let dialogsHtml = '';
+    (dialogs || []).forEach(function (d) {
+      dialogsHtml += '<div style="margin-top:14px;padding-top:12px;border-top:2px solid #cbd5e1;">';
+      dialogsHtml += '<div style="font:700 13px Arial,sans-serif;color:#0b3a73;margin-bottom:6px;">' + escHtml(d.title) + '</div>';
+      (d.items || []).forEach(function (it) {
+        if (it.type === 'header') {
+          dialogsHtml += '<div style="margin:8px 0 4px;font:700 12px Arial,sans-serif;color:#1e293b;">' + escHtml(it.text) + '</div>';
+        } else if (it.type === 'tab') {
+          dialogsHtml += '<div style="margin:7px 0 3px;font:700 10.5px Arial,sans-serif;color:#006aff;text-transform:uppercase;letter-spacing:1px;">' + escHtml(it.text) + '</div>';
+        } else if (it.type === 'subheader') {
+          dialogsHtml += '<div style="margin:6px 0 2px;font:700 11.5px Arial,sans-serif;color:#334155;">' + escHtml(it.text) + '</div>';
+        } else if (it.type === 'note') {
+          dialogsHtml += '<div style="margin:3px 0;font:400 11px Arial,sans-serif;color:#64748b;font-style:italic;">' + escHtml(it.text) + '</div>';
+        } else if (it.type === 'kv') {
+          dialogsHtml +=
+            '<table style="width:100%;border-collapse:collapse;"><tr>' +
+              '<td style="padding:4px 0;color:#475569;font:500 11.5px Arial,sans-serif;">' + escHtml(it.label) + '</td>' +
+              '<td style="padding:4px 0;color:#0f172a;font:700 11.5px Arial,sans-serif;text-align:right;">' + escHtml(it.value) + '</td>' +
+            '</tr></table>';
+        } else if (it.type === 'table') {
+          dialogsHtml += '<table style="width:100%;border-collapse:collapse;font:500 11px Arial,sans-serif;margin:4px 0;">';
+          it.rows.forEach(function (cells, idx) {
+            const tag = idx === 0 ? 'th' : 'td';
+            dialogsHtml += '<tr>' + cells.map(function (c) {
+              return '<' + tag + ' style="padding:3px 6px;border-bottom:1px solid #f1f5f9;text-align:left;">' + escHtml(c) + '</' + tag + '>';
+            }).join('') + '</tr>';
+          });
+          dialogsHtml += '</table>';
+        }
+      });
+      dialogsHtml += '</div>';
+    });
+
+    return (
+      '<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:600px;">' +
+        '<style>' + LOP_CARD_CSS + '</style>' +
+        renderScenarioCardFacsimile(title, subtitle, status, priced, fields) +
+        dialogsHtml +
+        '<div style="margin-top:14px;font:400 10px Arial,sans-serif;color:#94a3b8;text-align:right;">Captured via ZHL Productivity Pack v' + escHtml(VERSION) + '</div>' +
+      '</div>'
+    );
+  }
+
   // ---- Deep dialog capture ----------------------------------------
   //
   // Four blue-link buttons on the scenario card open detail dialogs:
@@ -463,6 +512,138 @@
     }
   }
 
+  // ---- Lead source capture (Pricing tab) --------------------------
+  //
+  // Lead source info lives behind a "Lead source information" button on
+  // the Pricing tab of the Pricing & Scenarios page. The Snapshot is
+  // invoked from the Scenarios sibling tab — so we navigate over to
+  // Pricing, click the trigger, capture the popover, close it, then
+  // navigate back. The grey progress overlay shields the LO from
+  // seeing the tab flicker.
+
+  function isOnScenariosTab() {
+    return /\/pricing-and-scenarios\/scenarios/i.test(location.pathname);
+  }
+  function isOnPricingTab() {
+    return /\/pricing-and-scenarios\/pricing(?!-)/i.test(location.pathname);
+  }
+
+  function findSubnavLink(suffix) {
+    const links = document.querySelectorAll('header a[href]');
+    for (const a of links) {
+      const href = a.getAttribute('href') || '';
+      if (href.endsWith(suffix) && isElementVisible(a)) return a;
+    }
+    // Broader fallback: any <a href$="...">
+    return document.querySelector('a[href$="' + suffix + '"]');
+  }
+
+  async function navigateToTab(suffix, predicate, timeoutMs) {
+    const link = findSubnavLink(suffix);
+    if (!link) return false;
+    try { link.click(); } catch (_) { return false; }
+    const ok = await waitFor(predicate, timeoutMs || 3000);
+    // Settle for content render
+    await sleep(350);
+    return !!ok;
+  }
+
+  function isElementVisible(el) {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+
+  function findLeadSourceTrigger() {
+    // The trigger is a <button> with text "Lead source information"
+    // inside a <p> wrapper. Hand-roll the search across visible buttons
+    // because the class is hashed and unstable.
+    const buttons = document.querySelectorAll('button');
+    for (const b of buttons) {
+      if (!isElementVisible(b)) continue;
+      if (visibleText(b) === 'Lead source information') return b;
+    }
+    return null;
+  }
+
+  async function captureLeadSourceDialog() {
+    const before = new Set();
+    document.querySelectorAll('section[role="dialog"]').forEach(function (d) { before.add(d); });
+    const trigger = findLeadSourceTrigger();
+    if (!trigger) return null;
+    try { trigger.click(); } catch (_) { return null; }
+    const dialog = await waitFor(function () {
+      const all = document.querySelectorAll('section[role="dialog"]');
+      for (const d of all) {
+        if (before.has(d)) continue;
+        const h = d.querySelector('h4');
+        if (h && /lead source information/i.test(visibleText(h))) return d;
+      }
+      return null;
+    }, 2500);
+    if (!dialog) return null;
+    await sleep(120);
+    const items = parseDialogBody(dialog);
+    closeDialog(dialog);
+    await waitFor(function () { return !document.body.contains(dialog); }, 1500);
+    return { title: 'Lead source information', items: items };
+  }
+
+  // Captures the Pricing-tab lead source info, regardless of whether
+  // the LO triggered Snapshot from Scenarios or Pricing. Returns null
+  // when not on a Pricing & Scenarios page at all (so we don't fire
+  // navigation off some unrelated route).
+  async function captureLeadSource() {
+    const onScenarios = isOnScenariosTab();
+    const onPricing   = isOnPricingTab();
+    if (!onScenarios && !onPricing) return null;
+
+    let returnSuffix = null;
+    if (onScenarios) {
+      // Walk to Pricing
+      const ok = await navigateToTab('/pricing-and-scenarios/pricing', isOnPricingTab, 3000);
+      if (!ok) return null;
+      returnSuffix = '/pricing-and-scenarios/scenarios';
+    }
+
+    const result = await captureLeadSourceDialog();
+
+    if (returnSuffix) {
+      await navigateToTab(returnSuffix, isOnScenariosTab, 3000);
+    }
+    return result;
+  }
+
+  // ---- Grey progress overlay --------------------------------------
+
+  const OVERLAY_ID = 'zhl-ss-progress-overlay';
+  function showProgress(message) {
+    let overlay = document.getElementById(OVERLAY_ID);
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = OVERLAY_ID;
+      overlay.style.cssText = [
+        'position:fixed','inset:0','z-index:2147483645',
+        'background:rgba(15,23,42,0.55)',
+        'display:flex','flex-direction:column','align-items:center','justify-content:center',
+        'gap:14px','color:#fff',
+        'font:500 14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif',
+        'cursor:wait'
+      ].join(';');
+      overlay.innerHTML =
+        '<style>@keyframes zhl-ss-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }</style>' +
+        '<span id="' + OVERLAY_ID + '-spin" style="display:inline-block;width:32px;height:32px;border:3px solid #fff;border-top-color:transparent;border-radius:50%;animation:zhl-ss-spin 0.8s linear infinite;"></span>' +
+        '<div id="' + OVERLAY_ID + '-msg" style="text-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>';
+      document.body.appendChild(overlay);
+    }
+    const msgEl = document.getElementById(OVERLAY_ID + '-msg');
+    if (msgEl) msgEl.textContent = message;
+  }
+  function hideProgress() {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) try { overlay.remove(); } catch (_) {}
+  }
+
   async function captureAllDialogs(card) {
     const buttons = findDialogButtons(card);
     const captured = [];
@@ -536,117 +717,103 @@
       'padding:24px'
     ].join(';');
 
-    const card_ = document.createElement('div');
-    card_.style.cssText = [
-      'background:#fff', 'border-radius:10px',
-      'max-width:560px', 'width:100%',
-      'max-height:calc(100vh - 48px)', 'overflow-y:auto',
-      'box-shadow:0 18px 48px rgba(0,0,0,0.3)',
-      'color:#0f172a'
-    ].join(';');
-
-    const statusBadge = status
-      ? '<span style="display:inline-block;background:' + (status === 'ASSIGNED TO LOAN' ? '#dcfce7' : '#fee2e2') + ';color:' + (status === 'ASSIGNED TO LOAN' ? '#065f46' : '#991b1b') + ';font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:100px;margin-right:8px;">' + escHtml(status) + '</span>'
-      : '';
-
-    let fieldsHtml = '';
-    fields.forEach(function (f) {
-      fieldsHtml +=
-        '<div style="display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px solid #f1f5f9;">' +
-          '<span style="color:#475569;font-size:12.5px;">' + escHtml(f.label) + '</span>' +
-          '<span style="color:#0f172a;font-size:12.5px;font-weight:600;text-align:right;">' + escHtml(f.value) + '</span>' +
-        '</div>';
-    });
-
-    card_.innerHTML =
-      '<div style="padding:18px 20px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">' +
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:11px;color:#006aff;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:4px;">Scenario Snapshot</div>' +
-          '<h3 style="margin:0;font:700 17px/1.25 inherit;color:#0b3a73;">' + escHtml(title) + '</h3>' +
-          (subtitle ? '<div style="margin-top:3px;font:500 12px/1.4 inherit;color:#334155;">' + escHtml(subtitle) + '</div>' : '') +
-          '<div style="margin-top:8px;">' +
-            statusBadge +
-            (priced ? '<span style="font:500 11px inherit;color:#6b7280;">Priced: ' + escHtml(priced) + '</span>' : '') +
-          '</div>' +
-        '</div>' +
-        '<button id="zhl-ss-close-x" aria-label="Close" style="background:none;border:none;font:400 22px/1 sans-serif;color:#6b7280;cursor:pointer;padding:0 2px;">&times;</button>' +
-      '</div>' +
-      '<div id="zhl-ss-body" style="padding:6px 20px 16px;">' +
-        fieldsHtml +
-        '<div id="zhl-ss-deep" style="margin-top:10px;padding:8px 10px;background:#eff6ff;border-radius:6px;color:#0b3a73;font:500 11.5px inherit;display:flex;align-items:center;gap:8px;">' +
-          '<span style="display:inline-block;width:10px;height:10px;border:2px solid #006aff;border-top-color:transparent;border-radius:50%;animation:zhl-ss-spin 0.7s linear infinite;"></span>' +
-          '<span>Capturing detail dialogs (Points, P&I, Closing costs, Cash to/from)…</span>' +
-        '</div>' +
-      '</div>' +
-      '<div style="padding:12px 20px 16px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;align-items:center;background:#fafbfc;border-radius:0 0 10px 10px;">' +
-        '<button id="zhl-ss-copy" disabled style="padding:7px 12px;background:#fff;color:#94a3b8;border:1px solid #e2e8f0;border-radius:5px;font:600 12.5px inherit;cursor:not-allowed;">Copy as text</button>' +
-        '<button id="zhl-ss-print" disabled style="padding:7px 12px;background:#cbd5e1;color:#fff;border:1px solid #cbd5e1;border-radius:5px;font:600 12.5px inherit;cursor:not-allowed;">Print</button>' +
-        '<button id="zhl-ss-close" style="padding:7px 12px;background:#006aff;color:#fff;border:1px solid #006aff;border-radius:5px;font:600 12.5px inherit;cursor:pointer;">Close</button>' +
-      '</div>' +
-      '<div style="padding:8px 20px 12px;font:400 10.5px inherit;color:#94a3b8;border-top:1px solid #f1f5f9;text-align:right;">' + escHtml(ZHL_TIP) + '</div>' +
-      '<style>@keyframes zhl-ss-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }</style>';
-
-    overlay.appendChild(card_);
+    // We hide the to-be-built overlay element while capture runs and
+    // show the page-level grey progress overlay instead. Modal opens
+    // with all data already rendered.
+    overlay.style.display = 'none';
     document.body.appendChild(overlay);
 
-    let cancelled = false;
-    function dismiss() { cancelled = true; try { overlay.remove(); } catch (_) {} }
-    card_.querySelector('#zhl-ss-close').addEventListener('click', dismiss);
-    card_.querySelector('#zhl-ss-close-x').addEventListener('click', dismiss);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) dismiss(); });
-
+    showProgress('Capturing scenario details…');
     track('scenario_snapshot_open', { fieldCount: fields.length });
 
-    // Async capture all dialogs, then enable Copy/Print and append data
+    // Capture detail dialogs (Points, P&I, Closing costs, Cash to/from)
     let dialogs = [];
     try {
       dialogs = await captureAllDialogs(card);
     } catch (e) {
       console.warn('[ZHL Snapshot] dialog capture failed', e);
     }
-    if (cancelled) return;
 
-    // Replace the loading indicator with the rendered dialog sections
-    const body = card_.querySelector('#zhl-ss-body');
-    const loader = card_.querySelector('#zhl-ss-deep');
-    if (loader) loader.remove();
-    let html = '';
-    dialogs.forEach(function (d) { html += renderDialogSectionHtml(d); });
-    if (!html) {
-      html = '<div style="margin-top:10px;padding:8px 10px;background:#fef3c7;border-radius:6px;color:#92400e;font:500 11.5px inherit;">Detail dialogs unavailable — captured card fields only.</div>';
+    // Capture the Pricing-tab Lead source info (navigates Scenarios → Pricing → Scenarios under the overlay)
+    showProgress('Capturing lead source info…');
+    let leadSource = null;
+    try { leadSource = await captureLeadSource(); }
+    catch (e) { console.warn('[ZHL Snapshot] lead source capture failed', e); }
+    if (leadSource) dialogs.push(leadSource);
+
+    hideProgress();
+    overlay.style.display = 'flex';
+
+    const card_ = document.createElement('div');
+    card_.style.cssText = [
+      'background:#f8fafc', 'border-radius:10px',
+      'max-width:600px', 'width:100%',
+      'max-height:calc(100vh - 48px)', 'overflow-y:auto',
+      'box-shadow:0 18px 48px rgba(0,0,0,0.3)',
+      'color:#0f172a'
+    ].join(';');
+
+    let dialogsHtml = '';
+    dialogs.forEach(function (d) { dialogsHtml += renderDialogSectionHtml(d); });
+    if (!dialogsHtml) {
+      dialogsHtml = '<div style="margin-top:10px;padding:8px 10px;background:#fef3c7;border-radius:6px;color:#92400e;font:500 11.5px inherit;">Detail dialogs unavailable — captured card fields only.</div>';
     }
-    body.insertAdjacentHTML('beforeend', html);
 
-    // Enable buttons now that we have the full payload
+    card_.innerHTML =
+      // Compact header bar — just the eyebrow + close X. The card
+      // identity (title, status, priced, fields) lives in the
+      // facsimile below, no duplication.
+      '<div style="padding:14px 20px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border-radius:10px 10px 0 0;border-bottom:1px solid #e5e7eb;">' +
+        '<div style="font-size:11px;color:#006aff;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;">Scenario Snapshot</div>' +
+        '<button id="zhl-ss-close-x" aria-label="Close" style="background:none;border:none;font:400 22px/1 sans-serif;color:#6b7280;cursor:pointer;padding:0 2px;">&times;</button>' +
+      '</div>' +
+      // Scenario card facsimile + dialog sections
+      '<div id="zhl-ss-body" style="padding:16px 20px 16px;">' +
+        '<style>' + LOP_CARD_CSS + '</style>' +
+        renderScenarioCardFacsimile(title, subtitle, status, priced, fields) +
+        dialogsHtml +
+      '</div>' +
+      // Footer
+      '<div style="padding:12px 20px 16px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;align-items:center;background:#fff;border-radius:0 0 10px 10px;">' +
+        '<button id="zhl-ss-copy" style="padding:7px 14px;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-radius:5px;font:600 12.5px inherit;cursor:pointer;">Copy</button>' +
+        '<button id="zhl-ss-print" style="padding:7px 14px;background:#0b3a73;color:#fff;border:1px solid #0b3a73;border-radius:5px;font:600 12.5px inherit;cursor:pointer;">Print</button>' +
+        '<button id="zhl-ss-close" style="padding:7px 14px;background:#006aff;color:#fff;border:1px solid #006aff;border-radius:5px;font:600 12.5px inherit;cursor:pointer;">Close</button>' +
+      '</div>' +
+      '<div style="padding:8px 20px 12px;font:400 10.5px inherit;color:#94a3b8;border-top:1px solid #f1f5f9;text-align:right;background:#fff;border-radius:0 0 10px 10px;">' + escHtml(ZHL_TIP) + '</div>';
+
+    overlay.appendChild(card_);
+
+    function dismiss() { try { overlay.remove(); } catch (_) {} }
+    card_.querySelector('#zhl-ss-close').addEventListener('click', dismiss);
+    card_.querySelector('#zhl-ss-close-x').addEventListener('click', dismiss);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) dismiss(); });
+
     const copyBtn  = card_.querySelector('#zhl-ss-copy');
     const printBtn = card_.querySelector('#zhl-ss-print');
-    copyBtn.disabled = false;
-    copyBtn.style.background = '#fff';
-    copyBtn.style.color = '#0f172a';
-    copyBtn.style.borderColor = '#cbd5e1';
-    copyBtn.style.cursor = 'pointer';
-    printBtn.disabled = false;
-    printBtn.style.background = '#0b3a73';
-    printBtn.style.color = '#fff';
-    printBtn.style.borderColor = '#0b3a73';
-    printBtn.style.cursor = 'pointer';
 
+    // Copy: write both rich-HTML (renders nicely in Outlook / Word /
+    // Slack) AND plain (fixed-column padded labels) to the clipboard
+    // so wherever the LO pastes, it looks clean.
     copyBtn.addEventListener('click', function () {
-      const txt = buildPlainTextSnapshot(title, subtitle, status, priced, fields, dialogs);
+      const txt  = buildPlainTextSnapshot(title, subtitle, status, priced, fields, dialogs);
+      const html = buildHtmlSnapshot(title, subtitle, status, priced, fields, dialogs);
       const orig = copyBtn.textContent;
+      function done(ok) {
+        copyBtn.textContent = ok ? '✓ Copied' : '✗ Copy failed';
+        setTimeout(function () { copyBtn.textContent = orig; }, 1500);
+        if (ok) track('scenario_snapshot_copy', { fieldCount: fields.length, dialogCount: dialogs.length });
+      }
       try {
-        navigator.clipboard.writeText(txt).then(function () {
-          copyBtn.textContent = '✓ Copied';
-          setTimeout(function () { copyBtn.textContent = orig; }, 1500);
-          track('scenario_snapshot_copy', { fieldCount: fields.length, dialogCount: dialogs.length });
-        }).catch(function (e) {
-          console.warn('[ZHL Snapshot] clipboard write failed', e);
-          copyBtn.textContent = '✗ Copy failed';
-          setTimeout(function () { copyBtn.textContent = orig; }, 1500);
+        const items = [new ClipboardItem({
+          'text/html':  new Blob([html], { type: 'text/html'  }),
+          'text/plain': new Blob([txt],  { type: 'text/plain' })
+        })];
+        navigator.clipboard.write(items).then(function () { done(true); }, function () {
+          navigator.clipboard.writeText(txt).then(function () { done(true); }, function () { done(false); });
         });
-      } catch (e) {
-        console.warn('[ZHL Snapshot] clipboard API unavailable', e);
-        copyBtn.textContent = '✗ Copy unavailable';
+      } catch (_) {
+        try { navigator.clipboard.writeText(txt).then(function () { done(true); }, function () { done(false); }); }
+        catch (__) { done(false); }
       }
     });
 
