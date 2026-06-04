@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.57.3",
+    category: "bugfix",
+    headline: "Loan Story button now only appears on Full Application — was leaking onto Premier Agent / Tasks / etc.",
+    highlights: [
+      "The injection logic preferred the existing Copy LOP file panel as its anchor (correct), but fell back to mounting onto the persistent subnav row when the panel wasn't there yet. On non-Full-App pages the panel doesn't exist, so the fallback fired and attached our button to the subnav — which doesn't get torn down between tabs. Result: button stuck around on Premier Agent / Tasks.",
+      "Removed the subnav fallback entirely. Only anchor next to the Copy LOP file panel, and explicitly remove our button when the user navigates away from Full Application (or when the panel disappears). Same lifecycle as the Copy from Stage and Pricing Exception Workflow buttons now."
+    ],
+    sections: ["loan-story-generator"]
+  },
+  {
     version: "1.57.2",
     category: "improvement",
     headline: "Pricing Exception Workflow: removed the 'Copy body only' and 'Copy subject only' buttons. Open in Gmail already handles both reliably.",

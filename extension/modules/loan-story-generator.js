@@ -613,15 +613,20 @@
   // Button injection
   // -------------------------------------------------------------------
   function findInjectionTarget() {
-    // Prefer the existing Productivity Pack panel (sibling to the
-    // subnav links). If that's not there yet (other modules still
-    // initializing), fall back to the subnav container itself.
+    // ONLY anchor next to the existing Productivity Pack panel (which
+    // lop-file-copy injects on the Full Application page and removes
+    // when the LO navigates away). Sibling-mounting onto the persistent
+    // subnav row was the old fallback — but it caused our button to
+    // outlive Full App and show up on Premier Agent / Tasks / etc.
+    // Same lifecycle as Copy from Stage and Pricing Exception now.
     const panel = document.getElementById(PANEL_ID);
     if (panel) return { kind: 'panel', el: panel };
-    // Subnav: look for the active "Full application" link's parent.
-    const fullApp = document.querySelector('a[data-cy="subnav-full-application"]');
-    if (fullApp && fullApp.parentElement) return { kind: 'subnav', el: fullApp.parentElement };
     return null;
+  }
+
+  function removeButton() {
+    const existing = document.getElementById(BUTTON_ID);
+    if (existing) { try { existing.remove(); } catch (_) {} }
   }
 
   function makeButton() {
@@ -650,20 +655,30 @@
   }
 
   function tryInject() {
-    if (!isFullAppPage()) return;
+    // Off Full App? Clean up any leftover button. Even though our
+    // anchor (the Copy LOP file panel) usually unmounts when LOP
+    // re-renders the subnav content, this guard catches the case
+    // where our button got attached and the panel hasn't been torn
+    // down yet — keeps us strictly on Full Application.
+    if (!isFullAppPage()) { removeButton(); return; }
+    // The Copy LOP file panel needs to be present to anchor next to;
+    // also confirms we're actually on the Full App content (not just
+    // a URL match against a still-loading page).
+    const target = findInjectionTarget();
+    if (!target) { removeButton(); return; }
     const existing = document.getElementById(BUTTON_ID);
     if (existing) {
-      syncButtonState(existing);
-      return;
+      // If the existing button is no longer inside the current panel
+      // (LOP may have re-mounted the panel), re-attach it.
+      if (existing.parentElement !== target.el) {
+        try { existing.remove(); } catch (_) {}
+      } else {
+        syncButtonState(existing);
+        return;
+      }
     }
-    const target = findInjectionTarget();
-    if (!target) return;
     const btn = makeButton();
-    if (target.kind === 'panel') {
-      target.el.appendChild(btn);
-    } else {
-      target.el.appendChild(btn);
-    }
+    target.el.appendChild(btn);
     syncButtonState(btn);
   }
 
