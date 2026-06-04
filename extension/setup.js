@@ -74,7 +74,7 @@ document.querySelectorAll('input[data-feature]').forEach((input) => {
 // borrower-facing PDFs. Stored in chrome.storage.local under the
 // lo_* keys. Saves on input (debounced) so the user doesn't have
 // to click a Save button.
-const LO_FIELDS = ['lo_name', 'lo_nmls', 'lo_phone', 'lo_email'];
+const LO_FIELDS = ['lo_name', 'lo_nmls', 'lo_phone', 'lo_email', 'lo_zillow_url'];
 async function loadLoProfile() {
   const data = await chrome.storage.local.get(LO_FIELDS);
   document.querySelectorAll('input[data-lo-field]').forEach((input) => {
@@ -275,4 +275,182 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
     try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'firstrun_dismissed' }); } catch (_) {}
     hideBanner();
   });
+})();
+
+// ---------------------------------------------------------------------------
+// VPA Email template editor
+//
+// Lets the LO customize the subject line and HTML body of the Send VPA
+// Email module. Storage keys: vpa_subject_tmpl, vpa_body_html_tmpl.
+// Defaults are read from window.__ZHL_VPA_DEFAULT_SUBJECT and
+// window.__ZHL_VPA_DEFAULT_BODY_HTML (set by sf-vpa-email.js when it
+// loads), with a local copy below as a fallback for the case where
+// setup.html is opened in a context that doesn't have the module
+// loaded in the same window.
+// ---------------------------------------------------------------------------
+(function initVpaTemplateEditor() {
+  const subjectInput = document.getElementById('vpa-subject-tmpl');
+  const bodyEditor   = document.getElementById('vpa-body-tmpl');
+  const resetBtn     = document.getElementById('vpa-reset-btn');
+  const statusEl     = document.getElementById('vpa-status');
+  const toolbar      = document.querySelector('.vpa-body-toolbar');
+  const tags         = document.querySelectorAll('.vpa-placeholders .placeholder-tag');
+  if (!subjectInput || !bodyEditor) return;
+
+  // Local fallback default (kept in sync with sf-vpa-email.js's
+  // DEFAULT_BODY_HTML_TMPL). The module exposes the live default on
+  // window when it runs in the same document; setup.html doesn't load
+  // sf-vpa-email.js though, so we always end up using these locals.
+  const LOCAL_DEFAULT_SUBJECT =
+    'Verified Pre-Approval for {Full Names} - Up to {Amount}! - {LO Name} from Zillow Home Loans';
+
+  const LOCAL_DEFAULT_BODY_HTML = (
+    '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
+      '<h1 style="color: #1a73e8; font-size: 26px; font-weight: bold; margin-bottom: 16px;">Congratulations {Greeting}!</h1>' +
+      '<p>I\'m excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to <span style="color: #1a73e8; font-weight: bold; text-decoration: underline;">{Amount}</span> at Zillow Home Loans!&nbsp; Please find your preapproval letter attached, a copy of your appraisal waiver certificate, and my profile.&nbsp; You can also click here to view my <a href="{Zillow URL}" style="color: #1a73e8; text-decoration: underline;">Zillow Webpage</a>!</p>' +
+      '<p><strong>This is a significant milestone on your homebuying journey.&nbsp; Now, armed with the Verified Pre-Approval, you\'re one step closer to finding your dream home!</strong></p>' +
+      '<p><strong>Feel free to reach out to me if you have any questions or need assistance moving forward. I\'m here to help make your homeownership dreams a reality.</strong></p>' +
+      '<br/>' +
+      '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 4px;">' +
+        '<tr>' +
+          '<td style="vertical-align: middle; padding-right: 8px;">' +
+            '<img src="https://drive.google.com/uc?export=view&id=1DfbFqOFCz3OnUUPxHoNnVh3JIUzjAitV" alt="Zillow" width="36" height="36" style="display: block;"/>' +
+          '</td>' +
+          '<td style="vertical-align: middle;">' +
+            '<span style="color: #1a73e8; font-size: 22px; font-weight: bold; font-style: italic;">What\'s Next?</span>' +
+          '</td>' +
+        '</tr>' +
+      '</table>' +
+      '<ul style="margin: 8px 0 16px 0; padding-left: 24px;">' +
+        '<li style="margin-bottom: 6px;">Continue to stay in touch with your Loan Officer, {LO Name} and your Real Estate Agent, {Agent}.</li>' +
+        '<li style="margin-bottom: 6px;">Continue to pay all bills on time.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not open any new lines of credit nor acquire new debt.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not increase balances on your current credit obligations.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not make changes to your employment outside of promotions or simply moving physical locations.</li>' +
+        '<li style="margin-bottom: 6px;">Avoid any unnecessary movement of monies between accounts.</li>' +
+        '<li style="margin-bottom: 6px;">Do Not dimmish your savings or assets required for your home purchase.</li>' +
+      '</ul>' +
+      '<br/>' +
+      '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 4px;">' +
+        '<tr>' +
+          '<td style="vertical-align: middle; padding-right: 8px;">' +
+            '<img src="https://drive.google.com/uc?export=view&id=1XWel1Mh3_SbuGxz4tb0jF_4iQqMP2TdV" alt="Bonus" width="40" height="50" style="display: block;"/>' +
+          '</td>' +
+          '<td style="vertical-align: middle;">' +
+            '<span style="color: #1a73e8; font-size: 22px; font-weight: bold; font-style: italic;">Don\'t Forget</span>' +
+          '</td>' +
+        '</tr>' +
+      '</table>' +
+      '<ul style="margin: 8px 0 16px 0; padding-left: 24px;">' +
+        '<li style="margin-bottom: 6px;">No Cost Appraisal &ndash; By financing with Zillow Home Loans and working with a Zillow Premier Agent partner, Zillow Home Loans will cover the cost of your appraisal*.</li>' +
+        '<li style="margin-bottom: 6px;">Very comfortable 21-Day closings</li>' +
+      '</ul>' +
+      '<p style="font-size: 20px; font-weight: bold; font-style: italic; margin: 20px 0;">Congratulations again {Greeting}, and best of luck with your home search!</p>' +
+      '<p style="font-size: 10px; color: #666666; font-style: italic; line-height: 1.4;">* *While the appraisal fee will appear as a loan cost on your initial disclosures, your final disclosure will show Zillow Home Loans covering the cost. Offer available on initial appraisal for purchase and refinance transactions only, where an appraisal is required by Zillow Home Loans. Zillow Home Loans must order appraisal. Appraisal fee will not be charged to the borrower when the loan closes with Zillow Home Loans. Offer does not apply to any subsequent appraisal, including re-inspections, desk reviews, etc. Zillow Home Loans, in its sole discretion, reserves the right to change or end promotion at any time.</p>' +
+    '</div>'
+  );
+
+  function getDefaultSubject() {
+    try { return window.__ZHL_VPA_DEFAULT_SUBJECT || LOCAL_DEFAULT_SUBJECT; }
+    catch (_) { return LOCAL_DEFAULT_SUBJECT; }
+  }
+  function getDefaultBodyHtml() {
+    try { return window.__ZHL_VPA_DEFAULT_BODY_HTML || LOCAL_DEFAULT_BODY_HTML; }
+    catch (_) { return LOCAL_DEFAULT_BODY_HTML; }
+  }
+
+  // Load saved values (or defaults)
+  chrome.storage.local.get(['vpa_subject_tmpl', 'vpa_body_html_tmpl'], function (data) {
+    subjectInput.value = (data && data.vpa_subject_tmpl) || getDefaultSubject();
+    bodyEditor.innerHTML = (data && data.vpa_body_html_tmpl) || getDefaultBodyHtml();
+  });
+
+  // Status helper
+  let statusTimer = null;
+  function setStatus(text, isError) {
+    if (!statusEl) return;
+    statusEl.textContent = text || '';
+    statusEl.classList.toggle('error', !!isError);
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 1800);
+  }
+
+  // Debounced save on subject change
+  let subjectTimer = null;
+  subjectInput.addEventListener('input', function () {
+    clearTimeout(subjectTimer);
+    subjectTimer = setTimeout(function () {
+      chrome.storage.local.set({ vpa_subject_tmpl: subjectInput.value.trim() }, function () {
+        setStatus('Subject saved');
+      });
+    }, 400);
+  });
+
+  // Debounced save on body edit
+  let bodyTimer = null;
+  bodyEditor.addEventListener('input', function () {
+    clearTimeout(bodyTimer);
+    bodyTimer = setTimeout(function () {
+      chrome.storage.local.set({ vpa_body_html_tmpl: bodyEditor.innerHTML }, function () {
+        setStatus('Body saved');
+      });
+    }, 600);
+  });
+
+  // Toolbar buttons → document.execCommand on the editor
+  if (toolbar) {
+    toolbar.addEventListener('click', function (e) {
+      const btn = e.target.closest('.vpa-tb');
+      if (!btn) return;
+      e.preventDefault();
+      const cmd = btn.getAttribute('data-cmd');
+      if (!cmd) return;
+      bodyEditor.focus();
+      if (cmd === 'createLink') {
+        const url = window.prompt('Enter URL:');
+        if (url) document.execCommand('createLink', false, url);
+      } else {
+        document.execCommand(cmd, false, null);
+      }
+      // Save the edit
+      chrome.storage.local.set({ vpa_body_html_tmpl: bodyEditor.innerHTML });
+    });
+  }
+
+  // Placeholder chip click → insert at caret
+  tags.forEach(function (tag) {
+    tag.addEventListener('click', function () {
+      const code = tag.getAttribute('data-insert') || tag.textContent.trim();
+      // Decide which input has focus. If neither does, default to the body.
+      const active = document.activeElement;
+      if (active === subjectInput) {
+        const start = subjectInput.selectionStart || subjectInput.value.length;
+        const end   = subjectInput.selectionEnd   || start;
+        const before = subjectInput.value.slice(0, start);
+        const after  = subjectInput.value.slice(end);
+        subjectInput.value = before + code + after;
+        const pos = before.length + code.length;
+        subjectInput.setSelectionRange(pos, pos);
+        subjectInput.dispatchEvent(new Event('input', { bubbles: true }));
+        subjectInput.focus();
+      } else {
+        bodyEditor.focus();
+        document.execCommand('insertText', false, code);
+        bodyEditor.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  });
+
+  // Reset to defaults
+  if (resetBtn) {
+    resetBtn.addEventListener('click', function () {
+      if (!window.confirm('Reset the VPA Email subject and body to the default template? Your customizations will be replaced.')) return;
+      subjectInput.value    = getDefaultSubject();
+      bodyEditor.innerHTML  = getDefaultBodyHtml();
+      chrome.storage.local.set({
+        vpa_subject_tmpl:    subjectInput.value,
+        vpa_body_html_tmpl:  bodyEditor.innerHTML
+      }, function () { setStatus('Reset to default'); });
+    });
+  }
 })();

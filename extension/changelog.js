@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.57.0",
+    category: "feature",
+    headline: "VPA Email is now fully customizable from Setup — edit the subject line, the HTML body (rich editor), and your Zillow Webpage URL. Mirrors the original SFGmail setup.",
+    highlights: [
+      "LO Profile card now has a Zillow Webpage URL field (lo_zillow_url). Used in the VPA email body's \"You can also click here to view my Zillow Webpage!\" link. If left blank, the link still renders but goes nowhere — edit the body template to remove the sentence if you don't want it.",
+      "Send VPA Email module card now has a VPA Email template panel: subject line input + rich body editor (bold / italic / underline / bullets / link / clear formatting toolbar) + clickable placeholder chips ({Greeting}, {Borrower}, {Full Names}, {Amount}, {Agent}, {Agent Name}, {LO Name}, {LO Email}, {Zillow URL}) + Reset to default button. Saves on every edit (debounced); status indicator confirms.",
+      "Placeholder substitution happens at send time. Plain-text placeholders like {Greeting} / {Amount} / {Borrower} resolve to escaped text; {Agent} and {LO Name} resolve to fully-styled HTML (mailto link in red bold / blue bold when an email is available, plain styled span when not). Same substitution logic the original SFGmail extension used.",
+      "Default templates extracted as DEFAULT_SUBJECT_TMPL and DEFAULT_BODY_HTML_TMPL in sf-vpa-email.js. Customizations live under chrome.storage.local keys vpa_subject_tmpl and vpa_body_html_tmpl; if either is empty the default is used. Click-handler reads templates from storage on every send so changes are live without reloading anything."
+    ],
+    sections: ["sf-vpa-email"]
+  },
+  {
     version: "1.56.2",
     category: "improvement",
     headline: "Send VPA Email now produces the full HTML-formatted email — same big blue Congratulations headline, Zillow / Bonus icons, branded bullet lists, and disclaimer footnote as the original SFGmail proof-of-concept. No more plain text.",

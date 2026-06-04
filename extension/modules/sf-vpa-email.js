@@ -274,13 +274,60 @@
     return [first, last].filter(Boolean).join(' ');
   }
 
-  // Subject line — matches the original SFGmail default exactly:
-  //   "Verified Pre-Approval for {fullNames} - Up to {amount}! - {LOName} from Zillow Home Loans"
-  function buildSubject(lead, loName) {
+  // -----------------------------------------------------------------
+  // Template defaults + placeholder substitution
+  //
+  // Subject and body are user-editable on the Setup page. The defaults
+  // below are written with literal {Placeholder} markers; storage keys
+  // vpa_subject_tmpl and vpa_body_html_tmpl override them per LO.
+  // Substitution happens at send time inside substituteSubject() and
+  // substituteBodyHtml().
+  // -----------------------------------------------------------------
+
+  const DEFAULT_SUBJECT_TMPL =
+    'Verified Pre-Approval for {Full Names} - Up to {Amount}! - {LO Name} from Zillow Home Loans';
+
+  function getSubjectTmpl() {
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.get(['vpa_subject_tmpl'], function (data) {
+          const v = data && data.vpa_subject_tmpl;
+          resolve(v && v.trim() ? v : DEFAULT_SUBJECT_TMPL);
+        });
+      } catch (_) { resolve(DEFAULT_SUBJECT_TMPL); }
+    });
+  }
+
+  // Subject substitution — all placeholders resolve to plain text. The
+  // {Agent} and {LO Name} HTML wrappers used in the body don't make sense
+  // in a subject line, so they fall back to plain names here.
+  function substituteSubject(tmpl, lead, settings) {
+    const greeting  = buildGreeting(lead);
     const fullNames = buildFullNames(lead) || lead.firstName || '';
-    const amount    = lead.amount || '';
-    const lo        = loName || 'Justin Case';
-    return `Verified Pre-Approval for ${fullNames} - Up to ${amount}! - ${lo} from Zillow Home Loans`;
+    return String(tmpl || '')
+      .replace(/\{Full Names\}/g, fullNames)
+      .replace(/\{Greeting\}/g,   greeting)
+      .replace(/\{Borrower\}/g,   lead.firstName || '')
+      .replace(/\{Amount\}/g,     lead.amount    || '')
+      .replace(/\{Agent Name\}/g, lead.agentName || '')
+      .replace(/\{Agent\}/g,      lead.agentName || '')
+      .replace(/\{LO Name\}/g,    settings.loName || 'Justin Case')
+      .replace(/\{LO Email\}/g,   settings.loEmail || '')
+      .replace(/\{Zillow URL\}/g, settings.zillowUrl || '');
+  }
+
+  function buildSubject(lead, loNameOrSettings) {
+    // Synchronous default-template fallback for callers that don't await.
+    // buildSubjectAsync below is the canonical entry point.
+    const settings = typeof loNameOrSettings === 'string'
+      ? { loName: loNameOrSettings, loEmail: '', zillowUrl: '' }
+      : (loNameOrSettings || {});
+    return substituteSubject(DEFAULT_SUBJECT_TMPL, lead, settings);
+  }
+
+  async function buildSubjectAsync(lead, settings) {
+    const tmpl = await getSubjectTmpl();
+    return substituteSubject(tmpl, lead, settings);
   }
 
   // Body — plain-text faithful port of templates/vpa-template.html from the
@@ -327,17 +374,28 @@
   }
 
   function buildComposeUrl(lead, loName) {
+    return buildComposeUrlWithSubject(
+      lead,
+      buildSubject(lead, loName),
+      buildBody(lead, loName)
+    );
+  }
+
+  // Same as buildComposeUrl but accepts the resolved subject + plain body
+  // up-front. The async send path uses this so the user-customizable
+  // subject template makes it into the compose URL.
+  function buildComposeUrlWithSubject(lead, subject, plainBody) {
     const params = new URLSearchParams();
     if (lead.email) params.set('to', lead.email);
     const cc = [lead.coBorrowerEmail, lead.agentEmail].filter(Boolean);
     if (cc.length) params.set('cc', cc.join(','));
-    params.set('su', buildSubject(lead, loName));
+    params.set('su', subject);
     // Plain-text body included as a belt-and-suspenders fallback. The
     // companion content script (gmail-vpa-paste.js) replaces it with the
     // formatted HTML once the compose tab loads. If both that and the
     // clipboard fallback fail, the LO at least has the plain wording in
     // the body to send.
-    params.set('body', buildBody(lead, loName));
+    params.set('body', plainBody);
     return GMAIL_COMPOSE_BASE + '&' + params.toString();
   }
 
@@ -370,28 +428,18 @@
     return '<span style="color: #1a73e8; font-weight: bold;">' + name + '</span>';
   }
 
-  function buildBodyHtml(lead, loName, loEmail, zillowUrl) {
-    const greeting  = escHtml(buildGreeting(lead));
-    const amount    = escHtml(lead.amount || '[AMOUNT]');
-    const agentHtml = buildAgentHtml(lead);
-    const loHtml    = buildLoHtml(loName, loEmail);
-    const zillowLine = zillowUrl
-      ? '&nbsp; You can also click here to view my <a href="' + escHtml(zillowUrl) + '" style="color: #1a73e8; text-decoration: underline;">Zillow Webpage</a>!'
-      : '';
-
-    return (
-      '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
-
-      '<h1 style="color: #1a73e8; font-size: 26px; font-weight: bold; margin-bottom: 16px;">Congratulations ' + greeting + '!</h1>' +
-
-      '<p>I\'m excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to <span style="color: #1a73e8; font-weight: bold; text-decoration: underline;">' + amount + '</span> at Zillow Home Loans!&nbsp; Please find your preapproval letter attached, a copy of your appraisal waiver certificate, and my profile.' + zillowLine + '</p>' +
-
+  // Default HTML body template. Placeholders ({Greeting}, {Amount},
+  // {Agent}, {LO Name}, {Zillow URL}) get substituted at send time.
+  // Editable on the Setup page; the user's version is stored under
+  // vpa_body_html_tmpl. ALSO exposed on window so setup.js can grab the
+  // default for the editor's initial fill and Reset button.
+  const DEFAULT_BODY_HTML_TMPL = (
+    '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
+      '<h1 style="color: #1a73e8; font-size: 26px; font-weight: bold; margin-bottom: 16px;">Congratulations {Greeting}!</h1>' +
+      '<p>I\'m excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to <span style="color: #1a73e8; font-weight: bold; text-decoration: underline;">{Amount}</span> at Zillow Home Loans!&nbsp; Please find your preapproval letter attached, a copy of your appraisal waiver certificate, and my profile.&nbsp; You can also click here to view my <a href="{Zillow URL}" style="color: #1a73e8; text-decoration: underline;">Zillow Webpage</a>!</p>' +
       '<p><strong>This is a significant milestone on your homebuying journey.&nbsp; Now, armed with the Verified Pre-Approval, you\'re one step closer to finding your dream home!</strong></p>' +
-
       '<p><strong>Feel free to reach out to me if you have any questions or need assistance moving forward. I\'m here to help make your homeownership dreams a reality.</strong></p>' +
-
       '<br/>' +
-
       '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 4px;">' +
         '<tr>' +
           '<td style="vertical-align: middle; padding-right: 8px;">' +
@@ -402,9 +450,8 @@
           '</td>' +
         '</tr>' +
       '</table>' +
-
       '<ul style="margin: 8px 0 16px 0; padding-left: 24px;">' +
-        '<li style="margin-bottom: 6px;">Continue to stay in touch with your Loan Officer, ' + loHtml + ' and your Real Estate Agent, ' + agentHtml + '.</li>' +
+        '<li style="margin-bottom: 6px;">Continue to stay in touch with your Loan Officer, {LO Name} and your Real Estate Agent, {Agent}.</li>' +
         '<li style="margin-bottom: 6px;">Continue to pay all bills on time.</li>' +
         '<li style="margin-bottom: 6px;">Do Not open any new lines of credit nor acquire new debt.</li>' +
         '<li style="margin-bottom: 6px;">Do Not increase balances on your current credit obligations.</li>' +
@@ -412,9 +459,7 @@
         '<li style="margin-bottom: 6px;">Avoid any unnecessary movement of monies between accounts.</li>' +
         '<li style="margin-bottom: 6px;">Do Not dimmish your savings or assets required for your home purchase.</li>' +
       '</ul>' +
-
       '<br/>' +
-
       '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 4px;">' +
         '<tr>' +
           '<td style="vertical-align: middle; padding-right: 8px;">' +
@@ -425,18 +470,70 @@
           '</td>' +
         '</tr>' +
       '</table>' +
-
       '<ul style="margin: 8px 0 16px 0; padding-left: 24px;">' +
         '<li style="margin-bottom: 6px;">No Cost Appraisal &ndash; By financing with Zillow Home Loans and working with a Zillow Premier Agent partner, Zillow Home Loans will cover the cost of your appraisal*.</li>' +
         '<li style="margin-bottom: 6px;">Very comfortable 21-Day closings</li>' +
       '</ul>' +
-
-      '<p style="font-size: 20px; font-weight: bold; font-style: italic; margin: 20px 0;">Congratulations again ' + greeting + ', and best of luck with your home search!</p>' +
-
+      '<p style="font-size: 20px; font-weight: bold; font-style: italic; margin: 20px 0;">Congratulations again {Greeting}, and best of luck with your home search!</p>' +
       '<p style="font-size: 10px; color: #666666; font-style: italic; line-height: 1.4;">* *While the appraisal fee will appear as a loan cost on your initial disclosures, your final disclosure will show Zillow Home Loans covering the cost. Offer available on initial appraisal for purchase and refinance transactions only, where an appraisal is required by Zillow Home Loans. Zillow Home Loans must order appraisal. Appraisal fee will not be charged to the borrower when the loan closes with Zillow Home Loans. Offer does not apply to any subsequent appraisal, including re-inspections, desk reviews, etc. Zillow Home Loans, in its sole discretion, reserves the right to change or end promotion at any time.</p>' +
+    '</div>'
+  );
 
-      '</div>'
-    );
+  // Expose the default template on window so setup.js (which loads in a
+  // separate document but shares the same extension origin) can read it
+  // for initial fill / Reset to Default. setup.js falls back to its own
+  // copy if this global isn't reachable.
+  try { window.__ZHL_VPA_DEFAULT_BODY_HTML = DEFAULT_BODY_HTML_TMPL; } catch (_) {}
+  try { window.__ZHL_VPA_DEFAULT_SUBJECT  = DEFAULT_SUBJECT_TMPL; }   catch (_) {}
+
+  function getBodyHtmlTmpl() {
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.get(['vpa_body_html_tmpl'], function (data) {
+          const v = data && data.vpa_body_html_tmpl;
+          resolve(v && v.trim() ? v : DEFAULT_BODY_HTML_TMPL);
+        });
+      } catch (_) { resolve(DEFAULT_BODY_HTML_TMPL); }
+    });
+  }
+
+  // HTML body substitution. {Greeting} / {Borrower} / {Amount} / {Full
+  // Names} / {Agent Name} / {LO Email} / {Zillow URL} resolve to escaped
+  // plain text; {Agent} and {LO Name} resolve to fully-styled HTML chunks
+  // (mailto link in red bold / blue bold when an email is available,
+  // plain styled span when not).
+  function substituteBodyHtml(tmpl, lead, settings) {
+    const greeting  = escHtml(buildGreeting(lead));
+    const fullNames = escHtml(buildFullNames(lead) || '');
+    const amount    = escHtml(lead.amount    || '');
+    const agentName = escHtml(lead.agentName || '');
+    const loEmail   = escHtml(settings.loEmail || '');
+    const zillowUrl = escHtml(settings.zillowUrl || '');
+    const agentHtml = buildAgentHtml(lead);
+    const loHtml    = buildLoHtml(settings.loName, settings.loEmail);
+    return String(tmpl || '')
+      .replace(/\{Greeting\}/g,   greeting)
+      .replace(/\{Borrower\}/g,   escHtml(lead.firstName || ''))
+      .replace(/\{Full Names\}/g, fullNames)
+      .replace(/\{Amount\}/g,     amount)
+      .replace(/\{Agent\}/g,      agentHtml)
+      .replace(/\{Agent Name\}/g, agentName)
+      .replace(/\{LO Name\}/g,    loHtml)
+      .replace(/\{LO Email\}/g,   loEmail)
+      .replace(/\{Zillow URL\}/g, zillowUrl);
+  }
+
+  async function buildBodyHtmlAsync(lead, settings) {
+    const tmpl = await getBodyHtmlTmpl();
+    return substituteBodyHtml(tmpl, lead, settings);
+  }
+
+  // Synchronous default-template fallback for the few legacy call sites
+  // that don't await. Real send path uses buildBodyHtmlAsync.
+  function buildBodyHtml(lead, loName, loEmail, zillowUrl) {
+    return substituteBodyHtml(DEFAULT_BODY_HTML_TMPL, lead, {
+      loName: loName, loEmail: loEmail, zillowUrl: zillowUrl
+    });
   }
 
   // Pull the configured LO name / email / Zillow URL from chrome.storage.
@@ -541,16 +638,20 @@
         showToast('No email address visible on this lead. Make sure the Email field is showing on the page.', 'error');
         return;
       }
-      // Build HTML + plain bodies and stash both. The Gmail companion
-      // content script (gmail-vpa-paste.js) reads chrome.storage.local
-      // once the compose tab loads and replaces the plain body with the
-      // formatted HTML. The clipboard fallback covers cases where the
-      // auto-paste fails (Ctrl+V).
-      const html  = buildBodyHtml(lead, settings.loName, settings.loEmail, settings.zillowUrl);
+      // Build HTML + plain bodies (HTML uses the user-customizable
+      // template from Setup → VPA Email template; subject likewise).
+      // The Gmail companion content script (gmail-vpa-paste.js) reads
+      // chrome.storage.local once the compose tab loads and replaces the
+      // plain body with the formatted HTML. The clipboard fallback
+      // covers cases where the auto-paste fails (Ctrl+V).
+      const [html, subject] = await Promise.all([
+        buildBodyHtmlAsync(lead, settings),
+        buildSubjectAsync(lead, settings)
+      ]);
       const plain = buildBody(lead, settings.loName);
       await stashAndClip(html, plain);
 
-      const url = buildComposeUrl(lead, settings.loName);
+      const url = buildComposeUrlWithSubject(lead, subject, plain);
       // Plain window.open with just _blank — no windowFeatures string — so
       // browsers open it as a normal tab in the LO's current Gmail session
       // (matches the Pricing Exception Workflow's behavior). Passing a

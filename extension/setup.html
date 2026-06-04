@@ -81,6 +81,10 @@
             <span style="margin-bottom:4px;font-weight:600;">Email</span>
             <input type="email" data-lo-field="lo_email" placeholder="e.g. justinca@zillowhomeloans.com" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
           </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Zillow Webpage URL</span>
+            <input type="url" data-lo-field="lo_zillow_url" placeholder="e.g. https://www.zillow.com/home-loans/loan-officer/justincase" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
           <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
             <button type="button" id="lo-pull-from-sf" title="Built by Justin Case. Karma appreciated 💛" style="padding:8px 12px;border:1px solid #0b5cab;background:#0b5cab;color:#fff;border-radius:4px;font:600 12px Arial,sans-serif;cursor:pointer;">Pull from Salesforce</button>
             <span id="lo-pull-status" style="font:12px Arial,sans-serif;color:#6b7280;"></span>
@@ -409,6 +413,48 @@
           <li>Opens a <strong>pre-filled Gmail compose tab</strong> with To / CC / Subject / Body ready &mdash; the LO attaches the Verified Pre-Approval PDF and clicks Send.</li>
           <li><strong>No OAuth, no Connected App, no per-user enrollment.</strong> Uses the public Gmail compose URL, so rollout is just flipping this toggle. No Google verification, no 100-user test cap.</li>
         </ul>
+
+        <div class="vpa-email-config">
+          <h3>VPA Email template</h3>
+          <p class="vpa-helper">Customize the subject line and body. Click a placeholder chip below to insert it at your cursor &mdash; chips get replaced with real lead data when the email is sent. Pulls <strong>Loan Officer name / email / Zillow Webpage URL</strong> from the LO Profile card at the top of this page.</p>
+
+          <div class="vpa-placeholders">
+            <span class="placeholder-tag" data-insert="{Greeting}" title="Borrower's first name, or 'First & Co-First' if there's a co-borrower">{Greeting}</span>
+            <span class="placeholder-tag" data-insert="{Borrower}" title="Borrower's first name only">{Borrower}</span>
+            <span class="placeholder-tag" data-insert="{Full Names}" title="Full borrower + co-borrower names (subject only)">{Full Names}</span>
+            <span class="placeholder-tag" data-insert="{Amount}" title="Purchase price / pre-approval amount">{Amount}</span>
+            <span class="placeholder-tag" data-insert="{Agent}" title="Buyer's Agent name, styled red bold and linked to their email when available">{Agent}</span>
+            <span class="placeholder-tag" data-insert="{Agent Name}" title="Buyer's Agent plain-text name (subject only)">{Agent Name}</span>
+            <span class="placeholder-tag" data-insert="{LO Name}" title="Your name, styled blue bold and linked to your email">{LO Name}</span>
+            <span class="placeholder-tag" data-insert="{LO Email}" title="Your email address (plain text)">{LO Email}</span>
+            <span class="placeholder-tag" data-insert="{Zillow URL}" title="Your Zillow Webpage URL (plain text)">{Zillow URL}</span>
+          </div>
+
+          <label class="vpa-label">Subject line
+            <input id="vpa-subject-tmpl" type="text" placeholder="Verified Pre-Approval for {Full Names} - Up to {Amount}! - {LO Name} from Zillow Home Loans" />
+          </label>
+
+          <label class="vpa-label">Email body
+            <span class="vpa-helper-inline">Edit like a Word document. The default template includes the Congratulations headline, Zillow / Bonus icons, and disclaimer footnote.</span>
+          </label>
+          <div class="vpa-body-toolbar">
+            <button type="button" class="vpa-tb" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" class="vpa-tb" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" class="vpa-tb" data-cmd="underline" title="Underline"><u>U</u></button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="insertUnorderedList" title="Bullet list">&bull; List</button>
+            <button type="button" class="vpa-tb" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="createLink" title="Insert link">&#128279; Link</button>
+            <button type="button" class="vpa-tb" data-cmd="removeFormat" title="Clear formatting">&times; Clear</button>
+          </div>
+          <div id="vpa-body-tmpl" class="vpa-body-editor" contenteditable="true"></div>
+
+          <div class="vpa-config-row">
+            <button id="vpa-reset-btn" type="button" class="secondary">Reset to default template</button>
+            <span id="vpa-status" class="vpa-status"></span>
+          </div>
+        </div>
       </div>
     </section>
 
