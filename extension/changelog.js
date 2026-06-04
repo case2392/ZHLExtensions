@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.59.1",
+    category: "improvement",
+    headline: "Intro Email: Borrower Information block restyled as a clean two-column table (was a wall of single-line Field: value entries).",
+    highlights: [
+      "Default template's bottom Borrower Information block is now a proper aligned table — label column in gray, value column in dark text, blank-row spacers between Borrower / Co-Borrower / Property sub-groups. Renders cleanly in Gmail / Outlook / Word.",
+      "Reminder: existing saved templates are not touched. Click Reset to default on the Setup → Send Intro Email from Salesforce → Intro Email template panel to pick up the new layout. (Same Reset also picks up the v1.58.2 signature removal if you haven't already.)"
+    ],
+    sections: ["sf-intro-email"]
+  },
+  {
     version: "1.59.0",
     category: "improvement",
     headline: "Scenario Snapshot: now also grabs Lead source info (LSH record, hierarchy, Marksman, Incentive program) from the Pricing tab. Modal opens with the scenario card facsimile at the top. Copy writes rich HTML + plain so paste looks clean everywhere.",

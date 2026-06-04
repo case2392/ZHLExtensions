@@ -521,18 +521,20 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
       '<p>Once you have a policy selected, just let me know so we can coordinate the rest.</p>' +
       '<p>If any questions come up between now and closing, text or call me anytime &mdash; that\'s what I\'m here for. We\'ll keep this moving.</p>' +
       '<hr style="border: none; border-top: 1px solid #d1d5db; margin: 16px 0;">' +
-      '<p style="font-size: 12px; color: #4b5563;">' +
-        '<strong>Borrower Information</strong><br>' +
-        'Borrower: {Borrower Name}<br>' +
-        'Phone: {Borrower Phone}<br>' +
-        'Email: {Borrower Email}<br>' +
-        'Co-Borrower: {Co-Borrower Name}<br>' +
-        'Phone: {Co-Borrower Phone}<br>' +
-        'Email: {Co-Borrower Email}<br>' +
-        'Property Address: {Property Address}<br>' +
-        'Loan Number: {Loan Number}<br>' +
-        'Estimated Closing Date: {Closing Date}' +
-      '</p>' +
+      '<table cellpadding="0" cellspacing="0" border="0" style="margin-top: 2px; font-family: Calibri, Arial, sans-serif; font-size: 12px; color: #4b5563; border-collapse: collapse;">' +
+        '<tr><td colspan="2" style="padding: 0 0 6px; font: 700 11px Arial, sans-serif; color: #0b3a73; letter-spacing: 0.5px; text-transform: uppercase;">Borrower Information</td></tr>' +
+        '<tr><td style="padding: 2px 18px 2px 0; color: #6b7280; vertical-align: top; white-space: nowrap;">Borrower</td><td style="padding: 2px 0; color: #111827;">{Borrower Name}</td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Phone</td><td style="padding: 1px 0; color: #111827;">{Borrower Phone}</td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Email</td><td style="padding: 1px 0; color: #111827;">{Borrower Email}</td></tr>' +
+        '<tr><td colspan="2" style="padding: 4px 0;"></td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Co-Borrower</td><td style="padding: 1px 0; color: #111827;">{Co-Borrower Name}</td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Phone</td><td style="padding: 1px 0; color: #111827;">{Co-Borrower Phone}</td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Email</td><td style="padding: 1px 0; color: #111827;">{Co-Borrower Email}</td></tr>' +
+        '<tr><td colspan="2" style="padding: 4px 0;"></td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Property</td><td style="padding: 1px 0; color: #111827;">{Property Address}</td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Loan #</td><td style="padding: 1px 0; color: #111827;">{Loan Number}</td></tr>' +
+        '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Est. Closing</td><td style="padding: 1px 0; color: #111827;">{Closing Date}</td></tr>' +
+      '</table>' +
     '</div>'
   );
 
