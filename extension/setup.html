@@ -1167,6 +1167,49 @@
       </div>
     </section>
 
+    <!-- ============== Section: Admin Controls (Justin only) ============== -->
+    <!-- Hidden by default. setup.js reveals it when lo_email matches the admin
+         address. Anyone can technically inspect the page and flip styles, but
+         the kill switch's source of truth is kill-switch.json in the repo,
+         which only the admin can edit — so visibility here is just convenience. -->
+    <section id="admin-controls-card" class="module-card" data-module style="display:none;border:2px solid #f59e0b;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);">
+      <div class="module-head">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:20px;">🛠️</span>
+            <h2 style="margin:0;">Admin Controls</h2>
+            <span style="background:#f59e0b;color:#fff;font:700 10px Arial,sans-serif;padding:2px 8px;border-radius:10px;letter-spacing:0.5px;">JUSTIN ONLY</span>
+          </div>
+          <p class="module-sub">Remote kill switch + admin diagnostics. Visible only when the LO email matches the admin address.</p>
+        </div>
+      </div>
+      <div class="module-body">
+        <div style="background:#fff;border:1px solid #fbbf24;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+          <div style="font:700 13px Arial,sans-serif;color:#78350f;margin-bottom:8px;">Current kill switch state</div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div id="ks-state-badge" style="font:700 14px Arial,sans-serif;padding:6px 14px;border-radius:6px;background:#dcfce7;color:#166534;">OFF — features running</div>
+            <button type="button" id="ks-poll-now-btn" style="background:#0b5cab;color:#fff;border:none;border-radius:6px;padding:8px 14px;font:600 12px Arial,sans-serif;cursor:pointer;">Force poll now</button>
+            <span id="ks-poll-status" style="font:12px Arial,sans-serif;color:#6b7280;"></span>
+          </div>
+          <div style="margin-top:10px;font:12px/1.4 Arial,sans-serif;color:#78350f;">
+            <div><strong>Last poll:</strong> <span id="ks-last-poll">never</span></div>
+            <div><strong>Source updated:</strong> <span id="ks-source-updated">unknown</span></div>
+            <div style="margin-top:4px;"><strong>Message:</strong> <span id="ks-message" style="color:#6b7280;font-style:italic;">(none)</span></div>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #fbbf24;border-radius:8px;padding:14px 16px;">
+          <div style="font:700 13px Arial,sans-serif;color:#78350f;margin-bottom:6px;">How to flip the switch</div>
+          <ol style="margin:0 0 8px 18px;padding:0;font:12px/1.5 Arial,sans-serif;color:#78350f;">
+            <li>Open <a id="ks-edit-link" href="https://github.com/case2392/zhlextensions/edit/main/kill-switch.json" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:700;">kill-switch.json on GitHub</a>.</li>
+            <li>Change <code>"killSwitch"</code> to <code>true</code> (or back to <code>false</code>).</li>
+            <li>Update the <code>"updated"</code> ISO timestamp.</li>
+            <li>Commit to <code>main</code>. Every installed copy picks it up within 10 minutes.</li>
+          </ol>
+          <div style="font:11px/1.5 Arial,sans-serif;color:#6b7280;font-style:italic;">Fail-open: if the fetch fails (offline, GitHub down), the previous state is kept — installs are never disabled by a transient network issue.</div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer class="page-footer">

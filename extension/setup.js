@@ -658,3 +658,86 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
     });
   }
 })();
+
+// -------------------------------------------------------------------------
+// Admin Controls — kill switch dashboard. Visible only when lo_email matches
+// the admin address. The card itself does NOT push changes to the remote
+// kill-switch.json — that is done by editing the file directly on GitHub.
+// This card just surfaces current state + a "poll now" convenience button.
+// -------------------------------------------------------------------------
+(function () {
+  const ADMIN_EMAIL = 'justinca@zillowhomeloans.com';
+  const card = document.getElementById('admin-controls-card');
+  if (!card) return;
+
+  function fmtTs(ms) {
+    if (!ms) return 'never';
+    try {
+      const d = new Date(ms);
+      return d.toLocaleString();
+    } catch (_) { return String(ms); }
+  }
+
+  function refreshKsCard() {
+    chrome.storage.local.get([
+      'zhl_kill_switch',
+      'zhl_kill_switch_message',
+      'zhl_kill_switch_updated',
+      'zhl_kill_switch_last_poll'
+    ], function (data) {
+      const on = data.zhl_kill_switch === true;
+      const badge = document.getElementById('ks-state-badge');
+      if (badge) {
+        badge.textContent = on ? 'ON — all features disabled' : 'OFF — features running';
+        badge.style.background = on ? '#fee2e2' : '#dcfce7';
+        badge.style.color      = on ? '#991b1b' : '#166534';
+      }
+      const last = document.getElementById('ks-last-poll');
+      if (last) last.textContent = fmtTs(data.zhl_kill_switch_last_poll);
+      const upd = document.getElementById('ks-source-updated');
+      if (upd) upd.textContent = data.zhl_kill_switch_updated || 'unknown';
+      const msg = document.getElementById('ks-message');
+      if (msg) msg.textContent = data.zhl_kill_switch_message || '(none)';
+    });
+  }
+
+  function maybeShowAdmin() {
+    chrome.storage.local.get(['lo_email'], function (data) {
+      const email = (data.lo_email || '').trim().toLowerCase();
+      if (email === ADMIN_EMAIL) {
+        card.style.display = '';
+        refreshKsCard();
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  // Re-check on storage changes (email may get filled in after page load
+  // by the Salesforce auto-pull).
+  chrome.storage.onChanged.addListener(function (changes, area) {
+    if (area !== 'local') return;
+    if (changes.lo_email) maybeShowAdmin();
+    if (changes.zhl_kill_switch ||
+        changes.zhl_kill_switch_message ||
+        changes.zhl_kill_switch_updated ||
+        changes.zhl_kill_switch_last_poll) {
+      refreshKsCard();
+    }
+  });
+
+  const pollBtn = document.getElementById('ks-poll-now-btn');
+  const pollStatus = document.getElementById('ks-poll-status');
+  if (pollBtn) {
+    pollBtn.addEventListener('click', function () {
+      if (pollStatus) pollStatus.textContent = 'Polling…';
+      chrome.runtime.sendMessage({ type: 'ZHL_KILL_SWITCH_POLL_NOW' }, function (resp) {
+        if (pollStatus) pollStatus.textContent = (resp && resp.ok) ? 'Polled ✓' : 'Poll failed';
+        refreshKsCard();
+        setTimeout(function () { if (pollStatus) pollStatus.textContent = ''; }, 2500);
+      });
+    });
+  }
+
+  maybeShowAdmin();
+})();

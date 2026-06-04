@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.60.0",
+    category: "improvement",
+    headline: "Added a remote kill switch so the admin can pause every installed copy of the extension within ~10 minutes if a security or compliance issue comes up — without uninstalling and without losing your saved configuration.",
+    highlights: [
+      "Service worker now polls a small JSON file in the GitHub repo every 10 minutes (chrome.alarms-driven) and writes the result into chrome.storage.local under zhl_kill_switch. Every module's IIFE wrapper checks that flag before running. When the file flips to {\"killSwitch\": true}, every installed copy short-circuits all modules until it flips back. Your LO profile, templates, and feature toggles are NEVER touched — they stay in storage and resume the instant the switch flips off.",
+      "Fail-OPEN by design: if the fetch fails (offline, GitHub down, repo moved), the flag is left unchanged. The extension is never disabled by a transient network issue — only by an authoritative {\"killSwitch\": true} payload from the source of truth file.",
+      "Admin Controls card added to Setup, visible only when lo_email matches the admin address. Shows current state, last poll time, source-file 'updated' timestamp, and a Force-poll-now button. Direct edit link to kill-switch.json on GitHub for flipping the switch.",
+      "New permission: 'alarms' (used for the 10-minute polling cycle). Fetch URL: raw.githubusercontent.com/case2392/zhlextensions/main/kill-switch.json — covered by the existing <all_urls> host permission."
+    ],
+    sections: []
+  },
+  {
     version: "1.59.4",
     category: "improvement",
     headline: "Copy LOP file panel: buttons no longer mid-word-wrap on narrow viewports. 'Stage from this file' renamed 'Copy Old LOP', 'Paste from staged' renamed 'Paste New LOP'.",

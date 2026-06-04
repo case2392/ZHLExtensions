@@ -211,6 +211,82 @@ chrome.action.onClicked.addListener(() => {
 });
 
 // -------------------------------------------------------------------------
+// Remote kill switch
+// -------------------------------------------------------------------------
+//
+// Polls a JSON file in the public GitHub repo every 10 minutes and writes
+// the result into chrome.storage.local under `zhl_kill_switch`. Every
+// module's IIFE wrapper checks that flag before running, so flipping the
+// JSON to {"killSwitch": true} disables every installed copy within ~10 min.
+//
+// User config (LO profile, templates, feature toggles) is NEVER touched —
+// it stays in storage and resumes the instant the switch flips back off.
+//
+// Fail-OPEN: if the fetch fails (offline, GitHub down, repo gone), the
+// flag is NOT changed. We never disable the extension because we couldn't
+// read the file. The only way to disable is an authoritative
+// {"killSwitch": true} payload.
+
+const KILL_SWITCH_URL = "https://raw.githubusercontent.com/case2392/zhlextensions/main/kill-switch.json";
+const KILL_SWITCH_ALARM = "zhl_kill_switch_poll";
+
+async function pollKillSwitch() {
+  try {
+    const resp = await fetch(KILL_SWITCH_URL, { cache: "no-store" });
+    if (!resp.ok) {
+      console.warn("[ZHL Kill Switch] fetch non-200:", resp.status);
+      return;
+    }
+    const cfg = await resp.json();
+    const flag = cfg && cfg.killSwitch === true;
+    const prev = await chrome.storage.local.get(["zhl_kill_switch"]);
+    await chrome.storage.local.set({
+      zhl_kill_switch: flag,
+      zhl_kill_switch_message: (cfg && cfg.message) || "",
+      zhl_kill_switch_updated: (cfg && cfg.updated) || "",
+      zhl_kill_switch_last_poll: Date.now()
+    });
+    if (prev.zhl_kill_switch !== flag) {
+      console.log(`[ZHL Kill Switch] state changed: ${prev.zhl_kill_switch} -> ${flag}`);
+      if (flag === true) {
+        // Best-effort telemetry — fire-and-forget; not required for kill to work.
+        try {
+          chrome.runtime.sendMessage({ type: "TRACK", event: "kill_switch_fired", props: { version: VERSION } });
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.warn("[ZHL Kill Switch] poll failed (fail-open, flag unchanged):", e);
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
+  pollKillSwitch();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
+  pollKillSwitch();
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm && alarm.name === KILL_SWITCH_ALARM) pollKillSwitch();
+});
+
+// Allow setup.html "Force poll now" admin button to trigger a fetch on demand.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === "ZHL_KILL_SWITCH_POLL_NOW") {
+    pollKillSwitch().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+    return true; // async response
+  }
+});
+
+// Fire one poll on every service-worker spin-up too, in case the alarm
+// hasn't run recently (Chrome may have suspended the worker).
+pollKillSwitch();
+
+// -------------------------------------------------------------------------
 // Caller ID lookup (was Genesys-CallerID/background.js)
 // -------------------------------------------------------------------------
 

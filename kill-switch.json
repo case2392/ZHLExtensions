@@ -1,0 +1,7 @@
+{
+  "killSwitch": false,
+  "message": "ZHL Productivity Pack is paused pending security review. Your configuration is preserved — features will resume automatically when re-enabled.",
+  "minVersion": null,
+  "updated": "2026-06-04T00:00:00Z",
+  "_comment": "Source of truth for the remote kill switch. When killSwitch is true, every installed copy of the extension short-circuits all modules within 10 minutes (next poll). User configuration (LO profile, templates, feature toggles) is preserved. Only Justin Case maintains this file."
+}
