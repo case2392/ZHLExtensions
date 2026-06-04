@@ -151,10 +151,6 @@
       '</p>' +
       '<p>Once you have a policy selected, just let me know so we can coordinate the rest.</p>' +
       '<p>If any questions come up between now and closing, text or call me anytime &mdash; that\'s what I\'m here for. We\'ll keep this moving.</p>' +
-      '<p>Best,<br>' +
-        '{LO Name}<br>' +
-        'Mortgage Loan Officer | <span style="font-family: Georgia, \'Times New Roman\', serif; color: #0E35C4; font-weight: bold;">Zillow Home Loans</span><br>' +
-        'NMLS #{NMLS}</p>' +
       '<hr style="border: none; border-top: 1px solid #d1d5db; margin: 16px 0;">' +
       '<p style="font-size: 12px; color: #4b5563;">' +
         '<strong>Borrower Information</strong><br>' +
@@ -278,11 +274,6 @@
       '   ' + ctx.iaEmail,
       '',
       'If any questions come up between now and closing, text or call me anytime.',
-      '',
-      'Best,',
-      ctx.loName,
-      'Mortgage Loan Officer | Zillow Home Loans',
-      'NMLS #' + ctx.loNmls,
       '',
       '———————————————',
       'Borrower Information',

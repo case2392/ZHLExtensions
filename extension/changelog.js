@@ -13,6 +13,15 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.58.2",
+    category: "improvement",
+    headline: "Intro Email: drop the in-template signature block. Gmail's own signature adds itself to every compose tab — having ours in the body too was producing duplicates.",
+    highlights: [
+      "Removed the 'Best, {LO Name} / Mortgage Loan Officer | Zillow Home Loans / NMLS #{NMLS}' block from the default Intro Email body (HTML + plain). Gmail's auto-signature handles it. The body now closes with the 'text or call me anytime' line, then the hr divider, then the Borrower Information summary. Hit Reset to default on the Intro Email template panel to pick up the new default — existing saved templates aren't touched."
+    ],
+    sections: ["sf-intro-email"]
+  },
+  {
     version: "1.58.1",
     category: "improvement",
     headline: "Intro Email: greeting now includes co-borrower, insurance agent is a Setup config that auto-CCs on every draft, borrower phone + email + Property Street/City/State/Zip + Purchase Price added. Button renamed 'Insurance Intro'.",
