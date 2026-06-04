@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.59.2",
+    category: "bugfix",
+    headline: "Scenario Snapshot: lead source capture now actually fires (was clicking the wrong element + .click() not triggering React Router).",
+    highlights: [
+      "Lead source's trigger is a <button> wrapped inside a <p aria-haspopup='dialog'>. Popper.js binds the open-popover handler to the WRAPPER, not the inner button. Clicking the button alone did nothing. Updated findLeadSourceTrigger() to prefer the [aria-haspopup='dialog'] wrapper when present and fall back to the button.",
+      "Navigation between Scenarios ↔ Pricing wasn't always firing because .click() on a React Router <a> doesn't always trigger the synthetic-event handler. Replaced with a real-click sequence (pointerdown / mousedown / pointerup / mouseup / click) — same pattern other modules in the pack use. Element gets scrollIntoView()'d first so the click target is interactable.",
+      "Settle window after navigation bumped from 350ms to 450ms — gives React more headroom to mount the new tab's content before we look for the trigger.",
+      "Defensive fallback: if the popover anchor click doesn't open the dialog, we try clicking the inner button as a backup before giving up.",
+      "Added [ZHL Snapshot] console.log diagnostics so the lead-source flow is debuggable from devtools without redeploying."
+    ],
+    sections: ["scenario-snapshot"]
+  },
+  {
     version: "1.59.1",
     category: "improvement",
     headline: "Intro Email: Borrower Information block restyled as a clean two-column table (was a wall of single-line Field: value entries).",

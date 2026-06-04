@@ -534,17 +534,33 @@
       const href = a.getAttribute('href') || '';
       if (href.endsWith(suffix) && isElementVisible(a)) return a;
     }
-    // Broader fallback: any <a href$="...">
     return document.querySelector('a[href$="' + suffix + '"]');
+  }
+
+  // React Router-friendly click. .click() alone sometimes doesn't fire
+  // the React synthetic-event handler that owns the SPA transition;
+  // a full pointer+mouse sequence is what real interactions produce.
+  function realClick(el) {
+    if (!el) return;
+    const opts = { bubbles: true, cancelable: true, view: window };
+    try {
+      el.dispatchEvent(new PointerEvent('pointerdown', opts));
+      el.dispatchEvent(new MouseEvent('mousedown', opts));
+      el.dispatchEvent(new PointerEvent('pointerup', opts));
+      el.dispatchEvent(new MouseEvent('mouseup', opts));
+      el.dispatchEvent(new MouseEvent('click', opts));
+    } catch (_) {
+      try { el.click(); } catch (__) {}
+    }
   }
 
   async function navigateToTab(suffix, predicate, timeoutMs) {
     const link = findSubnavLink(suffix);
-    if (!link) return false;
-    try { link.click(); } catch (_) { return false; }
+    if (!link) { console.warn('[ZHL Snapshot] tab link not found for', suffix); return false; }
+    try { link.scrollIntoView({ block: 'center' }); } catch (_) {}
+    realClick(link);
     const ok = await waitFor(predicate, timeoutMs || 3000);
-    // Settle for content render
-    await sleep(350);
+    await sleep(450); // give React time to mount the new tab's content
     return !!ok;
   }
 
@@ -554,10 +570,21 @@
     return r.width > 0 && r.height > 0;
   }
 
+  // Lead source's trigger is a <button> wrapped in a <p aria-haspopup=
+  // "dialog">. The popover handler binds to the WRAPPER, not the button,
+  // so clicking the button alone doesn't open the popover. We prefer the
+  // wrapper when present and fall back to the button otherwise.
   function findLeadSourceTrigger() {
-    // The trigger is a <button> with text "Lead source information"
-    // inside a <p> wrapper. Hand-roll the search across visible buttons
-    // because the class is hashed and unstable.
+    // 1. <p> / <span> with aria-haspopup="dialog" whose text or child
+    //    button text is "Lead source information".
+    const popperAnchors = document.querySelectorAll('[aria-haspopup="dialog"]');
+    for (const p of popperAnchors) {
+      if (!isElementVisible(p)) continue;
+      const innerBtn = p.querySelector('button');
+      const text = visibleText(innerBtn || p);
+      if (text === 'Lead source information') return p;
+    }
+    // 2. Any visible <button> with that exact text (best-effort).
     const buttons = document.querySelectorAll('button');
     for (const b of buttons) {
       if (!isElementVisible(b)) continue;
@@ -570,8 +597,14 @@
     const before = new Set();
     document.querySelectorAll('section[role="dialog"]').forEach(function (d) { before.add(d); });
     const trigger = findLeadSourceTrigger();
-    if (!trigger) return null;
-    try { trigger.click(); } catch (_) { return null; }
+    if (!trigger) {
+      console.warn('[ZHL Snapshot] Lead source trigger not found on this page');
+      return null;
+    }
+    try { trigger.scrollIntoView({ block: 'center' }); } catch (_) {}
+    await sleep(80);
+    realClick(trigger);
+
     const dialog = await waitFor(function () {
       const all = document.querySelectorAll('section[role="dialog"]');
       for (const d of all) {
@@ -581,7 +614,32 @@
       }
       return null;
     }, 2500);
-    if (!dialog) return null;
+
+    if (!dialog) {
+      console.warn('[ZHL Snapshot] Lead source dialog did not open after click');
+      // Try clicking the inner button as a fallback (in case our wrapper
+      // selection was wrong and we hit a non-popper element).
+      const innerBtn = trigger.tagName === 'BUTTON' ? null : trigger.querySelector('button');
+      if (innerBtn) {
+        realClick(innerBtn);
+        const dlg2 = await waitFor(function () {
+          const all = document.querySelectorAll('section[role="dialog"]');
+          for (const d of all) {
+            if (before.has(d)) continue;
+            const h = d.querySelector('h4');
+            if (h && /lead source information/i.test(visibleText(h))) return d;
+          }
+          return null;
+        }, 1500);
+        if (!dlg2) return null;
+        await sleep(120);
+        const items2 = parseDialogBody(dlg2);
+        closeDialog(dlg2);
+        await waitFor(function () { return !document.body.contains(dlg2); }, 1500);
+        return { title: 'Lead source information', items: items2 };
+      }
+      return null;
+    }
     await sleep(120);
     const items = parseDialogBody(dialog);
     closeDialog(dialog);
@@ -596,19 +654,30 @@
   async function captureLeadSource() {
     const onScenarios = isOnScenariosTab();
     const onPricing   = isOnPricingTab();
-    if (!onScenarios && !onPricing) return null;
+    console.log('[ZHL Snapshot] captureLeadSource: pathname=' + location.pathname + ', onScenarios=' + onScenarios + ', onPricing=' + onPricing);
+    if (!onScenarios && !onPricing) {
+      console.warn('[ZHL Snapshot] not on Scenarios or Pricing tab — skipping lead source capture');
+      return null;
+    }
 
     let returnSuffix = null;
     if (onScenarios) {
-      // Walk to Pricing
+      console.log('[ZHL Snapshot] navigating Scenarios → Pricing for lead source');
       const ok = await navigateToTab('/pricing-and-scenarios/pricing', isOnPricingTab, 3000);
-      if (!ok) return null;
+      if (!ok) {
+        console.warn('[ZHL Snapshot] navigation to Pricing tab failed — skipping lead source');
+        return null;
+      }
       returnSuffix = '/pricing-and-scenarios/scenarios';
     }
 
     const result = await captureLeadSourceDialog();
+    if (result) {
+      console.log('[ZHL Snapshot] lead source captured —', result.items.length, 'items');
+    }
 
     if (returnSuffix) {
+      console.log('[ZHL Snapshot] navigating Pricing → Scenarios');
       await navigateToTab(returnSuffix, isOnScenariosTab, 3000);
     }
     return result;
