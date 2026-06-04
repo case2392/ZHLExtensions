@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.57.1",
+    category: "improvement",
+    headline: "Setup brand mark + VPA email now use the new Zillow logo and brand-typed 'Zillow Home Loans' wordmark. Accent color updated to the cobalt sampled from the brand PNG (#0E35C4).",
+    highlights: [
+      "Setup page header now uses the Zillow Z logo PNG (extension/images/zhl-logo.png) instead of the 'ZHL' text mark — pulled from the matching brand PNGs the user committed to main.",
+      "VPA Email body template leads with a Zillow Home Loans brand banner image (the wordmark PNG), and the inline 'What's Next?' Zillow icon now points at the new Zillow Logo PNG. Both images hosted on raw.githubusercontent.com/case2392/ZHLExtensions/main so they load in the recipient's email client without OAuth or Drive sharing.",
+      "Inline 'Zillow Home Loans' text mentions in the main body (the pre-approval announcement, the No Cost Appraisal bullet) are now wrapped in a styled span using Georgia serif bold in the brand cobalt #0E35C4 — matching the wordmark PNG. Disclaimer footnote keeps default styling (gray italic small) so disclosures still read as disclosures.",
+      "Accent color changed from #1a73e8 to #0E35C4 across the VPA email: Congratulations <h1>, {Amount} highlight, Zillow Webpage link, What's Next? / Don't Forget section headers, closing Congratulations again, and the LO Name mailto link. Heading + section labels switched to Georgia serif bold to match the brand typography. The brand image already provides the canonical wordmark at the top of the email.",
+      "Existing saved templates are NOT overwritten — only the default kicks in when vpa_body_html_tmpl is unset. Click Reset to default on the Setup → VPA Email template panel to pick up the new branding."
+    ],
+    sections: ["sf-vpa-email"]
+  },
+  {
     version: "1.57.0",
     category: "feature",
     headline: "VPA Email is now fully customizable from Setup — edit the subject line, the HTML body (rich editor), and your Zillow Webpage URL. Mirrors the original SFGmail setup.",

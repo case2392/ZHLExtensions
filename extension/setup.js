@@ -304,20 +304,27 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
   const LOCAL_DEFAULT_SUBJECT =
     'Verified Pre-Approval for {Full Names} - Up to {Amount}! - {LO Name} from Zillow Home Loans';
 
+  // Brand asset URLs + styled "Zillow Home Loans" span (kept in sync with
+  // sf-vpa-email.js DEFAULT_BODY_HTML_TMPL).
+  const __ZHL_LOGO_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/Zillow%20Logo.png';
+  const __ZHL_TEXT_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/ZIllow%20Home%20Loans%20Text.png';
+  const __ZHL_BRAND = '<span style="font-family: Georgia, \'Times New Roman\', serif; color: #0E35C4; font-weight: bold;">Zillow Home Loans</span>';
+
   const LOCAL_DEFAULT_BODY_HTML = (
     '<div style="font-family: Calibri, Arial, sans-serif; font-size: 14.5px; color: #000000; line-height: 1.5;">' +
-      '<h1 style="color: #1a73e8; font-size: 26px; font-weight: bold; margin-bottom: 16px;">Congratulations {Greeting}!</h1>' +
-      '<p>I\'m excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to <span style="color: #1a73e8; font-weight: bold; text-decoration: underline;">{Amount}</span> at Zillow Home Loans!&nbsp; Please find your preapproval letter attached, a copy of your appraisal waiver certificate, and my profile.&nbsp; You can also click here to view my <a href="{Zillow URL}" style="color: #1a73e8; text-decoration: underline;">Zillow Webpage</a>!</p>' +
+      '<img src="' + __ZHL_TEXT_URL + '" alt="Zillow Home Loans" width="300" height="44" style="display: block; margin: 0 0 18px 0;"/>' +
+      '<h1 style="color: #0E35C4; font-size: 26px; font-weight: bold; margin-bottom: 16px; font-family: Georgia, \'Times New Roman\', serif;">Congratulations {Greeting}!</h1>' +
+      '<p>I\'m excited to inform you that after reviewing your credit, income, and assets, you have been pre-approved for up to <span style="color: #0E35C4; font-weight: bold; text-decoration: underline;">{Amount}</span> at ' + __ZHL_BRAND + '!&nbsp; Please find your preapproval letter attached, a copy of your appraisal waiver certificate, and my profile.&nbsp; You can also click here to view my <a href="{Zillow URL}" style="color: #0E35C4; text-decoration: underline;">Zillow Webpage</a>!</p>' +
       '<p><strong>This is a significant milestone on your homebuying journey.&nbsp; Now, armed with the Verified Pre-Approval, you\'re one step closer to finding your dream home!</strong></p>' +
       '<p><strong>Feel free to reach out to me if you have any questions or need assistance moving forward. I\'m here to help make your homeownership dreams a reality.</strong></p>' +
       '<br/>' +
       '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 4px;">' +
         '<tr>' +
-          '<td style="vertical-align: middle; padding-right: 8px;">' +
-            '<img src="https://drive.google.com/uc?export=view&id=1DfbFqOFCz3OnUUPxHoNnVh3JIUzjAitV" alt="Zillow" width="36" height="36" style="display: block;"/>' +
+          '<td style="vertical-align: middle; padding-right: 10px;">' +
+            '<img src="' + __ZHL_LOGO_URL + '" alt="Zillow" width="40" height="40" style="display: block;"/>' +
           '</td>' +
           '<td style="vertical-align: middle;">' +
-            '<span style="color: #1a73e8; font-size: 22px; font-weight: bold; font-style: italic;">What\'s Next?</span>' +
+            '<span style="color: #0E35C4; font-size: 22px; font-weight: bold; font-style: italic; font-family: Georgia, \'Times New Roman\', serif;">What\'s Next?</span>' +
           '</td>' +
         '</tr>' +
       '</table>' +
@@ -337,15 +344,15 @@ document.querySelectorAll('a[data-zhl-karma-link]').forEach((a) => {
             '<img src="https://drive.google.com/uc?export=view&id=1XWel1Mh3_SbuGxz4tb0jF_4iQqMP2TdV" alt="Bonus" width="40" height="50" style="display: block;"/>' +
           '</td>' +
           '<td style="vertical-align: middle;">' +
-            '<span style="color: #1a73e8; font-size: 22px; font-weight: bold; font-style: italic;">Don\'t Forget</span>' +
+            '<span style="color: #0E35C4; font-size: 22px; font-weight: bold; font-style: italic; font-family: Georgia, \'Times New Roman\', serif;">Don\'t Forget</span>' +
           '</td>' +
         '</tr>' +
       '</table>' +
       '<ul style="margin: 8px 0 16px 0; padding-left: 24px;">' +
-        '<li style="margin-bottom: 6px;">No Cost Appraisal &ndash; By financing with Zillow Home Loans and working with a Zillow Premier Agent partner, Zillow Home Loans will cover the cost of your appraisal*.</li>' +
+        '<li style="margin-bottom: 6px;">No Cost Appraisal &ndash; By financing with ' + __ZHL_BRAND + ' and working with a Zillow Premier Agent partner, ' + __ZHL_BRAND + ' will cover the cost of your appraisal*.</li>' +
         '<li style="margin-bottom: 6px;">Very comfortable 21-Day closings</li>' +
       '</ul>' +
-      '<p style="font-size: 20px; font-weight: bold; font-style: italic; margin: 20px 0;">Congratulations again {Greeting}, and best of luck with your home search!</p>' +
+      '<p style="font-size: 20px; font-weight: bold; font-style: italic; margin: 20px 0; color: #0E35C4; font-family: Georgia, \'Times New Roman\', serif;">Congratulations again {Greeting}, and best of luck with your home search!</p>' +
       '<p style="font-size: 10px; color: #666666; font-style: italic; line-height: 1.4;">* *While the appraisal fee will appear as a loan cost on your initial disclosures, your final disclosure will show Zillow Home Loans covering the cost. Offer available on initial appraisal for purchase and refinance transactions only, where an appraisal is required by Zillow Home Loans. Zillow Home Loans must order appraisal. Appraisal fee will not be charged to the borrower when the loan closes with Zillow Home Loans. Offer does not apply to any subsequent appraisal, including re-inspections, desk reviews, etc. Zillow Home Loans, in its sole discretion, reserves the right to change or end promotion at any time.</p>' +
     '</div>'
   );
