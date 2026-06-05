@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.60.1",
+    category: "improvement",
+    headline: "Hard Pull Guardrail: matrix updated to match ZHL's revised hard-pull guidelines. No-soft-on-file now warns to pull a soft first, and the 680–699 LLPA carve-out has been removed — only 700–719 still allows an optional hard for pricing.",
+    highlights: [
+      "Updated guidance matrix (per the revised ZHL hard-pull guidelines): No soft on file → pull a soft first (was: hard OK). Less than 620 → hard OK. ≥ 620 + DU Approval or LPA Accept → pull a soft (was already correct). ≥ 620 + both AUS Refer → hard OK. Optional 700–719 → hard OK for potential 720 LLPA pricing.",
+      "Removed the 680–699 LLPA carve-out — borrowers in that range with an AUS approval now correctly trigger the soft-pull warning. The 700–719 window is the only optional-hard-for-pricing band that remains.",
+      "Warning dialog reason line now reads 'no soft on file' instead of a numeric score when no soft scores are present in the credit panel. Matrix table inside the dialog updated to match the new five-row guidance."
+    ],
+    sections: ["hard-pull-guardrail"]
+  },
+  {
     version: "1.60.0",
     category: "improvement",
     headline: "Added a remote kill switch so the admin can pause every installed copy of the extension within ~10 minutes if a security or compliance issue comes up — without uninstalling and without losing your saved configuration.",

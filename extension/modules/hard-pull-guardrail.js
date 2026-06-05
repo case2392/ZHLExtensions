@@ -4,34 +4,32 @@
 // selects "Hard," this module checks the worst soft credit score
 // across borrowers + the most recent DU result against ZHL's hard-pull
 // guidance matrix. If the combination indicates an unnecessary hard
-// pull (soft > 620 + DU Approval, outside the 680-719 optional pricing
-// window), the click on "Pull credit" is intercepted and a warning
+// pull, the click on "Pull credit" is intercepted and a warning
 // dialog surfaces showing the matrix + LO can Confirm or Cancel.
 //
 // Not a hard stop — the LO can always proceed after confirmation. The
 // guardrail is about catching the absent-minded case, not blocking
 // legitimate edge cases.
 //
-// Guidance matrix encoded — "approval" means EITHER:
+// Guidance matrix (per the updated ZHL hard-pull guidelines):
+//
+//   No soft on file                        → Soft  (WARN on hard)
+//   Soft < 620                             → Hard OK
+//   Soft ≥ 620 + ANY AUS approval          → Soft  (WARN on hard)
+//   Soft ≥ 620 + both AUS Refer/none       → Hard OK
+//   Optional 700–719 (near 720 LLPA)       → Hard OK for pricing (no warn)
+//
+// "Approval" means EITHER:
 //   DU  starts with "Approve" → "Approve/Eligible" or "Approve/Ineligible"
 //   LPA starts with "Accept"  → "Accept" or "Accept/Eligible"
 // If either AUS is approving, a soft pull is sufficient.
 //
-// Non-approval ("Deny" in ZHL's matrix language):
+// "Refer" (the AUS analog of "Deny" in the LO-facing matrix):
 //   DU  → "Refer/Eligible" or "Refer/Ineligible"
 //   LPA → "Refer" (no /Eligible suffix on LPA)
 // Error rows are skipped — the reader walks back to the most recent
 // non-error result so a freshly-errored re-run doesn't mask the LO's
 // actual standing.
-//
-//   No soft on file                        → Hard OK
-//   Soft < 620                             → Hard OK
-//   Soft 620-679 + ANY AUS approval        → WARN  (use soft instead)
-//   Soft 620-679 + both AUS Refer/none     → Hard OK
-//   Soft 680-699                           → Optional Hard (LLPA at 700 — no warn)
-//   Soft 700-719                           → Optional Hard (LLPA at 720 — no warn)
-//   Soft ≥ 720 + ANY AUS approval          → WARN  (no benefit; already top tier)
-//   Soft ≥ 720 + both AUS Refer/none       → Hard OK
 
 (function () {
   'use strict';
@@ -138,18 +136,21 @@
     return duApproved || lpaApproved;
   }
   function shouldWarnOnHardPull(softScore, duStatus, lpaStatus) {
-    if (softScore == null) return false;          // No soft → can't second-guess
+    // Updated guidance: when there is no soft on file, the LO should
+    // pull a soft first, not jump straight to a hard.
+    if (softScore == null) return true;
     if (softScore < 620) return false;            // Hard appropriate
-    // Optional pricing windows — hard might pick up LLPA tier improvement,
-    // so don't warn even with an approval.
-    if (softScore >= 680 && softScore <= 719) return false;
-    // 620-679 OR 720+: warn when ANY AUS is approving.
+    // Optional 700–719 LLPA window — hard may capture the 720 tier
+    // improvement, so don't warn even with an approval.
+    if (softScore >= 700 && softScore <= 719) return false;
+    // ≥620 (excl. 700–719 window): warn when ANY AUS is approving.
     if (!duStatus && !lpaStatus) return false;    // No AUS read → can't warn confidently
     return isAusApproval(duStatus, lpaStatus);
   }
 
   function buildReason(softScore, duStatus, lpaStatus) {
-    return 'Worst soft score across borrowers: <b>' + softScore + '</b>' +
+    const softTxt = (softScore == null) ? '<b>no soft on file</b>' : 'Worst soft score across borrowers: <b>' + softScore + '</b>';
+    return softTxt +
            ' &nbsp;·&nbsp; DU: <b>' + (duStatus || 'unknown') + '</b>' +
            ' &nbsp;·&nbsp; LPA: <b>' + (lpaStatus || 'unknown') + '</b>';
   }
@@ -184,7 +185,7 @@
       '</div>' +
       '<div style="font:13px/1.45 inherit;color:#334155;margin-bottom:12px;">' + buildReason(softScore, duStatus, lpaStatus) + '</div>' +
       '<div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;padding:10px 12px;font:12px/1.5 inherit;color:#78350f;margin-bottom:14px;">' +
-        '<b>ZHL guidance:</b> Hard credit should not be pulled prior to VPA when the soft credit score is greater than 620 and either DU is approved or LPA is accepted — unless it\'s an edge case (e.g. pricing improvement at the 680→700 or 700→720 LLPA tier).' +
+        '<b>ZHL guidance:</b> Pull a <b>soft</b> when there is no soft on file, or when the soft score is ≥ 620 and either DU is approved or LPA is accepted. A hard pull is appropriate when the soft is &lt; 620, when both AUS results are Refer, or — optionally — when the soft is in the 700–719 window where the 720 LLPA tier may improve pricing.' +
       '</div>' +
       '<div style="overflow:hidden;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:16px;">' +
         '<table style="width:100%;border-collapse:collapse;font:11.5px/1.4 inherit;">' +
@@ -193,11 +194,10 @@
           '<th style="padding:7px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Soft or Hard</th>' +
         '</tr></thead>' +
         '<tbody>' +
-          row('No soft on file', 'Hard', '#dcfce7') +
+          row('No soft on file', 'Soft', '#dcfce7') +
           row('Less than 620', 'Hard', '#fed7aa') +
-          row('Higher than 620 + DU Approval or LPA Accept', 'Soft', '#dcfce7') +
-          row('Higher than 620 + both DU &amp; LPA Refer', 'Hard', '#fed7aa') +
-          row('Optional 680–699 (near 700 LLPA)', 'Hard for pricing', '#fef9c3') +
+          row('Higher than 620 + DU Approval', 'Soft', '#dcfce7') +
+          row('Higher than 620 + DU Deny', 'Hard', '#fed7aa') +
           row('Optional 700–719 (near 720 LLPA)', 'Hard for pricing', '#fef9c3') +
         '</tbody></table>' +
       '</div>' +
