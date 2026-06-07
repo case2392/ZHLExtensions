@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.61.0",
+    category: "feature",
+    headline: "New MOSS Request button on Salesforce Lead / Contact / Opportunity pages — pick the type of help you need from the MOSS team (condo report, work up a contract, schedule the buyer, build / refresh a pre-approval, custom ask) and submit in two clicks.",
+    highlights: [
+      "Adds a MOSS Request button to the Salesforce action bar, right next to the Send VPA Email button. Click opens a modal with the common MOSS asks pre-listed: look up condo report, work up a contract, call this buyer at a specific time (with a date/time picker), initial outreach to buyer, get buyer scheduled on my calendar, work up a pre-approval, update a pre-approval, or a free-form custom request.",
+      "Captures the request locally (record ID, borrower name, request type, notes, optional call time) so you have a personal audit trail of what you've submitted on each record — the modal surfaces the last three requests on the same record at the top so you can see what's already in flight.",
+      "Preview build (v1). Direct submission into the MOSS Work Discovery /tasks queue (zhl-work-discovery-prod.corp.zgcp-itrc-prod-k8s.zg-int.net/tasks) is the v2 target — for now the confirmation toast offers a one-click link to the MOSS desktop so you can drop the request the usual way with the captured details still on hand."
+    ],
+    sections: ["sf-moss-request"]
+  },
+  {
     version: "1.60.1",
     category: "improvement",
     headline: "Hard Pull Guardrail: matrix updated to match ZHL's revised hard-pull guidelines. No-soft-on-file now warns to pull a soft first, and the 680–699 LLPA carve-out has been removed — only 700–719 still allows an optional hard for pricing.",

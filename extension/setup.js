@@ -12,6 +12,7 @@ const FEATURE_KEYS = [
   "feature_callerId",
   "feature_smsAddParticipants",
   "feature_sfVpaEmail",
+  "feature_sfMossRequest",
   "feature_sfIntroEmail",
   "feature_loanStoryGenerator",
   "feature_autoCallDetailsTab",

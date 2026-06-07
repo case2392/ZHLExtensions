@@ -389,6 +389,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: MOSS Request from Salesforce ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>MOSS Request from Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.salesforce.com</code> &mdash; Lead / Contact / Opportunity pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_sfMossRequest" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Adds a <strong>MOSS Request</strong> button to the Lead / Contact / Opportunity action bar, right next to the Send VPA Email button.</li>
+          <li>Click opens a modal with the common MOSS asks pre-listed: <em>look up condo report, work up a contract, call this buyer at a specific time, initial outreach to buyer, schedule buyer on my calendar, work up a pre-approval, update a pre-approval,</em> or a custom note.</li>
+          <li>Captures the request locally (record ID, borrower name, request type, notes, optional call time) so you have a personal audit trail of what you submitted today &mdash; the modal surfaces recent requests on the same record at the top.</li>
+          <li><strong>Preview build (v1).</strong> Direct submission into the <a href="https://zhl-work-discovery-prod.corp.zgcp-itrc-prod-k8s.zg-int.net/tasks" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;">MOSS Work Discovery /tasks queue</a> is the v2 target &mdash; for now the toast offers a one-click link to the MOSS desktop so you can drop the request the usual way.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: Send VPA Email from Salesforce ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
