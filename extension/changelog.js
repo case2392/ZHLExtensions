@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.61.1",
+    category: "bugfix",
+    headline: "Copy LOP file: asset rows weren't being saved on paste — the Borrower(s) chip wasn't committing because the asset form was using the broken single-select helper. Fixed.",
+    highlights: [
+      "Symptom: pasting into the new loan would land 'addresses' and 'employment' rows cleanly, but 'assets' would show '0 of N rows added' and report 'Save did not close — likely Borrower(s) field is required'. The first asset's Add form would stay open, blocking subsequent assets ('Add button not available').",
+      "Cause: pasteAssetRow() in lop-file-copy.js was driving the asset's Borrower(s) multi-select with selectComboboxOption() (the single-select helper). That helper clicks the option div, which returns success but doesn't always commit the underlying checkbox — so LOP's required-field validation blocked save.",
+      "Fix: switched to selectMultiBorrowerCombobox(), the same dedicated multi-picker pasteRealEstateRow() already uses. It opens the listbox once and toggles each borrower's checkbox by label match, which is what LOP's React form actually requires."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.61.0",
     category: "feature",
     headline: "New MOSS Request button on Salesforce Lead / Contact / Opportunity pages — pick the type of help you need from the MOSS team (condo report, work up a contract, schedule the buyer, build / refresh a pre-approval, custom ask) and submit in two clicks.",

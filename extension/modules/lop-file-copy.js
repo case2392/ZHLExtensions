@@ -3349,18 +3349,19 @@
     if (!form) return { ok: false, reason: 'Add form did not appear' };
     await wait(150);
 
-    // Borrower(s) is a multi-select combobox — open the listbox
-    // and click the matching option. The source row's text is like
-    // "Sekou Swaray"; for multi-borrower assets the source carried
-    // both names joined together — we attempt each token.
+    // Borrower(s) is a MULTI-SELECT combobox (named "borrowerIds"
+    // on the asset form — lowercase "d", unlike real estate's
+    // "borrowerIDs"). The dropdown shows a checkbox next to each
+    // borrower name. Picking via the single-select combobox helper
+    // returns true but doesn't always commit the chip (LOP's
+    // multi-select wants the underlying checkbox toggled, not the
+    // option div clicked). Use the dedicated multi picker — same
+    // helper used by pasteRealEstateRow above.
     const borrowerInput = form.querySelector('input[name="borrowerIds"]');
     if (borrowerInput && row['Borrower(s)']) {
-      const names = String(row['Borrower(s)']).split(/\s*(?:&|and|,)\s*/).filter(Boolean);
-      for (const name of names) {
-        const ok = await selectComboboxOption(borrowerInput, name);
-        console.log('[Copy LOP][assets] select borrower', name, '→', ok);
-        await wait(120);
-      }
+      const wantNames = String(row['Borrower(s)']).split(/\s*(?:&|and|,)\s*/).filter(Boolean);
+      const result = await selectMultiBorrowerCombobox(borrowerInput, wantNames);
+      console.log('[Copy LOP][assets] select borrowers', wantNames, '→', result);
     }
     writeSelect(form, 'type', mapAssetType(row['Type']));
     await wait(80);
