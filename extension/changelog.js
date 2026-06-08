@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.62.2",
+    category: "bugfix",
+    headline: "Copy LOP file: asset rows weren't picking up the right Asset type when the source row had LOP's 'D' badge next to the type name. mapAssetType() now falls back to prefix-match, and the failure dialog tells you which specific field stayed empty instead of guessing Borrower(s).",
+    highlights: [
+      "Root cause: LOP renders some asset rows with a one-letter badge appended to the type cell (the small 'D' pill next to 'Checking account' marking it as a depository account). cell.textContent picks up both, producing strings like 'checking account d' or 'checking accountd' that miss the exact-match table → mapAssetType returns empty → Asset type dropdown stays at 'Select' → required-field validation blocks save → form stays open → next asset hits 'Add button not available' too.",
+      "Fix in mapAssetType(): if the lowercase trimmed source text doesn't match a known type exactly, fall back to picking the longest known type whose name appears at the START of the cell text. 'checking account d' now matches 'checking account' → 'CheckingAccount'.",
+      "Diagnostic upgrade in pasteAssetRow(): when Save doesn't close the Add form, the modal now inspects the still-open form and reports which specific required field is empty (Asset type, Borrower(s), Financial institution, Amount). If Asset type is the culprit, the message includes the source text so the LO knows exactly what to pick manually."
+    ],
+    sections: ["lop-file-copy"]
+  },
+  {
     version: "1.62.1",
     category: "bugfix",
     headline: "Intro / VPA Email auto-paste: extend the storage TTL from 60s to 10 min so a slow-loading Gmail tab no longer leaves you with the plain-text URL fallback instead of the formatted HTML draft.",

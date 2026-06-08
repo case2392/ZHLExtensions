@@ -2925,7 +2925,25 @@
   };
   function mapAssetType(text) {
     if (!text) return '';
-    return ASSET_TYPE_MAP[String(text).toLowerCase().trim()] || '';
+    const norm = String(text).toLowerCase().trim();
+    // Exact match first.
+    if (ASSET_TYPE_MAP[norm]) return ASSET_TYPE_MAP[norm];
+    // Fuzzy fallback: LOP sometimes renders the asset row's Type cell
+    // with a one-letter badge appended to the type name (e.g. the
+    // "D" pill next to "Checking account" that marks the asset as a
+    // depository account). cell.textContent collects both, producing
+    // strings like "checking account d" or "checking accountd" that
+    // miss the exact-match table. Pick the longest known type that
+    // appears at the start of the normalized cell text.
+    let best = '';
+    let bestLen = 0;
+    for (const key of Object.keys(ASSET_TYPE_MAP)) {
+      if (norm.indexOf(key) === 0 && key.length > bestLen) {
+        best = ASSET_TYPE_MAP[key];
+        bestLen = key.length;
+      }
+    }
+    return best;
   }
 
   const GIFT_TYPE_MAP = {
@@ -3379,7 +3397,30 @@
     const closed = await waitForCondition(function () { return !getAddForm(table); }, 4000);
     await wait(300);
     if (!closed) {
-      return { ok: false, reason: 'Save did not close — likely Borrower(s) field is required (it\'s a multi-select that this version can\'t drive). Please pick the borrower(s) manually for this row, then close.' };
+      // Inspect the still-open form and figure out which required field
+      // failed validation, so the LO sees a useful message instead of a
+      // stale "probably Borrower(s)" guess.
+      const stillForm = getAddForm(table);
+      const missing = [];
+      if (stillForm) {
+        const typeSel = stillForm.querySelector('select[name="type"]');
+        if (typeSel && !typeSel.value) {
+          const sourceType = row['Type'] || '(empty)';
+          missing.push('Asset or credit type (source had "' + sourceType + '" — no matching LOP option found, pick manually)');
+        }
+        const borrowerChips = stillForm.querySelectorAll('[data-cy^="combobox-tag-"], .css-1rhbuit-multiValue');
+        if (borrowerChips.length === 0) {
+          missing.push('Borrower(s)');
+        }
+        const instInput = stillForm.querySelector('input[name="financialInstitution"]');
+        if (instInput && instInput.required && !instInput.value) missing.push('Financial institution');
+        const amtInput = stillForm.querySelector('input[name="amount"]');
+        if (amtInput && amtInput.required && !amtInput.value) missing.push('Amount');
+      }
+      const reason = missing.length
+        ? 'Save did not close — required field(s) empty: ' + missing.join(', ') + '. Fill the highlighted field(s) manually, then click Add.'
+        : 'Save did not close — fill any red-outlined required field manually, then click Add.';
+      return { ok: false, reason: reason };
     }
     return { ok: true };
   }
