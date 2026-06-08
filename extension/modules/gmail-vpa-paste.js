@@ -20,9 +20,9 @@
     console.log('[ZHL VPA Auto-paste] loaded on', location.href);
 
     const STORAGE_KEY = 'zhlVpaPendingPaste';
-    const TTL_MS      = 60 * 1000;
+    const TTL_MS      = 10 * 60 * 1000;   // 10 min — was 60s, too tight if Gmail loaded slowly
     const POLL_MS     = 100;
-    const POLL_LIMIT  = 200; // ~20 s total polling for the compose body
+    const POLL_LIMIT  = 300;              // ~30 s polling for the compose body (was 20s)
 
     function findComposeBody() {
       const all = document.querySelectorAll('div[contenteditable="true"]');
@@ -163,15 +163,18 @@
       try {
         chrome.storage.local.get([STORAGE_KEY], function (data) {
           const pending = data && data[STORAGE_KEY];
-          if (!pending || !pending.html) return;
+          if (!pending || !pending.html) {
+            console.log('[ZHL VPA Auto-paste] no pending paste in storage — plain-text URL fallback will be the final content');
+            return;
+          }
           const age = Date.now() - (pending.ts || 0);
           if (age > TTL_MS) {
             try { chrome.storage.local.remove([STORAGE_KEY]); } catch (_) {}
-            console.log('[ZHL VPA Auto-paste] pending paste expired (age=' + age + ' ms)');
+            console.warn('[ZHL VPA Auto-paste] pending paste EXPIRED (age=' + age + ' ms, TTL=' + TTL_MS + ' ms). LO will see the plain-text URL fallback. Clicking Send VPA Email again should restore the formatted draft.');
             return;
           }
           runningInThisTab = true;
-          console.log('[ZHL VPA Auto-paste] pending paste found (age=' + age + ' ms), running…');
+          console.log('[ZHL VPA Auto-paste] pending paste found (age=' + age + ' ms, HTML length=' + (pending.html || '').length + ' bytes), running…');
           pasteIntoCompose(
             pending.html,
             function onOk() {

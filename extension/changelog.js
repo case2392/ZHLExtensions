@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.62.1",
+    category: "bugfix",
+    headline: "Intro / VPA Email auto-paste: extend the storage TTL from 60s to 10 min so a slow-loading Gmail tab no longer leaves you with the plain-text URL fallback instead of the formatted HTML draft.",
+    highlights: [
+      "Symptom: clicking Send Intro Email or Send VPA Email opens Gmail with the plain-text body in the URL (correct), then a content script on the Gmail tab is supposed to paste the formatted HTML on top. If Gmail took longer than 60 seconds to load — slow corporate network, idle ZG VPN, sleeping tab — the storage stash expired before the paste fired. Result: the LO saw an unformatted draft.",
+      "Fix: TTL extended from 60s to 10 min in both gmail-intro-paste.js and gmail-vpa-paste.js. Polling window also extended from ~20s to ~30s. Added explicit console warnings when the stash expires or is missing, so future failures can be diagnosed from the browser DevTools console.",
+      "Also cleaned up a no-op duplicate check in the Intro auto-paste's looksLikeFormattedPaste fingerprint (was checking the same string twice). No behavioral impact."
+    ],
+    sections: ["sf-intro-email", "sf-vpa-email"]
+  },
+  {
     version: "1.62.0",
     category: "milestone",
     headline: "🎉 Product has shipped Sort & reorder scenarios NATIVELY in LOP. The full feature set (Sort by rate, Reset, Select all, drag-and-drop) is now in core LOP for every LO — no extension needed. The extension's scenario-sort module is retired in celebration.",

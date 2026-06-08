@@ -3,7 +3,7 @@
 // Companion to sf-intro-email.js. When the LO clicks "Send Intro
 // Email" on a Salesforce Opportunity page, the SF-side handler stashes
 // the formatted HTML body in chrome.storage.local under
-// zhlIntroPendingPaste (TTL 60 s). This script runs on the Gmail tab,
+// zhlIntroPendingPaste (TTL 10 min). This script runs on the Gmail tab,
 // finds the contenteditable compose body, and replaces the plain-text
 // content that the compose URL filled in with the formatted HTML.
 //
@@ -18,9 +18,9 @@
     console.log('[ZHL Intro Auto-paste] loaded on', location.href);
 
     const STORAGE_KEY = 'zhlIntroPendingPaste';
-    const TTL_MS      = 60 * 1000;
+    const TTL_MS      = 10 * 60 * 1000;   // 10 min — was 60s, too tight if Gmail loaded slowly
     const POLL_MS     = 100;
-    const POLL_LIMIT  = 200;
+    const POLL_LIMIT  = 300;              // ~30 s polling for the compose body (was 20s)
 
     function findComposeBody() {
       const all = document.querySelectorAll('div[contenteditable="true"]');
@@ -95,9 +95,13 @@
       try {
         if (!target) return false;
         const html = target.innerHTML || '';
-        const hasDisclosures = html.indexOf('disclosures are signed') >= 0
-                            || html.indexOf('disclosures are signed') >= 0;
-        const hasHOI = html.indexOf('Homeowners insurance') >= 0;
+        // Body always contains these two phrases — match either possible
+        // apostrophe encoding (raw, &#39;, &apos;) although neither phrase
+        // currently includes one. Keep the second branch for future
+        // template edits that introduce one.
+        const hasDisclosures = html.indexOf('disclosures are signed') >= 0;
+        const hasHOI = html.indexOf('Homeowners insurance') >= 0
+                    || html.indexOf('homeowners insurance') >= 0;
         return hasDisclosures && hasHOI;
       } catch (_) { return false; }
     }
@@ -154,15 +158,18 @@
       try {
         chrome.storage.local.get([STORAGE_KEY], function (data) {
           const pending = data && data[STORAGE_KEY];
-          if (!pending || !pending.html) return;
+          if (!pending || !pending.html) {
+            console.log('[ZHL Intro Auto-paste] no pending paste in storage — plain-text URL fallback will be the final content');
+            return;
+          }
           const age = Date.now() - (pending.ts || 0);
           if (age > TTL_MS) {
             try { chrome.storage.local.remove([STORAGE_KEY]); } catch (_) {}
-            console.log('[ZHL Intro Auto-paste] pending paste expired (age=' + age + ' ms)');
+            console.warn('[ZHL Intro Auto-paste] pending paste EXPIRED (age=' + age + ' ms, TTL=' + TTL_MS + ' ms). LO will see the plain-text URL fallback. Clicking Send Intro Email again should restore the formatted draft.');
             return;
           }
           runningInThisTab = true;
-          console.log('[ZHL Intro Auto-paste] pending paste found (age=' + age + ' ms), running…');
+          console.log('[ZHL Intro Auto-paste] pending paste found (age=' + age + ' ms, HTML length=' + (pending.html || '').length + ' bytes), running…');
           pasteIntoCompose(
             pending.html,
             function onOk() {
