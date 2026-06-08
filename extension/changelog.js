@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.61.3",
+    category: "improvement",
+    headline: "Intro Email: insurance-agent pronouns are now configurable (defaults to she/her for Karson Carter), and the Borrower Information block hides the Co-Borrower rows entirely when there's no co-borrower on the file.",
+    highlights: [
+      "Pronouns dropdown added to Setup → Send Intro Email → Default homeowners insurance agent — she/her, he/him, or they/them. Karson Carter defaults to she/her. The body template now reads e.g. '...she can shop multiple carriers for you... reach her directly:' instead of 'she/he ... her/him'.",
+      "Two new placeholder chips in the Intro Email template editor: {IA Pronoun Subject} (she / he / they) and {IA Pronoun Object} (her / him / them). The default body template uses them; existing customized templates keep the literal 'she/he' until you click Reset to default — or you can swap the literal text for the chips manually.",
+      "Borrower Information block now hides the three Co-Borrower rows (Co-Borrower / Phone / Email) when the loan has no co-borrower, instead of showing them with 'n/a'. Implemented via a new {#if Co-Borrower}…{/if} conditional block in the template — wrapping any content in that pair makes it appear only when a co-borrower is present. Plain-text fallback honors the same conditional."
+    ],
+    sections: ["sf-intro-email"]
+  },
+  {
     version: "1.61.2",
     category: "improvement",
     headline: "Pricing Exception Workflow: threshold for the 'big PE' justification branch lowered from 2.5 points to 2 points to match the updated ZHL guidance.",

@@ -142,7 +142,7 @@
       '<p>Great news &mdash; your initial disclosures are signed and your file is officially moving. Here\'s what to expect over the next several days so nothing catches you off guard.</p>' +
       '<p><strong>1. Initial underwriting review.</strong> Your file goes into an early underwriter review so we can get ahead of any conditions before they become time crunches later. The goal is to surface anything we need from you now, while we have runway, rather than at the closing table.</p>' +
       '<p><strong>2. Loan processor introduction.</strong> One of our processors will reach out shortly to introduce themselves and become your day-to-day point of contact for documentation. They\'ll let you know if anything additional is needed beyond what you\'ve already provided. I\'m still quarterbacking the whole file, so don\'t worry &mdash; you\'re not getting handed off, just adding a teammate.</p>' +
-      '<p><strong>3. Homeowners insurance.</strong> This is the one item I\'d ask you to start on this week. You\'ll need a homeowners insurance policy in place before we can close, and quotes can take a few days to come back. I\'ve cc\'d <strong>{Insurance Agent Name}</strong> with {Insurance Agent Company} on this email &mdash; she/he can shop multiple carriers for you to find the best coverage and rate. Feel free to reply all or reach her/him directly:</p>' +
+      '<p><strong>3. Homeowners insurance.</strong> This is the one item I\'d ask you to start on this week. You\'ll need a homeowners insurance policy in place before we can close, and quotes can take a few days to come back. I\'ve cc\'d <strong>{Insurance Agent Name}</strong> with {Insurance Agent Company} on this email &mdash; {IA Pronoun Subject} can shop multiple carriers for you to find the best coverage and rate. Feel free to reply all or reach {IA Pronoun Object} directly:</p>' +
       '<p style="margin-left: 24px;">' +
         '<strong>{Insurance Agent Name}</strong><br>' +
         '{Insurance Agent Company}<br>' +
@@ -157,10 +157,12 @@
         '<tr><td style="padding: 2px 18px 2px 0; color: #6b7280; vertical-align: top; white-space: nowrap;">Borrower</td><td style="padding: 2px 0; color: #111827;">{Borrower Name}</td></tr>' +
         '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Phone</td><td style="padding: 1px 0; color: #111827;">{Borrower Phone}</td></tr>' +
         '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Email</td><td style="padding: 1px 0; color: #111827;">{Borrower Email}</td></tr>' +
+        '{#if Co-Borrower}' +
         '<tr><td colspan="2" style="padding: 4px 0;"></td></tr>' +
         '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Co-Borrower</td><td style="padding: 1px 0; color: #111827;">{Co-Borrower Name}</td></tr>' +
         '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Phone</td><td style="padding: 1px 0; color: #111827;">{Co-Borrower Phone}</td></tr>' +
         '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Email</td><td style="padding: 1px 0; color: #111827;">{Co-Borrower Email}</td></tr>' +
+        '{/if}' +
         '<tr><td colspan="2" style="padding: 4px 0;"></td></tr>' +
         '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Property</td><td style="padding: 1px 0; color: #111827;">{Property Address}</td></tr>' +
         '<tr><td style="padding: 1px 18px 1px 0; color: #6b7280; vertical-align: top;">Loan #</td><td style="padding: 1px 0; color: #111827;">{Loan Number}</td></tr>' +
@@ -195,7 +197,14 @@
 
   function substituteAll(tmpl, ctx, htmlSafe) {
     const enc = htmlSafe ? escHtml : function (s) { return s == null ? '' : String(s); };
-    return String(tmpl || '')
+    // Conditional block: {#if Co-Borrower}…{/if} expands only when the
+    // current record has a co-borrower. Run before placeholder substitution
+    // so the inner placeholders inside the block get their normal treatment.
+    let out = String(tmpl || '').replace(
+      /\{#if Co-Borrower\}([\s\S]*?)\{\/if\}/g,
+      function (_, inner) { return ctx.hasCoBorrower ? inner : ''; }
+    );
+    return out
       .replace(/\{Greeting\}/g,                enc(ctx.greeting))
       .replace(/\{First Name\}/g,              enc(ctx.firstName))
       .replace(/\{Borrower Name\}/g,           enc(ctx.borrowerName))
@@ -214,7 +223,9 @@
       .replace(/\{Insurance Agent Name\}/g,    enc(ctx.iaName))
       .replace(/\{Insurance Agent Company\}/g, enc(ctx.iaCompany))
       .replace(/\{Insurance Agent Phone\}/g,   enc(ctx.iaPhone))
-      .replace(/\{Insurance Agent Email\}/g,   enc(ctx.iaEmail));
+      .replace(/\{Insurance Agent Email\}/g,   enc(ctx.iaEmail))
+      .replace(/\{IA Pronoun Subject\}/g,      enc(ctx.iaPronounSubject))
+      .replace(/\{IA Pronoun Object\}/g,       enc(ctx.iaPronounObject));
   }
 
   function buildContext(borrowers, settings, fields) {
@@ -229,15 +240,23 @@
     const greeting = co
       ? primaryParsed.first + ' & ' + coParsed.first
       : (primaryParsed.first || '[First Name]');
+    // Derive she/her | he/him | they/them from the stored pronouns string.
+    // Stored shape is "subject/object" — first segment is subject (she/he/they),
+    // second is object (her/him/them). Fallback to "they/them" if anything weird.
+    const rawPronouns = String(settings.iaPronouns || 'they/them').toLowerCase().trim();
+    const pronounParts = rawPronouns.split('/').map(function (s) { return s.trim(); }).filter(Boolean);
+    const iaPronounSubject = pronounParts[0] || 'they';
+    const iaPronounObject  = pronounParts[1] || pronounParts[0] || 'them';
     return {
       greeting:          greeting,
       firstName:         primaryParsed.first || '[First Name]',
       borrowerName:      primaryFull   || '[Borrower Name]',
       borrowerPhone:     (primary && primary.phone) || '',
       borrowerEmail:     (primary && primary.email) || '',
-      coBorrowerName:    coFull        || 'n/a',
-      coBorrowerPhone:   (co && co.phone) || 'n/a',
-      coBorrowerEmail:   (co && co.email) || 'n/a',
+      hasCoBorrower:     !!co,
+      coBorrowerName:    coFull        || '',
+      coBorrowerPhone:   (co && co.phone) || '',
+      coBorrowerEmail:   (co && co.email) || '',
       propertyAddress:   fields.propertyAddress || '[Property Address]',
       loanNumber:        fields.loanNumber      || '[Loan Number]',
       closingDate:       fields.closingDate     || '[Closing Date]',
@@ -248,7 +267,9 @@
       iaName:            settings.iaName    || '[Insurance Agent Name]',
       iaCompany:         settings.iaCompany || '[Insurance Agent Company]',
       iaPhone:           settings.iaPhone   || '[Insurance Agent Phone]',
-      iaEmail:           settings.iaEmail   || ''
+      iaEmail:           settings.iaEmail   || '',
+      iaPronounSubject:  iaPronounSubject,
+      iaPronounObject:   iaPronounObject
     };
   }
 
@@ -259,7 +280,7 @@
   // as a final fallback if the auto-paste fails AND the clipboard
   // copy is unavailable.
   function buildPlainBody(ctx) {
-    return [
+    const lines = [
       'Hi ' + ctx.greeting + ',',
       '',
       'Great news — your initial disclosures are signed and your file is officially moving. Here\'s what to expect over the next several days so nothing catches you off guard.',
@@ -268,7 +289,7 @@
       '',
       '2. Loan processor introduction. One of our processors will reach out shortly to introduce themselves and become your day-to-day point of contact for documentation. I\'m still quarterbacking the whole file — just adding a teammate.',
       '',
-      '3. Homeowners insurance. You\'ll need a homeowners insurance policy in place before we can close. I\'ve cc\'d ' + ctx.iaName + ' with ' + ctx.iaCompany + ' — she/he can shop multiple carriers for you.',
+      '3. Homeowners insurance. You\'ll need a homeowners insurance policy in place before we can close. I\'ve cc\'d ' + ctx.iaName + ' with ' + ctx.iaCompany + ' — ' + ctx.iaPronounSubject + ' can shop multiple carriers for you.',
       '',
       '   ' + ctx.iaName,
       '   ' + ctx.iaCompany,
@@ -281,14 +302,21 @@
       'Borrower Information',
       'Borrower: '         + ctx.borrowerName,
       'Phone: '            + ctx.borrowerPhone,
-      'Email: '            + ctx.borrowerEmail,
-      'Co-Borrower: '      + ctx.coBorrowerName,
-      'Phone: '            + ctx.coBorrowerPhone,
-      'Email: '            + ctx.coBorrowerEmail,
+      'Email: '            + ctx.borrowerEmail
+    ];
+    if (ctx.hasCoBorrower) {
+      lines.push(
+        'Co-Borrower: '    + ctx.coBorrowerName,
+        'Phone: '          + ctx.coBorrowerPhone,
+        'Email: '          + ctx.coBorrowerEmail
+      );
+    }
+    lines.push(
       'Property Address: ' + ctx.propertyAddress,
       'Loan Number: '      + ctx.loanNumber,
       'Estimated Closing Date: ' + ctx.closingDate
-    ].join('\n');
+    );
+    return lines.join('\n');
   }
 
   // ----- Settings + stash ------------------------------------------
@@ -298,10 +326,11 @@
   // send a fully-populated Insurance Intro on the very first click,
   // without requiring a trip to the Setup page first.
   const KARSON_DEFAULTS = {
-    name:    'Karson Carter',
-    company: 'Goosehead Insurance',
-    phone:   '(336) 596-3603',
-    email:   'Karson.carter@goosehead.com'
+    name:     'Karson Carter',
+    company:  'Goosehead Insurance',
+    phone:    '(336) 596-3603',
+    email:    'Karson.carter@goosehead.com',
+    pronouns: 'she/her'
   };
 
   function getLoSettings() {
@@ -310,7 +339,8 @@
         chrome.storage.local.get([
           'lo_name', 'lo_email', 'lo_nmls',
           'insurance_agent_name', 'insurance_agent_company',
-          'insurance_agent_phone', 'insurance_agent_email'
+          'insurance_agent_phone', 'insurance_agent_email',
+          'insurance_agent_pronouns'
         ], function (data) {
           resolve({
             loName:    (data && data.lo_name)                 || '',
@@ -319,14 +349,16 @@
             iaName:    (data && data.insurance_agent_name)    || KARSON_DEFAULTS.name,
             iaCompany: (data && data.insurance_agent_company) || KARSON_DEFAULTS.company,
             iaPhone:   (data && data.insurance_agent_phone)   || KARSON_DEFAULTS.phone,
-            iaEmail:   (data && data.insurance_agent_email)   || KARSON_DEFAULTS.email
+            iaEmail:   (data && data.insurance_agent_email)   || KARSON_DEFAULTS.email,
+            iaPronouns:(data && data.insurance_agent_pronouns)|| KARSON_DEFAULTS.pronouns
           });
         });
       } catch (_) {
         resolve({
           loName: '', loEmail: '', loNmls: '',
           iaName: KARSON_DEFAULTS.name, iaCompany: KARSON_DEFAULTS.company,
-          iaPhone: KARSON_DEFAULTS.phone, iaEmail: KARSON_DEFAULTS.email
+          iaPhone: KARSON_DEFAULTS.phone, iaEmail: KARSON_DEFAULTS.email,
+          iaPronouns: KARSON_DEFAULTS.pronouns
         });
       }
     });

@@ -531,6 +531,9 @@
             <span class="placeholder-tag" data-insert="{Insurance Agent Company}" title="From the Insurance Agent block below">{Insurance Agent Company}</span>
             <span class="placeholder-tag" data-insert="{Insurance Agent Phone}" title="From the Insurance Agent block below">{Insurance Agent Phone}</span>
             <span class="placeholder-tag" data-insert="{Insurance Agent Email}" title="From the Insurance Agent block below — also auto-CC'd on every Intro Email">{Insurance Agent Email}</span>
+            <span class="placeholder-tag" data-insert="{IA Pronoun Subject}" title="Insurance agent's subject pronoun (she / he / they) — pulled from the Pronouns dropdown below">{IA Pronoun Subject}</span>
+            <span class="placeholder-tag" data-insert="{IA Pronoun Object}" title="Insurance agent's object pronoun (her / him / them) — pulled from the Pronouns dropdown below">{IA Pronoun Object}</span>
+            <span class="placeholder-tag" data-insert="{#if Co-Borrower}…{/if}" title="Conditional block — content inside is only included when there's a co-borrower. Wrap the co-borrower rows.">{#if Co-Borrower}…{/if}</span>
           </div>
 
           <h3 style="margin-top: 18px;">Default homeowners insurance agent</h3>
@@ -547,6 +550,13 @@
             </label>
             <label class="vpa-label" style="margin-top:0;">Agent email (auto-CC'd)
               <input type="email" data-ia-field="insurance_agent_email" placeholder="e.g. karson.carter@goosehead.com" autocomplete="off" />
+            </label>
+            <label class="vpa-label" style="margin-top:0;">Pronouns (used in body)
+              <select data-ia-field="insurance_agent_pronouns">
+                <option value="she/her">she / her</option>
+                <option value="he/him">he / him</option>
+                <option value="they/them">they / them</option>
+              </select>
             </label>
           </div>
 

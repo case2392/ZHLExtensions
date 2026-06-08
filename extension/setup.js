@@ -100,7 +100,7 @@ loadLoProfile();
 // Insurance Agent defaults — used by the Intro Email module and auto-CC'd
 // on every Intro Email draft. Same auto-save-on-input pattern as the LO
 // Profile fields.
-const IA_FIELDS = ['insurance_agent_name', 'insurance_agent_company', 'insurance_agent_phone', 'insurance_agent_email'];
+const IA_FIELDS = ['insurance_agent_name', 'insurance_agent_company', 'insurance_agent_phone', 'insurance_agent_email', 'insurance_agent_pronouns'];
 // Default insurance agent. New installs see these pre-filled in Setup
 // (not as placeholder hints — as actual editable values) so clicking
 // Insurance Intro for the first time before touching Setup still sends
@@ -110,12 +110,13 @@ const IA_DEFAULTS = {
   insurance_agent_name:    'Karson Carter',
   insurance_agent_company: 'Goosehead Insurance',
   insurance_agent_phone:   '(336) 596-3603',
-  insurance_agent_email:   'Karson.carter@goosehead.com'
+  insurance_agent_email:   'Karson.carter@goosehead.com',
+  insurance_agent_pronouns:'she/her'
 };
 async function loadInsuranceAgent() {
   const data = await chrome.storage.local.get(IA_FIELDS);
   const seeds = {};
-  document.querySelectorAll('input[data-ia-field]').forEach((input) => {
+  document.querySelectorAll('input[data-ia-field], select[data-ia-field]').forEach((input) => {
     const key = input.dataset.iaField;
     if (data[key] != null && data[key] !== '') {
       input.value = data[key];
@@ -132,8 +133,9 @@ async function loadInsuranceAgent() {
   }
 }
 const iaSaveTimers = {};
-document.querySelectorAll('input[data-ia-field]').forEach((input) => {
-  input.addEventListener('input', () => {
+document.querySelectorAll('input[data-ia-field], select[data-ia-field]').forEach((input) => {
+  const evt = input.tagName === 'SELECT' ? 'change' : 'input';
+  input.addEventListener(evt, () => {
     const key = input.dataset.iaField;
     clearTimeout(iaSaveTimers[key]);
     iaSaveTimers[key] = setTimeout(async () => {
