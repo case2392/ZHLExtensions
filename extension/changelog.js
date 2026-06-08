@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.62.0",
+    category: "milestone",
+    headline: "🎉 Product has shipped Sort & reorder scenarios NATIVELY in LOP. The full feature set (Sort by rate, Reset, Select all, drag-and-drop) is now in core LOP for every LO — no extension needed. The extension's scenario-sort module is retired in celebration.",
+    highlights: [
+      "Sort & reorder scenario cards is now built into the Loan Officer Portal natively. Every LO at ZHL gets Sort by rate (ascending / descending), Reset, Select all / Deselect all, and drag-and-drop reordering of scenario cards — without installing anything. This module was the prototype that validated the design; with native parity now in production, the extension stays out of LOP's way.",
+      "scenario-sort.js is permanently disabled in this release — the module short-circuits at load time and never injects its toolbar, drag handles, or click handlers. The full source is preserved in the repo so the implementation history remains visible. The Setup page replaces the old toggle with a celebratory '✓ Shipped natively · Product' card explaining the handoff.",
+      "First feature to make the full LO-builder → Product-validation → native-shipment round trip. Direct proof that the extension's pattern (LOs build small, Product ships big) is the flywheel ZHL was hoping it would be. Impact Report's Product Validation page updated to call out the handoff."
+    ],
+    sections: ["scenario-sort"]
+  },
+  {
     version: "1.61.3",
     category: "improvement",
     headline: "Intro Email: insurance-agent pronouns are now configurable (defaults to she/her for Karson Carter), and the Borrower Information block hides the Co-Borrower rows entirely when there's no co-borrower on the file.",

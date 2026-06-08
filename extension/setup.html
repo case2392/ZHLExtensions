@@ -204,29 +204,27 @@
       </div>
     </section>
 
-    <!-- ============== Module: Scenario Sort ============== -->
-    <section class="module-card" data-module>
+    <!-- ============== Module: Scenario Sort (retired — shipped by Product) ============== -->
+    <section class="module-card disabled" data-module data-retired-by-product style="border:2px solid #10b981;background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);">
       <div class="module-head">
         <div class="module-title-block">
-          <h2>Sort &amp; reorder scenario cards</h2>
-          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — scenarios page</p>
+          <h2 style="color:#065f46;">Sort &amp; reorder scenario cards
+            <span style="display:inline-block;margin-left:8px;font:700 10px Arial,sans-serif;letter-spacing:0.8px;text-transform:uppercase;background:#10b981;color:#fff;padding:3px 8px;border-radius:100px;vertical-align:middle;">Shipped natively · Product</span>
+          </h2>
+          <p class="module-runs-on" style="color:#047857;">Now built into LOP &mdash; no extension needed.</p>
         </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_scenarioSort" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
+        <div style="display:flex;align-items:center;gap:6px;color:#065f46;font:700 12px Arial,sans-serif;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:100px;background:#10b981;color:#fff;font-size:13px;">✓</span>
+          Retired
+        </div>
       </div>
 
-      <div class="module-body">
-        <div class="module-screenshot">
-          <img src="images/scenario-sort.svg" alt="Sort toolbar above the scenario cards row with Rate ascending/descending buttons" />
+      <div class="module-body" style="background:#fff;border-radius:8px;padding:14px 16px;margin-top:10px;">
+        <div style="font:14.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
+          <p style="margin:0 0 10px;"><strong style="color:#065f46;">🎉 Huge win — Product has shipped this entire feature set natively in LOP.</strong></p>
+          <p style="margin:0 0 10px;">Sort by rate (ascending / descending), Reset, Select all, and drag-and-drop reordering of scenario cards are all live in the core Loan Officer Portal for every ZHL LO, no extension required. This module was the prototype that validated the design; with native parity in production, the extension stays out of LOP's way and the toggle is retired.</p>
+          <p style="margin:0;color:#475569;font-size:13px;font-style:italic;">The flywheel works: LOs build it — Product validates it — Product ships it permanently. First feature to make the full round trip.</p>
         </div>
-        <ul class="module-features">
-          <li>Adds a small toolbar above the scenario cards with <strong>Rate ↑</strong> (low → high) and <strong>Rate ↓</strong> (high → low) buttons.</li>
-          <li>One click reorders the cards in place. Generate PDF then walks them in the new order.</li>
-          <li><strong>Drag-and-drop</strong> any card to fine-tune the order manually after sorting.</li>
-        </ul>
       </div>
     </section>
 

@@ -1,6 +1,15 @@
 // ZHL Productivity Pack module — feature key: feature_scenarioSort
-// Wraps original module body in a chrome.storage.local feature-flag check.
-// If the user disables this module on the setup page the body never runs.
+//
+// PERMANENTLY DISABLED as of v1.62.0. ZHL Product has shipped this entire
+// feature set (Sort by rate ↑/↓, Reset, Select all, drag-and-drop
+// reordering) natively in LOP — this module was the prototype that
+// validated the design. With native parity now live in production, the
+// extension stays out of LOP's way.
+//
+// The full source below is preserved (not deleted) so the implementation
+// history remains visible in the repo. The IIFE just short-circuits and
+// never injects anything. The Setup page surfaces a celebratory "Shipped
+// natively by Product" badge in place of the old toggle.
 (function () {
   'use strict';
   const __ZHL_FEATURE_KEY = 'feature_scenarioSort';
@@ -10,7 +19,12 @@
 
   const VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
     ? chrome.runtime.getManifest().version : '?';
-  console.log('[Scenario Sort v' + VERSION + '] loaded in', location.href);
+
+  // Permanent disable. Product shipped this natively in LOP — bail before
+  // any toolbar / drag-drop / sort code runs. Leave the rest of the module
+  // intact below for historical reference.
+  console.log('[Scenario Sort v' + VERSION + '] permanently disabled — shipped natively by Product in LOP. Module retained for history.');
+  return;
 
   function track(event, props) {
     try { chrome.runtime.sendMessage({ type: 'TRACK', event, props: props || {} }); } catch (_) {}
