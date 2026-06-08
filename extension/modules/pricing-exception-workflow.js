@@ -7,12 +7,12 @@
 //
 //   Q: Is this loan locked?
 //      Yes → Imported pricing? → Comp PE fields? → No lock-diff alert? →
-//            Comp LE in eFolder? → < 2.5 pts? →
-//              under 2.5: email RM "ZG#### is ready for PE request"
-//              over  2.5: surface 3 justification questions, include in email
+//            Comp LE in eFolder? → < 2 pts? →
+//              under 2: email RM "ZG#### is ready for PE request"
+//              over  2: surface 3 justification questions, include in email
 //      No  → Updated scenario assigned? → Comp LE on tasks? →
 //            Enter ZHL + Comp pricing details → compute PE $ + points →
-//            < 2.5 pts? → same email branches
+//            < 2 pts? → same email branches
 //
 // Output is a previewable email body the LO can Copy or Open in mail.
 (function () {
@@ -671,7 +671,7 @@
       reason:        '',
       expectations:  '',
       agentRel:      '',
-      isOver25:      null,      // true | false (set at points-check)
+      isOver2:      null,      // true | false (set at points-check)
       rmEmail:       ''
     };
   }
@@ -1036,8 +1036,8 @@
 
     // --------- unlocked-only: reason / description ----------------------
     // RM wants a description on every unlocked PE request (not just
-    // > 2.5 pts). Writes to s.reason so if the request later turns out
-    // to be > 2.5 pts, the big-25 form's "Main reason" textarea
+    // > 2 pts). Writes to s.reason so if the request later turns out
+    // to be > 2 pts, the big-25 form's "Main reason" textarea
     // pre-fills with whatever was typed here.
     'U-reason': function (body) {
       const s = workflowState;
@@ -1055,32 +1055,32 @@
       });
     },
 
-    // --------- shared: < 2.5 pts? ---------------------------------------
+    // --------- shared: < 2 pts? ---------------------------------------
     // In the UNLOCKED path we already computed s.pePoints from the
     // ZHL/comp pricing inputs — no reason to ask the LO a question we
-    // already know the answer to. Auto-route: if pePoints >= 2.5,
+    // already know the answer to. Auto-route: if pePoints >= 2,
     // straight to the justification step; otherwise straight to the
     // email step. The LOCKED path still gets the manual question
     // because we never calculate the PE size in that branch.
     'points-check': function (body) {
       const s = workflowState;
       if (s.locked === false && s.loanAmount > 0) {
-        s.isOver25 = (s.pePoints || 0) >= 2.5;
-        goTo(s.isOver25 ? 'big-pe-questions' : 'email');
+        s.isOver2 = (s.pePoints || 0) >= 2;
+        goTo(s.isOver2 ? 'big-pe-questions' : 'email');
         return;
       }
       body.innerHTML =
-        '<h4 style="margin:0 0 12px;font-size:15px;color:#111827;">Is your PE request under 2.5 points?</h4>' +
+        '<h4 style="margin:0 0 12px;font-size:15px;color:#111827;">Is your PE request under 2 points?</h4>' +
         '<p style="margin:0 0 16px;color:#6b7280;font-size:12px;">If you don\'t know, check the PE points field on the ENC Lock screen.</p>' +
         '<div style="display:flex;gap:8px;">' +
-          btnPrimary('Yes — under 2.5', 'zhl-pe-under') +
-          btnSecondary('No — 2.5 or over', 'zhl-pe-over') +
+          btnPrimary('Yes — under 2', 'zhl-pe-under') +
+          btnSecondary('No — 2 or over', 'zhl-pe-over') +
         '</div>';
       body.querySelector('#zhl-pe-under').addEventListener('click', function () {
-        s.isOver25 = false; goTo('email');
+        s.isOver2 = false; goTo('email');
       });
       body.querySelector('#zhl-pe-over').addEventListener('click', function () {
-        s.isOver25 = true; goTo('big-pe-questions');
+        s.isOver2 = true; goTo('big-pe-questions');
       });
     },
 
@@ -1091,7 +1091,7 @@
       const wrap  = 'margin-bottom:12px;';
       const brName = (s.borrowerName || 'the borrower').trim();
       body.innerHTML =
-        '<h4 style="margin:0 0 6px;font-size:15px;color:#111827;">PE > 2.5 points — additional justification required</h4>' +
+        '<h4 style="margin:0 0 6px;font-size:15px;color:#111827;">PE > 2 points — additional justification required</h4>' +
         '<p style="margin:0 0 14px;color:#6b7280;font-size:12px;">Your manager wants these three answers included in the PE email.</p>' +
         '<div style="' + wrap + '"><label style="' + label + '">1. What is the main reason for needing this PE? Please be specific.</label>' +
           '<textarea id="pe-reason" style="' + ta + '">' + escapeHtml(s.reason) + '</textarea></div>' +
@@ -1357,7 +1357,8 @@
   }
   function loLabel(s) { return (s.loName || '').trim() || '(your name)'; }
   function loanIdForEmail(s) { return (s.zgNumber || s.loanId || '(loan id)').trim(); }
-  function sizeLabel(s) { return s.isOver25 ? '2.5 points or over' : 'under 2.5 points'; }
+  function sizeLabel(s) { return s.isOver2 ? '2 points or over' : 'under 2 points'; }
+
   function compLabel(s)     { return (s.compLender || '').trim() || 'Competitor'; }
   // Rate-lock status surfaced in the subject and as the first sentence of
   // the email body. RM asked for this to be obvious — locked vs unlocked
@@ -1404,7 +1405,7 @@
       'PE request size: ' + sizeLabel(s),
       ''
     ];
-    if (s.isOver25) lines.push.apply(lines, big25SectionPlain(s));
+    if (s.isOver2) lines.push.apply(lines, big2SectionPlain(s));
     lines.push('Thanks.');
     // ----- html -----
     const html = wrapHtml(
@@ -1419,11 +1420,11 @@
         '<li>Comp LE uploaded to eFolder</li>' +
       '</ul>' +
       '<p style="margin:14px 0;"><strong>PE request size:</strong> ' + escapeHtml(sizeLabel(s)) + '</p>' +
-      (s.isOver25 ? big25SectionHtml(s) : '') +
+      (s.isOver2 ? big2SectionHtml(s) : '') +
       '<p style="margin-top:18px;">Thanks.</p>'
     );
     return {
-      subject: lockedTag(s) + ' PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + (s.isOver25 ? ' — >2.5 pts' : ''),
+      subject: lockedTag(s) + ' PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + (s.isOver2 ? ' — >2 pts' : ''),
       body: lines.join('\n'),
       html: html
     };
@@ -1464,14 +1465,14 @@
       ''
     ];
     // Reason / description — always included on the unlocked path. If we're
-    // over 2.5 pts, the big-25 section's #1 question already includes it,
+    // over 2 pts, the big-25 section's #1 question already includes it,
     // so we suppress the standalone section here to avoid duplication.
-    if (!s.isOver25 && (s.reason || '').trim()) {
+    if (!s.isOver2 && (s.reason || '').trim()) {
       lines.push('Reason for PE request:');
       lines.push('  ' + s.reason.trim());
       lines.push('');
     }
-    if (s.isOver25) lines.push.apply(lines, big25SectionPlain(s));
+    if (s.isOver2) lines.push.apply(lines, big2SectionPlain(s));
     lines.push('Attached: Scenario details (View details snip), competitor LE / worksheet.');
     lines.push('');
     lines.push('Thanks.');
@@ -1492,26 +1493,26 @@
         ' <span style="color:#6b7280;">(' + escapeHtml(formatPctDisplay(s.pePoints)) + ')</span><br>' +
         '<strong>PE request size:</strong> ' + escapeHtml(sizeLabel(s)) +
       '</p>' +
-      (!s.isOver25 && (s.reason || '').trim()
+      (!s.isOver2 && (s.reason || '').trim()
         ? htmlSectionHeading('Reason for PE request') +
           '<p style="margin:0 0 14px;color:#374151;line-height:1.5;white-space:pre-wrap;">' + escapeHtml((s.reason || '').trim()) + '</p>'
         : '') +
-      (s.isOver25 ? big25SectionHtml(s) : '') +
+      (s.isOver2 ? big2SectionHtml(s) : '') +
       '<p style="margin:18px 0 0;color:#6b7280;font-size:12px;font-style:italic;">Attached: Scenario details (View details snip), competitor LE / worksheet.</p>' +
       '<p style="margin-top:14px;">Thanks.</p>'
     );
     const compForSubject = (s.compLender || '').trim() ? ' vs ' + (s.compLender || '').trim() : '';
     return {
-      subject: lockedTag(s) + ' PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + compForSubject + (s.isOver25 ? ' — >2.5 pts' : ''),
+      subject: lockedTag(s) + ' PE Request for ' + borrowerLabel(s) + ' (' + id + ')' + compForSubject + (s.isOver2 ? ' — >2 pts' : ''),
       body: lines.join('\n'),
       html: html
     };
   }
 
-  function big25SectionPlain(s) {
+  function big2SectionPlain(s) {
     const brName = (s.borrowerName || 'the borrower').trim();
     return [
-      'Justification (PE > 2.5 pts):',
+      'Justification (PE > 2 pts):',
       '',
       '  1) Main reason for PE:',
       '     ' + (s.reason || '(not provided)'),
@@ -1524,9 +1525,9 @@
       ''
     ];
   }
-  function big25SectionHtml(s) {
+  function big2SectionHtml(s) {
     const brName = (s.borrowerName || 'the borrower').trim();
-    return htmlSectionHeading('Justification (PE > 2.5 pts)') +
+    return htmlSectionHeading('Justification (PE > 2 pts)') +
       '<ol style="margin:0 0 14px;padding-left:22px;line-height:1.6;">' +
         '<li style="margin-bottom:10px;">' +
           '<strong>Main reason for PE:</strong><br>' +

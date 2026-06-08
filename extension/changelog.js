@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.61.2",
+    category: "improvement",
+    headline: "Pricing Exception Workflow: threshold for the 'big PE' justification branch lowered from 2.5 points to 2 points to match the updated ZHL guidance.",
+    highlights: [
+      "The 'Is your PE request under X points?' step now asks 'under 2 points' instead of 'under 2.5'. The auto-route logic (when PE points were captured from the LE Section A inputs) compares pePoints >= 2 instead of >= 2.5.",
+      "Email subject tags (' — >2 pts') and the 'Justification (PE > 2 pts)' section heading updated to match. Modal copy ('PE > 2 points — additional justification required'), the sizeLabel helper, and all related comments rewritten.",
+      "Internal renames: isOver25 → isOver2, big25SectionHtml/Plain → big2SectionHtml/Plain. No functional change beyond the threshold."
+    ],
+    sections: ["pricing-exception-workflow"]
+  },
+  {
     version: "1.61.1",
     category: "bugfix",
     headline: "Copy LOP file: asset rows weren't being saved on paste — the Borrower(s) chip wasn't committing because the asset form was using the broken single-select helper. Fixed.",
