@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.62.3",
+    category: "bugfix",
+    headline: "Copy LOP file: the Hard Pull Guardrail no longer interrupts the paste flow's credit-reissue step. The paste now bypasses the guardrail because the LO has already explicitly chosen to copy a known-good loan onto the destination.",
+    highlights: [
+      "Symptom: in the middle of a Copy LOP paste, after the addresses / employment / income / assets / pricing all landed and the script moved on to the credit-reissue step, the Hard Pull Guardrail's confirmation dialog popped up ('Hard pull may be outside ZHL guidance — no soft on file'). This is technically correct guidance — but in a paste flow the destination loan having no soft on file is expected (it's a brand-new file being populated from the source), and the LO has already opted into the operation. The dialog was friction, not a safety net.",
+      "Fix: runHardReissue() in lop-file-copy.js now sets window.__zhl_skip_hard_pull_warning = true (the Hard Pull Guardrail's published SKIP_FLAG) immediately before clicking [data-cy=\"run-credit\"], so the Guardrail's click interceptor lets the click through silently. The flag is cleared 2 seconds later, and in a finally so an exception can't permanently disable the Guardrail.",
+      "Soft-pull path (runSoftPull) does not need this — the Pull-type select defaults to Soft on that branch and the Guardrail only fires on pullType=Hard."
+    ],
+    sections: ["lop-file-copy", "hard-pull-guardrail"]
+  },
+  {
     version: "1.62.2",
     category: "bugfix",
     headline: "Copy LOP file: asset rows weren't picking up the right Asset type when the source row had LOP's 'D' badge next to the type name. mapAssetType() now falls back to prefix-match, and the failure dialog tells you which specific field stayed empty instead of guessing Borrower(s).",
