@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.62.4",
+    category: "bugfix",
+    headline: "Send VPA Email: subject line now includes the co-borrower's last name. Previously every VPA subject showed only the co-borrower's first name (e.g., 'Connie Oldham & Glen' instead of 'Connie Oldham & Glen Smith', or 'Ashley Burkholder & Timothy' instead of 'Ashley & Timothy Burkholder').",
+    highlights: [
+      "Root cause: the scraper at sf-vpa-email.js captured the co-borrower's full name into coParsed via parseFullName(), but the returned lead object only carried coParsed.first through to the rest of the module. coBorrowerLastName was never populated. buildFullNames() then read lead.coBorrowerLastName, got undefined, treated coLast as empty, and the same-last-name collapse never fired.",
+      "Fix: add coBorrowerLastName: coParsed.last to the lead object. Two-line change. buildFullNames()'s existing logic now correctly produces 'Connie Oldham & Glen Smith' for different last names and the cleaner 'Ashley & Timothy Burkholder' when both borrowers share a last name.",
+      "Affects subject line only — body greeting ('Hi Connie & Glen') was already correct because it only uses first names. Default Intro Email is unaffected (it pulls from Salesforce Contact Roles which carries full names directly)."
+    ],
+    sections: ["sf-vpa-email"]
+  },
+  {
     version: "1.62.3",
     category: "bugfix",
     headline: "Copy LOP file: the Hard Pull Guardrail no longer interrupts the paste flow's credit-reissue step. The paste now bypasses the guardrail because the LO has already explicitly chosen to copy a known-good loan onto the destination.",

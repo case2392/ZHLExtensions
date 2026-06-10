@@ -240,6 +240,7 @@
       firstName: firstName || null,
       lastName: lastName || null,
       coBorrowerFirstName: coParsed.first || null,
+      coBorrowerLastName:  coParsed.last  || null,
       coBorrowerEmail: coBorrowerEmail || null,
       email: email || null,
       amount: amount || null,
