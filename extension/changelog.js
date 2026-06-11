@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.17",
+    category: "bugfix",
+    headline: "Send VPA Email + Send Intro Email: fix the auto-paste fingerprint that was bailing on the plain-text URL fallback. The HTML body now actually lands every time.",
+    highlights: [
+      "Symptom: clicking Send VPA Email (and sometimes Send Intro Email) opened Gmail with the plain-text body in the URL — and the formatted HTML never replaced it. The compose body stayed plain text, no Zillow Home Loans header, no <h1> Congratulations, no bullet styling, no Borrower Information table.",
+      "Root cause: gmail-vpa-paste.js's looksLikeFormattedPaste fingerprint was checking for the strings 'Congratulations' and \"What's Next\" anywhere in the compose body's innerHTML. Those words ALSO appear in the plain-text URL fallback body Gmail fills from &body=. So when the paster ran its verify check after Gmail's URL-driven body fill landed, it saw the plain text, said 'looks like our paste worked!', and bailed without ever inserting the HTML. Same bug existed in gmail-intro-paste.js.",
+      "Fix: switched both fingerprints to check for HTML STRUCTURAL markers that can only exist in the formatted body — never in plain text. VPA: <h1>Congratulations OR 'font-family: Calibri'. Intro: <table> wrapping 'Borrower Information' OR 'font-family: Calibri'. The PE Workflow paster already used this structural pattern (<table> + 'Pricing comparison') and was unaffected — that's why PE Email never regressed.",
+      "First-time vs returning behavior: this also explains the 'works sometimes' reports. On a fast Gmail load, our HTML paste landed before Gmail's URL-body fill, the verify saw the HTML, all good. On a slow Gmail load, Gmail's URL-body fill landed first, our paste fired, then a re-render reverted to URL body, the verify saw the URL body's text, decided everything looked fine, exited. With the structural check the paster will keep retrying for up to 3 seconds until real HTML is in the body."
+    ],
+    sections: ["sf-vpa-email", "sf-intro-email"]
+  },
+  {
     version: "1.63.16",
     category: "milestone",
     headline: "🎉 Product has shipped the 2-1 Buydown calculator NATIVELY in LOP — second feature to make the full LO-builder → Product validation → native shipment round trip. The extension's buydown-calc module is retired in celebration.",

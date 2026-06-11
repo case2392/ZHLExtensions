@@ -91,18 +91,25 @@
     // "disclosures are signed" near the top plus the "Homeowners
     // insurance" section header. Both must be present for the paste to
     // be considered intact.
+    // Intro Email "looks-like-our-paste" fingerprint. Earlier versions
+    // matched plain-text strings ("disclosures are signed", "Homeowners
+    // insurance") — but those phrases ALSO appear in the plain-text URL
+    // fallback body Gmail fills from &body=. The text check produced
+    // false positives where the paster saw the URL-driven plain text,
+    // thought the paste worked, and bailed without ever inserting the
+    // formatted HTML.
+    //
+    // Both markers below are HTML structural artifacts that cannot
+    // appear in the plain-text body — checking for either confirms the
+    // formatted paste actually landed.
     function looksLikeFormattedPaste(target) {
       try {
         if (!target) return false;
         const html = target.innerHTML || '';
-        // Body always contains these two phrases — match either possible
-        // apostrophe encoding (raw, &#39;, &apos;) although neither phrase
-        // currently includes one. Keep the second branch for future
-        // template edits that introduce one.
-        const hasDisclosures = html.indexOf('disclosures are signed') >= 0;
-        const hasHOI = html.indexOf('Homeowners insurance') >= 0
-                    || html.indexOf('homeowners insurance') >= 0;
-        return hasDisclosures && hasHOI;
+        const hasTableHeader = /<table[^>]*>[\s\S]*?Borrower Information/i.test(html);
+        const hasCalibri     = html.indexOf('font-family: Calibri') >= 0
+                            || html.indexOf('font-family:Calibri') >= 0;
+        return hasTableHeader || hasCalibri;
       } catch (_) { return false; }
     }
 

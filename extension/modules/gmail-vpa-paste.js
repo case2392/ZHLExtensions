@@ -92,19 +92,26 @@
       } catch (_) { return false; }
     }
 
-    // VPA "looks-like-our-paste" fingerprint. The HTML always contains an
-    // <h1> with "Congratulations" and a "What's Next?" span. Both must be
-    // present for the paste to be considered intact. Gmail may serialize
-    // the apostrophe as either &#39; or the raw ' depending on the path.
+    // VPA "looks-like-our-paste" fingerprint. The formatted HTML body
+    // always contains an <h1>Congratulations</h1> headline AND the
+    // Calibri body font-family. Earlier versions matched plain text
+    // strings like "Congratulations" / "What's Next" — but those words
+    // ALSO appear in the plain-text URL fallback body that Gmail fills
+    // from &body=. The text check produced false positives: the paster
+    // saw the URL-driven plain text, thought the paste worked, and
+    // bailed out without ever pasting the actual HTML.
+    //
+    // Both markers below are HTML structural artifacts that cannot
+    // appear in the plain-text body — checking for either as a strong
+    // positive signal that the formatted paste actually landed.
     function looksLikeFormattedPaste(target) {
       try {
         if (!target) return false;
         const html = target.innerHTML || '';
-        const hasCongrats   = html.indexOf('Congratulations') >= 0;
-        const hasWhatsNext  = html.indexOf("What's Next") >= 0
-                           || html.indexOf("What&#39;s Next") >= 0
-                           || html.indexOf('What&apos;s Next') >= 0;
-        return hasCongrats && hasWhatsNext;
+        const hasH1Congrats = /<h1[^>]*>\s*Congratulations/i.test(html);
+        const hasCalibri    = html.indexOf('font-family: Calibri') >= 0
+                           || html.indexOf('font-family:Calibri') >= 0;
+        return hasH1Congrats || hasCalibri;
       } catch (_) { return false; }
     }
 
