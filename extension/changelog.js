@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.13",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: fix duplicate save (save was firing twice from one click sequence) and switch save verification from Note History row count (wrong panel — never updates here) to PA Notes textarea clearing + success toast.",
+    highlights: [
+      "Duplicate save fix: fullClickSequence() was dispatching a 'click' MouseEvent in its mouse-event loop AND calling .click() separately — two click events fired, two saves committed, two identical disposition entries appeared. Removed 'click' from the buildup loop; .click() is the only thing that triggers the actual click handler now. The buildup events (pointerover, pointerenter, mouseover, mouseenter, pointerdown, mousedown, pointerup, mouseup) prime the kx ripple framework, then .click() does the work exactly once.",
+      "Save verification fix: the disposition modal's own <c-disposition-note-history> section doesn't reflect newly-saved notes — those go to a different activity panel on the lead. So v1.63.10–v1.63.12's row-count check was guaranteed to time out, and v1.63.12's 20-second wait made the overlay sit there forever. New approach: snapshot the PA Notes textarea value before clicking Save (must be non-empty), then wait for it to clear OR for a Salesforce success toast. Salesforce resets the form on a successful save, which empties the textarea — that's a reliable in-page signal that the save round-tripped through the backend. Timeout reduced to 10 seconds.",
+      "False-positive guard: the textarea-cleared signal only counts if the textarea actually HAD content at save-click time. An already-empty textarea (which would happen if our PA Notes write failed earlier) doesn't false-positive as success."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.12",
     category: "bugfix",
     headline: "Zoho Booking auto-log: stop showing the success toast when the disposition didn't actually persist. Wait for the disposition modal to be FULLY hydrated by LWC before interacting, make Communication Type Email a hard requirement (no proceeding if the click doesn't take), and only trust the Note History row count growing as the save-succeeded signal.",

@@ -270,11 +270,12 @@
 
   // Full pointer/mouse event sequence — Salesforce's "kx" interaction
   // framework (the ripple effect on disposition buttons) relies on the
-  // pointerdown/mousedown/pointerup/mouseup/click sequence, not just a
-  // plain .click(). For LWC buttons inside that framework, a single
-  // .click() looks fired but the component doesn't register it as a
-  // real selection (variant stays neutral, etc.). This dispatches the
-  // full sequence at the element's center coords.
+  // pointerdown/mousedown/pointerup/mouseup sequence to register a
+  // click as a real selection. We dispatch the full buildup events
+  // then call .click() ONCE to trigger the actual click handler. The
+  // earlier version of this also dispatched a 'click' MouseEvent in
+  // the mouse[] loop AND called .click() — that was firing the save
+  // twice and producing duplicate disposition entries.
   function fullClickSequence(el) {
     if (!el) return;
     try { el.focus(); } catch (_) {}
@@ -285,13 +286,19 @@
       bubbles: true, cancelable: true, composed: true, view: window,
       button: 0, buttons: 1, clientX: x, clientY: y
     };
-    const pointer = ['pointerover','pointerenter','pointerdown','pointerup'];
-    const mouse   = ['mouseover','mouseenter','mousedown','mouseup','click'];
-    for (const type of pointer) {
-      try { el.dispatchEvent(new PointerEvent(type, base)); } catch (_) {}
-    }
-    for (const type of mouse) {
-      try { el.dispatchEvent(new MouseEvent(type, base)); } catch (_) {}
+    // Buildup only — no 'click' here. The real click comes from
+    // .click() below, which synthesizes its own click event.
+    const buildup = [
+      'pointerover', 'pointerenter',
+      'mouseover',   'mouseenter',
+      'pointerdown', 'mousedown',
+      'pointerup',   'mouseup'
+    ];
+    for (const type of buildup) {
+      try {
+        const Constructor = type.startsWith('pointer') ? PointerEvent : MouseEvent;
+        el.dispatchEvent(new Constructor(type, base));
+      } catch (_) {}
     }
     try { el.click(); } catch (_) {}
   }
@@ -747,49 +754,55 @@
     }, 5000, 250);
     if (!saveBtn) return { ok: false, reason: 'Save button not found inside disposition modal.' };
 
-    // Snapshot the Note History row count BEFORE clicking Save. On a
-    // successful save Salesforce adds a new <tr> to the
-    // <c-disposition-note-history> table — that's the ONLY reliable
-    // positive signal that the disposition actually persisted to the
-    // backend. v1.63.10's fallback signals (PA Notes textarea cleared,
-    // SF "saved" toast) were false-positive prone — Salesforce can
-    // clear/reset the form for reasons other than save success, and
-    // toasts can fire from other UI events. Backend persistence is the
-    // only thing that matters.
-    function countNoteHistoryRows() {
-      try {
-        const rows = queryAllPiercing('c-disposition-note-history table tbody tr, c-disposition-note-history tr[data-show]');
-        return rows.length;
-      } catch (_) { return 0; }
-    }
-    const noteHistoryRowCountBefore = countNoteHistoryRows();
+    // Save verification. The disposition modal's own <c-disposition-note-history>
+    // section does NOT reflect newly-saved notes — they go to a different
+    // panel on the lead. So the v1.63.10 row-count check was always going
+    // to time out. Instead: snapshot the PA Notes textarea value before
+    // clicking Save, then wait for it to CLEAR. On a successful save
+    // Salesforce resets the form, which empties the textarea — that's a
+    // reliable in-page signal that the save round-tripped through the
+    // backend. A success toast also fires; we accept either signal.
+    const paNotesValueBeforeSave = ta.value || '';
 
-    console.log('[ZHL Zoho Booking Paster] clicking disposition Save button:', saveBtn, 'note-history rows before:', noteHistoryRowCountBefore);
+    console.log('[ZHL Zoho Booking Paster] clicking disposition Save button:', saveBtn, 'PA Notes value at click time:', JSON.stringify(paNotesValueBeforeSave));
     try { saveBtn.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
     await wait(300);
     fullClickSequence(saveBtn);
 
-    // Wait for the backend save to land — up to 20 seconds. Salesforce's
-    // save POST + Note History re-render can take time on a slow
-    // connection or busy SF instance.
+    // Wait for the form reset (textarea clears) OR a success toast — up
+    // to 10 seconds. Salesforce's save POST + form-reset re-render
+    // usually takes 1-3s; allow generous headroom.
     const savedOk = await waitFor(function () {
-      const rowsNow = countNoteHistoryRows();
-      if (rowsNow > noteHistoryRowCountBefore) return 'note-history-grew';
+      // Signal A — PA Notes textarea cleared. Only counts if the textarea
+      // HAD content before save (so an already-empty textarea doesn't
+      // false-positive as success).
+      try {
+        const currentVal = ta.value || '';
+        if (paNotesValueBeforeSave && currentVal === '') return 'pa-notes-cleared';
+      } catch (_) {}
+      // Signal B — Salesforce success toast. Filter out error/validation
+      // toasts so we don't false-positive on those.
+      const toasts = queryAllPiercing('.slds-notify_toast, .toastMessage, .slds-notify--toast, [role="alert"]');
+      for (const tEl of toasts) {
+        const txt = (tEl.textContent || '').trim().toLowerCase();
+        if (!txt || txt.length < 4) continue;
+        if (/error|fail|invalid|required|missing/i.test(txt)) continue;
+        if (/saved|success|created|logged|added/i.test(txt)) return 'sf-toast';
+      }
       return null;
-    }, 20000, 500);
+    }, 10000, 300);
 
     if (!savedOk) {
-      const rowsAfter = countNoteHistoryRows();
-      console.warn('[ZHL Zoho Booking Paster] Note History row count did not grow.', {
-        before: noteHistoryRowCountBefore,
-        afterTimeout: rowsAfter
+      console.warn('[ZHL Zoho Booking Paster] save verification failed.', {
+        paNotesBefore: paNotesValueBeforeSave,
+        paNotesNow: ta.value
       });
       return {
         ok: false,
-        reason: 'Save was clicked but no new row appeared in Note History within 20 seconds. The disposition was NOT persisted. Most likely cause: Communication Type not actually set to Email, or LWC reactive state still showed empty PA Notes when Save fired. Paste the note manually for now.'
+        reason: 'Save was clicked but no confirmation appeared within 10 seconds — PA Notes textarea did not clear and no success toast fired. Most likely cause: Communication Type not actually set to Email, or LWC reactive state still showed empty PA Notes when Save fired. Paste the note manually for now.'
       };
     }
-    console.log('[ZHL Zoho Booking Paster] save confirmed — Note History row count grew from', noteHistoryRowCountBefore, 'to', countNoteHistoryRows());
+    console.log('[ZHL Zoho Booking Paster] save confirmed by:', savedOk);
     return { ok: true };
   }
 
