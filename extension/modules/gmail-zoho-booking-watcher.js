@@ -302,18 +302,29 @@
           // a new tab to fallbackUrl if none are open. On reuse, the SW also
           // sends a ZHL_BOOKING_CHECK_PENDING message to that tab so the
           // paster wakes up immediately.
+          // The service worker is the SOLE authority for tab handling:
+          // it focuses an existing Salesforce tab if one is open, or
+          // creates a new one if not. We deliberately do NOT window.open
+          // from here on a falsy callback — in MV3 the sendMessage
+          // callback frequently fires with chrome.runtime.lastError set
+          // even when the SW DID successfully focus the existing tab,
+          // and an extra window.open would then pop a redundant blank
+          // tab that steals focus. The only place we fall back is the
+          // synchronous catch (extension context genuinely gone), where
+          // the SW could not have run at all.
           try {
             chrome.runtime.sendMessage(
               { type: 'ZHL_OPEN_OR_FOCUS_SF', fallbackUrl: SALESFORCE_HOME },
               function (resp) {
-                if (!resp || !resp.ok) {
-                  // Service worker failed — last-resort fall back to window.open.
-                  try { window.open(SALESFORCE_HOME, '_blank'); } catch (_) {}
-                }
-                console.log('[ZHL Zoho Booking Watcher] SW open-or-focus result:', resp);
+                // Touch lastError so Chrome doesn't log "unchecked
+                // runtime.lastError"; do NOT window.open on a falsy resp.
+                const _ = chrome.runtime && chrome.runtime.lastError;
+                console.log('[ZHL Zoho Booking Watcher] SW open-or-focus result:', resp, _ ? ('(lastError: ' + _.message + ')') : '');
               }
             );
           } catch (_) {
+            // Extension context invalidated — SW unreachable. Only here
+            // do we open directly, because nothing else can.
             try { window.open(SALESFORCE_HOME, '_blank'); } catch (__) {}
           }
           firingInThisTab = false;

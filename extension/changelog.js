@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.14",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: stop opening a brand-new Salesforce tab when one is already open. The service worker is now the sole authority for tab handling, with a broad fallback query so an existing tab is always reused.",
+    highlights: [
+      "Root cause: the Gmail watcher had a window.open() fallback that fired whenever the sendMessage callback got a falsy response. In MV3 that callback frequently fires with chrome.runtime.lastError set even when the service worker DID successfully focus the existing Salesforce tab — so both happened: the SW focused the existing tab AND the watcher popped a redundant blank tab that stole focus, landing the LO on a new tab instead of their open Salesforce tab.",
+      "Fix #1: removed the in-callback window.open fallback. The watcher now only opens a tab directly in the synchronous catch block (extension context genuinely invalidated, where the SW could not have run at all). The SW handles focus-existing-vs-create-new for every other case.",
+      "Fix #2: hardened the SW handler. If the URL-filtered chrome.tabs.query returns nothing (it can miss on discarded/unloaded tabs), it now does a broad query of all tabs and filters by Salesforce host client-side. It also prefers an already-active SF tab, then the most recently accessed one. Added the 'tabs' permission so the broad query reliably populates each tab's url.",
+      "Net effect: if any Salesforce tab is open anywhere, the auto-log reuses it. A new tab is created only when no Salesforce tab exists at all."
+    ],
+    sections: ["gmail-zoho-booking-watcher", "sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.13",
     category: "bugfix",
     headline: "Zoho Booking auto-log: fix duplicate save (save was firing twice from one click sequence) and switch save verification from Note History row count (wrong panel — never updates here) to PA Notes textarea clearing + success toast.",

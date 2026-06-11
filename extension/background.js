@@ -295,19 +295,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "ZHL_OPEN_OR_FOCUS_SF") {
     const fallbackUrl = msg.fallbackUrl || "https://zillowhomeloans.lightning.force.com/lightning/page/home";
+    const isSfUrl = (u) => !!u && /:\/\/[^/]*\.(lightning\.force|salesforce)\.com\//i.test(u);
     (async () => {
       try {
-        const sfTabs = await chrome.tabs.query({
+        // Primary: URL-filtered query.
+        let sfTabs = await chrome.tabs.query({
           url: [
             "https://*.lightning.force.com/*",
             "https://*.salesforce.com/*"
           ]
         });
+        // Fallback: if the URL filter returned nothing (it can miss on
+        // discarded/unloaded tabs or odd host casings), do a broad query
+        // and filter client-side. This is what prevents the "opened a new
+        // tab even though Salesforce was already open" symptom.
+        if (!sfTabs || !sfTabs.length) {
+          const allTabs = await chrome.tabs.query({});
+          sfTabs = (allTabs || []).filter((t) => isSfUrl(t.url) || isSfUrl(t.pendingUrl));
+        }
         if (sfTabs && sfTabs.length) {
-          // Prefer the most recently active SF tab — Chrome returns them in
-          // arbitrary order. lastAccessed is set by Chrome but isn't always
-          // exposed in MV3; fall back to the first match.
-          const target = sfTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+          // Prefer an already-active SF tab if one exists, otherwise the
+          // most recently accessed.
+          const active = sfTabs.find((t) => t.active);
+          const target = active || sfTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
           await chrome.tabs.update(target.id, { active: true });
           try { await chrome.windows.update(target.windowId, { focused: true }); } catch (_) {}
           // Tell the paster on that tab to check its pending stash. The
@@ -316,9 +326,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           try {
             chrome.tabs.sendMessage(target.id, { type: "ZHL_BOOKING_CHECK_PENDING" });
           } catch (_) {}
+          console.log("[ZHL Open SF] reused existing SF tab", target.id, target.url);
           sendResponse({ ok: true, tabId: target.id, reused: true });
           return;
         }
+        console.log("[ZHL Open SF] no SF tab found — opening new tab");
         const newTab = await chrome.tabs.create({ url: fallbackUrl });
         sendResponse({ ok: true, tabId: newTab.id, reused: false });
       } catch (e) {
