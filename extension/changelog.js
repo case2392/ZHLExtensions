@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.5",
+    category: "improvement",
+    headline: "Zoho Booking auto-log: temporarily disabled per-messageId dedup + 10/day daily limit so the same test booking can be re-fired repeatedly during testing. Re-enable before broad rollout.",
+    highlights: [
+      "Both safety rails are bypassed via commented-out blocks in gmail-zoho-booking-watcher.js consumeBooking() with TESTING MODE markers. The structure is preserved so re-enabling is a copy-paste un-comment.",
+      "While disabled: the same Gmail message can detect-and-fire over and over, and the daily counter doesn't increment. Storage writes to zhlZohoBookingSeenIds and zhlZohoBookingDailyCount are also skipped to keep chrome.storage.local clean across repeated test runs.",
+      "The confirmation toast (5-second countdown with explicit Cancel) is still in place. Detection still requires the email to be a real Zoho booking confirmation (sender + subject + body fields)."
+    ],
+    sections: ["gmail-zoho-booking-watcher"]
+  },
+  {
     version: "1.63.4",
     category: "bugfix",
     headline: "Zoho Booking auto-log: after typing the phone, the synthetic Enter keydown was being ignored by Salesforce (events created via dispatchEvent have isTrusted=false). Now clicks the 'Show more results for...' link instead — same path the LO takes manually.",
