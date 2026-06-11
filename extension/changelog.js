@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.10",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: Communication Type Email click wasn't actually selecting Email (the disposition was saving with default Call or empty Type), and the v1.63.9 save verification was reading false positives. Fixed both with the full pointer event sequence and verifying the new disposition lands in Note History.",
+    highlights: [
+      "Root cause #1 (Communication Type): the Email button is a <lightning-button> with class=\"button-email\" — the inner <button> uses Salesforce's 'kx' interaction framework (kx-scope, kx-type=\"ripple\"). A plain .click() looks fired but the LWC component doesn't register it as a real selection — the variant stays \"neutral\" instead of flipping to \"brand\". Same problem as the Enter key issue we hit on search.",
+      "Fix #1 (full click sequence): new fullClickSequence() helper that dispatches pointerover→pointerenter→pointerdown→pointerup→mouseover→mouseenter→mousedown→mouseup→click at the element's center coordinates, then calls .click() as a backup. This is what the kx framework expects from a real user. After clicking, the paster reads the lightning-button host's variant attribute back — if it's still 'neutral' after two attempts (inner + host click), we know the click didn't take and the paster proceeds with Call selected instead of falsely claiming Email is set.",
+      "Root cause #2 (save verification): v1.63.9 checked for an SF 'saved' toast or the PA Notes textarea clearing. Both were false-positive prone — other toasts can match /saved/, and textarea clearing can happen for reasons other than save success.",
+      "Fix #2 (Note History row count): on the disposition page the LO pasted, saved dispositions land in <c-disposition-note-history> as new <tr> rows. The paster now snapshots the row count before clicking Save and waits for it to grow after — that's the strongest possible signal that the disposition actually persisted. Falls back to PA Notes clearing and the SF toast check only if the Note History row count check is inconclusive.",
+      "Save click also uses fullClickSequence() now, in case Salesforce's Save handler is also gated on the kx interaction framework rather than just a plain click."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.9",
     category: "bugfix",
     headline: "Zoho Booking auto-log: 'Save' toast was firing even when nothing actually persisted to the Activity tracker. Now scopes the Save button + Communication Type click to the disposition modal subtree, then verifies the save with a positive signal (SF success toast OR the form clearing).",

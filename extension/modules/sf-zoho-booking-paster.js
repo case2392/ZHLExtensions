@@ -268,6 +268,34 @@
     } catch (_) {}
   }
 
+  // Full pointer/mouse event sequence — Salesforce's "kx" interaction
+  // framework (the ripple effect on disposition buttons) relies on the
+  // pointerdown/mousedown/pointerup/mouseup/click sequence, not just a
+  // plain .click(). For LWC buttons inside that framework, a single
+  // .click() looks fired but the component doesn't register it as a
+  // real selection (variant stays neutral, etc.). This dispatches the
+  // full sequence at the element's center coords.
+  function fullClickSequence(el) {
+    if (!el) return;
+    try { el.focus(); } catch (_) {}
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const base = {
+      bubbles: true, cancelable: true, composed: true, view: window,
+      button: 0, buttons: 1, clientX: x, clientY: y
+    };
+    const pointer = ['pointerover','pointerenter','pointerdown','pointerup'];
+    const mouse   = ['mouseover','mouseenter','mousedown','mouseup','click'];
+    for (const type of pointer) {
+      try { el.dispatchEvent(new PointerEvent(type, base)); } catch (_) {}
+    }
+    for (const type of mouse) {
+      try { el.dispatchEvent(new MouseEvent(type, base)); } catch (_) {}
+    }
+    try { el.click(); } catch (_) {}
+  }
+
   async function runSearch(phoneDigits) {
     // Step 1: open the Search Assistant overlay. Three paths:
     //   a. Click the search button (Aura, light DOM — most reliable).
@@ -484,11 +512,48 @@
   }
 
   async function selectCommunicationTypeEmail() {
-    // Communication Type is rendered as three button-like toggles
-    // (Call / Text / Email) inside the disposition modal. Scope to the
-    // modal container so we don't accidentally click the "Email" label
-    // in the Borrower Information panel (which is a labelled field, not
-    // a radio).
+    // The disposition modal's Communication Type uses three
+    // <lightning-button> elements with class="button-call" /
+    // "button-text" / "button-email". The currently-selected one carries
+    // variant="brand" (and an inline blue background style); the rest
+    // are variant="neutral". Click the host with class="button-email"
+    // and verify the variant attribute flips to "brand".
+    const emailHost = await waitFor(function () {
+      return queryOnePiercing('lightning-button.button-email');
+    }, 8000, 250);
+    if (!emailHost) return { ok: false, reason: 'Email button (lightning-button.button-email) not found.' };
+
+    const innerBtn = emailHost.querySelector && emailHost.querySelector('button');
+    console.log('[ZHL Zoho Booking Paster] Communication Type Email — variant before click:', emailHost.getAttribute('variant'));
+
+    // The "kx" ripple framework on the inner <button> needs the full
+    // pointer/mouse event sequence, not just a plain .click().
+    fullClickSequence(innerBtn || emailHost);
+    await wait(350);
+
+    let variant = emailHost.getAttribute('variant');
+    if (variant !== 'brand') {
+      // Try clicking the host directly too — some LWC button-groups
+      // listen on the host, not the inner element.
+      console.log('[ZHL Zoho Booking Paster] Email variant still', variant, '— trying host click');
+      fullClickSequence(emailHost);
+      await wait(350);
+      variant = emailHost.getAttribute('variant');
+    }
+
+    if (variant !== 'brand') {
+      console.warn('[ZHL Zoho Booking Paster] Communication Type Email did not visibly select (variant=', variant, '). Continuing anyway; Save will fail if Communication Type is required.');
+      return { ok: false, reason: 'Email click did not flip variant to "brand" — Communication Type may still be Call.' };
+    }
+    console.log('[ZHL Zoho Booking Paster] Email selected (variant=brand)');
+    return { ok: true };
+  }
+
+  // Wrap the original-style "find any element with text Email" path —
+  // kept for the runOnce caller signature but not actually called now
+  // that we have the specific selector above. Left here in case Salesforce
+  // changes the class structure later.
+  async function _selectCommunicationTypeEmailLegacy() {
     const btn = await waitFor(function () {
       const container = findDispositionContainer() || document;
       const candidates = Array.from(
@@ -500,17 +565,6 @@
           const rect = el.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) return el;
         }
-      }
-      // Fallback to a wider piercing search if the scoped query missed.
-      const wide = queryAllPiercing('button, [role="button"], lightning-radio-group label');
-      for (const el of wide) {
-        const txt = (el.textContent || '').trim().toLowerCase();
-        if (txt !== 'email') continue;
-        // Skip elements that look like a field label (their visible text is
-        // exactly "Email" but they're not inside a button context).
-        if (el.tagName === 'LABEL' && !el.closest('lightning-radio-group')) continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) return el;
       }
       return null;
     }, 8000, 250);
@@ -675,39 +729,56 @@
     }, 5000, 250);
     if (!saveBtn) return { ok: false, reason: 'Save button not found inside disposition modal.' };
 
-    console.log('[ZHL Zoho Booking Paster] clicking disposition Save button:', saveBtn);
+    // Snapshot the Note History row count BEFORE clicking Save. On a
+    // successful save Salesforce adds a new <tr> to the
+    // <c-disposition-note-history> table — that's the most reliable
+    // positive signal that the disposition actually persisted.
+    const noteHistoryRowCountBefore = (function () {
+      try {
+        const rows = queryAllPiercing('c-disposition-note-history table tbody tr, c-disposition-note-history tr[data-show]');
+        return rows.length;
+      } catch (_) { return 0; }
+    })();
+
+    console.log('[ZHL Zoho Booking Paster] clicking disposition Save button:', saveBtn, 'note-history rows before:', noteHistoryRowCountBefore);
     try { saveBtn.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
     await wait(200);
-    saveBtn.click();
+    fullClickSequence(saveBtn);
 
-    // Verify the save actually persisted. Two positive signals to look
-    // for: (a) a Salesforce success toast with text like "Saved",
-    // "Disposition saved", or "Record saved"; (b) the PA Notes textarea
-    // cleared (the disposition modal usually resets after a successful
-    // save). If neither shows up within 5 seconds, treat it as a save
-    // failure and surface the warning so the LO can check manually.
+    // Verify the save actually persisted. Three positive signals in
+    // order of confidence:
+    //   (a) Note History gained a new row — strongest signal, comes
+    //       straight from Salesforce's own data.
+    //   (b) PA Notes textarea cleared (disposition modal resets on save).
+    //   (c) SF "saved" toast that isn't an error/required-field toast.
     const savedOk = await waitFor(function () {
-      // Signal A — SF success toast.
+      // Signal A — Note History row count increased.
+      try {
+        const rowsNow = queryAllPiercing('c-disposition-note-history table tbody tr, c-disposition-note-history tr[data-show]');
+        if (rowsNow.length > noteHistoryRowCountBefore) return 'note-history-grew';
+      } catch (_) {}
+      // Signal B — PA Notes textarea cleared (form reset on save).
+      try {
+        const tas = queryAllPiercing('textarea[placeholder*="PA Notes"]');
+        const ta = tas.length ? tas[0] : null;
+        if (ta && (ta.value || '') === '') return 'pa-notes-cleared';
+      } catch (_) {}
+      // Signal C — SF success toast (least reliable, since other toasts
+      // can fire during the flow).
       const toasts = queryAllPiercing('.slds-notify_toast, .toastMessage, .slds-notify--toast, [role="alert"]');
       for (const t of toasts) {
         const txt = (t.textContent || '').toLowerCase();
         if (!txt) continue;
         if (/error|fail|invalid|required/i.test(txt)) continue;
-        if (/saved|success|created|logged/i.test(txt)) return 'toast';
+        if (/saved|success|created|logged/i.test(txt)) return 'sf-toast';
       }
-      // Signal B — PA Notes textarea cleared (form reset on save).
-      try {
-        const tas = queryAllPiercing('textarea[placeholder*="PA Notes"]');
-        const ta = tas.length ? tas[0] : null;
-        if (ta && (ta.value || '') === '') return 'cleared';
-      } catch (_) {}
       return null;
-    }, 5000, 300);
+    }, 8000, 300);
 
     if (!savedOk) {
       return {
         ok: false,
-        reason: 'Save was clicked but no success indication appeared within 5 seconds — the disposition may not have actually persisted. Check the Activity timeline.'
+        reason: 'Save was clicked but the disposition did not appear in Note History within 8 seconds. The Communication Type may not have actually been selected, or Salesforce rejected the save silently. Check the Activity timeline.'
       };
     }
     console.log('[ZHL Zoho Booking Paster] save confirmed by:', savedOk);
