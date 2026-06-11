@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.8",
+    category: "improvement",
+    headline: "Zoho Booking auto-log: added a greyed-out progress overlay on the Salesforce tab during the auto-log run, matching the LOP File Copy / SMS Mark All Read pattern.",
+    highlights: [
+      "Same translucent-white veil + blue spinner + status message UX as the LOP File Copy and SMS Mark All Read overlays. Greys out the page so it's obvious automation is running and prevents the LO from accidentally clicking into Salesforce while the script is still driving things.",
+      "Status line updates per phase: 'Searching Salesforce by contact phone…' → 'Opening lead record…' → 'Opening Call Details tab…' → 'Setting Communication Type to Email…' → 'Filling PA Notes and saving…'. Hidden on success, error, or any early return.",
+      "Overlay only paints on the Salesforce tab — Gmail stays clickable since the watcher's role is finished as soon as it stashes the payload and pings the service worker."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.7",
     category: "bugfix",
     headline: "Zoho Booking auto-log: PA Notes textarea was being written to but LWC's reactive state never saw the change — disposition got saved with an empty note. Fixed by setting the <lightning-textarea> host's value property, dispatching composed events, and scrolling so the LO can see it.",

@@ -107,6 +107,79 @@
     } catch (_) {}
   }
 
+  // ---- Progress overlay ------------------------------------------
+  //
+  // Matches the lop-file-copy / sms-mark-all-read overlay style: a soft
+  // white-veil over the whole Salesforce tab with a spinner and a
+  // status line that updates as we move through each phase. Greys out
+  // the page so the LO knows automation is running and can't
+  // accidentally click into the search results / lead while the script
+  // is still driving things.
+  const PROGRESS_ID = 'zhl-zoho-booking-progress';
+  function showProgress(text, sub) {
+    let overlay = document.getElementById(PROGRESS_ID);
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = PROGRESS_ID;
+      overlay.style.cssText = [
+        'position:fixed', 'top:0', 'left:0', 'right:0', 'bottom:0',
+        'background:rgba(255,255,255,0.92)',
+        'z-index:2147483647',
+        'display:flex', 'flex-direction:column',
+        'align-items:center', 'justify-content:center',
+        'gap:14px',
+        'font:600 15px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif',
+        'color:#0b5cab', 'text-align:center',
+        'pointer-events:all', 'cursor:wait',
+        'padding:24px'
+      ].join(';');
+      const spinner = document.createElement('div');
+      spinner.style.cssText = [
+        'width:36px', 'height:36px',
+        'border:4px solid #cfe1f5',
+        'border-top-color:#006aff',
+        'border-radius:50%',
+        'animation:zhl-zb-spin 0.8s linear infinite'
+      ].join(';');
+      const msg = document.createElement('div');
+      msg.setAttribute('data-zhl-zb-msg', '1');
+      msg.textContent = text || 'Auto-logging booking…';
+      const subEl = document.createElement('div');
+      subEl.setAttribute('data-zhl-zb-sub', '1');
+      subEl.style.cssText = 'font:500 12px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#6b7280;max-width:380px;';
+      subEl.textContent = sub || '';
+      overlay.appendChild(spinner);
+      overlay.appendChild(msg);
+      overlay.appendChild(subEl);
+      document.body.appendChild(overlay);
+      if (!document.getElementById('zhl-zb-spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'zhl-zb-spin-style';
+        style.textContent = '@keyframes zhl-zb-spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+      }
+    } else {
+      updateProgress(text, sub);
+    }
+    return overlay;
+  }
+  function updateProgress(text, sub) {
+    const overlay = document.getElementById(PROGRESS_ID);
+    if (!overlay) return;
+    if (text != null) {
+      const m = overlay.querySelector('[data-zhl-zb-msg]');
+      if (m) m.textContent = text;
+    }
+    if (sub != null) {
+      const s = overlay.querySelector('[data-zhl-zb-sub]');
+      if (s) s.textContent = sub;
+    }
+  }
+  function hideProgress() {
+    const overlay = document.getElementById(PROGRESS_ID);
+    if (overlay) overlay.remove();
+  }
+
   // ---- Toast ------------------------------------------------------
   function showToast(message, kind) {
     const existing = document.getElementById(TOAST_ID);
@@ -550,30 +623,39 @@
     runningInThisTab = true;
     const noteText = buildNoteText(booking);
     try {
-      showToast('Auto-logging booking for ' + booking.borrowerName + '…', 'info');
+      showProgress(
+        'Auto-logging booking for ' + booking.borrowerName,
+        'Searching Salesforce by contact phone…'
+      );
 
       const s = await runSearch(booking.phoneDigits || booking.phoneRaw);
       if (!s.ok) throw new Error(s.reason);
 
+      updateProgress(null, 'Opening lead record…');
       const c = await clickLeadLink(booking.borrowerName);
       if (!c.ok) throw new Error(c.reason);
 
       await wait(800);
+      updateProgress(null, 'Opening Call Details tab…');
       await ensureCallDetailsTab();
       await wait(400);
 
+      updateProgress(null, 'Setting Communication Type to Email…');
       const t = await selectCommunicationTypeEmail();
       if (!t.ok) console.warn('[ZHL Zoho Booking Paster] could not select Email — proceeding anyway');
 
+      updateProgress(null, 'Filling PA Notes and saving…');
       const f = await fillPaNotesAndSave(noteText);
       if (!f.ok) throw new Error(f.reason);
 
       // Success — clear stash so we don't fire again.
       await clearStorage([STORAGE_KEY]);
+      hideProgress();
       showToast('✓ Auto-logged booking for ' + booking.borrowerName + '. Agent will see the PA note.', 'ok');
       try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'zoho_booking_logged_ok' }); } catch (_) {}
     } catch (e) {
       console.error('[ZHL Zoho Booking Paster] failed:', e);
+      hideProgress();
       const copied = await copyToClipboard(noteText);
       showToast('Could not auto-log — ' + (e && e.message ? e.message : 'unknown error') +
                 (copied ? '. Note copied to clipboard — paste manually into PA Notes.' : '. Paste this manually: ' + noteText),
@@ -583,6 +665,7 @@
       // mark it consumed so we don't retry automatically.
       await clearStorage([STORAGE_KEY]);
     } finally {
+      hideProgress();
       runningInThisTab = false;
     }
   }
