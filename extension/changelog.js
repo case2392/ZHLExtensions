@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.0",
+    category: "feature",
+    headline: "New: auto-log Zoho booking confirmation emails as a PA Note in Salesforce, so the premier agent sees the scheduled appointment without you remembering to log it manually.",
+    highlights: [
+      "Watches your ZHL Gmail inbox for booking confirmation emails from scheduling@booking.zillowgroup.com (subject 'New Appointment with <Name>'). When one is detected, parses the borrower name, date, time, and contact phone from the body and shows a 5-second confirmation toast top-right in Gmail with an explicit Cancel button.",
+      "If you let the countdown finish (or click 'Open Salesforce & paste'), a Salesforce tab opens, types the contact phone into the global search bar, clicks the matched Lead from the search results, selects Communication Type = Email, fills the PA Notes textarea with '<First Name> scheduled an appointment with me for <time> on <day, date>.', and clicks Save. Agent sees the PA note immediately.",
+      "Safety rails: per-message dedup keyed on Gmail messageId so the same booking can't double-fire; daily limit of 10 auto-logs per LO so a misdetection can't loop; if any Salesforce step fails the note is copied to your clipboard with a toast telling you exactly which step broke. Feature toggle in Setup if you want to disable entirely."
+    ],
+    sections: ["gmail-zoho-booking-watcher", "sf-zoho-booking-paster"]
+  },
+  {
     version: "1.62.4",
     category: "bugfix",
     headline: "Send VPA Email: subject line now includes the co-borrower's last name. Previously every VPA subject showed only the co-borrower's first name (e.g., 'Connie Oldham & Glen' instead of 'Connie Oldham & Glen Smith', or 'Ashley Burkholder & Timothy' instead of 'Ashley & Timothy Burkholder').",

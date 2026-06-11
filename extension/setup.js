@@ -13,6 +13,7 @@ const FEATURE_KEYS = [
   "feature_smsAddParticipants",
   "feature_sfVpaEmail",
   "feature_sfMossRequest",
+  "feature_zohoBookingAutoNote",
   "feature_sfIntroEmail",
   "feature_loanStoryGenerator",
   "feature_autoCallDetailsTab",

@@ -387,6 +387,30 @@
       </div>
     </section>
 
+    <!-- ============== Module: Zoho Booking Auto-Note ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Auto-log Zoho booking emails as a PA Note in Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code> + <code>*.lightning.force.com</code> &mdash; cross-tab orchestration</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_zohoBookingAutoNote" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <ul class="module-features">
+          <li>Watches your ZHL Gmail inbox for booking confirmation emails from <code>scheduling@booking.zillowgroup.com</code> (subject <em>&ldquo;New Appointment with &lt;Name&gt;&rdquo;</em>) and parses the borrower name, date, time, and contact phone from the body.</li>
+          <li>Shows a <strong>5-second confirmation toast</strong> at the top-right of Gmail with the parsed details and an explicit <em>Cancel</em> button before doing anything in Salesforce. If you cancel, nothing is logged.</li>
+          <li>If you proceed, opens Salesforce in a new tab, searches the contact phone in the global search bar, clicks the matched Lead, selects <strong>Communication Type = Email</strong>, fills the <strong>PA Notes</strong> textarea with <em>&ldquo;[First Name] scheduled an appointment with me for [time] on [day, date].&rdquo;</em>, and clicks <strong>Save</strong>. Your premier agent sees the PA note right away.</li>
+          <li><strong>Safety rails:</strong> per-message dedup so the same booking can't fire twice; a hard limit of 10 auto-logs per LO per day; if any Salesforce step fails the note is copied to your clipboard with a toast telling you which step broke, so you can finish manually in seconds.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: MOSS Request from Salesforce ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
