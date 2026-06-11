@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.4",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: after typing the phone, the synthetic Enter keydown was being ignored by Salesforce (events created via dispatchEvent have isTrusted=false). Now clicks the 'Show more results for...' link instead — same path the LO takes manually.",
+    highlights: [
+      "Symptom: phone digits typed correctly into the search overlay, the suggestions dropdown showed 'Show more results for \"<phone>\"', but the search results page never loaded — so the paster timed out at 'Search results page never loaded' and fell back to the clipboard-copy toast.",
+      "Cause: Salesforce's search submission handler is gated on real user events (KeyboardEvent.isTrusted === true). Synthetic events created via dispatchEvent are isTrusted=false and silently ignored. The 'Press Enter to search' path was never going to work for Salesforce specifically.",
+      "Fix: after pressEnter(), wait briefly to check if results loaded (in case some SF instance handles it). If not, find the 'Show more results for...' anchor in the suggestions dropdown via piercing query (matches by text, supports light/shadow DOM) and click it. Falls back to document.body Enter as a last-ditch belt-and-suspenders."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.3",
     category: "bugfix",
     headline: "Zoho Booking auto-log: Salesforce's global search is a BUTTON that opens an overlay — not an input you can type into directly. Click the button first, THEN find the input.",

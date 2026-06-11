@@ -234,19 +234,65 @@
 
     input.focus();
     setReactInputValue(input, phoneDigits);
-    await wait(250);
-    pressEnter(input);
+    await wait(300);
 
-    // Salesforce navigates to a search results page — the URL changes
-    // and a "We searched for" header appears.
-    const searched = await waitFor(function () {
-      return /search/i.test(location.hash || '') ||
-             /search/i.test(location.pathname || '') ||
-             queryOnePiercing('records-search-results-page, lst-search-results, records-glasshouse-search-results') ||
-             document.body.textContent.indexOf('We searched for') >= 0;
-    }, 8000, 300);
-    if (!searched) return { ok: false, reason: 'Search results page never loaded after submitting.' };
-    return { ok: true };
+    // Submitting the search. Salesforce ignores synthetic KeyboardEvents
+    // because they're isTrusted=false — the actual submit handler is gated
+    // on real user events. Three submission paths in order of preference:
+    //
+    //   a. Press Enter on the input (works on some SF instances; harmless
+    //      if it doesn't).
+    //   b. Click the "Show more results for <term>" link that appears in
+    //      the suggestions dropdown — this is the same action the LO takes
+    //      manually and reliably navigates to the search results page.
+    //   c. Press Enter on the document body as a last-ditch fallback.
+    pressEnter(input);
+    await wait(500);
+
+    // Quick check — if Enter happened to work, we're already on results.
+    const alreadyOnResults = await waitFor(searchResultsPageLoaded, 1200, 200);
+    if (alreadyOnResults) return { ok: true };
+
+    // Otherwise, look for the "Show more results for..." anchor and click it.
+    const showMore = await waitFor(findShowMoreResultsLink, 3000, 250);
+    if (showMore) {
+      try { showMore.scrollIntoView({ block: 'center' }); } catch (_) {}
+      try { showMore.click(); } catch (_) {}
+      const ok = await waitFor(searchResultsPageLoaded, 8000, 300);
+      if (ok) return { ok: true };
+    }
+
+    // Last-ditch: dispatch Enter to document.body in case there's a global
+    // keydown handler waiting for it.
+    pressEnter(document.body);
+    const lastShot = await waitFor(searchResultsPageLoaded, 4000, 300);
+    if (lastShot) return { ok: true };
+
+    return { ok: false, reason: 'Search results page never loaded after submitting.' };
+  }
+
+  function searchResultsPageLoaded() {
+    if (/search/i.test(location.hash || '')) return true;
+    if (/search/i.test(location.pathname || '')) return true;
+    if (queryOnePiercing('records-search-results-page, lst-search-results, records-glasshouse-search-results')) return true;
+    if ((document.body.textContent || '').indexOf('We searched for') >= 0) return true;
+    return false;
+  }
+
+  function findShowMoreResultsLink() {
+    // Salesforce's search suggestions panel renders a "Show more results
+    // for "<term>"" link/button at the top when the typed term has no
+    // direct match. Find by text match across anchors, buttons, and
+    // role="button" elements — both light DOM and shadow DOM.
+    const candidates = queryAllPiercing('a, button, [role="button"], [role="link"], [role="option"]');
+    for (const el of candidates) {
+      const t = (el.textContent || '').trim();
+      if (/^Show more results for/i.test(t)) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) return el;
+      }
+    }
+    return null;
   }
 
   async function clickLeadLink(borrowerName) {
