@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.3",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: Salesforce's global search is a BUTTON that opens an overlay — not an input you can type into directly. Click the button first, THEN find the input.",
+    highlights: [
+      "Root cause discovered from the global-header DOM the LO pasted: the visible 'Search...' bar is actually <button class=\"search-button\" aria-label=\"Search\">Search...</button> inside .forceSearchAssistant. Clicking it opens the Search Assistant overlay where the real input lives. v1.63.0–v1.63.2 were all looking for an <input> at the top of the page that doesn't exist until the button is clicked.",
+      "Also confirmed the global header is Aura (data-aura-rendered-by attributes everywhere) — light DOM — so the trigger button is accessible via plain document.querySelector. No shadow DOM piercing needed for that step. The sf-shadow-shim still helps for the overlay's input (likely in shadow DOM) and for the PA Notes / Save button later in the flow.",
+      "New runSearch() flow: (1) document.querySelector for the search-button trigger (forceSearchAssistant button), click it, wait 450ms; (2) findActiveSearchInput() — checks document.activeElement first (since Salesforce auto-focuses the overlay input), then falls back to a shadow-pierced search-input lookup; (3) if neither lands, dispatch Ctrl+/ and Cmd+/ as a backup; (4) one more 4-second wait+poll; (5) only then give up. Once the input is in hand, type and press Enter as before."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.2",
     category: "bugfix",
     headline: "Zoho Booking auto-log: Salesforce's Lightning Web Component shadow DOM is in CLOSED mode, which my v1.63.1 piercing helper couldn't see into. Added a document_start main-world shim that forces every attachShadow call to open mode, plus a keyboard-shortcut fallback for the global search.",

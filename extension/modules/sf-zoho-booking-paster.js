@@ -133,14 +133,51 @@
   }
 
   // ---- The Salesforce flow ----------------------------------------
-  function findGlobalSearchInput() {
-    // Salesforce Lightning's global search lives inside a Lightning Web
-    // Component shadow root — pierce through it. The input carries
-    // class="slds-input" type="search" placeholder="Search..." per the
-    // DOM the LO provided. Pierces only work for OPEN shadow roots;
-    // sf-shadow-shim.js (registered at document_start, world:"MAIN")
-    // forces all attachShadow calls to open mode.
-    const candidates = queryAllPiercing('input.slds-input[type="search"], input[type="search"][placeholder^="Search"], input.slds-input[placeholder^="Search"]');
+  //
+  // Per the global-header DOM the LO provided, what visually looks like
+  // a "search input" at the top of Salesforce is actually a BUTTON
+  // (button.search-button inside .forceSearchAssistant) — clicking it
+  // opens the Search Assistant overlay where the real input lives. The
+  // header is Aura (data-aura-rendered-by attributes everywhere), so
+  // the button itself is in light DOM and accessible via document.
+  // querySelector. The input that appears AFTER clicking may be in
+  // shadow DOM, so we use the piercing helper for the second step.
+  function findSearchTriggerButton() {
+    // Prefer the most specific selectors first.
+    const candidates = [
+      '.slds-global-header__item_search button.search-button',
+      '.forceSearchAssistant button.search-button',
+      '.forceSearchAssistant button',
+      'button.search-button[aria-label="Search"]',
+      'button[aria-label="Search"]'
+    ];
+    for (const sel of candidates) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) return el;
+      }
+    }
+    return null;
+  }
+
+  function findActiveSearchInput() {
+    // After the trigger is clicked, the search input appears (and is
+    // usually auto-focused). Try the focused element first, then a
+    // piercing query for an input that looks like the global search.
+    const ae = document.activeElement;
+    if (ae && ae.tagName === 'INPUT') {
+      const ph  = (ae.placeholder || '').toLowerCase();
+      const al  = (ae.getAttribute('aria-label') || '').toLowerCase();
+      const typ = (ae.getAttribute('type') || '').toLowerCase();
+      if (typ === 'search' || ph.indexOf('search') >= 0 || al.indexOf('search') >= 0) return ae;
+    }
+    const candidates = queryAllPiercing(
+      'input.slds-input[type="search"], ' +
+      'input[type="search"][placeholder*="Search"], ' +
+      'input[type="search"][aria-label*="Search"], ' +
+      'input.slds-input[placeholder*="Search"]'
+    );
     for (const el of candidates) {
       const rect = el.getBoundingClientRect();
       if (rect.width > 100 && rect.height > 10) return el;
@@ -148,10 +185,6 @@
     return null;
   }
 
-  // Salesforce Lightning's documented global-search keyboard shortcut.
-  // Dispatching the key sequence focuses the search input regardless of
-  // whether it's in light or shadow DOM. Then document.activeElement
-  // gives us a typeable handle — no querySelector needed.
   function dispatchKey(target, opts) {
     try {
       ['keydown','keypress','keyup'].forEach(function (type) {
@@ -161,52 +194,58 @@
       });
     } catch (_) {}
   }
-  async function focusSearchViaShortcut() {
-    // Try Ctrl+/ (Windows/Linux) then Cmd+/ (Mac). Salesforce's "Show
-    // keyboard shortcuts" overlay documents this as the global-search
-    // shortcut on Lightning.
-    const opts = { key: '/', code: 'Slash', keyCode: 191, which: 191 };
-    dispatchKey(document.body, Object.assign({}, opts, { ctrlKey: true }));
-    await wait(200);
-    let el = document.activeElement;
-    if (el && el.tagName === 'INPUT' && /search/i.test(el.placeholder || '')) return el;
-    dispatchKey(document.body, Object.assign({}, opts, { metaKey: true }));
-    await wait(200);
-    el = document.activeElement;
-    if (el && el.tagName === 'INPUT' && /search/i.test(el.placeholder || '')) return el;
-    return null;
-  }
 
   async function runSearch(phoneDigits) {
-    // Try 3 paths, in order of preference:
-    //   1. Keyboard shortcut focuses the input. Most robust — no DOM
-    //      walking required.
-    //   2. Shadow-DOM piercing (works once sf-shadow-shim.js has run).
-    //   3. Standard querySelector (in case search is rendered in light
-    //      DOM for some reason).
-    let input = await focusSearchViaShortcut();
+    // Step 1: open the Search Assistant overlay. Three paths:
+    //   a. Click the search button (Aura, light DOM — most reliable).
+    //   b. Keyboard shortcut Ctrl+/ then Cmd+/.
+    //   c. If neither lands but an input is already focused (e.g. the
+    //      LO had search open), just use that.
+    const trigger = findSearchTriggerButton();
+    if (trigger) {
+      try { trigger.click(); } catch (_) {}
+      await wait(450);
+    }
+    // After click, the input is usually auto-focused. Probe for it.
+    let input = findActiveSearchInput();
     if (!input) {
-      input = await waitFor(findGlobalSearchInput, 6000, 250);
+      // Belt-and-suspenders — keyboard shortcut in case the click didn't
+      // land or the overlay needs a focus event to render its input.
+      const opts = { key: '/', code: 'Slash', keyCode: 191, which: 191 };
+      dispatchKey(document.body, Object.assign({}, opts, { ctrlKey: true }));
+      await wait(250);
+      input = findActiveSearchInput();
+      if (!input) {
+        dispatchKey(document.body, Object.assign({}, opts, { metaKey: true }));
+        await wait(250);
+        input = findActiveSearchInput();
+      }
+    }
+    // One more wait+poll in case the input appears slowly.
+    if (!input) {
+      input = await waitFor(findActiveSearchInput, 4000, 250);
     }
     if (!input) {
-      // Last resort — standard query without piercing, in case Salesforce
-      // moves the input to light DOM at some point.
-      input = document.querySelector('input.slds-input[type="search"], input[type="search"][placeholder^="Search"]');
+      return {
+        ok: false,
+        reason: 'Global search input never appeared after opening the Search Assistant overlay.'
+      };
     }
-    if (!input) return { ok: false, reason: 'Global search input not found (tried keyboard shortcut, shadow piercing, and standard query).' };
 
     input.focus();
     setReactInputValue(input, phoneDigits);
     await wait(250);
     pressEnter(input);
 
-    // Salesforce navigates to /one/one.app#... search-results URL.
+    // Salesforce navigates to a search results page — the URL changes
+    // and a "We searched for" header appears.
     const searched = await waitFor(function () {
       return /search/i.test(location.hash || '') ||
+             /search/i.test(location.pathname || '') ||
              queryOnePiercing('records-search-results-page, lst-search-results, records-glasshouse-search-results') ||
              document.body.textContent.indexOf('We searched for') >= 0;
     }, 8000, 300);
-    if (!searched) return { ok: false, reason: 'Search results page never loaded.' };
+    if (!searched) return { ok: false, reason: 'Search results page never loaded after submitting.' };
     return { ok: true };
   }
 
