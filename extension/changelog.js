@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.15",
+    category: "improvement",
+    headline: "Zoho Booking auto-log: re-enabled the per-messageId dedup and 10/day per-LO daily limit that were temporarily disabled for testing in v1.63.5. The flow is verified working end-to-end now, so the safety rails are back on.",
+    highlights: [
+      "Per-messageId dedup: chrome.storage.local key zhlZohoBookingSeenIds tracks the last 200 Gmail messageIds we've processed. The same Zoho booking confirmation email cannot trigger an auto-log twice — opening or refreshing the same email re-detects the booking but the dedup check short-circuits before the confirmation toast appears.",
+      "Daily limit: chrome.storage.local key zhlZohoBookingDailyCount tracks how many auto-logs fired per LO per day (10/day cap). Catches runaway loops if detection ever misfires on a non-Zoho email — the watcher quietly stops after 10 fires and resumes the next day.",
+      "Both keys are now written to on every successful auto-log, same as v1.63.0 originally specified."
+    ],
+    sections: ["gmail-zoho-booking-watcher"]
+  },
+  {
     version: "1.63.14",
     category: "bugfix",
     headline: "Zoho Booking auto-log: stop opening a brand-new Salesforce tab when one is already open. The service worker is now the sole authority for tab handling, with a broad fallback query so an existing tab is always reused.",

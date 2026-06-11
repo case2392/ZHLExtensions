@@ -256,42 +256,32 @@
     if (firingInThisTab) return;
     firingInThisTab = true;
     try {
-      // ---- TESTING MODE: dedup + daily limit DISABLED ---------------
-      // The per-messageId dedup check and the 10/day daily limit are
-      // temporarily bypassed so the same Zoho booking email can be
-      // re-fired repeatedly during testing without having to clear
-      // chrome.storage.local between runs. Restore both guards by
-      // un-commenting the block below before broad rollout.
-      //
-      // const data = await getStorage([DEDUP_KEY, COUNT_KEY]);
-      // const seen = Array.isArray(data[DEDUP_KEY]) ? data[DEDUP_KEY] : [];
-      // if (booking.messageId && seen.indexOf(booking.messageId) >= 0) {
-      //   console.log('[ZHL Zoho Booking Watcher] messageId already processed, skipping');
-      //   firingInThisTab = false;
-      //   return;
-      // }
-      // const today = todayKey();
-      // const count = data[COUNT_KEY] && data[COUNT_KEY].dayKey === today ? (data[COUNT_KEY].count || 0) : 0;
-      // if (count >= DAILY_LIMIT) {
-      //   console.warn('[ZHL Zoho Booking Watcher] daily limit of ' + DAILY_LIMIT + ' reached, skipping');
-      //   firingInThisTab = false;
-      //   return;
-      // }
-      const seen = [];
+      // Dedup + daily limit. Per-messageId dedup so the same Gmail
+      // message can't fire twice. Daily limit caps a misdetection
+      // loop at DAILY_LIMIT fires per LO per day.
+      const data = await getStorage([DEDUP_KEY, COUNT_KEY]);
+      const seen = Array.isArray(data[DEDUP_KEY]) ? data[DEDUP_KEY] : [];
+      if (booking.messageId && seen.indexOf(booking.messageId) >= 0) {
+        console.log('[ZHL Zoho Booking Watcher] messageId already processed, skipping');
+        firingInThisTab = false;
+        return;
+      }
       const today = todayKey();
-      const count = 0;
-      console.log('[ZHL Zoho Booking Watcher] TESTING MODE — dedup + daily limit disabled');
+      const count = data[COUNT_KEY] && data[COUNT_KEY].dayKey === today ? (data[COUNT_KEY].count || 0) : 0;
+      if (count >= DAILY_LIMIT) {
+        console.warn('[ZHL Zoho Booking Watcher] daily limit of ' + DAILY_LIMIT + ' reached, skipping');
+        firingInThisTab = false;
+        return;
+      }
 
       // Confirmation toast.
       showConfirmationToast(booking,
         async function onConfirm() {
-          // TESTING MODE: only stash the payload — skip writing to
-          // DEDUP_KEY / COUNT_KEY so we don't accumulate state during
-          // repeated test runs. When re-enabling the guards above,
-          // restore the two payload assignments below.
+          // Bump dedup + counter, stash payload, open Salesforce.
+          const trimmedSeen = (booking.messageId ? seen.concat([booking.messageId]) : seen).slice(-DEDUP_MAX);
           const payload = {};
-          // payload[DEDUP_KEY] = (booking.messageId ? seen.concat([booking.messageId]) : seen).slice(-DEDUP_MAX);
-          // payload[COUNT_KEY] = { dayKey: today, count: count + 1 };
+          payload[DEDUP_KEY] = trimmedSeen;
+          payload[COUNT_KEY] = { dayKey: today, count: count + 1 };
           payload[STORAGE_KEY] = Object.assign({}, booking, { ts: Date.now() });
           await setStorage(payload);
           console.log('[ZHL Zoho Booking Watcher] stashed booking, asking SW to open-or-focus Salesforce');
