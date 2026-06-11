@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.9",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: 'Save' toast was firing even when nothing actually persisted to the Activity tracker. Now scopes the Save button + Communication Type click to the disposition modal subtree, then verifies the save with a positive signal (SF success toast OR the form clearing).",
+    highlights: [
+      "Symptom: paster reported 'PA Note saved' but the Activity tracker showed no new disposition entry. The success toast was firing on a click that didn't actually persist anything.",
+      "Root cause: my Save selector was button.slds-button_brand[title=\"Save\"] anywhere in the document, plus the Communication Type 'Email' click matched the first element with text 'email' — both could land on the wrong target (record-edit Save, the Email field label in Borrower Information, etc.), and a click on the wrong button silently does nothing.",
+      "Fix #1 — disposition container scope: new findDispositionContainer() that looks for elements carrying the LWC scoping attribute c-dispositionmodal_dispositionmodal (or the logoutcome variant) and walks up to the lowest ancestor wrapping both the PA Notes textarea and the Save button. Save button + Communication Type Email click now scope to this container's subtree first.",
+      "Fix #2 — save verification: after clicking Save, wait up to 5 seconds for a positive signal: (a) a Salesforce success toast that says 'saved' / 'success' / 'created' / 'logged' (and isn't an error/required-field toast); OR (b) the PA Notes textarea cleared (the disposition modal usually resets on a successful save). If neither shows up, return ok:false with a 'no success indication appeared, check Activity timeline' reason so the LO knows to verify manually.",
+      "Diagnostic logging: paster now logs the actual Save button element it's about to click so the next console capture will tell us exactly what was clicked if something still misses."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.8",
     category: "improvement",
     headline: "Zoho Booking auto-log: added a greyed-out progress overlay on the Salesforce tab during the auto-log run, matching the LOP File Copy / SMS Mark All Read pattern.",

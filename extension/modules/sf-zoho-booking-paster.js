@@ -450,17 +450,67 @@
     return { ok: true };
   }
 
+  // Find the disposition-modal root container so we can scope subsequent
+  // queries to its subtree. The Save button, Communication Type buttons,
+  // My Notes editor, PA Notes textarea, and New Follow-up section are
+  // all light-DOM children of this LWC and carry a "c-dispositionmodal*"
+  // scoping attribute. Without this scoping we risk clicking a Save
+  // button from a different form (record-edit Save, etc.) or matching
+  // the Email field label in Borrower Information as the Communication
+  // Type "Email" button — both of which leave the disposition unsaved.
+  function findDispositionContainer() {
+    // The scoping attribute is something like c-dispositionmodal_dispositionmodal
+    // or c-dispositionmodallogoutcome_dispositionmodallogoutcome.
+    const candidates = queryAllPiercing(
+      '[c-dispositionmodal_dispositionmodal], ' +
+      '[c-dispositionmodallogoutcome_dispositionmodallogoutcome]'
+    );
+    if (!candidates.length) return null;
+    // Use the lowest common ancestor — find the highest element among
+    // the candidates and look at one of its ancestors that wraps the
+    // PA Notes textarea + Save button.
+    const sample = candidates[0];
+    // Walk up looking for an ancestor that contains both a PA Notes
+    // textarea and a Save button.
+    let cur = sample;
+    while (cur && cur !== document.body) {
+      const hasPaNotes = cur.querySelector && cur.querySelector('textarea[placeholder*="PA Notes"]');
+      const hasSave    = cur.querySelector && cur.querySelector('button.slds-button_brand');
+      if (hasPaNotes && hasSave) return cur;
+      cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+    }
+    // Fallback — the sample itself.
+    return sample;
+  }
+
   async function selectCommunicationTypeEmail() {
     // Communication Type is rendered as three button-like toggles
-    // (Call / Text / Email). Find the one whose visible label is "Email".
+    // (Call / Text / Email) inside the disposition modal. Scope to the
+    // modal container so we don't accidentally click the "Email" label
+    // in the Borrower Information panel (which is a labelled field, not
+    // a radio).
     const btn = await waitFor(function () {
-      const candidates = queryAllPiercing('button, [role="button"], lightning-radio-group label');
+      const container = findDispositionContainer() || document;
+      const candidates = Array.from(
+        (container.querySelectorAll && container.querySelectorAll('button, [role="button"], lightning-radio-group label')) || []
+      );
       for (const el of candidates) {
         const txt = (el.textContent || '').trim().toLowerCase();
         if (txt === 'email') {
           const rect = el.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) return el;
         }
+      }
+      // Fallback to a wider piercing search if the scoped query missed.
+      const wide = queryAllPiercing('button, [role="button"], lightning-radio-group label');
+      for (const el of wide) {
+        const txt = (el.textContent || '').trim().toLowerCase();
+        if (txt !== 'email') continue;
+        // Skip elements that look like a field label (their visible text is
+        // exactly "Email" but they're not inside a button context).
+        if (el.tagName === 'LABEL' && !el.closest('lightning-radio-group')) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) return el;
       }
       return null;
     }, 8000, 250);
@@ -584,13 +634,35 @@
       console.log('[ZHL Zoho Booking Paster] PA Notes value committed:', noteText);
     }
 
-    // Save button — Salesforce ships it as button.slds-button_brand with
-    // title="Save" inside the disposition modal scope.
+    // Save button — scope to the disposition-modal container so we don't
+    // accidentally click a different Save (record-edit Save, follow-up
+    // Save, etc.). The disposition Save carries the LWC scoping
+    // attribute c-dispositionmodal_dispositionmodal on the same button.
     const saveBtn = await waitFor(function () {
-      // Strong match.
-      const exact = queryOnePiercing('button.slds-button_brand[title="Save"]');
-      if (exact) return exact;
-      // Fallback: any visible button labeled exactly "Save".
+      // Strongest match: button with the LWC scoping attribute.
+      const scoped = queryAllPiercing(
+        'button.slds-button_brand[title="Save"][c-dispositionmodal_dispositionmodal], ' +
+        'button.slds-button_brand[c-dispositionmodal_dispositionmodal], ' +
+        'button[c-dispositionmodal_dispositionmodal][title="Save"]'
+      );
+      for (const b of scoped) {
+        const rect = b.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) return b;
+      }
+      // Fallback: any Save button INSIDE the disposition container.
+      const container = findDispositionContainer();
+      if (container) {
+        const inside = container.querySelectorAll && container.querySelectorAll('button.slds-button_brand[title="Save"], button.slds-button_brand');
+        if (inside) {
+          for (const b of inside) {
+            const t = (b.textContent || '').trim();
+            if (t !== 'Save') continue;
+            const rect = b.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) return b;
+          }
+        }
+      }
+      // Last-resort fallback: any visible Save button anywhere.
       const all = queryAllPiercing('button');
       for (const b of all) {
         const t = (b.textContent || '').trim();
@@ -601,8 +673,44 @@
       }
       return null;
     }, 5000, 250);
-    if (!saveBtn) return { ok: false, reason: 'Save button not found.' };
+    if (!saveBtn) return { ok: false, reason: 'Save button not found inside disposition modal.' };
+
+    console.log('[ZHL Zoho Booking Paster] clicking disposition Save button:', saveBtn);
+    try { saveBtn.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+    await wait(200);
     saveBtn.click();
+
+    // Verify the save actually persisted. Two positive signals to look
+    // for: (a) a Salesforce success toast with text like "Saved",
+    // "Disposition saved", or "Record saved"; (b) the PA Notes textarea
+    // cleared (the disposition modal usually resets after a successful
+    // save). If neither shows up within 5 seconds, treat it as a save
+    // failure and surface the warning so the LO can check manually.
+    const savedOk = await waitFor(function () {
+      // Signal A — SF success toast.
+      const toasts = queryAllPiercing('.slds-notify_toast, .toastMessage, .slds-notify--toast, [role="alert"]');
+      for (const t of toasts) {
+        const txt = (t.textContent || '').toLowerCase();
+        if (!txt) continue;
+        if (/error|fail|invalid|required/i.test(txt)) continue;
+        if (/saved|success|created|logged/i.test(txt)) return 'toast';
+      }
+      // Signal B — PA Notes textarea cleared (form reset on save).
+      try {
+        const tas = queryAllPiercing('textarea[placeholder*="PA Notes"]');
+        const ta = tas.length ? tas[0] : null;
+        if (ta && (ta.value || '') === '') return 'cleared';
+      } catch (_) {}
+      return null;
+    }, 5000, 300);
+
+    if (!savedOk) {
+      return {
+        ok: false,
+        reason: 'Save was clicked but no success indication appeared within 5 seconds — the disposition may not have actually persisted. Check the Activity timeline.'
+      };
+    }
+    console.log('[ZHL Zoho Booking Paster] save confirmed by:', savedOk);
     return { ok: true };
   }
 
