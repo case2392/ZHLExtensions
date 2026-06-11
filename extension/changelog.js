@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.7",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: PA Notes textarea was being written to but LWC's reactive state never saw the change — disposition got saved with an empty note. Fixed by setting the <lightning-textarea> host's value property, dispatching composed events, and scrolling so the LO can see it.",
+    highlights: [
+      "Symptom: lead opened, disposition saved (the save toast appeared), but the PA Notes field was empty in the record. The synthetic input/change events on the inner <textarea> never reached LWC's reactive state, so when the save handler read the component's `value` property it got the empty initial value.",
+      "Fix #1 — host property write: the inner <textarea> lives in the shadow root of a <lightning-textarea> custom element. The component stores the reactive value on the host element, not the inner textarea. The paster now walks up across shadow-root boundaries to find the host and sets `host.value = noteText` directly. LWC propagates that into the inner textarea on its own re-render.",
+      "Fix #2 — execCommand + composed events: still drive the inner textarea too (focus, select all, document.execCommand('insertText'), then dispatch InputEvent('input', {composed: true, inputType: 'insertText'}) + change with composed:true so the events cross shadow boundaries and reach any listeners on parent components). Belt and suspenders.",
+      "Fix #3 — verification log: after the writes, the paster reads back ta.value and logs a warning to the console if it doesn't match the wanted text, including the host's value and whether a host was found. So if it still misses on the next test we can see exactly which path failed.",
+      "Fix #4 — scrollIntoView({block:'center'}) on the textarea before writing so the LO can watch it fill in. Useful during the rest of the testing pass."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.6",
     category: "bugfix",
     headline: "Zoho Booking auto-log: lead-link selector was looking for /lightning/r/Lead/ in the href, but Salesforce uses generic record IDs (e.g., /lightning/r/00Qa.../view) — selector never matched. Also the link has target=\"_blank\" so .click() was opening a new tab. Fixed both.",

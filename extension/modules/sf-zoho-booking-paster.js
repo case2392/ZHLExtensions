@@ -423,13 +423,93 @@
     }, 8000, 250);
   }
 
+  // Walk up the DOM, crossing shadow-root boundaries, to find the
+  // lightning-textarea host element. LWC stores the component's reactive
+  // value on the host, not the inner <textarea> — that's what we need to
+  // set for the disposition modal's save handler to actually pick up.
+  function findLwcHost(innerEl, hostTagName) {
+    let cur = innerEl;
+    const want = (hostTagName || '').toLowerCase();
+    while (cur) {
+      if (cur.tagName && cur.tagName.toLowerCase() === want) return cur;
+      // Step up: regular parent, or across the shadow root boundary.
+      let next = cur.parentElement;
+      if (!next) {
+        const root = (cur.getRootNode && cur.getRootNode());
+        if (root && root.host) next = root.host;
+      }
+      if (next === cur) break;
+      cur = next;
+    }
+    return null;
+  }
+
   async function fillPaNotesAndSave(noteText) {
     const ta = await findPaNotesTextarea();
     if (!ta) return { ok: false, reason: 'PA Notes textarea not found.' };
+
+    // Bring the textarea into view so the LO can see what's happening,
+    // especially while we're still ironing out the flow.
+    try { ta.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+    await wait(200);
+
+    // 1. Set the LWC host's reactive `value` property. This is the most
+    //    reliable way to drive a <lightning-textarea> — synthetic input
+    //    events on the inner <textarea> sometimes get ignored by LWC's
+    //    reactivity, but setting the host property propagates the value
+    //    into the component's state AND into the inner textarea via the
+    //    component's own re-render.
+    const host = findLwcHost(ta, 'lightning-textarea');
+    if (host) {
+      try { host.value = noteText; } catch (_) {}
+    }
+
+    // 2. Focus + select existing content + execCommand('insertText'). This
+    //    drives the browser's native input pipeline which fires the same
+    //    events a real user typing would fire (all with isTrusted=false
+    //    because they're still synthetic, but with the right shape).
     ta.focus();
-    setReactInputValue(ta, noteText);
+    try {
+      ta.setSelectionRange(0, (ta.value || '').length);
+    } catch (_) {}
+    let viaExec = false;
+    try { viaExec = document.execCommand('insertText', false, noteText); } catch (_) {}
+
+    // 3. Fallback: React-trusted writer if execCommand didn't take.
+    if (!viaExec && ta.value !== noteText) {
+      try {
+        const proto = HTMLTextAreaElement.prototype;
+        const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+        if (desc && desc.set) desc.set.call(ta, noteText);
+        else ta.value = noteText;
+      } catch (_) {}
+    }
+
+    // 4. Dispatch input + change with composed:true so they cross shadow
+    //    boundaries — important because LWC's listeners may live on the
+    //    host or higher up the tree, outside the textarea's shadow root.
+    try {
+      ta.dispatchEvent(new InputEvent('input', {
+        bubbles: true, composed: true, inputType: 'insertText', data: noteText
+      }));
+      ta.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    } catch (_) {}
+
     try { ta.blur(); } catch (_) {}
-    await wait(250);
+    await wait(500);
+
+    // 5. Verify the value actually stuck — if not, log it loudly so we
+    //    can see in the console what went wrong on the next test.
+    if (ta.value !== noteText) {
+      console.warn('[ZHL Zoho Booking Paster] PA Notes value did not stick after writes.', {
+        wanted: noteText,
+        got: ta.value,
+        hostFound: !!host,
+        hostValue: host && host.value
+      });
+    } else {
+      console.log('[ZHL Zoho Booking Paster] PA Notes value committed:', noteText);
+    }
 
     // Save button — Salesforce ships it as button.slds-button_brand with
     // title="Save" inside the disposition modal scope.
