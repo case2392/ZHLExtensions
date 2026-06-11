@@ -296,29 +296,63 @@
   }
 
   async function clickLeadLink(borrowerName) {
-    // Match on borrower full name first, then first-name only as a
-    // fallback. We look inside Lead-flavored anchors so we don't click a
-    // Contact/Account by mistake.
+    // Salesforce uses generic record IDs in URLs (e.g., /lightning/r/00Qa.../view),
+    // not object-type prefixes — so a selector like a[href*="/lightning/r/Lead/"]
+    // never matches. Record links carry data-refid="recordId" and the Aura
+    // class forceOutputLookup / outputLookupLink. They also have title=
+    // matching the record's display name, which is the most reliable selector.
     const wantFull  = String(borrowerName || '').toLowerCase().trim();
     const wantFirst = wantFull.split(/\s+/)[0] || '';
+
     const link = await waitFor(function () {
-      const links = queryAllPiercing('a[href*="/lightning/r/Lead/"], a[data-refid][href*="Lead"]');
-      for (const a of links) {
-        const t = (a.textContent || '').toLowerCase().trim();
-        if (!t) continue;
-        if (wantFull && t === wantFull) return a;
-        if (wantFull && t.indexOf(wantFull) >= 0) return a;
+      // Strategy 1 — exact title attribute match (most reliable on Aura
+      // forceOutputLookup links).
+      const byTitle = queryAllPiercing('a.forceOutputLookup[title], a[data-refid="recordId"][title]');
+      for (const a of byTitle) {
+        const title = (a.getAttribute('title') || '').toLowerCase().trim();
+        if (wantFull && title === wantFull) return a;
       }
-      // Looser fallback — first match by first name.
-      for (const a of links) {
+      // Strategy 2 — textContent exact / substring match on record-link anchors.
+      const recordLinks = queryAllPiercing('a.forceOutputLookup, a[data-refid="recordId"], a.outputLookupLink');
+      for (const a of recordLinks) {
+        const t = (a.textContent || '').toLowerCase().trim();
+        if (wantFull && (t === wantFull || t.indexOf(wantFull) >= 0)) return a;
+      }
+      // Strategy 3 — first-name fallback.
+      for (const a of recordLinks) {
         const t = (a.textContent || '').toLowerCase().trim();
         if (wantFirst && t.startsWith(wantFirst)) return a;
       }
       return null;
     }, 8000, 250);
+
     if (!link) return { ok: false, reason: 'No matching Lead link found in search results.' };
+
+    // The link carries target="_blank" — without removing it, .click() opens
+    // a brand-new tab instead of navigating the current SF tab. Strip it.
+    try { link.removeAttribute('target'); } catch (_) {}
     try { link.scrollIntoView({ block: 'center' }); } catch (_) {}
-    link.click();
+    try { link.click(); } catch (_) {}
+
+    // Wait for SPA navigation to the lead record. If the click somehow
+    // didn't navigate (Aura swallowed it, target stripping failed in some
+    // edge case, etc.), fall back to a direct location.href assignment to
+    // the href the link points to — Salesforce will intercept it and route
+    // via its own SPA navigation regardless.
+    const navigated = await waitFor(function () {
+      return location.pathname.indexOf('/lightning/r/') >= 0 ||
+             (location.hash || '').indexOf('recordId') >= 0;
+    }, 3500, 250);
+    if (!navigated) {
+      const href = link.getAttribute('href');
+      if (href) {
+        try {
+          const fullUrl = new URL(href, location.origin).toString();
+          console.log('[ZHL Zoho Booking Paster] click did not navigate — falling back to location.href =', fullUrl);
+          location.href = fullUrl;
+        } catch (_) {}
+      }
+    }
     return { ok: true };
   }
 

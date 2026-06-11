@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.6",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: lead-link selector was looking for /lightning/r/Lead/ in the href, but Salesforce uses generic record IDs (e.g., /lightning/r/00Qa.../view) — selector never matched. Also the link has target=\"_blank\" so .click() was opening a new tab. Fixed both.",
+    highlights: [
+      "Symptom: search executed, results page loaded (recommended result Quentin Goodwin visible), but the paster reported 'No matching Lead link found in search results' and copied the note to clipboard for manual pasting.",
+      "Root cause #1: my selector required a[href*=\"/lightning/r/Lead/\"]. Salesforce's actual record-link href is /lightning/r/<recordId>/view — no /Lead/ segment. The Aura class name forceOutputLookup and data-refid=\"recordId\" attribute are what identify these links across all object types.",
+      "Fix #1: new three-strategy lookup. (a) exact title-attribute match on a.forceOutputLookup[title] / a[data-refid=\"recordId\"][title] — most reliable since SF sets title to the record's display name. (b) textContent exact/substring match on the same anchors. (c) first-name fallback. All run with the shadow-DOM-piercing helper.",
+      "Root cause #2: the link carries target=\"_blank\". .click() respects that — it would open the lead in a brand-new tab, not navigate the current one.",
+      "Fix #2: link.removeAttribute('target') before clicking. Plus a 3.5-second nav check after the click — if the URL didn't change, fall back to location.href = link.href to force the navigation. Salesforce's router intercepts the assignment and SPA-routes correctly either way."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.5",
     category: "improvement",
     headline: "Zoho Booking auto-log: temporarily disabled per-messageId dedup + 10/day daily limit so the same test booking can be re-fired repeatedly during testing. Re-enable before broad rollout.",
