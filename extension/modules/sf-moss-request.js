@@ -1,23 +1,16 @@
 // ZHL Productivity Pack module — feature key: feature_sfMossRequest
 //
-// Adds a "MOSS Request" button to Salesforce Lead/Contact action bars,
-// right next to the existing "Send VPA Email" button. Clicking it opens
-// a modal where the LO picks a request type (look up condo report,
-// work up a contract, schedule the buyer, work up / update a
-// pre-approval, etc.), optionally adds notes / a due time, and
-// submits.
+// COMING SOON as of v1.63.11. The MOSS Request workflow is on the roadmap
+// but the cross-team scoping isn't finished (Work Discovery's
+// task-creation endpoint, LO-side auth, the intake schema). Until that
+// lands, this module short-circuits — no button is injected into the
+// Salesforce action bar, no storage is read or written. The Setup page
+// and walkthrough surface a "Coming Soon" badge in place of the live
+// toggle so LOs see the feature is on the radar.
 //
-// For v1 (this build), submitting STAGES the request in
-// chrome.storage.local under zhlMossPendingRequests so we have a
-// local audit trail and a list to surface back to the LO. The real
-// hand-off to the MOSS team's Work Discovery dashboard at
-// https://zhl-work-discovery-prod.corp.zgcp-itrc-prod-k8s.zg-int.net/tasks
-// is the v2 target — that app exposes a /tasks queue the MOSS
-// specialists pull from. Once we know its task-creation API (auth
-// scheme + payload shape), background.js will POST the captured
-// request into the queue directly. For now, the modal also offers
-// an "Open MOSS desktop" link so the LO can hop over and surface
-// the request manually if they prefer.
+// The full implementation below is preserved so re-enabling is a single
+// commit (remove the early return + flip the Setup card back to the
+// regular toggle UI).
 //
 // MOSS = Mortgage Origination Support Specialist. Caps preferred
 // per the team's own convention.
@@ -27,6 +20,11 @@
   function __zhlRunModule() {
 (function () {
   'use strict';
+
+  const VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
+    ? chrome.runtime.getManifest().version : '?';
+  console.log('[ZHL MOSS Request v' + VERSION + '] coming soon — module short-circuiting, no button injected. Source preserved below for the v2 build.');
+  return;
 
   const BUTTON_ID  = 'zhl-moss-request-btn';
   const MODAL_ID   = 'zhl-moss-request-modal';

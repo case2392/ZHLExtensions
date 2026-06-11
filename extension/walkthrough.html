@@ -140,6 +140,16 @@
       font: 700 10px/1.2 Arial,sans-serif; letter-spacing: .04em;
       align-self: start;
     }
+    .feature.is-coming-soon::before {
+      content: "COMING SOON";
+      grid-column: 1 / -1;
+      justify-self: end;
+      background: #f59e0b; color: #fff;
+      padding: 2px 8px; border-radius: 4px;
+      font: 700 10px/1.2 Arial,sans-serif; letter-spacing: .04em;
+      align-self: start;
+    }
+    .feature.is-coming-soon { border-color: #f59e0b; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); }
 
     /* ---- What's new section ---- */
     .whats-new {
@@ -422,6 +432,40 @@
           <li><strong>Pre-fills the whole draft.</strong> Gmail compose opens with To = borrower, CC = co-borrower (when present), Subject = &ldquo;Disclosures signed &mdash; here&rsquo;s what happens next&rdquo;, and the full HTML body populated from the customizable template &mdash; three numbered steps (initial UW review, processor intro, homeowners insurance), the homeowners insurance agent block (Karson Carter / Goosehead by default), your signature with NMLS, and the Borrower Information summary block at the bottom.</li>
           <li><strong>Editable from Setup.</strong> Setup &rarr; Send Intro Email from Salesforce &rarr; Intro Email template lets you customize the subject and the body. Same placeholder chips as the VPA editor (<code>{First Name}</code>, <code>{Borrower Name}</code>, <code>{Co-Borrower Name}</code>, <code>{Property Address}</code>, <code>{Loan Number}</code>, <code>{Closing Date}</code>, <code>{LO Name}</code>, <code>{LO Email}</code>, <code>{NMLS}</code>). Reset to default brings the original template back.</li>
           <li><strong>No OAuth, no Connected App.</strong> Uses the public Gmail compose URL + the Gmail companion content script for the auto-HTML-paste &mdash; same pattern as the VPA email and Pricing Exception Workflow.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- MOSS Request from Salesforce — COMING SOON -->
+    <div class="feature is-coming-soon" id="sf-moss-request">
+      <div class="shot">
+        <svg viewBox="0 0 260 170" class="demo-svg" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="260" height="170" fill="#fffbeb"/>
+          <rect x="20" y="14" width="220" height="140" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+          <rect x="32" y="28" width="36" height="16" rx="3" fill="#1d4ed8"/>
+          <text x="50" y="40" font="700 9px Arial" fill="#fff" text-anchor="middle">MOSS</text>
+          <text x="72" y="40" font="600 9px Arial" fill="#0f172a">Request</text>
+          <text x="32" y="62" font="600 7.5px Arial" fill="#334155">Pick a request type:</text>
+          <rect x="32" y="68" width="196" height="14" rx="3" fill="#eff6ff" stroke="#1d4ed8" stroke-width="0.8"/>
+          <text x="40" y="78" font="600 6.5px Arial" fill="#1d4ed8">○ Call this buyer at a specific time</text>
+          <rect x="32" y="86" width="196" height="12" rx="3" fill="#f8fafc" stroke="#e2e8f0" stroke-width="0.5"/>
+          <text x="40" y="94" font="500 6.5px Arial" fill="#475569">○ Look up condo report</text>
+          <rect x="32" y="102" width="196" height="12" rx="3" fill="#f8fafc" stroke="#e2e8f0" stroke-width="0.5"/>
+          <text x="40" y="110" font="500 6.5px Arial" fill="#475569">○ Work up a contract</text>
+          <rect x="32" y="118" width="196" height="12" rx="3" fill="#f8fafc" stroke="#e2e8f0" stroke-width="0.5"/>
+          <text x="40" y="126" font="500 6.5px Arial" fill="#475569">○ Schedule the buyer on my calendar</text>
+          <rect x="174" y="138" width="54" height="14" rx="3" fill="#1d4ed8"/>
+          <text x="201" y="148" font="600 7px Arial" fill="#fff" text-anchor="middle">Submit</text>
+        </svg>
+      </div>
+      <div class="body">
+        <h3>MOSS Request from Salesforce</h3>
+        <div class="where">Salesforce Lead / Contact / Opportunity action ribbon &mdash; <strong>MOSS Request</strong> button (next to Send VPA Email)</div>
+        <p>One-click submission to the Mortgage Origination Support Specialist team. Pick the type of help you need from a short list, add a note or a due time, and the request lands directly in MOSS&rsquo;s Work Discovery queue &mdash; no more &ldquo;LO writes the same Slack DM ten times a day&rdquo; pattern.</p>
+        <ul>
+          <li><strong>Coming soon:</strong> currently in scoping with the MOSS team and the Work Discovery team. Blocked on the LO-side intake endpoint &mdash; once that&rsquo;s live, the button shows up here automatically with no extension reinstall.</li>
+          <li><strong>Request types being scoped:</strong> look up condo report, work up a contract, call this buyer at a specific time, initial outreach, schedule the buyer on my calendar, work up a pre-approval, update a pre-approval, plus a free-form custom note.</li>
+          <li><strong>Captures the borrower context for you.</strong> Record ID, borrower name, type of request, optional time and notes &mdash; MOSS sees the whole picture without you re-typing the basics.</li>
         </ul>
       </div>
     </div>

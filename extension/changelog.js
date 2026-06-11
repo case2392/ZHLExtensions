@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.11",
+    category: "improvement",
+    headline: "MOSS Request from Salesforce moved to Coming Soon while the Work Discovery intake endpoint is being scoped. The button no longer injects on Salesforce action ribbons; the Setup card and walkthrough both surface a 'Coming Soon' banner instead.",
+    highlights: [
+      "Module behavior: sf-moss-request.js now short-circuits at load time — no button is added to Salesforce Lead / Contact / Opportunity action ribbons, no chrome.storage.local reads or writes. The full v1 implementation is preserved below the early return for the v2 build (single-commit re-enable).",
+      "Setup card: previous toggle card replaced with an amber 'Coming Soon' card explaining what the feature will do and what it's blocked on (the Work Discovery LO-side task-intake endpoint). When the endpoint is live, flipping it back here re-enables for every install with no extension reinstall needed.",
+      "Walkthrough: new 'Coming Soon' feature card (#sf-moss-request) added to the Salesforce section with an amber 'COMING SOON' badge, an SVG mockup of the request modal, and a description of the seven request types being scoped. New CSS class .feature.is-coming-soon styles it differently from .feature.is-new — and importantly, the 'What's new' section's auto-clone logic only picks up .is-new, so this Coming Soon card doesn't appear in the top-of-page new-features carousel."
+    ],
+    sections: ["sf-moss-request"]
+  },
+  {
     version: "1.63.10",
     category: "bugfix",
     headline: "Zoho Booking auto-log: Communication Type Email click wasn't actually selecting Email (the disposition was saving with default Call or empty Type), and the v1.63.9 save verification was reading false positives. Fixed both with the full pointer event sequence and verifying the new disposition lands in Note History.",

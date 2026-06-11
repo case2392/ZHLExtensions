@@ -411,27 +411,27 @@
       </div>
     </section>
 
-    <!-- ============== Module: MOSS Request from Salesforce ============== -->
-    <section class="module-card" data-module>
+    <!-- ============== Module: MOSS Request from Salesforce (Coming Soon) ============== -->
+    <section class="module-card disabled" data-module data-coming-soon style="border:2px solid #f59e0b;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);">
       <div class="module-head">
         <div class="module-title-block">
-          <h2>MOSS Request from Salesforce</h2>
-          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.salesforce.com</code> &mdash; Lead / Contact / Opportunity pages</p>
+          <h2 style="color:#78350f;">MOSS Request from Salesforce
+            <span style="display:inline-block;margin-left:8px;font:700 10px Arial,sans-serif;letter-spacing:0.8px;text-transform:uppercase;background:#f59e0b;color:#fff;padding:3px 8px;border-radius:100px;vertical-align:middle;">Coming Soon</span>
+          </h2>
+          <p class="module-runs-on" style="color:#92400e;">In scoping with the MOSS team &amp; Work Discovery.</p>
         </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_sfMossRequest" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
+        <div style="display:flex;align-items:center;gap:6px;color:#78350f;font:700 12px Arial,sans-serif;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:100px;background:#f59e0b;color:#fff;font-size:13px;">⏳</span>
+          Not yet enabled
+        </div>
       </div>
 
-      <div class="module-body">
-        <ul class="module-features">
-          <li>Adds a <strong>MOSS Request</strong> button to the Lead / Contact / Opportunity action bar, right next to the Send VPA Email button.</li>
-          <li>Click opens a modal with the common MOSS asks pre-listed: <em>look up condo report, work up a contract, call this buyer at a specific time, initial outreach to buyer, schedule buyer on my calendar, work up a pre-approval, update a pre-approval,</em> or a custom note.</li>
-          <li>Captures the request locally (record ID, borrower name, request type, notes, optional call time) so you have a personal audit trail of what you submitted today &mdash; the modal surfaces recent requests on the same record at the top.</li>
-          <li><strong>Preview build (v1).</strong> Direct submission into the <a href="https://zhl-work-discovery-prod.corp.zgcp-itrc-prod-k8s.zg-int.net/tasks" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:600;">MOSS Work Discovery /tasks queue</a> is the v2 target &mdash; for now the toast offers a one-click link to the MOSS desktop so you can drop the request the usual way.</li>
-        </ul>
+      <div class="module-body" style="background:#fff;border-radius:8px;padding:14px 16px;margin-top:10px;">
+        <div style="font:14.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
+          <p style="margin:0 0 10px;"><strong style="color:#78350f;">🔧 Coming soon — wiring up the cross-team integration with the MOSS team and ZHL Work Discovery.</strong></p>
+          <p style="margin:0 0 8px;">The vision: a <strong>MOSS Request</strong> button on every Lead / Contact / Opportunity action bar that opens a quick-pick modal of the common MOSS asks (look up condo report, work up a contract, schedule the buyer, work up / update a pre-approval, custom note, etc.) and submits the request directly into the MOSS team's Work Discovery <code>/tasks</code> queue. No more &ldquo;LO writes the same Slack DM ten times a day&rdquo; pattern.</p>
+          <p style="margin:0;color:#475569;font-size:13px;font-style:italic;">Currently blocked on the LO-side intake endpoint from the Work Discovery team. Enabling will happen here once that's live &mdash; no extension reinstall needed.</p>
+        </div>
       </div>
     </section>
 
