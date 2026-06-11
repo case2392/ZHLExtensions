@@ -137,7 +137,9 @@
     // Salesforce Lightning's global search lives inside a Lightning Web
     // Component shadow root — pierce through it. The input carries
     // class="slds-input" type="search" placeholder="Search..." per the
-    // DOM the LO provided.
+    // DOM the LO provided. Pierces only work for OPEN shadow roots;
+    // sf-shadow-shim.js (registered at document_start, world:"MAIN")
+    // forces all attachShadow calls to open mode.
     const candidates = queryAllPiercing('input.slds-input[type="search"], input[type="search"][placeholder^="Search"], input.slds-input[placeholder^="Search"]');
     for (const el of candidates) {
       const rect = el.getBoundingClientRect();
@@ -146,16 +148,63 @@
     return null;
   }
 
+  // Salesforce Lightning's documented global-search keyboard shortcut.
+  // Dispatching the key sequence focuses the search input regardless of
+  // whether it's in light or shadow DOM. Then document.activeElement
+  // gives us a typeable handle — no querySelector needed.
+  function dispatchKey(target, opts) {
+    try {
+      ['keydown','keypress','keyup'].forEach(function (type) {
+        target.dispatchEvent(new KeyboardEvent(type, Object.assign({
+          bubbles: true, cancelable: true
+        }, opts)));
+      });
+    } catch (_) {}
+  }
+  async function focusSearchViaShortcut() {
+    // Try Ctrl+/ (Windows/Linux) then Cmd+/ (Mac). Salesforce's "Show
+    // keyboard shortcuts" overlay documents this as the global-search
+    // shortcut on Lightning.
+    const opts = { key: '/', code: 'Slash', keyCode: 191, which: 191 };
+    dispatchKey(document.body, Object.assign({}, opts, { ctrlKey: true }));
+    await wait(200);
+    let el = document.activeElement;
+    if (el && el.tagName === 'INPUT' && /search/i.test(el.placeholder || '')) return el;
+    dispatchKey(document.body, Object.assign({}, opts, { metaKey: true }));
+    await wait(200);
+    el = document.activeElement;
+    if (el && el.tagName === 'INPUT' && /search/i.test(el.placeholder || '')) return el;
+    return null;
+  }
+
   async function runSearch(phoneDigits) {
-    const input = await waitFor(findGlobalSearchInput, 12000, 250);
-    if (!input) return { ok: false, reason: 'Global search input not found.' };
+    // Try 3 paths, in order of preference:
+    //   1. Keyboard shortcut focuses the input. Most robust — no DOM
+    //      walking required.
+    //   2. Shadow-DOM piercing (works once sf-shadow-shim.js has run).
+    //   3. Standard querySelector (in case search is rendered in light
+    //      DOM for some reason).
+    let input = await focusSearchViaShortcut();
+    if (!input) {
+      input = await waitFor(findGlobalSearchInput, 6000, 250);
+    }
+    if (!input) {
+      // Last resort — standard query without piercing, in case Salesforce
+      // moves the input to light DOM at some point.
+      input = document.querySelector('input.slds-input[type="search"], input[type="search"][placeholder^="Search"]');
+    }
+    if (!input) return { ok: false, reason: 'Global search input not found (tried keyboard shortcut, shadow piercing, and standard query).' };
+
     input.focus();
     setReactInputValue(input, phoneDigits);
     await wait(250);
     pressEnter(input);
+
     // Salesforce navigates to /one/one.app#... search-results URL.
     const searched = await waitFor(function () {
-      return /search/i.test(location.hash || '') || document.querySelector('records-search-results-page, lst-search-results, records-glasshouse-search-results');
+      return /search/i.test(location.hash || '') ||
+             queryOnePiercing('records-search-results-page, lst-search-results, records-glasshouse-search-results') ||
+             document.body.textContent.indexOf('We searched for') >= 0;
     }, 8000, 300);
     if (!searched) return { ok: false, reason: 'Search results page never loaded.' };
     return { ok: true };

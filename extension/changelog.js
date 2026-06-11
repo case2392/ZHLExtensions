@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.2",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: Salesforce's Lightning Web Component shadow DOM is in CLOSED mode, which my v1.63.1 piercing helper couldn't see into. Added a document_start main-world shim that forces every attachShadow call to open mode, plus a keyboard-shortcut fallback for the global search.",
+    highlights: [
+      "Symptom: v1.63.1 still showed 'Could not auto-log — Global search input not found'. The global-search input lives in a Lightning Web Component shadow root that Salesforce creates in mode:\"closed\" — element.shadowRoot returns null for closed roots regardless of how the walker traverses.",
+      "Primary fix: new sf-shadow-shim.js content script, registered at run_at:\"document_start\" with world:\"MAIN\" and all_frames:true. It monkey-patches Element.prototype.attachShadow to force {mode:\"open\"} on every shadow root LWC creates afterwards. Components still work normally (their own this.shadowRoot is unaffected by the mode flag) and our paster's existing queryAllPiercing() helper now sees through them.",
+      "Belt-and-suspenders: paster now tries the Salesforce documented global-search keyboard shortcut (Ctrl+/ on Windows, Cmd+/ on Mac) FIRST. It dispatches the key combo, waits 200ms, and grabs document.activeElement — which Salesforce focuses to the search input. This path doesn't depend on shadow DOM access at all. Falls through to the shadow-pierced selector, then to a plain querySelector, only if the shortcut doesn't land."
+    ],
+    sections: ["sf-zoho-booking-paster", "sf-shadow-shim"]
+  },
+  {
     version: "1.63.1",
     category: "bugfix",
     headline: "Zoho Booking auto-log: pierce shadow DOM to find the Salesforce global search input, and reuse an existing Salesforce tab instead of opening a brand-new one.",
