@@ -13,6 +13,20 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.12",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: stop showing the success toast when the disposition didn't actually persist. Wait for the disposition modal to be FULLY hydrated by LWC before interacting, make Communication Type Email a hard requirement (no proceeding if the click doesn't take), and only trust the Note History row count growing as the save-succeeded signal.",
+    highlights: [
+      "Root cause of intermittent failures: the LO's observation that it 'worked once and that one time it visibly scrolled / pasted / saved' pointed at a hydration race. The disposition modal's DOM is present quickly, but LWC takes another beat to wire up its reactive system. v1.63.10 was finding elements early and firing clicks/value sets before the component was actually listening — so the events looked successful from our side but never reached LWC's internal state. Form was empty when Save fired, save was rejected, but my fallback signals false-positived.",
+      "Hydration wait: new waitForDispositionReady() that requires all THREE critical elements (lightning-button.button-email, PA Notes textarea, disposition Save button) to be present, visible, and not aria-disabled together — up to 30s. Then a 1500ms settle buffer to let LWC finish wiring listeners. Only then do we start interacting.",
+      "Email selection is now mandatory: if the lightning-button's variant attribute doesn't flip from 'neutral' to 'brand' after the click sequence, the paster halts the flow instead of proceeding into a save attempt that would fail validation. Halt surfaces a clear reason in the warning toast.",
+      "PA Notes commit retry: after the initial write, if ta.value doesn't match the wanted text, retry the full write (host property + execCommand + composed events) up to 3 times with progressively longer waits (400ms, 600ms, 800ms). Logs each attempt's state to the console.",
+      "Save verification narrowed to Note History row count ONLY: removed v1.63.10's PA-Notes-cleared and SF-toast fallback signals — both were false-positive prone. Now only a new row in <c-disposition-note-history> counts as success. Wait extended to 20 seconds for the backend save round-trip.",
+      "Failure messaging is more specific too: 'no new row appeared in Note History within 20 seconds — the disposition was NOT persisted' plus the likely cause (Communication Type or LWC state), so the LO knows the auto-log truly failed instead of seeing a phantom success."
+    ],
+    sections: ["sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.11",
     category: "improvement",
     headline: "MOSS Request from Salesforce moved to Coming Soon while the Work Discovery intake endpoint is being scoped. The button no longer injects on Salesforce action ribbons; the Setup card and walkthrough both surface a 'Coming Soon' banner instead.",

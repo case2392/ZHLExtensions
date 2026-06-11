@@ -675,13 +675,31 @@
     try { ta.blur(); } catch (_) {}
     await wait(500);
 
-    // 5. Verify the value actually stuck — if not, log it loudly so we
-    //    can see in the console what went wrong on the next test.
-    if (ta.value !== noteText) {
-      console.warn('[ZHL Zoho Booking Paster] PA Notes value did not stick after writes.', {
+    // 5. Verify the value actually stuck. If not (LWC re-rendered with
+    //    its empty internal state, or our writes lost the race), retry
+    //    the write up to 3 times with progressively longer waits.
+    let attempt = 0;
+    while (ta.value !== noteText && attempt < 3) {
+      attempt++;
+      console.warn('[ZHL Zoho Booking Paster] PA Notes value missing on verify (attempt ' + attempt + ').', {
         wanted: noteText,
         got: ta.value,
-        hostFound: !!host,
+        hostValue: host && host.value
+      });
+      if (host) { try { host.value = noteText; } catch (_) {} }
+      ta.focus();
+      try { ta.setSelectionRange(0, (ta.value || '').length); } catch (_) {}
+      try { document.execCommand('insertText', false, noteText); } catch (_) {}
+      try {
+        ta.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: noteText }));
+        ta.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      } catch (_) {}
+      await wait(400 + attempt * 200);
+    }
+    if (ta.value !== noteText) {
+      console.error('[ZHL Zoho Booking Paster] PA Notes value still did not stick after 3 retries — giving up on PA Notes commit and proceeding to Save anyway.', {
+        wanted: noteText,
+        got: ta.value,
         hostValue: host && host.value
       });
     } else {
@@ -731,57 +749,47 @@
 
     // Snapshot the Note History row count BEFORE clicking Save. On a
     // successful save Salesforce adds a new <tr> to the
-    // <c-disposition-note-history> table — that's the most reliable
-    // positive signal that the disposition actually persisted.
-    const noteHistoryRowCountBefore = (function () {
+    // <c-disposition-note-history> table — that's the ONLY reliable
+    // positive signal that the disposition actually persisted to the
+    // backend. v1.63.10's fallback signals (PA Notes textarea cleared,
+    // SF "saved" toast) were false-positive prone — Salesforce can
+    // clear/reset the form for reasons other than save success, and
+    // toasts can fire from other UI events. Backend persistence is the
+    // only thing that matters.
+    function countNoteHistoryRows() {
       try {
         const rows = queryAllPiercing('c-disposition-note-history table tbody tr, c-disposition-note-history tr[data-show]');
         return rows.length;
       } catch (_) { return 0; }
-    })();
+    }
+    const noteHistoryRowCountBefore = countNoteHistoryRows();
 
     console.log('[ZHL Zoho Booking Paster] clicking disposition Save button:', saveBtn, 'note-history rows before:', noteHistoryRowCountBefore);
     try { saveBtn.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
-    await wait(200);
+    await wait(300);
     fullClickSequence(saveBtn);
 
-    // Verify the save actually persisted. Three positive signals in
-    // order of confidence:
-    //   (a) Note History gained a new row — strongest signal, comes
-    //       straight from Salesforce's own data.
-    //   (b) PA Notes textarea cleared (disposition modal resets on save).
-    //   (c) SF "saved" toast that isn't an error/required-field toast.
+    // Wait for the backend save to land — up to 20 seconds. Salesforce's
+    // save POST + Note History re-render can take time on a slow
+    // connection or busy SF instance.
     const savedOk = await waitFor(function () {
-      // Signal A — Note History row count increased.
-      try {
-        const rowsNow = queryAllPiercing('c-disposition-note-history table tbody tr, c-disposition-note-history tr[data-show]');
-        if (rowsNow.length > noteHistoryRowCountBefore) return 'note-history-grew';
-      } catch (_) {}
-      // Signal B — PA Notes textarea cleared (form reset on save).
-      try {
-        const tas = queryAllPiercing('textarea[placeholder*="PA Notes"]');
-        const ta = tas.length ? tas[0] : null;
-        if (ta && (ta.value || '') === '') return 'pa-notes-cleared';
-      } catch (_) {}
-      // Signal C — SF success toast (least reliable, since other toasts
-      // can fire during the flow).
-      const toasts = queryAllPiercing('.slds-notify_toast, .toastMessage, .slds-notify--toast, [role="alert"]');
-      for (const t of toasts) {
-        const txt = (t.textContent || '').toLowerCase();
-        if (!txt) continue;
-        if (/error|fail|invalid|required/i.test(txt)) continue;
-        if (/saved|success|created|logged/i.test(txt)) return 'sf-toast';
-      }
+      const rowsNow = countNoteHistoryRows();
+      if (rowsNow > noteHistoryRowCountBefore) return 'note-history-grew';
       return null;
-    }, 8000, 300);
+    }, 20000, 500);
 
     if (!savedOk) {
+      const rowsAfter = countNoteHistoryRows();
+      console.warn('[ZHL Zoho Booking Paster] Note History row count did not grow.', {
+        before: noteHistoryRowCountBefore,
+        afterTimeout: rowsAfter
+      });
       return {
         ok: false,
-        reason: 'Save was clicked but the disposition did not appear in Note History within 8 seconds. The Communication Type may not have actually been selected, or Salesforce rejected the save silently. Check the Activity timeline.'
+        reason: 'Save was clicked but no new row appeared in Note History within 20 seconds. The disposition was NOT persisted. Most likely cause: Communication Type not actually set to Email, or LWC reactive state still showed empty PA Notes when Save fired. Paste the note manually for now.'
       };
     }
-    console.log('[ZHL Zoho Booking Paster] save confirmed by:', savedOk);
+    console.log('[ZHL Zoho Booking Paster] save confirmed — Note History row count grew from', noteHistoryRowCountBefore, 'to', countNoteHistoryRows());
     return { ok: true };
   }
 
@@ -794,6 +802,38 @@
   async function copyToClipboard(text) {
     try { await navigator.clipboard.writeText(text); return true; }
     catch (_) { return false; }
+  }
+
+  // Wait for the disposition modal to be FULLY hydrated by LWC — not
+  // just present in the DOM, but mounted with event listeners wired up.
+  // The classic failure mode (and almost certainly the cause of the
+  // intermittent "it worked once" the LO is seeing) is interacting
+  // with the lightning-button / lightning-textarea / save button while
+  // LWC is still in the middle of its first render: the elements
+  // exist, but our clicks/value sets land before the component is
+  // listening. Wait for all three critical elements to be present
+  // AND visible together, then add a 1.5s settle buffer to let LWC
+  // finish wiring up its reactive system.
+  async function waitForDispositionReady() {
+    const result = await waitFor(function () {
+      const emailBtn = queryOnePiercing('lightning-button.button-email');
+      const paNotes  = queryOnePiercing('textarea[placeholder*="PA Notes"]');
+      const saveBtn  = queryOnePiercing('button.slds-button_brand[title="Save"][c-dispositionmodal_dispositionmodal]');
+      if (!emailBtn || !paNotes || !saveBtn) return null;
+      const rE = emailBtn.getBoundingClientRect();
+      const rP = paNotes.getBoundingClientRect();
+      const rS = saveBtn.getBoundingClientRect();
+      if (rE.width === 0 || rP.width === 0 || rS.width === 0) return null;
+      // Confirm the Save button isn't disabled (which would mean the
+      // form isn't fully wired yet).
+      if (saveBtn.disabled || saveBtn.getAttribute('aria-disabled') === 'true') return null;
+      return true;
+    }, 30000, 400);
+    if (!result) return false;
+    // Settle buffer — let LWC finish hooking up internal listeners
+    // before we start dispatching synthetic events.
+    await wait(1500);
+    return true;
   }
 
   let runningInThisTab = false;
@@ -814,14 +854,23 @@
       const c = await clickLeadLink(booking.borrowerName);
       if (!c.ok) throw new Error(c.reason);
 
-      await wait(800);
+      updateProgress(null, 'Waiting for the disposition modal to finish loading…');
+      const ready = await waitForDispositionReady();
+      if (!ready) throw new Error('Disposition modal did not finish loading within 30 seconds (Communication Type / PA Notes / Save not all present and visible).');
+
       updateProgress(null, 'Opening Call Details tab…');
       await ensureCallDetailsTab();
-      await wait(400);
+      await wait(500);
 
       updateProgress(null, 'Setting Communication Type to Email…');
       const t = await selectCommunicationTypeEmail();
-      if (!t.ok) console.warn('[ZHL Zoho Booking Paster] could not select Email — proceeding anyway');
+      if (!t.ok) {
+        // Halt instead of proceeding — saving with the wrong Communication
+        // Type (or with the form in an invalid state) is exactly how we
+        // ended up with a "Saved" toast and no actual disposition.
+        throw new Error('Communication Type could not be set to Email (variant did not flip to "brand"). ' + (t.reason || ''));
+      }
+      await wait(500);
 
       updateProgress(null, 'Filling PA Notes and saving…');
       const f = await fillPaNotesAndSave(noteText);
