@@ -1,12 +1,27 @@
 // ZHL Productivity Pack module — feature key: feature_buydownCalc
-// Wraps original module body in a chrome.storage.local feature-flag check.
-// If the user disables this module on the setup page the body never runs.
+//
+// PERMANENTLY DISABLED as of v1.63.16. ZHL Product has shipped the
+// 2-1 Buydown calculator natively in LOP — this module was the
+// prototype that validated the design. With native parity now live
+// in production, the extension stays out of LOP's way.
+//
+// The full source below is preserved (not deleted) so the
+// implementation history remains visible in the repo. The IIFE just
+// short-circuits and never injects anything. The Setup page surfaces
+// a celebratory "Shipped natively by Product" badge in place of the
+// old toggle, matching the pattern used for the scenario-sort
+// retirement in v1.62.0.
 (function () {
   'use strict';
   const __ZHL_FEATURE_KEY = 'feature_buydownCalc';
   function __zhlRunModule() {
 (function () {
   'use strict';
+
+  const VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
+    ? chrome.runtime.getManifest().version : '?';
+  console.log('[ZHL Buydown Calc v' + VERSION + '] permanently disabled — shipped natively by Product in LOP. Module retained for history.');
+  return;
 
   const BUTTON_CLASS = 'zhlbd-button';
   const WRAPPER_CLASS = 'zhlbd-button-wrapper';

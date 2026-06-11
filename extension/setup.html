@@ -126,30 +126,27 @@
       </div>
     </section>
 
-    <!-- ============== Module: 2-1 Buydown Calc ============== -->
-    <section class="module-card" data-module>
+    <!-- ============== Module: 2-1 Buydown Calc (retired — shipped by Product) ============== -->
+    <section class="module-card disabled" data-module data-retired-by-product style="border:2px solid #10b981;background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);">
       <div class="module-head">
         <div class="module-title-block">
-          <h2>2-1 Buydown Calculator</h2>
-          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — scenarios page</p>
+          <h2 style="color:#065f46;">2-1 Buydown Calculator
+            <span style="display:inline-block;margin-left:8px;font:700 10px Arial,sans-serif;letter-spacing:0.8px;text-transform:uppercase;background:#10b981;color:#fff;padding:3px 8px;border-radius:100px;vertical-align:middle;">Shipped natively · Product</span>
+          </h2>
+          <p class="module-runs-on" style="color:#047857;">Now built into LOP &mdash; no extension needed.</p>
         </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_buydownCalc" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
+        <div style="display:flex;align-items:center;gap:6px;color:#065f46;font:700 12px Arial,sans-serif;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:100px;background:#10b981;color:#fff;font-size:13px;">✓</span>
+          Retired
+        </div>
       </div>
 
-      <div class="module-body">
-        <div class="module-screenshot">
-          <img src="images/buydown-calc.svg" alt="Calc 2-1 Buydown button under a scenario card with a popup showing year 1, 2, and 3+ payments" />
+      <div class="module-body" style="background:#fff;border-radius:8px;padding:14px 16px;margin-top:10px;">
+        <div style="font:14.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
+          <p style="margin:0 0 10px;"><strong style="color:#065f46;">🎉 Another win — Product has shipped the 2-1 Buydown calculator natively in LOP.</strong></p>
+          <p style="margin:0 0 10px;">Year 1 / Year 2 / Year 3+ payment calc, buydown cost, and closing-cost impact are all live in the core Loan Officer Portal for every ZHL LO, no extension required. This module was the prototype that validated the design; with native parity in production, the extension stays out of LOP's way and the toggle is retired.</p>
+          <p style="margin:0;color:#475569;font-size:13px;font-style:italic;">Second feature to make the full LO-builder → Product validation → native shipment round trip (Scenario Sort was the first). The flywheel is working.</p>
         </div>
-        <ul class="module-features">
-          <li>Adds a <strong>Calc 2-1 Buydown</strong> button under every scenario card on the Pricing &amp; Scenarios page (works for up to 10 cards).</li>
-          <li>Reads the card's loan amount, note rate, term, and monthly P&amp;I/PITI automatically.</li>
-          <li>Pop-up shows the <strong>Year 1</strong> (rate − 2%), <strong>Year 2</strong> (rate − 1%), and <strong>Year 3+</strong> P&amp;I payments — plus total payment with escrow if PITI is on the card.</li>
-          <li>Computes the exact buydown cost (sum of monthly P&amp;I savings × 12 over years 1 and 2) and shows what it does to the total closing costs. Result is typically ~2.0–2.5% of the loan amount, varying by rate.</li>
-        </ul>
       </div>
     </section>
 

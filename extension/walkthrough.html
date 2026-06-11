@@ -150,6 +150,16 @@
       align-self: start;
     }
     .feature.is-coming-soon { border-color: #f59e0b; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); }
+    .feature.is-shipped-by-product::before {
+      content: "SHIPPED NATIVELY · PRODUCT";
+      grid-column: 1 / -1;
+      justify-self: end;
+      background: #10b981; color: #fff;
+      padding: 2px 8px; border-radius: 4px;
+      font: 700 10px/1.2 Arial,sans-serif; letter-spacing: .04em;
+      align-self: start;
+    }
+    .feature.is-shipped-by-product { border-color: #10b981; background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); }
 
     /* ---- What's new section ---- */
     .whats-new {
@@ -964,16 +974,16 @@
       </div>
     </div>
 
-    <!-- 2-1 Buydown PDF -->
-    <div class="feature" id="buydown-pdf">
+    <!-- 2-1 Buydown — SHIPPED NATIVELY BY PRODUCT -->
+    <div class="feature is-shipped-by-product" id="buydown-pdf">
       <div class="shot"><img src="images/buydown-calc.svg" alt="2-1 Buydown side-by-side scenario PDF with rates, payments, savings, and closing cost impact" /></div>
       <div class="body">
-        <h3>2-1 Buydown calc + Branded PDF</h3>
-        <div class="where">Scenarios page</div>
-        <p>Each Conventional scenario gets a <strong>Calc 2-1 Buydown</strong> button. The action bar gets a <strong>2-1 Buydown PDF</strong> button that generates a borrower-facing comparison sheet with Year 1 / Year 2 / Year 3+ rates and PITIA payments, savings, total buydown cost, and the closing-cost impact (with or without seller credit).</p>
+        <h3>2-1 Buydown calc</h3>
+        <div class="where">Scenarios page &mdash; <strong>now built into LOP natively</strong></div>
+        <p><strong style="color:#065f46;">🎉 Shipped by Product.</strong> ZHL Product has shipped the 2-1 Buydown calculator natively into LOP. Year 1 / Year 2 / Year 3+ payment calc, buydown cost, and closing-cost impact are all live in the core Loan Officer Portal for every ZHL LO &mdash; no extension required.</p>
         <ul>
-          <li>Side-by-side columns when multiple scenarios are selected.</li>
-          <li>Auto-disabled when LOP's own Generate PDF is disabled (e.g. RE-PRICE pending).</li>
+          <li>This was the prototype that validated the design. The extension's buydown module is retired in v1.63.16, replaced by a celebratory <em>Shipped natively · Product</em> badge in Setup.</li>
+          <li>Second feature to make the full LO-builder → Product validation → native shipment round trip (Scenario Sort was the first). The flywheel is working.</li>
         </ul>
       </div>
     </div>

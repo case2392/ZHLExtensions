@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.16",
+    category: "milestone",
+    headline: "🎉 Product has shipped the 2-1 Buydown calculator NATIVELY in LOP — second feature to make the full LO-builder → Product validation → native shipment round trip. The extension's buydown-calc module is retired in celebration.",
+    highlights: [
+      "Year 1 / Year 2 / Year 3+ payment calc, buydown cost, and closing-cost impact are now built into the Loan Officer Portal natively. Every LO at ZHL gets the feature with no install required. This module was the prototype that validated the design; with native parity in production, the extension stays out of LOP's way.",
+      "buydown-calc.js is permanently disabled in this release — the module short-circuits at load time with an early return and never injects its scenario-card buttons. The full source is preserved in the repo so the implementation history remains visible. Setup card and walkthrough both surface a celebratory '✓ Shipped natively · Product' badge in place of the old toggle / feature card.",
+      "Second feature to make the round trip — Scenario Sort (v1.62.0) was the first. Direct proof that the LO-builder pattern is becoming a repeatable flywheel at ZHL: LOs build, Product validates, Product ships natively, the extension retires and celebrates."
+    ],
+    sections: ["buydown-calc"]
+  },
+  {
     version: "1.63.15",
     category: "improvement",
     headline: "Zoho Booking auto-log: re-enabled the per-messageId dedup and 10/day per-LO daily limit that were temporarily disabled for testing in v1.63.5. The flow is verified working end-to-end now, so the safety rails are back on.",
