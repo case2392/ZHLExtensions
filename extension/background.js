@@ -282,6 +282,54 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// -------------------------------------------------------------------------
+// Open-or-focus Salesforce tab for cross-tab orchestrations (Zoho booking,
+// future MOSS request submission, etc.). Content scripts send this message
+// when they need to drive Salesforce; the service worker prefers reusing an
+// existing Salesforce tab (so the LO doesn't end up with a forest of new
+// tabs) and falls back to opening a new one if none is open.
+//
+// After the existing tab is focused, the message is forwarded to the tab so
+// the paster module can re-check its pending storage stash without waiting
+// for a URL change.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === "ZHL_OPEN_OR_FOCUS_SF") {
+    const fallbackUrl = msg.fallbackUrl || "https://zillowhomeloans.lightning.force.com/lightning/page/home";
+    (async () => {
+      try {
+        const sfTabs = await chrome.tabs.query({
+          url: [
+            "https://*.lightning.force.com/*",
+            "https://*.salesforce.com/*"
+          ]
+        });
+        if (sfTabs && sfTabs.length) {
+          // Prefer the most recently active SF tab — Chrome returns them in
+          // arbitrary order. lastAccessed is set by Chrome but isn't always
+          // exposed in MV3; fall back to the first match.
+          const target = sfTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+          await chrome.tabs.update(target.id, { active: true });
+          try { await chrome.windows.update(target.windowId, { focused: true }); } catch (_) {}
+          // Tell the paster on that tab to check its pending stash. The
+          // paster also has a load/URL-change trigger, but this wakes it
+          // up immediately on tab activation without a navigation.
+          try {
+            chrome.tabs.sendMessage(target.id, { type: "ZHL_BOOKING_CHECK_PENDING" });
+          } catch (_) {}
+          sendResponse({ ok: true, tabId: target.id, reused: true });
+          return;
+        }
+        const newTab = await chrome.tabs.create({ url: fallbackUrl });
+        sendResponse({ ok: true, tabId: newTab.id, reused: false });
+      } catch (e) {
+        console.warn("[ZHL Open SF] failed", e);
+        sendResponse({ ok: false, error: String(e && e.message || e) });
+      }
+    })();
+    return true; // async response
+  }
+});
+
 // Fire one poll on every service-worker spin-up too, in case the alarm
 // hasn't run recently (Chrome may have suspended the worker).
 pollKillSwitch();

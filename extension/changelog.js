@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.1",
+    category: "bugfix",
+    headline: "Zoho Booking auto-log: pierce shadow DOM to find the Salesforce global search input, and reuse an existing Salesforce tab instead of opening a brand-new one.",
+    highlights: [
+      "Symptom: v1.63.0 toast said 'Could not auto-log — Global search input not found'. Salesforce Lightning's global search input lives inside a Lightning Web Component shadow root (the input carries part=\"input\" and lwc-* attributes), and document.querySelectorAll doesn't see inside shadow DOM, so the selector never matched.",
+      "Fix: added a queryAllPiercing() helper that walks the document and every nested shadowRoot recursively. Switched the global-search input, Save button, PA Notes textarea, Communication Type buttons, Call Details tab, and Lead-link finders to use it.",
+      "Tab reuse: the watcher no longer calls window.open() directly. It now sends a ZHL_OPEN_OR_FOCUS_SF message to the service worker, which queries chrome.tabs.query for existing lightning.force.com / salesforce.com tabs and focuses the most recently used one. If no SF tab is open, it falls back to opening a new tab. On reuse the SW also sends a ZHL_BOOKING_CHECK_PENDING message to that tab so the paster wakes up immediately without waiting for a URL change."
+    ],
+    sections: ["gmail-zoho-booking-watcher", "sf-zoho-booking-paster"]
+  },
+  {
     version: "1.63.0",
     category: "feature",
     headline: "New: auto-log Zoho booking confirmation emails as a PA Note in Salesforce, so the premier agent sees the scheduled appointment without you remembering to log it manually.",

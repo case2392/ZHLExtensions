@@ -37,6 +37,33 @@
 
   // ---- Helpers ----------------------------------------------------
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  // Recursive shadow-DOM piercing query. Lightning Web Components encapsulate
+  // their internals (the global search input is one — note part="input" and
+  // lwc-* attributes) so document.querySelectorAll never sees them. Walk all
+  // shadowRoots in the tree and try the selector against each.
+  function queryAllPiercing(selector, root) {
+    const results = [];
+    const seen = new Set();
+    function visit(node) {
+      if (!node || seen.has(node)) return;
+      seen.add(node);
+      let matches = [];
+      try { matches = node.querySelectorAll ? Array.from(node.querySelectorAll(selector)) : []; } catch (_) {}
+      for (const m of matches) results.push(m);
+      let all = [];
+      try { all = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : []; } catch (_) {}
+      for (const el of all) {
+        if (el.shadowRoot) visit(el.shadowRoot);
+      }
+    }
+    visit(root || document);
+    return results;
+  }
+  function queryOnePiercing(selector, root) {
+    const r = queryAllPiercing(selector, root);
+    return r.length ? r[0] : null;
+  }
   function getStorage(keys) {
     return new Promise(function (resolve) {
       try { chrome.storage.local.get(keys, function (data) { resolve(data || {}); }); }
@@ -107,11 +134,14 @@
 
   // ---- The Salesforce flow ----------------------------------------
   function findGlobalSearchInput() {
-    // Salesforce Lightning global search bar.
-    const candidates = document.querySelectorAll('input.slds-input[type="search"], input[placeholder^="Search"]');
+    // Salesforce Lightning's global search lives inside a Lightning Web
+    // Component shadow root — pierce through it. The input carries
+    // class="slds-input" type="search" placeholder="Search..." per the
+    // DOM the LO provided.
+    const candidates = queryAllPiercing('input.slds-input[type="search"], input[type="search"][placeholder^="Search"], input.slds-input[placeholder^="Search"]');
     for (const el of candidates) {
       const rect = el.getBoundingClientRect();
-      if (rect.width > 100 && rect.height > 10 && rect.top < 120) return el;
+      if (rect.width > 100 && rect.height > 10) return el;
     }
     return null;
   }
@@ -138,7 +168,7 @@
     const wantFull  = String(borrowerName || '').toLowerCase().trim();
     const wantFirst = wantFull.split(/\s+/)[0] || '';
     const link = await waitFor(function () {
-      const links = Array.from(document.querySelectorAll('a[href*="/lightning/r/Lead/"], a[data-refid][href*="Lead"]'));
+      const links = queryAllPiercing('a[href*="/lightning/r/Lead/"], a[data-refid][href*="Lead"]');
       for (const a of links) {
         const t = (a.textContent || '').toLowerCase().trim();
         if (!t) continue;
@@ -162,7 +192,7 @@
     // The disposition form lives under the Call Details tab. It's the
     // default selected tab; if not, click it.
     const tab = await waitFor(function () {
-      const candidates = document.querySelectorAll('a[role="tab"], li[role="tab"] a, lightning-tab');
+      const candidates = queryAllPiercing('a[role="tab"], li[role="tab"] a, lightning-tab');
       for (const el of candidates) {
         const txt = (el.textContent || '').trim().toLowerCase();
         if (txt === 'call details') return el;
@@ -183,7 +213,7 @@
     // Communication Type is rendered as three button-like toggles
     // (Call / Text / Email). Find the one whose visible label is "Email".
     const btn = await waitFor(function () {
-      const candidates = document.querySelectorAll('button, [role="button"], lightning-radio-group label');
+      const candidates = queryAllPiercing('button, [role="button"], lightning-radio-group label');
       for (const el of candidates) {
         const txt = (el.textContent || '').trim().toLowerCase();
         if (txt === 'email') {
@@ -202,15 +232,23 @@
   async function findPaNotesTextarea() {
     return await waitFor(function () {
       // Most reliable: placeholder text Salesforce ships.
-      const ta = document.querySelector('textarea.slds-textarea[placeholder*="PA Notes"], textarea[placeholder*="PA Notes"]');
-      if (ta) return ta;
+      const tas = queryAllPiercing('textarea.slds-textarea[placeholder*="PA Notes"], textarea[placeholder*="PA Notes"]');
+      if (tas.length) return tas[0];
       // Fallback: walk the lightning-textarea components and match label text.
-      const lts = document.querySelectorAll('lightning-textarea');
+      const lts = queryAllPiercing('lightning-textarea');
       for (const lt of lts) {
-        const label = (lt.querySelector('label') || {}).textContent || '';
+        const label = (lt.querySelector && lt.querySelector('label')) ? lt.querySelector('label').textContent : '';
         if (/pa\s*notes/i.test(label)) {
-          const inner = lt.querySelector('textarea');
+          const inner = lt.querySelector && lt.querySelector('textarea');
           if (inner) return inner;
+        }
+        // Try shadowRoot label too.
+        if (lt.shadowRoot) {
+          const innerLabel = lt.shadowRoot.querySelector ? (lt.shadowRoot.querySelector('label') || {}).textContent || '' : '';
+          if (/pa\s*notes/i.test(innerLabel)) {
+            const inner = lt.shadowRoot.querySelector('textarea');
+            if (inner) return inner;
+          }
         }
       }
       return null;
@@ -229,11 +267,10 @@
     // title="Save" inside the disposition modal scope.
     const saveBtn = await waitFor(function () {
       // Strong match.
-      const exact = document.querySelector('button.slds-button_brand[title="Save"]');
+      const exact = queryOnePiercing('button.slds-button_brand[title="Save"]');
       if (exact) return exact;
-      // Fallback: any visible button labeled exactly "Save" inside a
-      // disposition-flavored ancestor.
-      const all = Array.from(document.querySelectorAll('button'));
+      // Fallback: any visible button labeled exactly "Save".
+      const all = queryAllPiercing('button');
       for (const b of all) {
         const t = (b.textContent || '').trim();
         if (t !== 'Save') continue;
@@ -324,6 +361,19 @@
       setTimeout(checkPending, 1200);
     }
   }, 800);
+
+  // Wake-up from the service worker — when the SW focuses an existing
+  // Salesforce tab (instead of opening a new one), the URL doesn't change
+  // so the polling above wouldn't notice the new pending stash. This
+  // listener triggers a check immediately on tab activation.
+  try {
+    chrome.runtime.onMessage.addListener(function (msg) {
+      if (msg && msg.type === 'ZHL_BOOKING_CHECK_PENDING') {
+        console.log('[ZHL Zoho Booking Paster] wake-up message received');
+        setTimeout(checkPending, 300);
+      }
+    });
+  } catch (_) {}
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {

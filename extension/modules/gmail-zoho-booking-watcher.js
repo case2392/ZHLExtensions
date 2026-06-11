@@ -282,10 +282,28 @@
           payload[COUNT_KEY] = { dayKey: today, count: count + 1 };
           payload[STORAGE_KEY] = Object.assign({}, booking, { ts: Date.now() });
           await setStorage(payload);
-          console.log('[ZHL Zoho Booking Watcher] stashed booking, opening Salesforce');
+          console.log('[ZHL Zoho Booking Watcher] stashed booking, asking SW to open-or-focus Salesforce');
           try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'zoho_booking_detected', props: { dayKey: today } }); } catch (_) {}
-          try { window.open(SALESFORCE_HOME, '_blank'); }
-          catch (_) {}
+          // Prefer reusing an existing Salesforce tab. The service worker
+          // queries chrome.tabs.query for lightning.force.com/salesforce.com
+          // tabs, focuses the most recent if found, and falls back to opening
+          // a new tab to fallbackUrl if none are open. On reuse, the SW also
+          // sends a ZHL_BOOKING_CHECK_PENDING message to that tab so the
+          // paster wakes up immediately.
+          try {
+            chrome.runtime.sendMessage(
+              { type: 'ZHL_OPEN_OR_FOCUS_SF', fallbackUrl: SALESFORCE_HOME },
+              function (resp) {
+                if (!resp || !resp.ok) {
+                  // Service worker failed — last-resort fall back to window.open.
+                  try { window.open(SALESFORCE_HOME, '_blank'); } catch (_) {}
+                }
+                console.log('[ZHL Zoho Booking Watcher] SW open-or-focus result:', resp);
+              }
+            );
+          } catch (_) {
+            try { window.open(SALESFORCE_HOME, '_blank'); } catch (__) {}
+          }
           firingInThisTab = false;
         },
         function onCancel() {
