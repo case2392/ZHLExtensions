@@ -581,10 +581,13 @@
   function ensureLoanComparisonPdfButton() {
     const generateBtn = findGeneratePdfButton();
     const existing = document.querySelector('[' + BRANDED_PDF_BUTTON_ATTR + ']');
+    // 2% Grant PDF was retired in v1.63.18 — the program has been sunset.
+    // We still clean up any stale button from older installs that the LO
+    // might be running while waiting for auto-update to propagate.
     const existingGrant = document.querySelector('[' + GRANT_PDF_BUTTON_ATTR + ']');
+    if (existingGrant) existingGrant.remove();
     if (!generateBtn) {
       if (existing) existing.remove();
-      if (existingGrant) existingGrant.remove();
       return;
     }
     const ab = findActionBarFor(generateBtn);
@@ -594,14 +597,8 @@
           makeBrandedBtn(BRANDED_PDF_BUTTON_ATTR, 'ZHL Comparison PDF', onComparisonPdfClick, ab),
           ab.anchor);
       }
-      if (!existingGrant) {
-        ab.container.insertBefore(
-          makeBrandedBtn(GRANT_PDF_BUTTON_ATTR, '2% Grant PDF', onGrantPdfClick, ab),
-          ab.anchor);
-      }
     }
     updateButtonState();
-    updateGrantButtonState();
   }
 
   // Mirror LOP's own Generate PDF disabled state (stale pricing).

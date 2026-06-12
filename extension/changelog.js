@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.18",
+    category: "improvement",
+    headline: "Removed the 2% Grant PDF button (the underlying ZHL 2% Grant program has been sunset). Intro Email now substitutes the configured insurance-agent pronouns into legacy customized templates that still contain literal 'he/she' / 'her/him' hedges — no more manual Reset required.",
+    highlights: [
+      "2% Grant PDF retired: the button next to ZHL Comparison PDF no longer injects. Eligibility logic and rendering branch can come back as a one-commit revert if the program ever returns — kept in source for now. Setup card and walkthrough copy updated to drop the Grant mention. Stale Grant buttons from older install versions are cleaned up on next render.",
+      "Pronoun fallback for legacy templates: customized intro_body_html_tmpl values saved before v1.61.3 still contain literal 'she/he' and 'her/him' hedge text — the v1.61.3 pronoun placeholders ({IA Pronoun Subject} / {IA Pronoun Object}) only get substituted if the template uses them. substituteAll now runs a second pass that maps the literal pronoun pairs onto the configured pronouns: 'she/he' or 'he/she' → subject pronoun, 'her/him' or 'him/her' → object pronoun. Capitalized variants ('She/He' at the start of a sentence) preserve the capital. Word boundaries protect the substitution from clobbering unrelated text."
+    ],
+    sections: ["loan-comparison-pdf", "sf-intro-email"]
+  },
+  {
     version: "1.63.17",
     category: "bugfix",
     headline: "Send VPA Email + Send Intro Email: fix the auto-paste fingerprint that was bailing on the plain-text URL fallback. The HTML body now actually lands every time.",

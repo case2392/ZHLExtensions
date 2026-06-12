@@ -204,7 +204,7 @@
       /\{#if Co-Borrower\}([\s\S]*?)\{\/if\}/g,
       function (_, inner) { return ctx.hasCoBorrower ? inner : ''; }
     );
-    return out
+    out = out
       .replace(/\{Greeting\}/g,                enc(ctx.greeting))
       .replace(/\{First Name\}/g,              enc(ctx.firstName))
       .replace(/\{Borrower Name\}/g,           enc(ctx.borrowerName))
@@ -226,6 +226,29 @@
       .replace(/\{Insurance Agent Email\}/g,   enc(ctx.iaEmail))
       .replace(/\{IA Pronoun Subject\}/g,      enc(ctx.iaPronounSubject))
       .replace(/\{IA Pronoun Object\}/g,       enc(ctx.iaPronounObject));
+
+    // Back-compat: legacy customized templates (saved before v1.61.3
+    // introduced the pronoun tokens) contain literal "she/he" / "her/him"
+    // hedges in the body text. Map those to the configured pronouns so
+    // the LO doesn't have to Reset their saved template just to pick up
+    // the dropdown selection. Capitalized variants are preserved when
+    // they appear at the start of a sentence.
+    function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+    const sub  = enc(ctx.iaPronounSubject || 'they');
+    const obj  = enc(ctx.iaPronounObject  || 'them');
+    const Sub  = cap(sub);
+    const Obj  = cap(obj);
+    out = out
+      .replace(/\bShe\/He\b/g,  Sub)
+      .replace(/\bHe\/She\b/g,  Sub)
+      .replace(/\bshe\/he\b/g,  sub)
+      .replace(/\bhe\/she\b/g,  sub)
+      .replace(/\bHer\/Him\b/g, Obj)
+      .replace(/\bHim\/Her\b/g, Obj)
+      .replace(/\bher\/him\b/g, obj)
+      .replace(/\bhim\/her\b/g, obj);
+
+    return out;
   }
 
   function buildContext(borrowers, settings, fields) {
