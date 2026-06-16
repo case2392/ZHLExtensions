@@ -36,6 +36,7 @@
       gleamSelector: '[data-cy="unsent-gleam"]',
       heading: 'Unsent',
       rowCbAttr:    'data-zhl-task-checkbox',
+      rowPlaceholderAttr: 'data-zhl-task-checkbox-placeholder',
       headerCbAttr: 'data-zhl-task-header-checkbox',
       buttonAttr:   'data-zhl-bulk-delete-btn',
       headerCellAttr: 'data-zhl-checkbox-th'
@@ -47,6 +48,7 @@
       gleamSelector: '[data-cy="awaiting-borrower-gleam"]',
       heading: 'Awaiting borrower',
       rowCbAttr:    'data-zhl-ab-checkbox',
+      rowPlaceholderAttr: 'data-zhl-ab-checkbox-placeholder',
       headerCbAttr: 'data-zhl-ab-header-checkbox',
       buttonAttr:   'data-zhl-ab-bulk-delete-btn',
       headerCellAttr: 'data-zhl-ab-checkbox-th'
@@ -98,15 +100,31 @@
     const rows = table.querySelectorAll('tbody tr');
     rows.forEach(function (tr) {
       if (tr.querySelector('[' + section.rowCbAttr + ']')) return;
-      if (!tr.querySelector('button[data-cy="delete-task-btn"]')) return;
+      if (tr.querySelector('[' + section.rowPlaceholderAttr + ']')) return;
       const td = document.createElement('td');
       td.style.cssText = 'width:36px;padding:8px 4px;text-align:center;';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.setAttribute(section.rowCbAttr, '1');
-      cb.style.cssText = 'cursor:pointer;';
-      cb.addEventListener('click', function (e) { e.stopPropagation(); });
-      td.appendChild(cb);
+      // If the row has a delete-task-btn, give it a real checkbox.
+      // Otherwise insert an EMPTY placeholder cell so the row still has
+      // the same column count as the header (which gained a new <th>
+      // for the bulk-select column). Without this placeholder the
+      // non-deletable rows have one fewer <td> than the header has
+      // <th>, which shifts every cell on that row one column to the
+      // left and makes the "Initial disclosures" rows look misaligned
+      // / broken — what the LO actually sees and reports.
+      const isDeletable = !!tr.querySelector('button[data-cy="delete-task-btn"]');
+      if (isDeletable) {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.setAttribute(section.rowCbAttr, '1');
+        cb.style.cssText = 'cursor:pointer;';
+        cb.addEventListener('click', function (e) { e.stopPropagation(); });
+        td.appendChild(cb);
+      } else {
+        // Mark with a different attribute so the next pass doesn't
+        // try to upgrade it to a checkbox, and so the parent fan-out
+        // for the header "select-all" toggle skips it cleanly.
+        td.setAttribute(section.rowPlaceholderAttr, '1');
+      }
       tr.insertBefore(td, tr.firstChild);
     });
   }

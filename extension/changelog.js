@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.19",
+    category: "bugfix",
+    headline: "Task Bulk Delete: new 'Initial disclosures' task rows were rendering misaligned in the Awaiting Borrower table because they don't carry a delete button, so the module was inserting the bulk-select column header but not a corresponding cell on those rows. Now adds an empty placeholder cell so every row has the same column count as the header.",
+    highlights: [
+      "Symptom: with the extension enabled, the 'Initial disclosures' task rows in the Awaiting Borrower section appear shifted one column to the left of all the other rows — Task name lines up under Toggle, Assigned-to lines up under Task name, etc. Without the extension, all rows align correctly.",
+      "Root cause: when the bulk-select column is added, the module gives every deletable row a checkbox <td>, but skipped non-deletable rows entirely. The header gained an extra <th> for the column, so deletable rows had N+1 cells and non-deletable rows had N cells — visual shift on the non-deletable ones.",
+      "The 'Initial disclosures' task type is one LOP recently added to the Awaiting Borrower table. Unlike Proof-of-X tasks, it isn't manually deletable, so it has no data-cy=\"delete-task-btn\" button. The module's old skip-rows-without-a-delete-button check was correct for the checkbox itself (we still don't add a real checkbox to a row that can't be bulk-deleted) but missed the column-count consequence.",
+      "Fix: non-deletable rows now get an empty placeholder <td> with a data-zhl-*-checkbox-placeholder attribute, so column counts match the header. The select-all toggle still only fans out to real checkbox <input>s, so non-deletable rows don't get accidentally selected."
+    ],
+    sections: ["task-bulk-delete"]
+  },
+  {
     version: "1.63.18",
     category: "improvement",
     headline: "Removed the 2% Grant PDF button (the underlying ZHL 2% Grant program has been sunset). Intro Email now substitutes the configured insurance-agent pronouns into legacy customized templates that still contain literal 'he/she' / 'her/him' hedges — no more manual Reset required.",
