@@ -1,14 +1,18 @@
 // ZHL Productivity Pack module — feature key: feature_cloneLeadPaContactId
 //
-// Salesforce Lead clone helper: when an LO clones an Unqualified Lead,
-// the new lead's PA Contact ID does NOT auto-populate. The LO has to
-// remember the value, click the pencil on the new lead, paste it, and
-// click Save — every single time, or the new lead never syncs with
-// the agent's FUB lead.
+// Salesforce clone helper: when an LO clones an Unqualified Lead — OR
+// clones an Opportunity / loan (which on ZHL's Lightning layout
+// becomes a NEW LEAD, not a new Opportunity) — the new lead's PA
+// Contact ID does NOT auto-populate. The LO has to remember the
+// value, click the pencil on the new lead, paste it, and click Save —
+// every single time, or the new lead never syncs with the agent's FUB
+// lead.
 //
 // This module:
-//   1. Watches for clicks on the Lead Clone quick action.
-//   2. Captures the source lead's PA Contact ID at click time.
+//   1. Watches for clicks on the Lead Clone or Opportunity Clone
+//      quick actions.
+//   2. Captures the source record's PA Contact ID at click time
+//      (Lead OR Opportunity).
 //   3. Augments the clone-confirmation modal with a banner explaining
 //      what's about to happen + showing the captured ID (so the LO
 //      always has it visible as a manual fallback).
@@ -96,7 +100,20 @@
     const m = location.pathname.match(/\/Lead\/([A-Za-z0-9]{15,18})\//);
     return m ? m[1] : '';
   }
+  function oppIdFromUrl() {
+    const m = location.pathname.match(/\/Opportunity\/([A-Za-z0-9]{15,18})\//);
+    return m ? m[1] : '';
+  }
   function isOnLeadPage() { return /\/lightning\/r\/Lead\//.test(location.pathname); }
+  function isOnOpportunityPage() { return /\/lightning\/r\/Opportunity\//.test(location.pathname); }
+  // Page type at capture time. Source can be Lead or Opportunity;
+  // destination is always Lead (the Opp clone action creates a new
+  // Lead, per ZHL's customized layout).
+  function currentRecordContext() {
+    if (isOnLeadPage()) return { type: 'Lead', id: leadIdFromUrl() };
+    if (isOnOpportunityPage()) return { type: 'Opportunity', id: oppIdFromUrl() };
+    return { type: '', id: '' };
+  }
 
   // ---- Read the PA Contact ID off the current lead ----------------
   // CRITICAL: Lightning Console keeps inactive workspace tabs mounted
@@ -320,18 +337,37 @@
   document.addEventListener('click', async function (e) {
     const btn = e.target && e.target.closest && e.target.closest('button');
     if (!btn) return;
+    const ctx = currentRecordContext();
+    if (!ctx.type) return; // only fire from a Lead or Opportunity page
     const name = (btn.getAttribute && btn.getAttribute('name')) || '';
     const text = (btn.textContent || '').trim();
-    const isClone = name === 'Lead.Clone' || (text === 'Clone' && btn.closest('[data-target-selection-name="sfdc:QuickAction.Lead.Clone"]'));
+    // Match either the standard Lightning clone quick action names
+    // (Lead.Clone, Opportunity.Clone) OR any "Clone"-text button
+    // whose nearest target-selection-name contains "Clone". The
+    // second form catches custom quick actions (e.g. ZHL's Opp-
+    // to-Lead clone flow). Page-context check above scopes this so
+    // we don't fire on unrelated record pages.
+    const tsnEl = btn.closest('[data-target-selection-name]');
+    const tsnVal = tsnEl ? (tsnEl.getAttribute('data-target-selection-name') || '') : '';
+    const isClone =
+      /\.Clone\b/.test(name) ||
+      (text === 'Clone' && /\bClone\b/i.test(tsnVal));
     if (!isClone) return;
-    if (!isOnLeadPage()) return;
     const id = readPaContactId();
-    const sourceLeadId = leadIdFromUrl();
-    console.log('[ZHL Clone PA] Clone clicked. Source lead:', sourceLeadId, 'PA Contact ID:', id || '(none)');
+    console.log('[ZHL Clone PA] Clone clicked. Source ' + ctx.type + ':', ctx.id, 'PA Contact ID:', id || '(none)');
     if (id) {
-      await stash({ sourceLeadId, paContactId: id, stashedAt: Date.now() });
+      // Store sourceRecordId + sourceType. Destination is always a
+      // new Lead (per ZHL's clone layout), so the auto-paste handler
+      // doesn't need to branch on source type — it just runs on the
+      // next Lead page nav.
+      await stash({
+        sourceRecordId: ctx.id,
+        sourceType: ctx.type,
+        paContactId: id,
+        stashedAt: Date.now()
+      });
     } else {
-      console.log('[ZHL Clone PA] No PA Contact ID on source lead; nothing to auto-paste.');
+      console.log('[ZHL Clone PA] No PA Contact ID on source ' + ctx.type + '; nothing to auto-paste.');
     }
     // Watch for the confirmation modal and inject the banner.
     const modal = await waitFor(findCloneConfirmModal, 4000);
@@ -345,8 +381,13 @@
     if (!pending || !pending.paContactId) return;
     const currentLeadId = leadIdFromUrl();
     if (!currentLeadId) return;
-    // Don't fire on the source lead itself.
-    if (currentLeadId === pending.sourceLeadId) return;
+    // Don't fire on the source lead itself. When source was an
+    // Opportunity, this comparison is harmless (Lead IDs start with
+    // 00Q, Opp IDs with 006 — they never collide). Falls back to
+    // the legacy sourceLeadId field so an in-flight clone from a
+    // pre-update stash still skips correctly.
+    const sourceId = pending.sourceRecordId || pending.sourceLeadId;
+    if (currentLeadId === sourceId) return;
 
     // Wait briefly for the layout to render. The PA Contact ID
     // section sits inside the details panel which can take a moment

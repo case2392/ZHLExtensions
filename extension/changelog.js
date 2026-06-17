@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.24",
+    category: "improvement",
+    headline: "Lead-clone PA Contact ID auto-paste now also fires when you clone an Opportunity (loan) — Salesforce recently started exposing the PA Contact ID field on the Opportunity layout, AND the Opp clone action on ZHL's layout creates a NEW LEAD (not a new Opp). The extension now bridges those two facts so the PA Contact ID carries from the source loan into the new lead automatically, no manual paste required.",
+    highlights: [
+      "Source-side capture: the Clone-button watcher now fires from BOTH /lightning/r/Lead/ AND /lightning/r/Opportunity/ pages. Detection broadened to match (a) any button whose name ends in '.Clone' (covers Lead.Clone, Opportunity.Clone, and any future *.Clone quick actions) and (b) any 'Clone'-text button inside a target-selection-name attribute containing 'Clone' (covers ZHL's custom Opp-to-Lead clone flow). Page-context check scopes the broad match so we never fire on unrelated record pages.",
+      "Storage shape: stash now records { sourceRecordId, sourceType: 'Lead' | 'Opportunity', paContactId, stashedAt } instead of the old sourceLeadId. The auto-paste handler reads either field (sourceRecordId OR legacy sourceLeadId) so an in-flight clone stashed by the previous version still de-dupes correctly during the rollout window.",
+      "Destination side unchanged: the auto-paste still triggers on the next Lead page navigation only. When source was an Opportunity, the source-record de-dup check is naturally harmless because Lead IDs start with 00Q and Opp IDs with 006, so they never collide.",
+      "Confirmation-modal banner unchanged — same c-clone-request injection, same 'PA Contact ID (in case the paste did not work)' fallback line, same full-width banner with the collapsed empty 3-of-12 column and inner-container auto height. Works the same on both Lead and Opportunity confirm modals because the c-clone-request component is shared."
+    ],
+    sections: ["sf-clone-pa-contact-id"]
+  },
+  {
     version: "1.63.23",
     category: "bugfix",
     headline: "Max Affordability pill, fix #3 — three concrete bugs surfaced from a DOM dump of the manually-expanded Eligibility details row. The redesigned LOP page uses TITLE CASE labels ('Monthly Income' vs the old 'Monthly income') AND <p> tags instead of <span> tags for both labels and values, AND v1.63.22's 'click 6 ancestors at once' approach was cancelling itself out. All three fixed.",
