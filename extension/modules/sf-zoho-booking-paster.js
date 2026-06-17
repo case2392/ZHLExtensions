@@ -828,25 +828,52 @@
   // AND visible together, then add a 1.5s settle buffer to let LWC
   // finish wiring up its reactive system.
   async function waitForDispositionReady() {
+    let lastMissing = null;
     const result = await waitFor(function () {
       const emailBtn = queryOnePiercing('lightning-button.button-email');
       const paNotes  = queryOnePiercing('textarea[placeholder*="PA Notes"]');
-      const saveBtn  = queryOnePiercing('button.slds-button_brand[title="Save"][c-dispositionmodal_dispositionmodal]');
-      if (!emailBtn || !paNotes || !saveBtn) return null;
+      // Save button: don't require the c-dispositionmodal_dispositionmodal
+      // LWC scoping attribute (its prefix can shift across recompiles).
+      // Look for any visible "Save" brand button inside the disposition
+      // container. findDispositionContainer() does the scoping for us.
+      let saveBtn = null;
+      const container = findDispositionContainer();
+      if (container) {
+        const candidates = container.querySelectorAll
+          ? container.querySelectorAll('button.slds-button_brand[title="Save"], button.slds-button_brand')
+          : [];
+        for (const b of candidates) {
+          const t = (b.textContent || '').trim();
+          if (t !== 'Save' && b.getAttribute('title') !== 'Save') continue;
+          const rect = b.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) continue;
+          saveBtn = b;
+          break;
+        }
+      }
+      if (!emailBtn) { lastMissing = 'lightning-button.button-email'; return null; }
+      if (!paNotes)  { lastMissing = 'PA Notes textarea';              return null; }
+      if (!saveBtn)  { lastMissing = 'disposition Save button';        return null; }
       const rE = emailBtn.getBoundingClientRect();
       const rP = paNotes.getBoundingClientRect();
-      const rS = saveBtn.getBoundingClientRect();
-      if (rE.width === 0 || rP.width === 0 || rS.width === 0) return null;
-      // Confirm the Save button isn't disabled (which would mean the
-      // form isn't fully wired yet).
-      if (saveBtn.disabled || saveBtn.getAttribute('aria-disabled') === 'true') return null;
+      if (rE.width === 0) { lastMissing = 'Email button (zero width — display:none?)'; return null; }
+      if (rP.width === 0) { lastMissing = 'PA Notes textarea (zero width)';            return null; }
+      // Deliberately NOT checking saveBtn.disabled / aria-disabled.
+      // Salesforce disables the Save button until the form has been
+      // touched — and the only way to touch it is to do our paste. The
+      // earlier version waited for Save to be enabled, which never
+      // happened on an already-loaded lead where the LO hadn't
+      // interacted yet, and the 30s timeout fired.
       return true;
-    }, 30000, 400);
-    if (!result) return false;
+    }, 15000, 400);
+    if (!result) {
+      console.warn('[ZHL Zoho Booking Paster] waitForDispositionReady timed out. Last missing element:', lastMissing);
+      return { ok: false, missing: lastMissing };
+    }
     // Settle buffer — let LWC finish hooking up internal listeners
     // before we start dispatching synthetic events.
     await wait(1500);
-    return true;
+    return { ok: true };
   }
 
   let runningInThisTab = false;
@@ -869,7 +896,9 @@
 
       updateProgress(null, 'Waiting for the disposition modal to finish loading…');
       const ready = await waitForDispositionReady();
-      if (!ready) throw new Error('Disposition modal did not finish loading within 30 seconds (Communication Type / PA Notes / Save not all present and visible).');
+      if (!ready.ok) {
+        throw new Error('Disposition modal did not finish loading within 15 seconds. Last missing element: ' + (ready.missing || 'unknown') + '. If the lead was already open in this tab, try refreshing it and re-running the booking from Gmail.');
+      }
 
       updateProgress(null, 'Opening Call Details tab…');
       await ensureCallDetailsTab();
