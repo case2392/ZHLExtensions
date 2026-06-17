@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.22",
+    category: "bugfix",
+    headline: "Max Affordability pill, take two: v1.63.21's auto-expand click missed the React handler. Now walks up multiple ancestors of the 'Eligibility details' label and fires the full pointer/mouse event sequence (pointerover→mouseover→pointerdown→mousedown→pointerup→mouseup→click) on each — same pattern that fixed the kx framework buttons in the Zoho booking paster.",
+    highlights: [
+      "Symptom on v1.63.21: section stayed collapsed and the pill never appeared. The single .click() on the inner flex was firing but React's onClick handler (which lives on a different ancestor in LOP's styled-component-nested DOM) wasn't being triggered. Plain .click() doesn't always cross the pointer-event-gated handlers some styled-component libraries install.",
+      "Fix: replaced the single .click() with a fullClickSequence() that dispatches pointerover, pointerenter, mouseover, mouseenter, pointerdown, mousedown, pointerup, mouseup, then .click() on each of the inner-most → outer-most ancestors (6 levels deep). Whichever ancestor actually owns the React onClick handler will fire correctly. Once expanded, the existing scan loop picks up the now-visible Monthly income / Credit score data on the next ~500ms tick and renders the Max Affordability pill as before."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.63.21",
     category: "bugfix",
     headline: "Max Affordability pill is back on the redesigned LOP Scenarios page. LOP changed the Eligibility header text case ('Eligibility Details' → 'Eligibility details') AND collapsed the section by default — the pill row our estimator reads from wasn't in the DOM until expanded.",

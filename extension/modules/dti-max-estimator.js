@@ -118,21 +118,47 @@
     return null;
   }
 
+  // Full pointer/mouse event sequence. LOP's styled-component
+  // collapse toggles often need the real pointer/mouse buildup —
+  // a plain .click() on the inner flex fires but React's onClick
+  // doesn't process it. Mirrors the helper used in the Zoho booking
+  // paster for the same "kx framework" pattern.
+  function fullClickSequence(el) {
+    if (!el || !el.dispatchEvent) return;
+    try {
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const base = {
+        bubbles: true, cancelable: true, composed: true, view: window,
+        button: 0, buttons: 1, clientX: x, clientY: y
+      };
+      const types = ['pointerover','pointerenter','mouseover','mouseenter','pointerdown','mousedown','pointerup','mouseup'];
+      for (const type of types) {
+        try {
+          const Ctor = type.startsWith('pointer') ? PointerEvent : MouseEvent;
+          el.dispatchEvent(new Ctor(type, base));
+        } catch (_) {}
+      }
+      el.click();
+    } catch (_) {
+      try { el.click(); } catch (__) {}
+    }
+  }
+
   function findEligibilityRow() {
     // The Eligibility Details header sits inside a labeled card. The
     // row that holds the pills (Monthly income, Credit score,
     // Liabilities, etc.) is rendered as a sibling Flex when the
     // section is expanded. In LOP's redesigned scenarios page the
     // section is COLLAPSED by default — the pill row is not in the
-    // DOM until the LO clicks the header chevron. If we don't find
-    // the pill row on the first scan, click the header once to
-    // expand it, then let the next scan find the data.
+    // DOM until the LO clicks the header chevron.
     const labelSpan = findEligibilityLabel();
     if (!labelSpan) return null;
-    // Walk a few ancestors looking for a Flex that contains both
-    // "Monthly income" and "Credit score" text — the pills row.
+    // Walk up to 8 ancestor levels from the label looking for a Flex
+    // that contains both "Monthly income" and "Credit score" text.
     let cur = labelSpan;
-    for (let depth = 0; depth < 6 && cur; depth++) {
+    for (let depth = 0; depth < 8 && cur; depth++) {
       const flexes = cur.querySelectorAll ? cur.querySelectorAll('div') : [];
       for (const f of flexes) {
         const t = (f.textContent || '');
@@ -143,24 +169,21 @@
     // Section is likely collapsed. Try to auto-expand once.
     if (!triedAutoExpand) {
       triedAutoExpand = true;
-      // The clickable area in the redesigned card is the chevron +
-      // label container. Walk up from the label looking for a
-      // role="button" or any element with cursor:pointer-ish styling.
-      // Fall back to clicking the label's nearest parent that
-      // contains an SVG (the chevron).
+      // Click candidates from inner-most to outer-most ancestor of the
+      // label. The styled-component class suffixes are generated and
+      // unreliable, so we click each candidate with the full pointer
+      // event sequence and let React's listener on whichever ancestor
+      // owns the handler do the right thing. Successive scans (every
+      // ~500 ms via the scan loop) will find the expanded pills once
+      // the click takes.
+      console.log('[ZHL DTI Max Estimator] Eligibility details section appears collapsed; auto-expanding once via full click sequence on label-ancestor chain.');
       let target = labelSpan.parentElement;
       let safety = 0;
       while (target && safety < 6) {
-        if (target.querySelector && target.querySelector('svg')) break;
+        fullClickSequence(target);
         target = target.parentElement;
         safety++;
       }
-      try {
-        if (target) {
-          console.log('[ZHL DTI Max Estimator] Eligibility details section appears collapsed; auto-expanding once.');
-          target.click();
-        }
-      } catch (_) {}
     }
     return null;
   }
