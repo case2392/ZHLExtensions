@@ -100,23 +100,67 @@
     return { row: row, income: income, liabilities: liab };
   }
 
+  // Track whether we've already tried to auto-expand the Eligibility
+  // section this page load, so we don't fight the LO if they
+  // deliberately collapsed it. Reset on URL change implicitly because
+  // the module reloads.
+  let triedAutoExpand = false;
+
+  function findEligibilityLabel() {
+    // Label text changed case in LOP's redesign: "Eligibility Details"
+    // -> "Eligibility details". Match case-insensitively to survive
+    // either spelling.
+    const spans = document.querySelectorAll('span');
+    for (const sp of spans) {
+      const txt = (sp.textContent || '').trim();
+      if (/^eligibility details$/i.test(txt)) return sp;
+    }
+    return null;
+  }
+
   function findEligibilityRow() {
-    // The Eligibility Details header sits inside a labeled card.
-    // The row that holds the pills is its sibling Flex with the
-    // dividers. Find the "Eligibility Details" label, then walk to
-    // the Flex that holds Monthly income / Credit score.
-    const labels = document.querySelectorAll('span');
-    for (const sp of labels) {
-      if ((sp.textContent || '').trim() !== 'Eligibility Details') continue;
-      // Sibling: the pills row.
-      const wrap = sp.parentElement;
-      if (!wrap) continue;
-      // The pills row is a Flex inside the same wrapper.
-      const flexes = wrap.querySelectorAll('div');
+    // The Eligibility Details header sits inside a labeled card. The
+    // row that holds the pills (Monthly income, Credit score,
+    // Liabilities, etc.) is rendered as a sibling Flex when the
+    // section is expanded. In LOP's redesigned scenarios page the
+    // section is COLLAPSED by default — the pill row is not in the
+    // DOM until the LO clicks the header chevron. If we don't find
+    // the pill row on the first scan, click the header once to
+    // expand it, then let the next scan find the data.
+    const labelSpan = findEligibilityLabel();
+    if (!labelSpan) return null;
+    // Walk a few ancestors looking for a Flex that contains both
+    // "Monthly income" and "Credit score" text — the pills row.
+    let cur = labelSpan;
+    for (let depth = 0; depth < 6 && cur; depth++) {
+      const flexes = cur.querySelectorAll ? cur.querySelectorAll('div') : [];
       for (const f of flexes) {
         const t = (f.textContent || '');
         if (/Monthly income/.test(t) && /Credit score/.test(t)) return f;
       }
+      cur = cur.parentElement;
+    }
+    // Section is likely collapsed. Try to auto-expand once.
+    if (!triedAutoExpand) {
+      triedAutoExpand = true;
+      // The clickable area in the redesigned card is the chevron +
+      // label container. Walk up from the label looking for a
+      // role="button" or any element with cursor:pointer-ish styling.
+      // Fall back to clicking the label's nearest parent that
+      // contains an SVG (the chevron).
+      let target = labelSpan.parentElement;
+      let safety = 0;
+      while (target && safety < 6) {
+        if (target.querySelector && target.querySelector('svg')) break;
+        target = target.parentElement;
+        safety++;
+      }
+      try {
+        if (target) {
+          console.log('[ZHL DTI Max Estimator] Eligibility details section appears collapsed; auto-expanding once.');
+          target.click();
+        }
+      } catch (_) {}
     }
     return null;
   }

@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.21",
+    category: "bugfix",
+    headline: "Max Affordability pill is back on the redesigned LOP Scenarios page. LOP changed the Eligibility header text case ('Eligibility Details' → 'Eligibility details') AND collapsed the section by default — the pill row our estimator reads from wasn't in the DOM until expanded.",
+    highlights: [
+      "Symptom: after LOP's Scenarios page redesign, the Max Affordability pill (the small green pill that shows the max purchase price that pushes back-end DTI to the cap for each loan program) silently stopped appearing. The Recommended Scenarios AI section and the Budget Preference panel are the new prominent surface; the Eligibility details section is collapsed by default and the Monthly income / Credit score / Liabilities pills only render when expanded.",
+      "Fix #1: case-insensitive label match. findEligibilityLabel() now matches /^eligibility details$/i so both the old 'Eligibility Details' and new 'Eligibility details' spellings work.",
+      "Fix #2: auto-expand the collapsed section once per page load. If the pill row can't be located after the label is found, the estimator clicks the chevron/header container exactly once to expand the section, then lets the next scan find the data normally. A flag prevents repeated clicking — if the LO deliberately re-collapses the section, the module respects that and won't fight them.",
+      "Diagnostic log in DevTools console when auto-expand fires, so future regressions are easier to spot."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.63.20",
     category: "bugfix",
     headline: "Zoho Booking auto-log: stops getting stuck at 'Waiting for the disposition modal to finish loading…' when the lead is already open in Salesforce. Removed the circular Save-button-must-be-enabled check, broadened the Save selector, added diagnostic logging when the wait times out.",
