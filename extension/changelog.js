@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.23",
+    category: "bugfix",
+    headline: "Max Affordability pill, fix #3 — three concrete bugs surfaced from a DOM dump of the manually-expanded Eligibility details row. The redesigned LOP page uses TITLE CASE labels ('Monthly Income' vs the old 'Monthly income') AND <p> tags instead of <span> tags for both labels and values, AND v1.63.22's 'click 6 ancestors at once' approach was cancelling itself out. All three fixed.",
+    highlights: [
+      "Bug 1 (case-sensitive walk-up): findEligibilityRow's text matcher used /Monthly income/.test(t) && /Credit score/.test(t) — case-sensitive. The redesigned eligibility row uses 'Monthly Income' / 'Credit Score' (capital I/S), so the matcher never recognised the expanded row even when the LO manually expanded it. Added /i flag.",
+      "Bug 2 (wrong cell tag): readEligibilityRow queried row.querySelectorAll('span, button'), but the new DOM uses <p> tags for both labels AND values. Even if the walk-up matched, the cell iteration would find zero label/value pairs and income/liabilities would stay NaN. Selector now accepts 'p, span, button' to support both the new in-page row (all <p>) and the older side-panel layout (<span> labels + <p> values).",
+      "Bug 3 (multi-ancestor click cancels itself): v1.63.22 fired the full pointer-event sequence on SIX label-ancestors in a tight loop. If two ancestors both respond to the click (inner toggle + an outer delegated handler), the section toggles open→closed→open→closed and lands back where it started. Now tries ONE label-ancestor per scan tick (depth 0→5). A successful expand on any tick stops further attempts because the walk-up finds the pill row and returns before we re-enter the expand block.",
+      "End result: when the LO loads the redesigned Pricing & Scenarios page with Eligibility details collapsed, the extension tries depth-0 click first tick, depth-1 next tick (~2s later via the 2-second scan timer), etc., until the right ancestor's React onClick fires. Once expanded, the existing pipeline reads income/liabilities/etc, computes Max Affordability, and renders the pill row as before."
+    ],
+    sections: ["dti-max-estimator"]
+  },
+  {
     version: "1.63.22",
     category: "bugfix",
     headline: "Max Affordability pill, take two: v1.63.21's auto-expand click missed the React handler. Now walks up multiple ancestors of the 'Eligibility details' label and fires the full pointer/mouse event sequence (pointerover→mouseover→pointerdown→mousedown→pointerup→mouseup→click) on each — same pattern that fixed the kx framework buttons in the Zoho booking paster.",

@@ -84,7 +84,11 @@
   function readEligibilityRow() {
     const row = findEligibilityRow();
     if (!row) return null;
-    const cells = row.querySelectorAll('span, button');
+    // Labels in LOP's redesigned eligibility row are <p> tags, not
+    // <span>s. The old side-panel view uses <span> labels and <p>
+    // values, so we accept either — the pair logic just walks the
+    // flat NodeList and pairs each label with the next sibling cell.
+    const cells = row.querySelectorAll('p, span, button');
     let income = NaN, liab = NaN;
     cells.forEach(function (el, idx) {
       const txt = (el.textContent || '').trim();
@@ -100,11 +104,12 @@
     return { row: row, income: income, liabilities: liab };
   }
 
-  // Track whether we've already tried to auto-expand the Eligibility
-  // section this page load, so we don't fight the LO if they
-  // deliberately collapsed it. Reset on URL change implicitly because
-  // the module reloads.
-  let triedAutoExpand = false;
+  // Auto-expand state. We try ONE label-ancestor per scan tick (not
+  // all 6 at once), so we don't accidentally toggle the section
+  // open-then-closed when multiple ancestors handle the click event
+  // (e.g. an inner toggle + an outer delegated handler). Reset
+  // implicitly per page load since the module reloads.
+  let autoExpandAttempt = 0;
 
   function findEligibilityLabel() {
     // Label text changed case in LOP's redesign: "Eligibility Details"
@@ -157,33 +162,34 @@
     if (!labelSpan) return null;
     // Walk up to 8 ancestor levels from the label looking for a Flex
     // that contains both "Monthly income" and "Credit score" text.
+    // Case-insensitive — LOP's redesign uses title case ("Monthly
+    // Income" / "Credit Score") while the old layout used sentence
+    // case. Match both.
     let cur = labelSpan;
     for (let depth = 0; depth < 8 && cur; depth++) {
       const flexes = cur.querySelectorAll ? cur.querySelectorAll('div') : [];
       for (const f of flexes) {
         const t = (f.textContent || '');
-        if (/Monthly income/.test(t) && /Credit score/.test(t)) return f;
+        if (/Monthly income/i.test(t) && /Credit score/i.test(t)) return f;
       }
       cur = cur.parentElement;
     }
-    // Section is likely collapsed. Try to auto-expand once.
-    if (!triedAutoExpand) {
-      triedAutoExpand = true;
-      // Click candidates from inner-most to outer-most ancestor of the
-      // label. The styled-component class suffixes are generated and
-      // unreliable, so we click each candidate with the full pointer
-      // event sequence and let React's listener on whichever ancestor
-      // owns the handler do the right thing. Successive scans (every
-      // ~500 ms via the scan loop) will find the expanded pills once
-      // the click takes.
-      console.log('[ZHL DTI Max Estimator] Eligibility details section appears collapsed; auto-expanding once via full click sequence on label-ancestor chain.');
+    // Section is likely collapsed. Try ONE label-ancestor per scan
+    // tick. We tried "click every ancestor at once" in v1.63.22 and
+    // it cancelled itself out — if two ancestors both respond to the
+    // click (inner toggle + a delegated handler higher up), the
+    // section toggles open→closed→open→closed and ends up back where
+    // it started. Walking one ancestor per tick lets a successful
+    // expand on one tick STOP further attempts (because the walk-up
+    // above finds the pill row and returns before we get here).
+    if (autoExpandAttempt < 6) {
       let target = labelSpan.parentElement;
-      let safety = 0;
-      while (target && safety < 6) {
+      for (let i = 0; i < autoExpandAttempt && target; i++) target = target.parentElement;
+      if (target) {
+        console.log('[ZHL DTI Max Estimator] expand attempt #' + autoExpandAttempt + ' on', target);
         fullClickSequence(target);
-        target = target.parentElement;
-        safety++;
       }
+      autoExpandAttempt++;
     }
     return null;
   }
