@@ -13,6 +13,20 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.26",
+    category: "improvement",
+    headline: "Loan Comparison PDF page 2 — monthly cost breakdown now shows every PITIA component on its own line (P&I, MI, taxes, insurance, HOA, other) by scraping the 'Payment breakdown' popup that opens when you click the Monthly P&I / PITI value on each scenario card. The prior catchall 'MI, taxes, insurance & HOA' row is kept only as a fallback for when the popup scrape can't read the components.",
+    highlights: [
+      "New scrape pipeline mirrors the existing closing-costs popup pattern: per selected scenario, click the StyledTextButton next to 'Monthly P&I / PITI' → wait for the dialog whose <h4> reads 'Payment breakdown' → pair each leaf <span> label with the next leaf <span> value (label-keyed lookup so the APR / Interest-rate header row at the top of the dialog is naturally skipped) → close the dialog → next scenario. Scraping is positional rather than class-based so LOP's styled-component class-suffix churn won't break it.",
+      "Scraped fields: firstMortgagePi, homeownersInsurance, propertyTaxes, mortgageInsurance, hoa, other, totalMonthlyPayment. Each is parsed via the same parseMoney helper used for the rest of the scrape.",
+      "Page 2 rendering: when the scrape produced ANY of P&I / taxes / insurance / MI, the breakdown table shows one row per component. P&I, property taxes, and homeowner's insurance always render (core PITIA). Mortgage insurance, HOA, and Other are hidden when 0 to avoid empty noise — so a 20%+ down conventional borrower with no HOA sees just P&I + taxes + insurance + PITIA total. The fallback two-row layout (P&I + 'MI, taxes, insurance & HOA' catchall + PITIA total) ships only when the popup scrape returned nothing.",
+      "Both PDF flows updated: onComparisonPdfClick (standard Loan Comparison) and onGrantPdfClick (2% Grant variant) now run scrapePaymentBreakdown after scrapeClosingDetail for each card. Both wrap the call in a try/catch so a single-card scrape failure degrades gracefully to the fallback row rather than aborting the whole PDF.",
+      "Defensive: scrapePaymentBreakdown closes any stale Payment-breakdown dialog before opening a new one (mirrors scrapeClosingDetail), waits up to 5s for the dialog to appear, and up to 2s for it to close — so back-to-back scenarios don't trip over a dialog that didn't dismiss in time.",
+      "Source-comment housekeeping in the page-2 derivation comment so future maintainers understand the new data flow (popup scrape, not just piti − pi math)."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.63.25",
     category: "improvement",
     headline: "Loan Comparison PDF — relabeled 'PITI' → 'PITIA' on both pages, because LOP's monthly figure already bundles HOA dues into the value. The previous 'PITI' label was technically wrong whenever the borrower had any HOA in the scenario; PITIA (Principal + Interest + Taxes + Insurance + Association dues) is the truthful name for what LOP is actually showing.",

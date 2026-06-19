@@ -434,6 +434,108 @@
     return detail;
   }
 
+  // ---- Payment-breakdown popup scraping --------------------------
+  //
+  // The "Monthly P&I / PITI" value on each scenario card is a
+  // StyledTextButton that opens a "Payment breakdown" dialog. The
+  // dialog body lays out six labeled rows that decompose PITIA:
+  //
+  //   First mortgage (P&I)
+  //   Homeowner's insurance
+  //   Property taxes
+  //   Mortgage insurance
+  //   HOA
+  //   Other
+  //   Total monthly payment   (= PITIA)
+  //
+  // Each row is a Flex div with two leaf <span> children: label,
+  // value. We pair them by label match, ignoring the APR /
+  // Interest-rate header row at the top of the dialog (those labels
+  // aren't in our map). Scraping these components lets page 2 of
+  // the comparison PDF show the truthful PITIA breakdown the
+  // borrower needs to see, instead of the prior catchall
+  // "MI, taxes, insurance & HOA" line.
+
+  const PAYMENT_BREAKDOWN_LABEL_MAP = {
+    'first mortgage (p&i)': 'firstMortgagePi',
+    "homeowner's insurance": 'homeownersInsurance',
+    'homeowners insurance': 'homeownersInsurance',
+    'property taxes': 'propertyTaxes',
+    'mortgage insurance': 'mortgageInsurance',
+    'hoa': 'hoa',
+    'other': 'other',
+    'total monthly payment': 'totalMonthlyPayment'
+  };
+
+  function findMonthlyPiPitiButton(card) {
+    const spans = card.querySelectorAll('span');
+    for (const sp of spans) {
+      if ((sp.textContent || '').replace(/\s+/g, ' ').trim() !== 'Monthly P&I / PITI') continue;
+      const row = sp.parentElement;
+      if (!row) continue;
+      const btn = row.querySelector('button');
+      if (btn) return btn;
+    }
+    return null;
+  }
+
+  function findOpenPaymentBreakdownDialog() {
+    const dialogs = document.querySelectorAll('section[role="dialog"][aria-modal="true"]');
+    for (const d of dialogs) {
+      const h = d.querySelector('h4, h3, h2');
+      if (h && /Payment breakdown/i.test(h.textContent || '')) return d;
+    }
+    return null;
+  }
+
+  function scrapePaymentBreakdownDialog(dialog) {
+    const out = {
+      firstMortgagePi: NaN,
+      homeownersInsurance: NaN,
+      propertyTaxes: NaN,
+      mortgageInsurance: NaN,
+      hoa: NaN,
+      other: NaN,
+      totalMonthlyPayment: NaN
+    };
+    if (!dialog) return out;
+    // Leaf spans only (skip wrappers that contain other spans), in
+    // document order. Class-name selectors are intentionally avoided —
+    // LOP's styled-component class suffixes churn between releases.
+    const spans = Array.from(dialog.querySelectorAll('span'))
+      .filter(function (sp) { return !sp.querySelector('span'); });
+    for (let i = 0; i < spans.length - 1; i++) {
+      const label = (spans[i].textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const key = PAYMENT_BREAKDOWN_LABEL_MAP[label];
+      if (!key) continue;
+      const val = parseMoney(spans[i + 1].textContent);
+      if (isFinite(val)) out[key] = val;
+    }
+    return out;
+  }
+
+  async function scrapePaymentBreakdown(card) {
+    const pitiBtn = findMonthlyPiPitiButton(card);
+    if (!pitiBtn) return null;
+    // Defensive: close a stale Payment-breakdown dialog if one's
+    // somehow still open from a previous click.
+    const existing = findOpenPaymentBreakdownDialog();
+    if (existing) {
+      const closeBtn = findDialogCloseButton(existing);
+      if (closeBtn) closeBtn.click();
+      await waitFor(function () { return !findOpenPaymentBreakdownDialog(); }, 1500);
+    }
+    pitiBtn.click();
+    const dialog = await waitFor(findOpenPaymentBreakdownDialog, 5000);
+    if (!dialog) return null;
+    await new Promise(function (r) { setTimeout(r, 100); });
+    const detail = scrapePaymentBreakdownDialog(dialog);
+    const closeBtn = findDialogCloseButton(dialog);
+    if (closeBtn) closeBtn.click();
+    await waitFor(function () { return !findOpenPaymentBreakdownDialog(); }, 2000);
+    return detail;
+  }
+
   function findAnyScenarios() {
     const out = [];
     document.querySelectorAll(STYLED_CARD_SELECTOR).forEach(function (card) {
@@ -777,12 +879,12 @@
 
     // ---- Page 2: per-scenario itemized cost summary --------------
     // For each scenario, render a card with: monthly cost breakdown
-    // (P&I, MI, taxes, insurance, HOA, other if available) and a
-    // closing-costs summary block. The PITIA components beyond P&I
-    // aren't broken out on the saved-scenario card, so we derive
-    // MI + taxes + insurance + HOA = PITIA - P&I and show that as a
-    // single "MI, taxes, insurance & HOA" line — labeled with the
-    // actual ingredients so it doesn't read as a vague catchall.
+    // (P&I, MI, taxes, insurance, HOA, other) and a closing-costs
+    // summary block. The PITIA components are scraped from LOP's
+    // "Payment breakdown" popup (clickable from the Monthly P&I /
+    // PITI value on the card) — see scrapePaymentBreakdown. When
+    // that scrape succeeds we render one row per component; when it
+    // fails we fall back to a derived (PITIA - P&I) catchall row.
     // Closing-costs summary shows total + seller credit + the
     // upfront cash impact.
     // FHA Upfront Mortgage Insurance Premium (UFMIP) is ALWAYS rolled
@@ -931,10 +1033,54 @@
     // page-break-inside: avoid — long itemized tables are allowed
     // to flow into a continuation page rather than triggering a
     // ghost blank page.
-    function p2Page(s, idx, total) {
+    // Monthly cost breakdown table. When the payment-breakdown popup
+    // was scraped successfully, render every component on its own line
+    // (P&I, MI, taxes, insurance, HOA, other) — hiding optional rows
+    // that are $0 to avoid clutter. When the scrape failed (popup
+    // didn't open, label match missed), fall back to the prior
+    // two-row layout derived from (PITIA - P&I).
+    function monthlyBreakdownHtml(s) {
       const pi = isFinite(s.pi) ? s.pi : NaN;
       const piti = isFinite(s.piti) ? s.piti : NaN;
-      const escrows = (isFinite(pi) && isFinite(piti)) ? Math.max(0, piti - pi) : NaN;
+      const bd = s.paymentBreakdown;
+      const haveBd = bd && (
+        isFinite(bd.firstMortgagePi) ||
+        isFinite(bd.propertyTaxes) ||
+        isFinite(bd.homeownersInsurance) ||
+        isFinite(bd.mortgageInsurance)
+      );
+      let rows = '';
+      if (haveBd) {
+        // Always show the three core PITIA components even if 0;
+        // hide MI / HOA / Other only when they're 0 (or NaN), so a
+        // borrower who isn't paying them doesn't see a confusing
+        // empty line. P&I uses the popup value when available, the
+        // card-level value otherwise.
+        const piVal = isFinite(bd.firstMortgagePi) ? bd.firstMortgagePi : pi;
+        rows += '<tr><th>Principal &amp; interest</th><td>' + fmtMoneyHtml(piVal) + '</td></tr>';
+        if (isFinite(bd.mortgageInsurance) && bd.mortgageInsurance > 0) {
+          rows += '<tr><th>Mortgage insurance</th><td>' + fmtMoneyHtml(bd.mortgageInsurance) + '</td></tr>';
+        }
+        rows += '<tr><th>Property taxes</th><td>' + fmtMoneyHtml(bd.propertyTaxes) + '</td></tr>';
+        rows += '<tr><th>Homeowner&rsquo;s insurance</th><td>' + fmtMoneyHtml(bd.homeownersInsurance) + '</td></tr>';
+        if (isFinite(bd.hoa) && bd.hoa > 0) {
+          rows += '<tr><th>HOA</th><td>' + fmtMoneyHtml(bd.hoa) + '</td></tr>';
+        }
+        if (isFinite(bd.other) && bd.other > 0) {
+          rows += '<tr><th>Other</th><td>' + fmtMoneyHtml(bd.other) + '</td></tr>';
+        }
+        const total = isFinite(bd.totalMonthlyPayment) ? bd.totalMonthlyPayment : piti;
+        rows += '<tr class="total"><th>Estimated monthly cost (PITIA)</th><td>' + fmtMoneyHtml(total) + '</td></tr>';
+      } else {
+        const escrows = (isFinite(pi) && isFinite(piti)) ? Math.max(0, piti - pi) : NaN;
+        rows += '<tr><th>Principal &amp; interest</th><td>' + fmtMoneyHtml(pi) + '</td></tr>';
+        rows += '<tr><th>MI, taxes, insurance &amp; HOA</th><td>' + fmtMoneyHtml(escrows) + '</td></tr>';
+        rows += '<tr class="total"><th>Estimated monthly cost (PITIA)</th><td>' + fmtMoneyHtml(piti) + '</td></tr>';
+      }
+      return '<table class="p2tbl">' + rows + '</table>';
+    }
+
+    function p2Page(s, idx, total) {
       const financedMip = fhaMipFor(s);
       const netClosing = (isFinite(s.closingCosts) ? s.closingCosts : 0) -
         (isFinite(s.sellerCredit) ? s.sellerCredit : 0) -
@@ -956,11 +1102,7 @@
           '<div class="p2top">' +
             '<div class="p2top-col">' +
               '<h3>Monthly cost breakdown</h3>' +
-              '<table class="p2tbl">' +
-                '<tr><th>Principal &amp; interest</th><td>' + fmtMoneyHtml(pi) + '</td></tr>' +
-                '<tr><th>MI, taxes, insurance &amp; HOA</th><td>' + fmtMoneyHtml(escrows) + '</td></tr>' +
-                '<tr class="total"><th>Estimated monthly cost (PITIA)</th><td>' + fmtMoneyHtml(piti) + '</td></tr>' +
-              '</table>' +
+              monthlyBreakdownHtml(s) +
             '</div>' +
             '<div class="p2top-col">' +
               '<h3>Cash at closing</h3>' +
@@ -1160,6 +1302,12 @@
         console.warn('[ZHL Loan Comparison PDF] closing-detail scrape failed for card', i + 1, e);
         data.closingDetail = null;
       }
+      try {
+        data.paymentBreakdown = await scrapePaymentBreakdown(cards[i]);
+      } catch (e) {
+        console.warn('[ZHL Loan Comparison PDF] payment-breakdown scrape failed for card', i + 1, e);
+        data.paymentBreakdown = null;
+      }
       scenarios.push(data);
     }
 
@@ -1198,6 +1346,8 @@
       const data = readScenario(cards[i]);
       try { data.closingDetail = await scrapeClosingDetail(cards[i]); }
       catch (e) { data.closingDetail = null; }
+      try { data.paymentBreakdown = await scrapePaymentBreakdown(cards[i]); }
+      catch (e) { data.paymentBreakdown = null; }
       scenarios.push(data);
     }
     if (btn) {
