@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.25",
+    category: "improvement",
+    headline: "Loan Comparison PDF — relabeled 'PITI' → 'PITIA' on both pages, because LOP's monthly figure already bundles HOA dues into the value. The previous 'PITI' label was technically wrong whenever the borrower had any HOA in the scenario; PITIA (Principal + Interest + Taxes + Insurance + Association dues) is the truthful name for what LOP is actually showing.",
+    highlights: [
+      "Page 1 big-row label: 'Estimated monthly cost (PITI)' → 'Estimated monthly cost (PITIA)'.",
+      "Page 2 breakdown total row: same relabel.",
+      "Page 2 catchall sub-line: was 'Taxes, insurance & escrows' (vague). Now reads 'MI, taxes, insurance & HOA' — spells out exactly what's inside the derived value (PITIA − P&I) so the borrower can match the number to the components their LO discussed.",
+      "Source-comment housekeeping: the module header, page-2 derivation comment, and styling comment all updated from PITI to PITIA. Remaining 'PITI' mentions are intentional and reference LOP's own row label 'Monthly P&I / PITI' (the scrape selector and an explanatory note about why we pull the right-hand value).",
+      "Not done in this pass: line-by-line breakdown of MI / taxes / insurance / HOA as separate sub-rows. The saved-scenario card only exposes the combined PITIA — separating the four would require scraping an additional LOP panel or popup. Ping me if you want that as a follow-up and I'll dig into the right-rail loan-details panel for the components."
+    ],
+    sections: ["loan-comparison-pdf"]
+  },
+  {
     version: "1.63.24",
     category: "improvement",
     headline: "Lead-clone PA Contact ID auto-paste now also fires when you clone an Opportunity (loan) — Salesforce recently started exposing the PA Contact ID field on the Opportunity layout, AND the Opp clone action on ZHL's layout creates a NEW LEAD (not a new Opp). The extension now bridges those two facts so the PA Contact ID carries from the source loan into the new lead automatically, no manual paste required.",

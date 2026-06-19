@@ -11,11 +11,11 @@
 //   - Drops the Credit score and DTI rows (the borrower doesn't
 //     need their qualifying credit pulled into a comparison
 //     handout)
-//   - Estimated monthly cost (PITI) and Cash (to) / from are
+//   - Estimated monthly cost (PITIA) and Cash (to) / from are
 //     rendered noticeably larger / heavier so they pop visually as
 //     the two numbers the borrower actually anchors on
 //   - Adds a Page 2 with a per-scenario itemized cost summary
-//     (every PITI component + closing-cost summary)
+//     (every PITIA component + closing-cost summary)
 //
 // Implementation: scrapes the saved-scenario cards on the
 // Scenarios sub-page, reads borrower names from the right-rail loan
@@ -733,13 +733,16 @@
     rowsHtml += spacer;
 
     // --- Costs ---
-    // Estimated monthly cost (PITI) and Cash (to)/from rendered
+    // Estimated monthly cost (PITIA) and Cash (to)/from rendered
     // bigger and bolder than every other row in the table — those
     // are the two numbers the borrower actually anchors on. Seller
     // credit gets its own line so it's not buried inside cash.
+    // Note: LOP's "Monthly P&I / PITI" row already bundles HOA dues
+    // into the right-hand number, so the truthful label is PITIA
+    // (Principal + Interest + Taxes + Insurance + Association dues).
     rowsHtml += row('Total closing costs', function (s) { return fmtMoneyHtml(s.closingCosts); });
     rowsHtml += row('Seller credit', function (s) { return fmtMoneyHtml(s.sellerCredit); });
-    rowsHtml += row('Estimated monthly cost (PITI)', function (s) { return fmtMoneyHtml(s.piti); }, { big: true });
+    rowsHtml += row('Estimated monthly cost (PITIA)', function (s) { return fmtMoneyHtml(s.piti); }, { big: true });
     if (isGrant) {
       // Grant path: show ZHL covering 2% of the loan toward the down
       // payment as a credit, then the reduced cash to close as the
@@ -775,12 +778,13 @@
     // ---- Page 2: per-scenario itemized cost summary --------------
     // For each scenario, render a card with: monthly cost breakdown
     // (P&I, MI, taxes, insurance, HOA, other if available) and a
-    // closing-costs summary block. The PITI components beyond P&I
+    // closing-costs summary block. The PITIA components beyond P&I
     // aren't broken out on the saved-scenario card, so we derive
-    // taxes + insurance + MI + HOA = PITI - P&I and show that as a
-    // single "Taxes, insurance, & escrows" line — labeled as such so
-    // it doesn't read as misleading detail. Closing-costs summary
-    // shows total + seller credit + the upfront cash impact.
+    // MI + taxes + insurance + HOA = PITIA - P&I and show that as a
+    // single "MI, taxes, insurance & HOA" line — labeled with the
+    // actual ingredients so it doesn't read as a vague catchall.
+    // Closing-costs summary shows total + seller credit + the
+    // upfront cash impact.
     // FHA Upfront Mortgage Insurance Premium (UFMIP) is ALWAYS rolled
     // into the loan amount (LOP doesn't disclose any path where it's
     // paid at closing). Total closing costs still shows it for TRID
@@ -954,8 +958,8 @@
               '<h3>Monthly cost breakdown</h3>' +
               '<table class="p2tbl">' +
                 '<tr><th>Principal &amp; interest</th><td>' + fmtMoneyHtml(pi) + '</td></tr>' +
-                '<tr><th>Taxes, insurance &amp; escrows</th><td>' + fmtMoneyHtml(escrows) + '</td></tr>' +
-                '<tr class="total"><th>Estimated monthly cost (PITI)</th><td>' + fmtMoneyHtml(piti) + '</td></tr>' +
+                '<tr><th>MI, taxes, insurance &amp; HOA</th><td>' + fmtMoneyHtml(escrows) + '</td></tr>' +
+                '<tr class="total"><th>Estimated monthly cost (PITIA)</th><td>' + fmtMoneyHtml(piti) + '</td></tr>' +
               '</table>' +
             '</div>' +
             '<div class="p2top-col">' +
@@ -1013,7 +1017,7 @@
       'table.cmp tr.head th:first-child { text-align: left; }' +
       'table.cmp td { padding: 5pt 8pt; font-size: 9.5pt; text-align: right; font-variant-numeric: tabular-nums; color: #1f2937; }' +
       'table.cmp tr:nth-child(even) th, table.cmp tr:nth-child(even) td { background: #f9fafb; }' +
-      // Big rows: estimated monthly cost (PITI) and Cash (to)/from
+      // Big rows: estimated monthly cost (PITIA) and Cash (to)/from
       'table.cmp tr.big th, table.cmp tr.big td { font-size: 13pt; font-weight: 700; color: #006aff; padding-top: 8pt; padding-bottom: 8pt; border-top: 1pt solid #006aff; border-bottom: 1pt solid #006aff; background: #f5f9ff !important; }' +
       // Spacer rows
       'table.cmp tr.spacer td { background: #ffffff !important; padding: 4pt 0; border: none; height: 6pt; }' +
