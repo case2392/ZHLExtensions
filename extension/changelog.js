@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.4",
+    category: "bugfix",
+    headline: "Appraisal Blast — the 'Immediate equity' line now only appears when there's actually positive equity. At a flat appraisal (appraised = purchase price) the email used to show 'Immediate equity $0 🎉', which read as silly. Now the equity row is omitted entirely unless the appraisal came in above the purchase price.",
+    highlights: [
+      "Celebration variant fires whenever the appraisal isn't low (equity >= 0), but the equity figure is only meaningful when it's strictly positive. Both the HTML highlight box and the plain-text body now gate the equity line on equity > 0.",
+      "HTML: at $0 equity the highlight box shows just Appraised value + Purchase price (the bottom margin on Purchase price is also dropped so the box doesn't have dead space where the equity row was).",
+      "Plain text: at $0 equity the sentence ends '...We're purchasing for $385,000. 🎉' instead of '...which means $0 in immediate equity 🎉'.",
+      "Low-value variant (appraisal below purchase) is unchanged — it still shows the Shortfall row."
+    ],
+    sections: ["gmail-appraisal-blast", "appraisal-blast"]
+  },
+  {
     version: "1.64.3",
     category: "improvement",
     headline: "Meeting Reminders — pop-up now appears smack in the middle of the screen on first show, is draggable by its header, and has an × close button in the corner that hides it until the next reminder fires. Position is remembered across renders, so once you drag it where you want, it stays there.",

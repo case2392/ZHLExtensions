@@ -302,11 +302,14 @@
         body += '\n\nThe home came back ' + conditionPhrase(data.condition) + '.';
       }
     } else {
+      // Celebration variant. Only mention immediate equity when the
+      // appraisal beat the purchase price (equity > 0); at a flat
+      // appraisal there's no equity to celebrate.
       body =
 'Hey all,\n\n' +
 'Congratulations! The appraisal on ' + data.address + ' came back at ' +
 money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
-', which means ' + money(equity) + ' in immediate equity 🎉';
+(equity > 0 ? ', which means ' + money(equity) + ' in immediate equity 🎉' : '. 🎉');
       if (data.condition) {
         body += '\n\nThe home came back ' + conditionPhrase(data.condition) + '.';
       }
@@ -382,12 +385,18 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
               'font-family: Georgia, \'Times New Roman\', serif; margin-bottom: 12px;">' +
               appraisedH + '</div>' +
             '<div style="' + labelStyle + '">Purchase price</div>' +
-            '<div style="font-size: 18px; color: #111827; font-weight: bold; margin-bottom: 12px;">' +
+            '<div style="font-size: 18px; color: #111827; font-weight: bold;' +
+              (equity > 0 ? ' margin-bottom: 12px;' : '') + '">' +
               purchaseH + '</div>' +
-            '<div style="' + labelStyle + '">Immediate equity</div>' +
-            '<div style="font-size: 22px; color: #16a34a; font-weight: bold; ' +
-              'font-family: Georgia, \'Times New Roman\', serif;">' +
-              escHtml(money(equity)) + ' 🎉</div>' +
+            // Only show the equity row when the appraisal came in ABOVE
+            // purchase price. At a flat appraisal (equity $0) the line
+            // would read "$0 🎉" which is silly, so omit it entirely.
+            (equity > 0 ? (
+              '<div style="' + labelStyle + '">Immediate equity</div>' +
+              '<div style="font-size: 22px; color: #16a34a; font-weight: bold; ' +
+                'font-family: Georgia, \'Times New Roman\', serif;">' +
+                escHtml(money(equity)) + ' 🎉</div>'
+            ) : '') +
           '</td></tr>' +
         '</table>';
       closing = '<p style="margin-top: 18px;">Reach out with any questions!</p>';
