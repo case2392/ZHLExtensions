@@ -351,8 +351,11 @@
       const row = document.createElement('div');
       row.style.cssText = 'padding:12px 14px;border-bottom:1px solid #eef0f2;';
       const inProgress = now >= d.ev.startMs && now <= (d.ev.endMs || d.ev.startMs);
-      const rel = relLabel(d.ev.startMs, now);
-      const relColor = (d.ev.startMs - now) <= 5 * 60000 ? '#b91c1c' : '#1d4ed8';
+      // All-day events get an "ALL DAY" badge instead of a countdown.
+      const rel = d.ev.allDay ? 'ALL DAY' : relLabel(d.ev.startMs, now);
+      const relColor = d.ev.allDay
+        ? '#7c3aed'
+        : ((d.ev.startMs - now) <= 5 * 60000 ? '#b91c1c' : '#1d4ed8');
 
       const meetBtn = d.ev.meet
         ? '<a href="' + escHtml(d.ev.meet) + '" target="_blank" rel="noreferrer" ' +
@@ -370,7 +373,7 @@
             '<div style="font-size:11.5px;color:#6b7280;margin-top:1px;">' + escHtml(fmtClock(d.ev.startMs)) + '</div>' +
             loc +
             '<div style="font-weight:700;color:' + relColor + ';margin-top:4px;">' +
-              (inProgress ? 'In progress' : rel) +
+              (d.ev.allDay ? 'ALL DAY' : (inProgress ? 'In progress' : rel)) +
             '</div>' +
             meetBtn +
           '</div>' +

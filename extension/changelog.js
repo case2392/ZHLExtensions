@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.5",
+    category: "improvement",
+    headline: "Meeting Reminders — fixed the core bug where week/day-view events weren't being detected (so a meeting added within the reminder window never popped). Also: all-day events now show an ALL DAY badge (anchored to 8am) instead of being ignored, the Join button now recognizes Zoom links too, and the Setup 'Show test reminder' button now fires THREE preview reminders at different intervals so you can see the full layout.",
+    highlights: [
+      "Root-cause fix for 'added a meeting within 30 min but it never popped up': in week/day view a Google Calendar event chip's aria-label carries only the time + title — NOT the date (the date is in the day-column header). The old parser REQUIRED a date in the aria-label, so every week-view event was rejected and nothing was scraped (hence the earlier '0 upcoming events loaded'). The scraper now resolves the date from the chip's nearest data-datekey ancestor (Google encodes the column date there as (year<<9)|(month<<5)|day) and searches both the aria-label AND the chip's visible text for the time. Falls back to text date parsing when there's no datekey.",
+      "All-day events (previously skipped): now produce a reminder anchored at 8:00am local on their date and render with a purple ALL DAY badge instead of an 'in X minutes' countdown. The reminder fires at your normal lead times before 8am (e.g. 7:30/7:55am with the 30,5 default).",
+      "Join button now matches Zoom as well as Google Meet — meet.google.com, *.zoom.us, and *.zoomgov.com links (corporate subdomains included, e.g. zillowgroup.zoom.us). The link is found in the chip's text, aria-label, or any <a href> inside it.",
+      "Show test reminder (Setup) now fires THREE previews at once so you can see the stacked layout: a Borrower call ~3 min out (red 'soon' styling + Google Meet Join), a Team standup ~25 min out (blue + Zoom Join), and an all-day Quarterly planning (ALL DAY badge). Dismiss all clears them.",
+      "Selector broadened to any [data-eventid] / [data-eventchip] / event-tagged role=button, and a one-line diagnostic still logs to the Calendar tab console (with samples) whenever a scrape parses zero events — set window.__zhlCalDebug = true to always log."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.4",
     category: "bugfix",
     headline: "Appraisal Blast — the 'Immediate equity' line now only appears when there's actually positive equity. At a flat appraisal (appraised = purchase price) the email used to show 'Immediate equity $0 🎉', which read as silly. Now the equity row is omitted entirely unless the appraisal came in above the purchase price.",

@@ -75,18 +75,18 @@
     });
   }
 
-  // ---- Aria-label parsing ----------------------------------------
-  // Returns { startMs, endMs, title } or null.
+  // ---- Chip parsing ----------------------------------------------
+  // Returns { startMs, endMs, title, allDay } or null.
   //
-  // Google Calendar event chips carry an aria-label that bundles the
-  // time, title, and (usually) date together. The exact wording varies
-  // by view and locale, so this parser is deliberately permissive:
-  //   - DATE is required (we will not guess a day — guessing risks
-  //     firing reminders for the wrong day). Matches "Wednesday,
-  //     July 15", "Jul 15", "July 15, 2026", "on July 15", etc.
-  //   - TIME accepts either a range ("10:15 – 11:15am", "1 to 2pm")
-  //     OR a single start time ("10:15am") in which case we assume a
-  //     30-minute duration.
+  // Key fix (v1.64.5): in WEEK/DAY view a Google Calendar event chip's
+  // aria-label usually carries only the time + title — NOT the date
+  // (the date lives in the day-column header). The previous parser
+  // required a date in the aria-label, so every week-view event was
+  // rejected and nothing got scraped. We now resolve the date from the
+  // chip's nearest `data-datekey` ancestor (Google encodes the column
+  // date there) and only fall back to text parsing when there's no
+  // datekey. We search BOTH the aria-label and the chip's visible text
+  // for the time, since the time sometimes only shows in the text.
   function to24h(h, ampm, fallbackAmPm) {
     const tag = (ampm || fallbackAmPm || '').toLowerCase();
     let H = h;
@@ -98,56 +98,119 @@
     return H;
   }
 
-  function parseAria(aria) {
-    if (!aria) return null;
-    if (/all[- ]day/i.test(aria)) return null;
+  // Google Calendar's data-datekey integer encodes the date as
+  // (year << 9) | (month << 5) | day, month 1-indexed. Some builds use
+  // (year-1970) instead of the full year, so we add 1970 back if the
+  // decoded year looks too small, and validate plausibility.
+  function decodeDateKey(dk) {
+    dk = parseInt(dk, 10);
+    if (!isFinite(dk) || dk <= 0) return null;
+    const day = dk & 31;
+    const month = (dk >> 5) & 15;     // 1-indexed
+    let year = dk >> 9;
+    if (year < 1970) year += 1970;
+    if (month < 1 || month > 12 || day < 1 || day > 31 || year < 2000 || year > 2100) return null;
+    return { year: year, month: month - 1, day: day }; // month 0-indexed for Date()
+  }
 
-    // ---- Date (required) ----
+  function findDateKeyDate(el) {
+    let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      if (cur.getAttribute) {
+        const dk = cur.getAttribute('data-datekey');
+        if (dk) { const d = decodeDateKey(dk); if (d) return d; }
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  // Month-name date from free text. Returns {year,month(0-idx),day,matched} or null.
+  function parseDateFromText(text) {
     const dRe = /(?:(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*,?\s+)?((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?/i;
-    const dm = aria.match(dRe);
+    const dm = text.match(dRe);
     if (!dm) return null;
     const month = MONTH_IDX[dm[1].toLowerCase()];
     if (month == null) return null;
     const day = +dm[2];
     let year = dm[3] ? +dm[3] : new Date().getFullYear();
-    let candidate = new Date(year, month, day);
-    const now = Date.now();
-    if (candidate.getTime() < now - 14 * 86400000) candidate = new Date(year + 1, month, day);
-    year = candidate.getFullYear();
+    let cand = new Date(year, month, day);
+    if (cand.getTime() < Date.now() - 14 * 86400000) cand = new Date(year + 1, month, day);
+    return { year: cand.getFullYear(), month: month, day: day, matched: dm[0] };
+  }
 
-    // ---- Time: try a range first, then a single start time ----
-    let startH, startM, endH, endM, matchedTime;
-    const tr = aria.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|–|—|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  // Time range or single start time from free text.
+  function parseTimeFromText(text) {
+    const tr = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|–|—|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
     if (tr) {
       const sTag = tr[3] || tr[6] || '';
       const eTag = tr[6] || '';
-      startH = to24h(+tr[1], sTag, eTag);
-      startM = +(tr[2] || 0);
-      endH   = to24h(+tr[4], eTag, sTag);
-      endM   = +(tr[5] || 0);
-      matchedTime = tr[0];
+      return { startH: to24h(+tr[1], sTag, eTag), startM: +(tr[2] || 0),
+               endH: to24h(+tr[4], eTag, sTag), endM: +(tr[5] || 0), matched: tr[0] };
+    }
+    const ts = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+    if (ts) {
+      return { startH: to24h(+ts[1], ts[3], ts[3]), startM: +(ts[2] || 0),
+               endH: null, endM: null, matched: ts[0] };
+    }
+    return null;
+  }
+
+  // Conferencing link: Google Meet OR Zoom (incl. corporate subdomains
+  // and zoomgov). Searched in the chip's text + aria + any <a href>.
+  const LINK_RE = /https?:\/\/(?:meet\.google\.com\/[a-z0-9\-]+|[a-z0-9.\-]*zoom\.us\/[^\s"'<>]+|[a-z0-9.\-]*zoomgov\.com\/[^\s"'<>]+)/i;
+  function findJoinLink(el, hay) {
+    const m = hay.match(LINK_RE);
+    if (m) return m[0];
+    const a = el.querySelector && el.querySelector('a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]');
+    if (a) return a.getAttribute('href') || '';
+    return '';
+  }
+
+  function parseChip(el) {
+    const aria = el.getAttribute('aria-label') || '';
+    const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    const hay = aria + ' • ' + text;
+    const isAllDay = /\ball[- ]day\b/i.test(hay);
+
+    // ---- Date: text first (most specific), else the datekey column ----
+    let dateInfo = parseDateFromText(aria) || parseDateFromText(text);
+    const dateMatched = dateInfo ? dateInfo.matched : '';
+    if (!dateInfo) {
+      const dk = findDateKeyDate(el);
+      if (dk) dateInfo = { year: dk.year, month: dk.month, day: dk.day, matched: '' };
+    }
+    if (!dateInfo) return null; // can't place it on a day — skip rather than guess
+
+    // ---- Time ----
+    const time = parseTimeFromText(hay);
+    let startMs, endMs, allDay = false;
+    if (time) {
+      startMs = new Date(dateInfo.year, dateInfo.month, dateInfo.day, time.startH, time.startM).getTime();
+      endMs = (time.endH == null)
+        ? startMs + 30 * 60000
+        : new Date(dateInfo.year, dateInfo.month, dateInfo.day, time.endH, time.endM).getTime();
+      if (endMs <= startMs) endMs += 86400000; // cross-midnight
+    } else if (isAllDay) {
+      // All-day event: anchor the reminder at 8:00am local on its date.
+      startMs = new Date(dateInfo.year, dateInfo.month, dateInfo.day, 8, 0).getTime();
+      endMs = startMs + 30 * 60000;
+      allDay = true;
     } else {
-      const ts = aria.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
-      if (!ts) return null;
-      startH = to24h(+ts[1], ts[3], ts[3]);
-      startM = +(ts[2] || 0);
-      endH = null; endM = null;
-      matchedTime = ts[0];
+      return null; // no time and not all-day — not a usable event chip
     }
 
-    const startMs = new Date(year, month, day, startH, startM).getTime();
-    let endMs = (endH == null)
-      ? startMs + 30 * 60000
-      : new Date(year, month, day, endH, endM).getTime();
-    if (endMs <= startMs) endMs += 86400000; // cross-midnight
-
-    // ---- Title: aria minus the matched time + date fragments ----
-    let title = aria.replace(matchedTime, ' ').replace(dm[0], ' ');
+    // ---- Title ----
+    let title = aria || text;
+    if (time && time.matched) title = title.replace(time.matched, ' ');
+    if (dateMatched) title = title.replace(dateMatched, ' ');
+    title = title.replace(/\ball[- ]day\b/i, ' ');
+    title = title.replace(LINK_RE, ' ');
     title = title.replace(/,\s*(busy|free|tentative)\b.*$/i, '');
-    title = title.replace(/\s+/g, ' ').replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, '').trim();
+    title = title.replace(/\s+/g, ' ').replace(/^[\s,;:.\-–—•]+|[\s,;:.\-–—•]+$/g, '').trim();
     if (!title) title = '(no title)';
 
-    return { startMs: startMs, endMs: endMs, title: title };
+    return { startMs: startMs, endMs: endMs, title: title, allDay: allDay };
   }
 
   // ---- Scrape pass ------------------------------------------------
@@ -159,14 +222,12 @@
     const seen = new Set();
     const out = [];
 
-    // Selectors are intentionally broad. Google Calendar event chips
-    // typically have role=button + a data-eventid (week/day view) or
-    // role=gridcell with an aria-label (month view). We also fall back
-    // to ANY element carrying both data-eventid and an aria-label, plus
-    // anything with a data-eventchip attribute, to survive markup drift.
+    // Broad selector — any element Google tags as an event chip. We read
+    // the date from a data-datekey ancestor now, so we no longer require
+    // an aria-label up front (some chips carry the info only in text).
     const chips = document.querySelectorAll(
-      '[data-eventid][aria-label], [data-eventchip][aria-label], ' +
-      '[role="button"][aria-label][jslog*="event"], ' +
+      '[data-eventid], [data-eventchip], ' +
+      '[role="button"][jslog*="event"], ' +
       '[role="gridcell"][aria-label]'
     );
 
@@ -174,15 +235,15 @@
     let considered = 0;
 
     chips.forEach(function (el) {
-      const aria = el.getAttribute('aria-label');
-      if (!aria) return;
-      // Must contain at least one clock time, otherwise it's an empty
-      // month-view grid cell ("Tuesday, July 15") — skip fast.
-      if (!/\d\s*(am|pm)/i.test(aria) && !/\d:\d{2}/.test(aria)) return;
+      const aria = el.getAttribute('aria-label') || '';
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      const hay = aria + ' • ' + text;
+      // Needs either a clock time or an all-day marker to be an event.
+      if (!/\d\s*(am|pm)/i.test(hay) && !/\d:\d{2}/.test(hay) && !/\ball[- ]day\b/i.test(hay)) return;
       considered++;
-      if (samples.length < 6) samples.push(aria);
+      if (samples.length < 6) samples.push((aria || text).slice(0, 120));
 
-      const parsed = parseAria(aria);
+      const parsed = parseChip(el);
       if (!parsed) return;
 
       const eid = el.getAttribute('data-eventid') || '';
@@ -190,25 +251,24 @@
       if (seen.has(key)) return;
       seen.add(key);
 
-      const txt = (el.textContent || '').replace(/\s+/g, ' ');
-      const meetM = txt.match(/https?:\/\/meet\.google\.com\/[a-z0-9\-]+/i);
-
       out.push({
-        uid: eid || ('aria-' + parsed.startMs + '-' + parsed.title.slice(0, 24)),
+        uid: eid || ('chip-' + parsed.startMs + '-' + parsed.title.slice(0, 24)),
         startMs: parsed.startMs,
         endMs: parsed.endMs,
         title: parsed.title,
         location: '',
-        meet: meetM ? meetM[0] : ''
+        meet: findJoinLink(el, hay),
+        allDay: !!parsed.allDay
       });
     });
 
     // Always log a one-line summary; dump samples when nothing parsed
-    // (or when debug is on) so the actual aria-label format is visible.
+    // (or when window.__zhlCalDebug is set) so the actual chip format is
+    // visible for tuning.
     if (out.length === 0 || window.__zhlCalDebug) {
       console.log('[ZHL Calendar Scraper] chips matched=' + chips.length +
-        ', with-time=' + considered + ', parsed=' + out.length +
-        (samples.length ? '\n  sample aria-labels:\n   • ' + samples.join('\n   • ') : ''));
+        ', candidates=' + considered + ', parsed=' + out.length +
+        (samples.length ? '\n  samples:\n   • ' + samples.join('\n   • ') : ''));
     }
 
     out.sort(function (a, b) { return a.startMs - b.startMs; });

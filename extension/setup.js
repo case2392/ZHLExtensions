@@ -173,14 +173,43 @@ if (calTestBtn) {
       const prev = Array.isArray(data.zhlCalEvents) ? data.zhlCalEvents : [];
       // Drop any earlier test events, then add a fresh one ~2 min out.
       const cleaned = prev.filter((e) => !(e && String(e.uid).indexOf('zhl-test') === 0));
+      // Three preview reminders at different intervals so the LO can see
+      // the stacked layout, the red "soon" coloring, a Join button, and
+      // the ALL DAY badge all at once. Start times are spread so each
+      // shows a distinct "in X minutes" (and one all-day).
       cleaned.push({
-        uid: 'zhl-test-' + now,
+        uid: 'zhl-test-a-' + now,
         _tab: 'zhl-test-preview',
-        startMs: now + 2 * 60000,
-        endMs: now + 32 * 60000,
-        title: 'Test meeting (ZHL preview)',
+        startMs: now + 3 * 60000,    // in ~3 min → red "soon"
+        endMs: now + 33 * 60000,
+        title: 'Borrower call — Test preview',
         location: '',
-        meet: ''
+        meet: 'https://meet.google.com/test-zhl-demo',
+        allDay: false
+      });
+      cleaned.push({
+        uid: 'zhl-test-b-' + now,
+        _tab: 'zhl-test-preview',
+        startMs: now + 25 * 60000,   // in ~25 min → blue
+        endMs: now + 55 * 60000,
+        title: 'Team standup — Test preview',
+        location: '',
+        meet: 'https://zillowgroup.zoom.us/j/0000000000',
+        allDay: false
+      });
+      cleaned.push({
+        uid: 'zhl-test-c-' + now,
+        _tab: 'zhl-test-preview',
+        // All-day preview: real all-day events anchor at 8am, but for the
+        // preview we put startMs near now so it isn't filtered as expired
+        // no matter when you click. The allDay flag is what drives the
+        // "ALL DAY" badge — the exact start time is irrelevant for it.
+        startMs: now + 60000,
+        endMs: now + 31 * 60000,
+        title: 'Quarterly planning (all-day) — Test preview',
+        location: '',
+        meet: '',
+        allDay: true
       });
       // Clear any prior dismiss/snooze on test instances so it re-shows.
       const dism = data.zhlCalDismissed || {};
@@ -203,8 +232,8 @@ if (calTestBtn) {
 
       if (testStatus) {
         testStatus.textContent = gmailOpen
-          ? '✓ Test reminder sent — check your Gmail tab (brought to front).'
-          : '✓ Test reminder queued — open a Gmail tab to see the pop-up.';
+          ? '✓ 3 test reminders sent — check your Gmail tab (brought to front).'
+          : '✓ 3 test reminders queued — open a Gmail tab to see the pop-up.';
         testStatus.style.color = '#16a34a';
       }
     } catch (e) {
