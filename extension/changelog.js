@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.3",
+    category: "improvement",
+    headline: "Meeting Reminders — pop-up now appears smack in the middle of the screen on first show, is draggable by its header, and has an × close button in the corner that hides it until the next reminder fires. Position is remembered across renders, so once you drag it where you want, it stays there.",
+    highlights: [
+      "Initial position: the reminder panel now opens centered (translate -50%/-50%) instead of top-right. Drag it by the blue header — clamped inside the viewport so it can't get lost off-screen — and its pixel coordinates persist to chrome.storage.local under zhlCalPanelPos. Every subsequent open uses that saved position.",
+      "Close X (top-right of the blue header, next to the title): closes the panel without dismissing or snoozing anything. The panel reappears the moment a NEW reminder enters the due list (e.g. the 5-minute follow-up after you closed the 30-minute heads-up, or a different meeting's reminder). Implemented via an in-memory closedKeysSnapshot: render() suppresses the panel while every due key is in the snapshot; the first new key clears it. Matches Outlook's close-X-on-the-popup semantics.",
+      "Drag implementation: mousemove/mouseup listeners are attached ONCE at module init (not in render), so they don't accumulate across the 15-second re-renders. The mousedown handler on the header skips drag-start when the click target is inside a button, so the X / Snooze / Dismiss buttons still work normally. First drag switches the panel from the centered transform to pixel positioning so subsequent moves track 1:1 with mouse delta.",
+      "Saved position is per-Chrome-profile (storage.local). To 're-center', click the X to close, then trigger a new reminder (e.g. the Setup test button) — actually, no, the saved position sticks. If you want a quick reset, deleting the zhlCalPanelPos key in chrome.storage will do it; happy to add a Setup button for this if you want one."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.2",
     category: "improvement",
     headline: "Meeting Reminders — added a 'Show test reminder' button in Setup (see the pop-up instantly without waiting for a real meeting), made already-open Calendar tabs get scraped automatically, and broadened the event parser to handle single-time chips plus diagnostic logging when nothing parses.",

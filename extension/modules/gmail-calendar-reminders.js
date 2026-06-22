@@ -205,6 +205,42 @@
 
   // -------- render the reminder panel ----------------------------
   let lastSignature = '';
+  // Set of due keys at the moment the LO clicked the X close button.
+  // While this is non-null, render() suppresses the panel as long as
+  // the current due set is a SUBSET of these keys. Any new key (a
+  // freshly-due reminder, a snoozed one waking up, etc.) clears the
+  // suppression so the panel reappears. In-memory only — matches the
+  // Outlook close-X semantics (close for now, reappears on next fire).
+  let closedKeysSnapshot = null;
+
+  // Drag state for the panel header. Listeners installed once at
+  // module init below so they don't accumulate across renders.
+  let drag = null;
+  document.addEventListener('mousemove', function (e) {
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    let nl = drag.panelLeft + dx;
+    let nt = drag.panelTop + dy;
+    // Clamp inside the viewport so a panel can't get lost off-screen.
+    const w = drag.panel.offsetWidth || 380;
+    const h = drag.panel.offsetHeight || 200;
+    nl = Math.max(8, Math.min(nl, window.innerWidth - w - 8));
+    nt = Math.max(8, Math.min(nt, window.innerHeight - h - 8));
+    drag.panel.style.left = nl + 'px';
+    drag.panel.style.top = nt + 'px';
+    drag.lastLeft = nl;
+    drag.lastTop = nt;
+  });
+  document.addEventListener('mouseup', function () {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    // Persist position so the panel reopens where the LO left it.
+    try {
+      setStorage({ zhlCalPanelPos: { left: d.lastLeft, top: d.lastTop } });
+    } catch (_) {}
+  });
 
   async function render() {
     const due = await computeDue();
@@ -212,7 +248,20 @@
       const ex = document.getElementById(PANEL_ID);
       if (ex) ex.remove();
       lastSignature = '';
+      closedKeysSnapshot = null; // nothing due — clear any prior X-suppression
       return;
+    }
+    // X-close suppression: if every due key was already present when
+    // the LO clicked X, keep the panel hidden. A single new key breaks
+    // the snapshot and the panel re-appears.
+    if (closedKeysSnapshot) {
+      const allSeen = due.every(function (d) { return closedKeysSnapshot.has(d.key); });
+      if (allSeen) {
+        const ex = document.getElementById(PANEL_ID);
+        if (ex) ex.remove();
+        return;
+      }
+      closedKeysSnapshot = null;
     }
     // Cheap signature so we don't rebuild the DOM every 15s tick when
     // nothing meaningful changed (which would reset the snooze dropdown
@@ -230,22 +279,70 @@
     panel = document.createElement('div');
     panel.id = PANEL_ID;
     panel.style.cssText = [
-      'position:fixed', 'top:70px', 'right:24px', 'z-index:2147483647',
+      'position:fixed', 'z-index:2147483647',
       'width:380px', 'max-width:92vw',
       'background:#ffffff', 'border:1px solid #c7ccd1', 'border-radius:10px',
       'box-shadow:0 16px 40px rgba(0,0,0,0.22)',
       'font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif',
       'color:#1f2937', 'overflow:hidden'
     ].join(';');
+    // Position: use the LO's last-dragged spot if one is saved,
+    // otherwise center the panel in the viewport on first show.
+    const posData = await getStorage(['zhlCalPanelPos']);
+    const savedPos = posData && posData.zhlCalPanelPos;
+    if (savedPos && isFinite(savedPos.left) && isFinite(savedPos.top)) {
+      panel.style.left = savedPos.left + 'px';
+      panel.style.top = savedPos.top + 'px';
+    } else {
+      // True centering via transform — switches to pixel coords on
+      // first drag (see startPanelDrag).
+      panel.style.left = '50%';
+      panel.style.top = '50%';
+      panel.style.transform = 'translate(-50%, -50%)';
+    }
 
-    // Header
+    // Header — draggable handle + close-X.
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:12px 14px;background:#1d4ed8;color:#fff;';
+    header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:12px 14px;background:#1d4ed8;color:#fff;cursor:move;user-select:none;';
     header.innerHTML =
       '<span style="font-size:16px;">🔔</span>' +
       '<span style="font-weight:700;">' + due.length + ' Reminder' + (due.length === 1 ? '' : 's') + '</span>' +
-      '<span style="margin-left:auto;font-size:11px;opacity:.85;">ZHL Meeting Reminders</span>';
+      '<span style="margin-left:auto;font-size:11px;opacity:.85;margin-right:8px;">ZHL Meeting Reminders</span>' +
+      '<button id="zhl-cal-close" title="Close (reappears on next reminder)" ' +
+        'style="background:rgba(255,255,255,0.18);color:#fff;border:none;width:22px;height:22px;border-radius:4px;cursor:pointer;font:700 14px/1 Arial,sans-serif;display:inline-flex;align-items:center;justify-content:center;">&times;</button>';
     panel.appendChild(header);
+
+    // Wire X close: snapshot the currently-due keys so we know what's
+    // "already seen" — render() suppresses the panel until a NEW key
+    // appears (i.e. a different reminder fires). Stop the click from
+    // bubbling into the drag-start handler on the header.
+    header.querySelector('#zhl-cal-close').addEventListener('mousedown', function (e) {
+      e.stopPropagation();
+    });
+    header.querySelector('#zhl-cal-close').addEventListener('click', function (e) {
+      e.stopPropagation();
+      closedKeysSnapshot = new Set(due.map(function (d) { return d.key; }));
+      try { panel.remove(); } catch (_) {}
+      lastSignature = '';
+    });
+
+    // Wire drag on the header (anywhere except inside a button).
+    header.addEventListener('mousedown', function (e) {
+      if (e.target.closest('button')) return;
+      const rect = panel.getBoundingClientRect();
+      // Switch from centered-transform to pixel coords so the move
+      // math stays simple (no transform offset to subtract).
+      panel.style.left = rect.left + 'px';
+      panel.style.top = rect.top + 'px';
+      panel.style.transform = 'none';
+      drag = {
+        panel: panel,
+        startX: e.clientX, startY: e.clientY,
+        panelLeft: rect.left, panelTop: rect.top,
+        lastLeft: rect.left, lastTop: rect.top
+      };
+      e.preventDefault();
+    });
 
     // Reminder rows
     const list = document.createElement('div');
