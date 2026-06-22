@@ -1,17 +1,32 @@
 // ZHL Productivity Pack module — feature key: feature_appraisalBlast
 //
-// When the LO opens a Reggora "Appraisal Submission Summary" email in
-// Gmail, this module injects a floating "Send to all parties" button.
+// When the LO opens a Reggora appraisal notification email in Gmail
+// (either "Appraisal Submission Summary" or "Low appraisal valuation"),
+// this module injects a floating "Send to all parties" button.
 // On click it:
 //   1. Parses the email for loan number, last name, property address,
 //      appraised value, purchase price, condition, and low-value flag.
+//      Two body formats are supported — the standard submission email
+//      with structured "Appraised value / Estimated value / Reconciliation
+//      / Report Condition / Low Value" lines, and the low-valuation
+//      email with prose "The appraisal valued the property at $X.
+//      The Purchase Price is $Y." (no condition info).
 //   2. Asks the background service worker to look up the loan in
 //      Salesforce and return every Contact Role's email.
 //   3. Buckets contacts into TO (Borrower, Co-Borrower, Buyer's Agent,
 //      Transaction Coordinator) and CC (Processor).
-//   4. Opens a Gmail compose tab pre-filled with TO / CC / Subject /
-//      Body — congratulatory wording for normal appraisals, a
-//      different message when the appraisal came in low.
+//   4. Builds BOTH a plain-text body (for Gmail's compose-URL `body=`
+//      param) AND a styled HTML body that matches the VPA email
+//      aesthetic (ZHL logo, Calibri body, Georgia ZHL-blue headings,
+//      framed highlight box with appraised / purchase / equity numbers).
+//   5. Stashes the HTML in chrome.storage.local, writes HTML+plain to
+//      the clipboard as a Ctrl+V fallback, and opens a Gmail compose
+//      tab with TO / CC / Subject pre-filled.
+//   6. On the new compose tab, the same script (loaded automatically
+//      because the content_script matches mail.google.com/*) sees
+//      the pending paste, locates the contenteditable compose body,
+//      and replaces the plain text with the formatted HTML — mirroring
+//      the VPA paste pattern.
 // Nothing sends automatically; the LO reviews and hits Send.
 
 (function () {
@@ -23,14 +38,46 @@
 
   const VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
     ? chrome.runtime.getManifest().version : '?';
-  console.log('[ZHL Appraisal Blast v' + VERSION + '] loaded');
+  console.log('[ZHL Appraisal Blast v' + VERSION + '] loaded on', location.href);
 
-  const SUBJECT_PREFIX = 'Appraisal Submission Summary';
+  // Subjects we accept. The standard submission email begins with
+  // "Appraisal Submission Summary:"; Reggora's low-value flag email
+  // begins with "Low appraisal valuation:". Both share the same
+  // "#ZG... - LastName, Address (County County)" tail in the subject
+  // so name/address parsing is unified.
+  const SUBJECT_PATTERNS = [
+    /^Appraisal Submission Summary[:\s]/i,
+    /^Low appraisal valuation[:\s]/i
+  ];
+
   const NAVY = '#1F3864', GOLD = '#BF8F00';
+  const ZHL_BLUE = '#0E35C4';
+  const ZHL_TEXT_URL = 'https://raw.githubusercontent.com/case2392/ZHLExtensions/main/ZIllow%20Home%20Loans%20Text.png';
   const ZHL_TIP = 'Built by Justin Case. Karma appreciated 💛';
+
+  // Paste handoff: identical pattern to gmail-vpa-paste.js — stash
+  // formatted HTML under a per-feature key with a TTL, then on the
+  // new compose tab the same content script finds the pending entry
+  // and paints it into the contenteditable body.
+  const PASTE_STORAGE_KEY = 'zhlAppraisalBlastPendingPaste';
+  const PASTE_TTL_MS = 10 * 60 * 1000;
 
   let panelInjected = false;
   let creditedTimeSaved = false;
+
+  // -------- helpers ----------------------------------------------
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  function money(n) {
+    if (!isFinite(n)) return '$0';
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
 
   // -------- detect the open email --------
   function openEmailSubject() {
@@ -49,9 +96,14 @@
     return bodyEl ? bodyEl.innerText : '';
   }
 
+  function subjectMatches(subj) {
+    for (const re of SUBJECT_PATTERNS) if (re.test(subj)) return true;
+    return false;
+  }
+
   function tick() {
     const subj = openEmailSubject();
-    const matches = subj.startsWith(SUBJECT_PREFIX);
+    const matches = subjectMatches(subj);
     if (matches && !panelInjected) injectPanel();
     else if (!matches && panelInjected) removePanel();
   }
@@ -104,34 +156,72 @@
   }
 
   // -------- parse the appraisal email --------
+  // Subject pattern (shared by both email variants):
+  //   "<prefix>: #ZG001234567 - LastName, 1302 W A St, Kannapolis NC 28081 (Rowan County)"
+  // Body shape varies — see comments inside.
   function parseEmail() {
     const subject = openEmailSubject();
     const body = openEmailBodyText();
 
+    // Loan number. Subject is the primary source; body provides a
+    // backup ("loan ZG..." in the submission email, "Loan Number:
+    // #ZG..." or "Loan Number: ZG..." in the low-value email).
     const loan =
       (subject.match(/#\s*(ZG\d+)/) || [])[1] ||
+      (body.match(/Loan Number:\s*#?\s*(ZG\d+)/i) || [])[1] ||
       (body.match(/loan\s+(ZG\d+)/i) || [])[1] || '';
 
+    // Last name from the subject's "#ZG... - <Last>, ..." segment.
     const ln = subject.match(/#\s*ZG\d+\s*-\s*([^,]+?),/i);
     const lastName = ln ? ln[1].trim() : '';
 
+    // Property address. Subject's tail is the primary source; both
+    // body formats can serve as a backup ("at <addr> (..." in the
+    // submission email, "Order Address: <addr> (..." in the
+    // low-value email).
     const addrMatch =
       subject.match(/#\s*ZG\d+\s*-\s*[^,]+,\s*(.+?)\s*\(/i) ||
+      body.match(/Order Address:\s*(.+?)\s*\(/i) ||
       body.match(/at\s+(.+?)\s*\(/i);
     const address = addrMatch ? addrMatch[1].trim() : '';
 
-    const num = function (re) {
-      const m = body.match(re);
-      return m ? parseFloat(m[1].replace(/,/g, '')) : 0;
-    };
-    const appraised = num(/Appraised value:\s*\$?([\d,]+(?:\.\d{2})?)/i);
-    const purchase  = num(/Estimated value:\s*\$?([\d,]+(?:\.\d{2})?)/i);
+    // Branch on email variant. The low-value email is unambiguously
+    // marked by its subject prefix; the submission email carries its
+    // own "Low Value: YES/NO" line that may also indicate a low
+    // value even when the subject is the standard prefix.
+    const isLowValueEmail = /^Low appraisal valuation/i.test(subject);
 
-    const condMatch = body.match(/Reconciliation\s*\/\s*Report\s*Condition:\s*([^\r\n]+)/i);
-    const condition = condMatch ? condMatch[1].trim() : '';
+    let appraised = 0, purchase = 0, condition = '', lowValue = 'NO';
 
-    const lowMatch = body.match(/Low\s*Value:\s*(YES|NO)/i);
-    const lowValue = lowMatch ? lowMatch[1].toUpperCase() : 'NO';
+    if (isLowValueEmail) {
+      // "The appraisal valued the property at $175000.00.
+      //  The Purchase Price is $178000.00."
+      const aMatch = body.match(/valued the property at\s*\$?([\d,]+(?:\.\d{2})?)/i);
+      appraised = aMatch ? parseFloat(aMatch[1].replace(/,/g, '')) : 0;
+      const pMatch = body.match(/Purchase\s*Price\s*is\s*\$?([\d,]+(?:\.\d{2})?)/i);
+      purchase = pMatch ? parseFloat(pMatch[1].replace(/,/g, '')) : 0;
+      condition = ''; // not present in the low-value email
+      lowValue = 'YES'; // implied by the subject prefix
+    } else {
+      // Standard submission email — structured field lines.
+      const num = function (re) {
+        const m = body.match(re);
+        return m ? parseFloat(m[1].replace(/,/g, '')) : 0;
+      };
+      appraised = num(/Appraised value:\s*\$?([\d,]+(?:\.\d{2})?)/i);
+      purchase  = num(/Estimated value:\s*\$?([\d,]+(?:\.\d{2})?)/i);
+
+      // Reggora writes "Reconciliation/Report Condition: <value>"
+      // (no spaces around the slash in the screenshots). The regex
+      // is permissive about whitespace either way. Condition can be
+      // a single token like "AsIs" or a semicolon-joined list like
+      // "SubjectToRepairs;SubjectToInspections".
+      const condMatch = body.match(/Reconciliation\s*\/\s*Report\s*Condition:\s*([^\r\n]+)/i);
+      condition = condMatch ? condMatch[1].trim() : '';
+
+      const lowMatch = body.match(/Low\s*Value:\s*(YES|NO)/i);
+      lowValue = lowMatch ? lowMatch[1].toUpperCase() : 'NO';
+    }
 
     return { loan: loan, lastName: lastName, address: address,
              appraised: appraised, purchase: purchase,
@@ -156,13 +246,40 @@
     return { to: to, cc: cc };
   }
 
-  function money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
-
+  // Map Reggora's condition codes to borrower-readable phrasing.
+  // Handles single values ("AsIs"), semicolon-joined lists
+  // ("SubjectToRepairs;SubjectToInspections"), and "Subject to ..."
+  // variants by token: repairs, inspections, completion. Falls
+  // back to the raw text if nothing matches.
   function conditionPhrase(condition) {
-    const c = (condition || '').toLowerCase().replace(/\s+/g, '');
-    if (c === 'asis' || c === 'as-is') return 'as-is, so no repairs are required';
-    if (c.indexOf('subjectto') === 0) return 'subject to repairs/completion — see the report for the required items';
-    return condition || 'see the report for details';
+    if (!condition) return '';
+    const parts = condition.split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    const flat = parts.map(function (s) { return s.toLowerCase().replace(/[\s\-]+/g, ''); });
+
+    const isAsIs = flat.some(function (n) { return n === 'asis'; });
+    const hasRepairs     = flat.some(function (n) { return n.indexOf('subjecttorepair')     >= 0; });
+    const hasInspections = flat.some(function (n) { return n.indexOf('subjecttoinspection') >= 0; });
+    const hasCompletion  = flat.some(function (n) { return n.indexOf('subjecttocompletion') >= 0; });
+    const anySubjectTo = hasRepairs || hasInspections || hasCompletion;
+
+    if (isAsIs && !anySubjectTo) {
+      return 'as-is, so no repairs are required';
+    }
+
+    if (anySubjectTo) {
+      const items = [];
+      if (hasRepairs) items.push('repairs');
+      if (hasInspections) items.push('inspections');
+      if (hasCompletion) items.push('completion');
+      let joined;
+      if (items.length === 1) joined = items[0];
+      else if (items.length === 2) joined = items.join(' and ');
+      else joined = items.slice(0, -1).join(', ') + ', and ' + items[items.length - 1];
+      return 'subject to ' + joined + ' — see the report for the required items';
+    }
+
+    // Unrecognized — keep the raw condition text.
+    return condition;
   }
 
   function buildMessage(data, contacts) {
@@ -172,25 +289,124 @@
 
     const subject = 'Appraisal Received - ' + data.lastName + ' - ' + data.address;
 
-    // No hand-typed signature — Gmail appends the LO's signature
-    // automatically when the compose window opens.
+    // Plain-text body — Gmail's compose-URL `body=` param renders this
+    // verbatim, and it's also the Ctrl+V fallback if the HTML paste
+    // never lands. Gmail appends the LO's signature automatically.
     let body;
     if (lowValue) {
       body =
 'Hey all,\n\n' +
 'The appraisal on ' + data.address + ' came back at ' + money(data.appraised) +
-' against a purchase price of ' + money(data.purchase) + '. Let\'s connect on next steps.\n\n' +
-'The home came back ' + conditionPhrase(data.condition) + '.';
+' against a purchase price of ' + money(data.purchase) + '. Let\'s connect on next steps.';
+      if (data.condition) {
+        body += '\n\nThe home came back ' + conditionPhrase(data.condition) + '.';
+      }
     } else {
       body =
 'Hey all,\n\n' +
 'Congratulations! The appraisal on ' + data.address + ' came back at ' +
 money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
-', which means ' + money(equity) + ' in immediate equity 🎉\n\n' +
-'The home came back ' + conditionPhrase(data.condition) + '.\n\n' +
-'Reach out with any questions.';
+', which means ' + money(equity) + ' in immediate equity 🎉';
+      if (data.condition) {
+        body += '\n\nThe home came back ' + conditionPhrase(data.condition) + '.';
+      }
+      body += '\n\nReach out with any questions.';
     }
     return { to: buckets.to, cc: buckets.cc, subject: subject, body: body };
+  }
+
+  // Pretty HTML body — mirrors the VPA email's visual language:
+  // ZHL logo at top, Calibri body, Georgia ZHL-blue headlines, a
+  // bordered highlight box for the dollar figures. Colors switch
+  // between celebration green (#16a34a) and amber/red warning
+  // (#D97706 / #b91c1c) for the low-value variant.
+  function buildHtmlBody(data) {
+    const equity = data.appraised - data.purchase;
+    const lowValue = data.lowValue === 'YES' || equity < 0;
+    const condPhrase = conditionPhrase(data.condition);
+
+    const wrapStyle =
+      'font-family: Calibri, Arial, sans-serif; font-size: 14.5px; ' +
+      'color: #000000; line-height: 1.5;';
+    const h1Style =
+      'color: ' + ZHL_BLUE + '; font-size: 26px; font-weight: bold; ' +
+      'margin: 0 0 14px 0; font-family: Georgia, \'Times New Roman\', serif;';
+    const labelStyle =
+      'font-size: 11px; color: #6b7280; letter-spacing: 0.6px; ' +
+      'text-transform: uppercase; margin-bottom: 2px;';
+
+    const logoTag =
+      '<img src="' + ZHL_TEXT_URL + '" alt="Zillow Home Loans" width="300" height="44" ' +
+      'style="display: block; margin: 0 0 18px 0;"/>';
+
+    const addressH = escHtml(data.address);
+    const appraisedH = escHtml(money(data.appraised));
+    const purchaseH = escHtml(money(data.purchase));
+
+    let headline, intro, highlightBox, closing;
+
+    if (lowValue) {
+      const shortfall = Math.max(0, data.purchase - data.appraised);
+      headline = '<h1 style="' + h1Style + '">Appraisal Results</h1>';
+      intro = '<p>The appraisal on <strong>' + addressH + '</strong> has come back.' +
+              ' Let&rsquo;s connect on next steps.</p>';
+      highlightBox =
+        '<table cellpadding="0" cellspacing="0" border="0" width="100%" ' +
+          'style="margin: 18px 0; border-collapse: collapse;">' +
+          '<tr><td style="background: #FEF7E0; border-left: 4px solid #D97706; padding: 16px 20px;">' +
+            '<div style="' + labelStyle + '">Appraised value</div>' +
+            '<div style="font-size: 22px; color: #D97706; font-weight: bold; ' +
+              'font-family: Georgia, \'Times New Roman\', serif; margin-bottom: 12px;">' +
+              appraisedH + '</div>' +
+            '<div style="' + labelStyle + '">Purchase price</div>' +
+            '<div style="font-size: 18px; color: #111827; font-weight: bold; margin-bottom: 12px;">' +
+              purchaseH + '</div>' +
+            (shortfall > 0 ? (
+              '<div style="' + labelStyle + '">Shortfall</div>' +
+              '<div style="font-size: 18px; color: #b91c1c; font-weight: bold;">' +
+                escHtml(money(shortfall)) + '</div>'
+            ) : '') +
+          '</td></tr>' +
+        '</table>';
+      closing = '<p style="margin-top: 18px;">I&rsquo;ll follow up shortly with options.</p>';
+    } else {
+      headline = '<h1 style="' + h1Style + '">🎉 Congratulations!</h1>';
+      intro = '<p>Great news &mdash; the appraisal on <strong>' + addressH +
+              '</strong> just came back.</p>';
+      highlightBox =
+        '<table cellpadding="0" cellspacing="0" border="0" width="100%" ' +
+          'style="margin: 18px 0; border-collapse: collapse;">' +
+          '<tr><td style="background: #F5F9FF; border-left: 4px solid ' + ZHL_BLUE + '; padding: 16px 20px;">' +
+            '<div style="' + labelStyle + '">Appraised value</div>' +
+            '<div style="font-size: 22px; color: ' + ZHL_BLUE + '; font-weight: bold; ' +
+              'font-family: Georgia, \'Times New Roman\', serif; margin-bottom: 12px;">' +
+              appraisedH + '</div>' +
+            '<div style="' + labelStyle + '">Purchase price</div>' +
+            '<div style="font-size: 18px; color: #111827; font-weight: bold; margin-bottom: 12px;">' +
+              purchaseH + '</div>' +
+            '<div style="' + labelStyle + '">Immediate equity</div>' +
+            '<div style="font-size: 22px; color: #16a34a; font-weight: bold; ' +
+              'font-family: Georgia, \'Times New Roman\', serif;">' +
+              escHtml(money(equity)) + ' 🎉</div>' +
+          '</td></tr>' +
+        '</table>';
+      closing = '<p style="margin-top: 18px;">Reach out with any questions!</p>';
+    }
+
+    const conditionPara = condPhrase
+      ? '<p>The home came back <strong>' + escHtml(condPhrase) + '</strong>.</p>'
+      : '';
+
+    return (
+      '<div data-zhl-ab-html="1" style="' + wrapStyle + '">' +
+        logoTag +
+        headline +
+        intro +
+        highlightBox +
+        conditionPara +
+        closing +
+      '</div>'
+    );
   }
 
   function openCompose(msg) {
@@ -202,6 +418,35 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
     params.set('su', msg.subject);
     params.set('body', msg.body);
     window.open('https://mail.google.com/mail/?' + params.toString(), '_blank');
+  }
+
+  // Stash + clipboard mirror of sf-vpa-email.js's stashAndClip:
+  // chrome.storage.local holds the HTML so the new compose tab can
+  // see it; the clipboard write is a Ctrl+V fallback for the rare
+  // case where the auto-paste misses (Gmail compose body never
+  // appears, extension context invalidated mid-flight, etc.).
+  function stashAndClip(html, plain) {
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.set({
+          [PASTE_STORAGE_KEY]: { html: html, plain: plain, ts: Date.now() }
+        }, function () {
+          try {
+            const data = [new ClipboardItem({
+              'text/html':  new Blob([html],  { type: 'text/html'  }),
+              'text/plain': new Blob([plain], { type: 'text/plain' })
+            })];
+            navigator.clipboard.write(data).then(resolve, function () {
+              try { navigator.clipboard.writeText(plain).then(resolve, resolve); }
+              catch (_) { resolve(); }
+            });
+          } catch (_) {
+            try { navigator.clipboard.writeText(plain).then(resolve, resolve); }
+            catch (__) { resolve(); }
+          }
+        });
+      } catch (_) { resolve(); }
+    });
   }
 
   // -------- click handler --------
@@ -223,8 +468,13 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
 
       const contacts = resp.contacts || [];
       const msg = buildMessage(data, contacts);
+      const html = buildHtmlBody(data);
+
       setStatus('Found ' + contacts.length + ' contacts; ' + msg.to.length + ' on TO, ' +
-        msg.cc.length + ' on CC. Opening draft…');
+        msg.cc.length + ' on CC. Stashing formatted body…');
+      await stashAndClip(html, msg.body);
+
+      setStatus('Opening draft…');
       openCompose(msg);
 
       // Time saved: ~6 min vs manually pulling contacts from Salesforce,
@@ -235,7 +485,9 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
         creditedTimeSaved = true;
       }
 
-      setTimeout(function () { setStatus('Draft opened. Review and send.'); }, 600);
+      setTimeout(function () {
+        setStatus('Draft opened. Formatted body will paste in automatically. (Ctrl+V fallback if needed.)');
+      }, 600);
     } catch (e) {
       setStatus('Error: ' + (e.message || String(e)));
     } finally {
@@ -253,6 +505,187 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
   obs.observe(document.body, { childList: true, subtree: true });
   setInterval(tick, 1500);
   tick();
+
+  // ============================================================
+  // Auto-paste of the formatted HTML into the Gmail compose body.
+  // This block mirrors gmail-vpa-paste.js exactly — kept inline so
+  // we don't need a separate companion content script in the
+  // manifest. The same module loads on every Gmail tab; the source
+  // tab does the stash + openCompose, and the new compose tab does
+  // the paste (it has no Reggora email so tick() never injects the
+  // panel, but the paste loop runs regardless).
+  // ============================================================
+  const POLL_MS = 100;
+  const POLL_LIMIT = 300; // ~30 s
+  let pasteRanInThisTab = false;
+
+  function findComposeBody() {
+    const all = document.querySelectorAll('div[contenteditable="true"]');
+    for (const el of all) {
+      const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+      if (aria.indexOf('message body') >= 0 ||
+          aria === 'body' ||
+          aria.indexOf('email body') >= 0 ||
+          aria.indexOf('compose body') >= 0) {
+        return el;
+      }
+    }
+    const gmailSpecific = document.querySelector(
+      'div[g_editable="true"], div.editable[contenteditable="true"]'
+    );
+    if (gmailSpecific) return gmailSpecific;
+    let largest = null;
+    let largestArea = 0;
+    for (const el of all) {
+      try {
+        const rect = el.getBoundingClientRect();
+        const area = rect.width * rect.height;
+        if (area > 8000 && area > largestArea) {
+          largestArea = area;
+          largest = el;
+        }
+      } catch (_) {}
+    }
+    return largest;
+  }
+
+  function placeCaretAtEnd(el) {
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (_) {}
+  }
+
+  function doPasteInto(target, html) {
+    try {
+      target.focus();
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (_) {}
+      let ok = false;
+      try { ok = document.execCommand('insertHTML', false, html); } catch (_) {}
+      if (!ok) {
+        try { target.innerHTML = html; ok = true; } catch (_) {}
+      }
+      try {
+        target.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertFromPaste' }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch (_) {}
+      placeCaretAtEnd(target);
+      return ok;
+    } catch (_) { return false; }
+  }
+
+  // Fingerprint: the data-zhl-ab-html marker attribute we always
+  // emit on the outer wrapper. Survives Gmail's sanitizer in
+  // testing; if Gmail ever strips it the secondary check on the
+  // Calibri font-family inside style attributes catches the paste.
+  function looksLikeFormattedPaste(target) {
+    try {
+      if (!target) return false;
+      const html = target.innerHTML || '';
+      if (html.indexOf('data-zhl-ab-html') >= 0) return true;
+      if (html.indexOf('font-family: Calibri') >= 0 ||
+          html.indexOf('font-family:Calibri') >= 0) return true;
+      return false;
+    } catch (_) { return false; }
+  }
+
+  function pasteIntoCompose(html, onSuccess, onFail) {
+    let attempts = 0;
+    let pasted = false;
+    const interval = setInterval(function () {
+      attempts++;
+      const target = findComposeBody();
+      if (target && !pasted) {
+        clearInterval(interval);
+        pasted = true;
+        const ok = doPasteInto(target, html);
+        console.log('[ZHL Appraisal Blast paste] pasted formatted body (attempt ' + attempts + ', ok=' + ok + ')');
+        // Verify a moment later in case Gmail's URL-driven plain
+        // body fill landed after our paste and overwrote it.
+        let verifyTries = 0;
+        const verifyInterval = setInterval(function () {
+          verifyTries++;
+          const stillTarget = findComposeBody();
+          if (!stillTarget) return;
+          if (looksLikeFormattedPaste(stillTarget)) {
+            clearInterval(verifyInterval);
+            if (typeof onSuccess === 'function') onSuccess();
+            return;
+          }
+          if (verifyTries <= 6) {
+            console.log('[ZHL Appraisal Blast paste] verify ' + verifyTries + ': formatted content missing — re-pasting');
+            doPasteInto(stillTarget, html);
+          } else {
+            clearInterval(verifyInterval);
+            console.warn('[ZHL Appraisal Blast paste] gave up after re-paste retries; clipboard fallback (Ctrl+V) still works');
+            if (typeof onFail === 'function') onFail();
+          }
+        }, 500);
+        return;
+      }
+      if (attempts > POLL_LIMIT) {
+        clearInterval(interval);
+        console.warn('[ZHL Appraisal Blast paste] gave up — compose body not found within ' + (POLL_LIMIT * POLL_MS / 1000) + ' s. Clipboard fallback still works (Ctrl+V).');
+        if (typeof onFail === 'function') onFail();
+      }
+    }, POLL_MS);
+  }
+
+  function extensionContextValid() {
+    try { return !!(chrome && chrome.runtime && chrome.runtime.id); }
+    catch (_) { return false; }
+  }
+
+  function checkAndPaste() {
+    if (pasteRanInThisTab) return;
+    if (!extensionContextValid()) return;
+    try {
+      chrome.storage.local.get([PASTE_STORAGE_KEY], function (data) {
+        const pending = data && data[PASTE_STORAGE_KEY];
+        if (!pending || !pending.html) return;
+        const age = Date.now() - (pending.ts || 0);
+        if (age > PASTE_TTL_MS) {
+          try { chrome.storage.local.remove([PASTE_STORAGE_KEY]); } catch (_) {}
+          return;
+        }
+        pasteRanInThisTab = true;
+        console.log('[ZHL Appraisal Blast paste] pending paste found (age=' + age + ' ms, HTML length=' + (pending.html || '').length + ' bytes), running…');
+        pasteIntoCompose(
+          pending.html,
+          function onOk() {
+            try { chrome.storage.local.remove([PASTE_STORAGE_KEY]); } catch (_) {}
+            console.log('[ZHL Appraisal Blast paste] verified formatted body in compose — storage cleared');
+          },
+          function onFail() {
+            pasteRanInThisTab = false;
+          }
+        );
+      });
+    } catch (e) {
+      console.warn('[ZHL Appraisal Blast paste] storage read failed:', e);
+    }
+  }
+
+  setTimeout(checkAndPaste, 300);
+  let lastUrl = location.href;
+  setInterval(function () {
+    if (!extensionContextValid()) return;
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      pasteRanInThisTab = false;
+      setTimeout(checkAndPaste, 300);
+    }
+  }, 500);
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {

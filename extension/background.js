@@ -1717,10 +1717,59 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
 });
 
 async function zhlAbHandleLookup(loanNumber, gmailTabId) {
-  zhlAbStatus(gmailTabId, 'Opening Salesforce in the background…');
-  const tab = await new Promise(function (resolve) {
-    chrome.tabs.create({ url: ZHL_AB_SF_HOME, active: false }, resolve);
-  });
+  zhlAbStatus(gmailTabId, 'Opening Salesforce invisibly in the background…');
+  // Open the Salesforce session in a SEPARATE minimized popup window
+  // instead of an inactive tab in the LO's current window. Reasons:
+  //  - chrome.tabs.create({ active: false }) still adds the new tab
+  //    to the LO's existing window's tab strip, so they watched
+  //    Lightning load, search, navigate to the Opp, etc., happen
+  //    live in a sibling tab. Disruptive even though it didn't take
+  //    focus.
+  //  - chrome.windows.create with state: 'minimized' + focused: false
+  //    + type: 'popup' opens a brand-new window that comes up already
+  //    minimized — no tab-strip pollution in the LO's working window,
+  //    and the window itself is collapsed to the taskbar where it's
+  //    out of sight.
+  // Lightning still renders fine in a minimized window (Chrome only
+  // throttles JS in unused tabs, not in minimized ones), so the
+  // search-and-scrape flow works the same. Falls back to the old
+  // tabs.create approach if windows.create fails (e.g. blocked by
+  // policy on managed devices).
+  let win = null;
+  try {
+    win = await new Promise(function (resolve, reject) {
+      try {
+        chrome.windows.create({
+          url: ZHL_AB_SF_HOME,
+          focused: false,
+          type: 'popup',
+          state: 'minimized',
+          width: 480,
+          height: 360
+        }, function (w) {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(w);
+        });
+      } catch (e) { reject(e); }
+    });
+  } catch (e) {
+    console.warn('[ZHL Appraisal Blast] windows.create failed, falling back to inactive tab:', e && e.message);
+  }
+
+  let tab;
+  if (win && win.tabs && win.tabs.length) {
+    tab = win.tabs[0];
+    // Re-assert minimized + unfocused immediately after open. Some
+    // platforms briefly show the window in its default state before
+    // honoring the initial state hint; this stamps it again so it
+    // settles into the taskbar quickly.
+    try { chrome.windows.update(win.id, { state: 'minimized', focused: false }); } catch (_) {}
+  } else {
+    tab = await new Promise(function (resolve) {
+      chrome.tabs.create({ url: ZHL_AB_SF_HOME, active: false }, resolve);
+    });
+  }
+
   try {
     await zhlAbWaitForLoad(tab.id);
     await zhlAbDelay(1500); // let Lightning finish rendering
@@ -1734,6 +1783,11 @@ async function zhlAbHandleLookup(loanNumber, gmailTabId) {
 
     zhlAbStatus(gmailTabId, 'Opening the loan record…');
     await chrome.tabs.update(tab.id, { url: resultUrl });
+    // Re-assert minimized after the URL change in case Lightning's
+    // navigation triggered a window-state reset on any platform.
+    if (win) {
+      try { chrome.windows.update(win.id, { state: 'minimized', focused: false }); } catch (_) {}
+    }
     await zhlAbWaitForLoad(tab.id);
     await zhlAbDelay(2000);
 
@@ -1743,7 +1797,13 @@ async function zhlAbHandleLookup(loanNumber, gmailTabId) {
     if (!r2.ok) throw new Error(r2.error || 'Failed to read contacts');
     return r2.contacts || [];
   } finally {
-    try { chrome.tabs.remove(tab.id); } catch (e) {}
+    // Tear down: prefer closing the WHOLE popup window we opened so
+    // there's no lingering minimized taskbar entry. Fall back to a
+    // tab close if we opened in a tab (the fallback branch above).
+    try {
+      if (win) chrome.windows.remove(win.id);
+      else chrome.tabs.remove(tab.id);
+    } catch (e) {}
   }
 }
 

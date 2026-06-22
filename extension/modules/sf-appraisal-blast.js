@@ -205,35 +205,60 @@
     viewAll.click();
 
     progress('Reading the contact list…');
+    // Resolve column indices from the header row instead of guessing.
+    // The Contact Roles related-list table has six columns:
+    //   Item Number | Contact Name | Role | Phone | Email | Action
+    // The header <th>s carry aria-label="Contact Name" / "Role" /
+    // "Phone" / "Email" — we map those to column indices and then
+    // pull the matching cell out of each body row. Previous version
+    // used a positional fallback that scanned cells[1..3] looking
+    // for text without digits/@, which incorrectly matched the
+    // Contact Name cell (e.g. "James Hanny") AS the role on every
+    // row, leaving every contact unbucketable.
     const contacts = await waitFor(function () {
-      const emailLinks = document.querySelectorAll('a.emailuiFormattedEmail, a[href^="mailto:"]');
-      if (emailLinks.length === 0) return null;
-      const seen = new Set();
-      const out = [];
-      emailLinks.forEach(function (a) {
-        const row = a.closest('tr') || a.closest('[role="row"]');
-        if (!row) return;
-        let role = '';
-        const labeled = row.querySelector('[data-label="Role"]');
-        if (labeled) role = (labeled.textContent || '').trim();
-        if (!role) {
-          const cells = row.querySelectorAll('td, th, [role="gridcell"]');
-          // contact name | role | phone | email — role is index 1 or 2 depending on layout
-          for (let i = 1; i < Math.min(cells.length, 4); i++) {
-            const t = (cells[i].textContent || '').trim();
-            if (t && !/^\+?\d/.test(t) && !/@/.test(t)) { role = t; break; }
-          }
-        }
-        const emailText = (a.textContent || '').trim();
-        const emailFromHref = (a.getAttribute('href') || '').replace(/^mailto:/i, '');
-        const email = (emailText || emailFromHref).trim();
-        const key = email.toLowerCase();
-        if (email && !seen.has(key)) {
-          seen.add(key);
-          out.push({ role: role, email: email });
-        }
+      const grid = document.querySelector('table[role="grid"], table.uiVirtualDataTable');
+      if (!grid) return null;
+      const headerCells = grid.querySelectorAll('thead th');
+      if (!headerCells.length) return null;
+      let roleIdx = -1, emailIdx = -1;
+      headerCells.forEach(function (th, i) {
+        const lbl = (th.getAttribute('aria-label') || th.getAttribute('title') || '').trim();
+        if (lbl === 'Role') roleIdx = i;
+        if (lbl === 'Email') emailIdx = i;
       });
-      // Require at least one named role to consider the table fully loaded.
+      if (roleIdx < 0) return null;
+
+      const rows = grid.querySelectorAll('tbody tr');
+      if (!rows.length) return null;
+      const out = [];
+      const seen = new Set();
+      rows.forEach(function (row) {
+        const cells = row.querySelectorAll(':scope > td, :scope > th');
+        if (cells.length <= roleIdx) return;
+        const roleCell = cells[roleIdx];
+        const role = (roleCell.textContent || '').replace(/\s+/g, ' ').trim();
+        // Email anchor lives inside the email column when emailIdx is
+        // known, otherwise fall back to scanning the whole row.
+        let emailAnchor = null;
+        if (emailIdx >= 0 && cells[emailIdx]) {
+          emailAnchor = cells[emailIdx].querySelector('a.emailuiFormattedEmail, a[href^="mailto:"]');
+        }
+        if (!emailAnchor) {
+          emailAnchor = row.querySelector('a.emailuiFormattedEmail, a[href^="mailto:"]');
+        }
+        if (!emailAnchor) return;
+        const emailText = (emailAnchor.textContent || '').trim();
+        const emailHref = (emailAnchor.getAttribute('href') || '').replace(/^mailto:/i, '').trim();
+        const email = (emailText || emailHref).trim();
+        if (!email) return;
+        const key = email.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({ role: role, email: email });
+      });
+      // Require at least one row with a non-empty role before
+      // considering the table fully loaded — covers the case where
+      // the grid mounts before the cell contents finish rendering.
       return out.length && out.some(function (x) { return x.role; }) ? out : null;
     }, 30000);
 
