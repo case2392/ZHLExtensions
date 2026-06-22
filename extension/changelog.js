@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.29",
+    category: "bugfix",
+    headline: "Appraisal Blast — loan number was getting typed correctly but Salesforce never actually submitted the search. Synthetic KeyboardEvent('Enter') is not isTrusted, so Lightning's submit handler ignores it — the dropdown opens but never navigates to the results page, and the script timed out waiting for an Opportunity link that never appeared. Now drives the dropdown manually: either grabs a direct Opportunity match if LOP inlined it, or clicks the 'Show more results for <loan#>' link (always present when anything matches) to reach the full search results page.",
+    highlights: [
+      "Bug: after the native value setter + 'input' event populates the dropdown, the script dispatched a synthetic KeyboardEvent for Enter on the search input. Chrome marks programmatically-dispatched events as isTrusted=false, and Salesforce's search submit handler (a delegated Lightning listener) only fires on isTrusted=true. Result: the loan number sat in the input box, the dropdown showed 'Show more results for ZG...', and our 25s wait-for-Opportunity-link timed out.",
+      "Fix: replace the synthetic Enter dispatch with manual dropdown navigation. After typing + 600ms wait for the dropdown to populate, race two paths: (a) any visible Opportunity-href anchor (LOP sometimes inlines the top hit as a direct dropdown option — grab it without clicking, saves a navigation) OR (b) any clickable element whose text starts with 'Show more results for' and contains the loan number — click it, which is what an LO would do manually, and which Lightning DOES respond to because the click event is on a real anchor/button with a real onClick handler (no isTrusted gate).",
+      "Fallback: if neither a direct match nor the Show-more-results link appears within 8s, fall back to the original synthetic Enter dispatch + 25s wait. So a future LOP redesign that hides the dropdown link won't immediately break the feature.",
+      "Both branches funnel into the same final step (waitFor an Opportunity-href anchor anywhere on screen) so the downstream URL-normalization and navigation logic in background.js stays unchanged.",
+      "Source comment expanded to document the isTrusted constraint so a future maintainer doesn't reintroduce the synthetic Enter approach."
+    ],
+    sections: ["sf-appraisal-blast"]
+  },
+  {
     version: "1.63.28",
     category: "bugfix",
     headline: "Appraisal Blast — loan number was being typed into the WRONG Salesforce input. The header has two inputs next to each other (a left 'Search: All' object-type combobox + the right global search input), and the v1.63.27 selector was grabbing the LEFT combobox because it appeared first in DOM order and matched the broad 'input.slds-input, input[type=\"search\"], input[role=\"combobox\"]' selector. Now requires type=\"search\" AND skips role=\"combobox\" so we always land on the right input.",

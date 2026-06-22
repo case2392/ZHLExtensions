@@ -116,26 +116,70 @@
     }, 8000);
 
     progress('Searching for ' + loanNumber + '…');
-    // Native setter so React/Aura registers the change
+    // Native setter so React/Aura registers the change.
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     setter.call(input, loanNumber);
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    await sleep(400);
-    const evtInit = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true };
-    input.dispatchEvent(new KeyboardEvent('keydown', evtInit));
-    input.dispatchEvent(new KeyboardEvent('keypress', evtInit));
-    input.dispatchEvent(new KeyboardEvent('keyup', evtInit));
+    await sleep(600); // let the dropdown populate
 
-    progress('Waiting for search results…');
-    const link = await waitFor(function () {
+    // Submit the search. Synthetic KeyboardEvent('Enter') is NOT
+    // trusted by Salesforce's submit handler — typing the loan
+    // number opens the dropdown but Enter never fires the full
+    // search, so the script used to time out waiting for an
+    // Opportunity link that never appeared. Drive the dropdown
+    // manually instead:
+    //   1. If a direct Opportunity match link appears in the
+    //      dropdown (LOP sometimes inlines the top hit), grab
+    //      its href without clicking — saves a navigation.
+    //   2. Otherwise click the "Show more results for <query>"
+    //      link, which always exists when anything matches and
+    //      takes us to the full search results page.
+    //   3. Fallback: synthetic Enter dispatch (in case LOP ever
+    //      drops the Show-more-results link entirely).
+    function findOppLinkAnywhere() {
       const links = document.querySelectorAll('a[data-refid="recordId"], a.outputLookupLink');
       for (const a of links) {
         const href = a.getAttribute('href') || '';
-        // Opportunity record IDs start with 006.
         if (/\/lightning\/r\/(?:Opportunity\/)?006[A-Za-z0-9]{12,16}/.test(href)) return a;
       }
       return null;
-    }, 25000);
+    }
+
+    const submitTarget = await waitFor(function () {
+      // 1. Direct Opportunity match somewhere on screen.
+      const direct = findOppLinkAnywhere();
+      if (direct) return { kind: 'direct', el: direct };
+      // 2. "Show more results for <loanNumber>" link.
+      const candidates = document.querySelectorAll('a, button, [role="option"]');
+      for (const el of candidates) {
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (/^Show more results for\b/i.test(t) && t.indexOf(loanNumber) !== -1) {
+          return { kind: 'more', el: el.closest('a, button, [role="option"]') || el };
+        }
+      }
+      return null;
+    }, 8000).catch(function () { return null; });
+
+    let link = null;
+    if (submitTarget && submitTarget.kind === 'direct') {
+      progress('Loan found in search suggestions.');
+      link = submitTarget.el;
+    } else if (submitTarget && submitTarget.kind === 'more') {
+      progress('Opening full search results…');
+      submitTarget.el.click();
+      progress('Waiting for search results page…');
+      link = await waitFor(findOppLinkAnywhere, 25000);
+    } else {
+      // Last-resort fallback if neither a direct match nor the
+      // Show-more-results link appears within 8s.
+      progress('Pressing Enter (fallback)…');
+      const evtInit = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true };
+      input.dispatchEvent(new KeyboardEvent('keydown', evtInit));
+      input.dispatchEvent(new KeyboardEvent('keypress', evtInit));
+      input.dispatchEvent(new KeyboardEvent('keyup', evtInit));
+      progress('Waiting for search results…');
+      link = await waitFor(findOppLinkAnywhere, 25000);
+    }
 
     let href = link.getAttribute('href');
     if (href.startsWith('/')) href = location.origin + href;
