@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.8",
+    category: "improvement",
+    headline: "Meeting Reminders — now reads the Google Calendar side-panel inside Gmail (and the Schedule/agenda view), so events show up and fire reminders even when you're using the little calendar panel rather than a full Calendar tab. Events already inside your reminder window when the calendar loads now pop right away.",
+    highlights: [
+      "Side-panel / iframe support: the Gmail Calendar side panel loads calendar.google.com in an IFRAME, and the scraper content script only ran in top-level Calendar tabs — so it never saw those events. The scraper now runs in all frames (manifest all_frames: true), and the background's inject-into-open-tabs step now injects into all frames too. That covers the embedded side-panel calendar as well as standalone Calendar tabs.",
+      "Agenda / Schedule view date fallback: in the agenda layout the event chip has no data-datekey — the date lives in a day-header row ('Mon, Jun 22'). Date resolution now has three tiers: (1) a date in the chip's own aria-label/text, (2) the data-datekey on a column ancestor (week/day view), (3) the nearest preceding day-header date (agenda view + side panel). So chips that only show a time still get placed on the right day.",
+      "De-dup across frames: because the scraper can now run in both a full Calendar tab and the side-panel iframe at once, the merged event store is de-duplicated by uid+start time so the same meeting can't produce two reminder cards.",
+      "Net effect for your screenshot: with the side panel open showing meetings 10 and 20 minutes out and a 30-minute lead time, both now scrape and pop immediately. (Reminders still display in Gmail — keep a Gmail tab open. If it still shows nothing, open the Calendar surface's console, set window.__zhlCalDebug = true, and share the '[ZHL Calendar Scraper]' line.)"
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.7",
     category: "bugfix",
     headline: "Meeting Reminders — dismissing one of the test-preview reminders no longer closes the whole pop-up. It now removes only the reminder you clicked, leaving the others showing.",

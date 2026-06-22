@@ -139,6 +139,32 @@
     return { year: cand.getFullYear(), month: month, day: day, matched: dm[0] };
   }
 
+  // Agenda / Schedule view fallback: events there are grouped under a
+  // day-header row ("Mon, Jun 22" / "Tuesday, June 23") with no
+  // data-datekey on the chip. Walk backward through previous siblings
+  // (and up the tree) to the nearest element whose text parses as a
+  // date header. Bounded so it can't run away on a huge DOM.
+  function findAgendaHeaderDate(el) {
+    let node = el;
+    for (let hops = 0; hops < 60 && node; hops++) {
+      let sib = node.previousElementSibling;
+      let scanned = 0;
+      while (sib && scanned < 40) {
+        // Use the element's OWN short text (headers are short); skip
+        // big containers so we don't accidentally read an event's text.
+        const txt = (sib.textContent || '').trim();
+        if (txt && txt.length <= 40) {
+          const d = parseDateFromText(txt);
+          if (d) return d;
+        }
+        sib = sib.previousElementSibling;
+        scanned++;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
   // Time range or single start time from free text.
   function parseTimeFromText(text) {
     const tr = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|–|—|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
@@ -211,12 +237,20 @@
     const hay = aria + ' • ' + text;
     const isAllDay = /\ball[- ]day\b/i.test(hay);
 
-    // ---- Date: text first (most specific), else the datekey column ----
+    // ---- Date resolution, in priority order:
+    //   1. a date inside the chip's own aria-label / text
+    //   2. the data-datekey on a column ancestor (week/day view)
+    //   3. the nearest agenda/schedule day-header date (Schedule view
+    //      and the Gmail Calendar side panel)
     let dateInfo = parseDateFromText(aria) || parseDateFromText(text);
     const dateMatched = dateInfo ? dateInfo.matched : '';
     if (!dateInfo) {
       const dk = findDateKeyDate(el);
       if (dk) dateInfo = { year: dk.year, month: dk.month, day: dk.day, matched: '' };
+    }
+    if (!dateInfo) {
+      const hd = findAgendaHeaderDate(el);
+      if (hd) dateInfo = hd;
     }
     if (!dateInfo) return null; // can't place it on a day — skip rather than guess
 
@@ -329,7 +363,18 @@
     // Drop anything more than 1h past its start time — saves the
     // Gmail-side renderer from filtering stale events.
     const now = Date.now();
-    const live = merged.filter(function (e) { return isFinite(e.startMs) && (e.startMs + 60 * 60000) > now; });
+    const filtered = merged.filter(function (e) { return isFinite(e.startMs) && (e.startMs + 60 * 60000) > now; });
+    // Dedup by uid|startMs so the SAME event seen in two frames (e.g.
+    // a full Calendar tab AND the Gmail side-panel iframe, both running
+    // the scraper via all_frames) doesn't produce duplicate reminders.
+    const live = [];
+    const seenKeys = {};
+    filtered.forEach(function (e) {
+      const k = (e.uid || '') + '|' + e.startMs;
+      if (seenKeys[k]) return;
+      seenKeys[k] = true;
+      live.push(e);
+    });
     live.sort(function (a, b) { return a.startMs - b.startMs; });
 
     await setStorage({

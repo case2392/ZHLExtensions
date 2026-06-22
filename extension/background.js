@@ -279,7 +279,7 @@ function zhlCalInjectOpenTabs() {
           if (!t.id) return;
           try {
             chrome.scripting.executeScript(
-              { target: { tabId: t.id }, files: ["modules/calendar-events-scraper.js"] },
+              { target: { tabId: t.id, allFrames: true }, files: ["modules/calendar-events-scraper.js"] },
               () => { const _ = chrome.runtime.lastError; /* ignore "cannot access" on locked tabs */ }
             );
           } catch (_) {}
