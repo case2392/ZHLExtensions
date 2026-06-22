@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.35",
+    category: "bugfix",
+    headline: "Walkthrough — Appraisal Blast now sorts to the TOP of the '✨ New features' section instead of the bottom. The section auto-sorts cards by the newest changelog version whose `sections` array references the card's HTML id, but the Appraisal Blast changelog entries used module filenames (gmail-appraisal-blast / sf-appraisal-blast / appraisal-blast-background) as section ids, none of which matched the card's id (appraisal-blast). With no matching changelog entry the card was treated as having no recency and fell to the bottom in DOM order.",
+    highlights: [
+      "walkthrough.js's populateNewFeatures() computes each card's recency via newestVersionFor(cardId), which scans changelog.js newest-first for the first entry whose `sections` array contains the card id. The convention is that the section id equals the card's HTML id (e.g. card id='pricing-exception-workflow' ↔ sections:['pricing-exception-workflow']).",
+      "The Appraisal Blast card has id='appraisal-blast', but its changelog entries listed sections like ['gmail-appraisal-blast','sf-appraisal-blast'] — the underlying module filenames, not the card id. So newestVersionFor('appraisal-blast') returned null and the card sorted to the bottom.",
+      "Fix: added 'appraisal-blast' to the sections arrays of the Appraisal Blast changelog entries (v1.63.27, .30, .33, .34). The newest of those (v1.63.34) is now the highest changelog version referencing the card, so it sorts above every other is-new card. Left the original module-filename section ids in place too — they're still accurate references to the underlying files.",
+      "No walkthrough.html or walkthrough.js change needed — the sort logic was already correct, it just had nothing to match against."
+    ],
+    sections: ["walkthrough", "appraisal-blast"]
+  },
+  {
     version: "1.63.34",
     category: "bugfix",
     headline: "Walkthrough — Appraisal Blast now appears in the '✨ New features' section at the top of the walkthrough page. Was missing the `is-new` class on the feature div, so walkthrough.js's auto-clone (which copies every .feature.is-new card into the top section) skipped it.",
@@ -20,7 +32,7 @@ window.ZHL_CHANGELOG = [
       "extension/walkthrough.html: added the `is-new` class to the Appraisal Blast feature div (line 1148: `<div class=\"feature\" id=\"appraisal-blast\">` → `<div class=\"feature is-new\" id=\"appraisal-blast\">`).",
       "walkthrough.js scans the document on load for every .feature.is-new card and clones it into #new-features-host in document order. Adding the class is the only step needed — the clone is automatic, so the same Gmail-section card now also renders at the top of the page next to the other recent features (Pricing Exception Workflow, Print Buyer Worksheet, etc.)."
     ],
-    sections: ["walkthrough"]
+    sections: ["walkthrough", "appraisal-blast"]
   },
   {
     version: "1.63.33",
@@ -32,7 +44,7 @@ window.ZHL_CHANGELOG = [
       "Removed the now-unused popup-window plumbing (the win variable, the state-reassert setTimeout calls, the windows.remove teardown branch). Teardown is back to a simple chrome.tabs.remove(tab.id) in the finally block.",
       "If hiding the tab becomes a priority again later, the right approach is a visible-but-background tab (active: false in the SAME window) rather than a minimized window — that keeps layout intact while staying off the LO's active view. We had that in v1.63.29 and earlier; it worked but still showed in the tab strip, which is why this revert uses active: true for clarity that the operation is running."
     ],
-    sections: ["appraisal-blast-background"]
+    sections: ["appraisal-blast-background", "appraisal-blast"]
   },
   {
     version: "1.63.32",
@@ -75,7 +87,7 @@ window.ZHL_CHANGELOG = [
       "Fingerprint for the auto-paste detector is a custom 'data-zhl-ab-html' attribute on the outer wrapper plus the Calibri font-family marker — distinct from the VPA email's '<h1>Congratulations' marker, so the two paste loops don't collide when the LO has both modules enabled and a pending paste from each.",
       "Time saved unchanged at ~6 min/appraisal, credited once per content-script load."
     ],
-    sections: ["gmail-appraisal-blast", "sf-appraisal-blast"]
+    sections: ["gmail-appraisal-blast", "sf-appraisal-blast", "appraisal-blast"]
   },
   {
     version: "1.63.29",
@@ -117,7 +129,7 @@ window.ZHL_CHANGELOG = [
       "Time saved: ~6 minutes per appraisal vs manually opening Salesforce, pulling each role's email, composing the message, and looking up the equity math. Credited once per content-script load so re-clicks don't double-count.",
       "Feature key: feature_appraisalBlast (default on for new installs, like every other ZHL module). Disable via Setup if not needed. The Salesforce content script gates on the same key so the SF tab driver never runs on installs that have the feature off."
     ],
-    sections: ["gmail-appraisal-blast", "sf-appraisal-blast"]
+    sections: ["gmail-appraisal-blast", "sf-appraisal-blast", "appraisal-blast"]
   },
   {
     version: "1.63.26",
