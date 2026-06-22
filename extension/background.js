@@ -1892,6 +1892,23 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     sendResponse({ ok: true, skipped: true, reason: 'scraper-driven; ICS poll disabled' });
     return false;
   }
+  // A new meeting reminder just appeared in a Gmail tab — bring that tab
+  // (and its window) to the front so the LO actually sees it. A content
+  // script can't focus its own window, so it delegates to us here. The
+  // Gmail side only sends this when a NEW reminder fires, not on every
+  // re-render, so it won't repeatedly steal focus.
+  if (msg && msg.type === 'ZHL_CAL_FOCUS_TAB') {
+    try {
+      if (sender && sender.tab && sender.tab.id != null) {
+        chrome.tabs.update(sender.tab.id, { active: true });
+        if (sender.tab.windowId != null) {
+          chrome.windows.update(sender.tab.windowId, { focused: true, drawAttention: true });
+        }
+      }
+    } catch (_) {}
+    sendResponse({ ok: true });
+    return false;
+  }
   return false;
 });
 

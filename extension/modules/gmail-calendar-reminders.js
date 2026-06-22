@@ -213,6 +213,20 @@
   // Outlook close-X semantics (close for now, reappears on next fire).
   let closedKeysSnapshot = null;
 
+  // Keys we've already brought Gmail to the front for. We only request
+  // window focus when a NEW reminder key appears (not on every 15s
+  // re-render), so we don't repeatedly yank the LO's focus while a
+  // reminder is just sitting there. A key that leaves the due list and
+  // later returns (e.g. after snooze) counts as new again.
+  let focusedKeys = new Set();
+  function requestWindowFocus() {
+    try {
+      chrome.runtime.sendMessage({ type: 'ZHL_CAL_FOCUS_TAB' }, function () {
+        const _ = chrome.runtime && chrome.runtime.lastError; // swallow if SW asleep
+      });
+    } catch (_) {}
+  }
+
   // Drag state for the panel header. Listeners installed once at
   // module init below so they don't accumulate across renders.
   let drag = null;
@@ -249,6 +263,7 @@
       if (ex) ex.remove();
       lastSignature = '';
       closedKeysSnapshot = null; // nothing due — clear any prior X-suppression
+      focusedKeys = new Set();   // reset focus tracking so a re-fire focuses again
       return;
     }
     // X-close suppression: if every due key was already present when
@@ -263,6 +278,14 @@
       }
       closedKeysSnapshot = null;
     }
+
+    // Bring Gmail to the front when a NEW reminder appears (a due key we
+    // haven't already surfaced). Only on new keys, so we don't yank
+    // focus on every 15s re-render while a reminder just sits there.
+    const dueKeys = due.map(function (d) { return d.key; });
+    const hasNew = dueKeys.some(function (k) { return !focusedKeys.has(k); });
+    focusedKeys = new Set(dueKeys);
+    if (hasNew) requestWindowFocus();
     // Cheap signature so we don't rebuild the DOM every 15s tick when
     // nothing meaningful changed (which would reset the snooze dropdown
     // and any hover state). Recompute when the set of due items OR their

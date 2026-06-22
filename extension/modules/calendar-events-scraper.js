@@ -167,6 +167,44 @@
     return '';
   }
 
+  // Google Calendar week/day-view aria-labels are comma-segmented:
+  //   "<title>, <organizer>, <RSVP status>, <location|No location>,
+  //    <title again>, <time>"
+  // The old title logic just stripped the time/date and kept everything
+  // else, producing word-salad like "Melynda Florea and 15-minute
+  // meeting, Justin Case, Accepted, No location, Melynda Florea and
+  // 15-minute meeting, 3:45pm". Instead, pick the FIRST comma-segment
+  // that isn't a time, a date, an RSVP status, or a location marker —
+  // that's the event title.
+  const STATUS_SEG_RE = /^(accepted|declined|maybe|tentative|going|not going|no response|needs action|awaiting reply|busy|free|no location|location|organizer|guests?)\b/i;
+  function isTimeSeg(s) {
+    return /^\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:(?:to|–|—|-)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\s*$/i.test(s) &&
+           /\d/.test(s);
+  }
+  function isDateSeg(s) {
+    return /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/i.test(s) ||
+           /^(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*\b/i.test(s.trim());
+  }
+  function extractTitle(base, timeMatched) {
+    const segs = String(base || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    let chosen = '';
+    for (const s of segs) {
+      if (isTimeSeg(s) || isDateSeg(s) || STATUS_SEG_RE.test(s)) continue;
+      chosen = s;
+      break;
+    }
+    if (!chosen) chosen = segs[0] || String(base || '');
+    // Clean any embedded time/link/all-day fragments out of the chosen
+    // segment. The time regex requires a colon or am/pm so it never eats
+    // a bare number like the "15" in "15-minute meeting".
+    let t = chosen;
+    if (timeMatched) t = t.split(timeMatched).join(' ');
+    t = t.replace(LINK_RE, ' ').replace(/\ball[- ]day\b/i, ' ');
+    t = t.replace(/\b\d{1,2}:\d{2}\s*(?:am|pm)?(?:\s*(?:to|–|—|-)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?|\b\d{1,2}\s*(?:am|pm)\b/gi, ' ');
+    t = t.replace(/\s+/g, ' ').replace(/^[\s,;:.\-–—•]+|[\s,;:.\-–—•]+$/g, '').trim();
+    return t || '(no title)';
+  }
+
   function parseChip(el) {
     const aria = el.getAttribute('aria-label') || '';
     const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
@@ -200,15 +238,9 @@
       return null; // no time and not all-day — not a usable event chip
     }
 
-    // ---- Title ----
-    let title = aria || text;
-    if (time && time.matched) title = title.replace(time.matched, ' ');
-    if (dateMatched) title = title.replace(dateMatched, ' ');
-    title = title.replace(/\ball[- ]day\b/i, ' ');
-    title = title.replace(LINK_RE, ' ');
-    title = title.replace(/,\s*(busy|free|tentative)\b.*$/i, '');
-    title = title.replace(/\s+/g, ' ').replace(/^[\s,;:.\-–—•]+|[\s,;:.\-–—•]+$/g, '').trim();
-    if (!title) title = '(no title)';
+    // ---- Title ---- (prefer aria's segments; fall back to chip text)
+    let title = extractTitle(aria, time && time.matched);
+    if (title === '(no title)' && text) title = extractTitle(text, time && time.matched);
 
     return { startMs: startMs, endMs: endMs, title: title, allDay: allDay };
   }

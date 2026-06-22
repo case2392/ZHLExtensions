@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.6",
+    category: "improvement",
+    headline: "Meeting Reminders — the pop-up now brings your Gmail window to the front when a new reminder fires (so you can't miss it even if you're in another tab/app), and the meeting title is cleaned up — no more 'Melynda Florea and 15-minute meeting, Justin Case, Accepted, No location, …' word salad.",
+    highlights: [
+      "Auto-focus on new reminder: when a reminder newly becomes due, the Gmail content script asks the background to activate its tab and focus its window (with the taskbar attention flag). It only fires on a NEW reminder key — not on every 15-second re-render — so it won't repeatedly steal focus while a reminder is just sitting there. A reminder that's snoozed and later wakes up counts as new again and re-focuses.",
+      "Title cleanup: Google's week/day-view aria-labels are comma-segmented as '<title>, <organizer>, <RSVP status>, <location>, <title again>, <time>'. The old parser stripped only the time/date and kept all the rest, producing word salad. The title is now the first comma-segment that isn't a time, date, RSVP status (Accepted/Declined/Maybe/etc.), or location marker ('No location'). Handles time-first formats too, and no longer mangles titles like '15-minute meeting' (the time-strip now requires a colon or am/pm, so it won't eat the bare '15').",
+      "Verified against the reported salad string plus time-first, Zoom-link, and all-day variants — all resolve to just the clean event name."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.5",
     category: "improvement",
     headline: "Meeting Reminders — fixed the core bug where week/day-view events weren't being detected (so a meeting added within the reminder window never popped). Also: all-day events now show an ALL DAY badge (anchored to 8am) instead of being ignored, the Join button now recognizes Zoom links too, and the Setup 'Show test reminder' button now fires THREE preview reminders at different intervals so you can see the full layout.",
