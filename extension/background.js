@@ -1840,16 +1840,28 @@ function zhlCalCreateAlarm() {
 }
 zhlCalCreateAlarm();
 
+// ICS poll DISABLED in v1.64.1+. Zillow Workspace admin hides the
+// per-user "Secret address in iCal format" option, so there's no
+// private URL the LO can paste. Calendar events now come from the
+// modules/calendar-events-scraper.js content script running on any
+// open calendar.google.com tab. The ICS parser + poller code below
+// is kept for reference (and as a fallback path if a personal account
+// is ever wired up), but it never runs unless we re-introduce the
+// cal_ics_url storage key and re-enable the alarm.
+//
+// We DO keep the ZHL_CAL_REFRESH_NOW message handler so callers
+// don't see "no listener" errors — it's just a no-op now.
 chrome.alarms.onAlarm.addListener(function (alarm) {
-  if (alarm && alarm.name === ZHL_CAL_ALARM) zhlCalPoll(false);
+  if (alarm && alarm.name === ZHL_CAL_ALARM) {
+    // No-op: scraper-driven now. Leaving the alarm registered means
+    // re-enabling the ICS path later is just flipping a flag.
+  }
 });
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg && msg.type === 'ZHL_CAL_REFRESH_NOW') {
-    zhlCalPoll(true).then(function (r) { sendResponse(r); }).catch(function (e) {
-      sendResponse({ ok: false, error: String(e && e.message || e) });
-    });
-    return true; // async
+    sendResponse({ ok: true, skipped: true, reason: 'scraper-driven; ICS poll disabled' });
+    return false;
   }
   return false;
 });

@@ -99,6 +99,44 @@
       </div>
     </section>
 
+    <!-- ============== Module: Meeting Reminders ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Meeting Reminders</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code> &mdash; Outlook-style reminder pop-ups from your Google Calendar</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_calendarReminders" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot" style="display:flex;flex-direction:column;gap:10px;align-items:stretch;width:360px;background:transparent;border:none;padding:0;">
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 12px;font-size:12px;color:#0f172a;line-height:1.5;">
+            <div style="font-weight:700;margin-bottom:4px;">Keep Google Calendar open in a tab</div>
+            <div>This module reads events directly from any open <code>calendar.google.com</code> tab in this browser. <strong>You must have a Calendar tab open</strong> (any view — Day, Week, Month works) for reminders to fire.</div>
+            <div style="margin-top:6px;font-size:11px;color:#475569;">Why not a background fetch? Zillow&rsquo;s Workspace admin has disabled the per-user &ldquo;Secret address in iCal format&rdquo; option, and the public iCal feed would require making the entire calendar public (exposing borrower info). Reading from an already-open Calendar tab is the only zero-auth, zero-exposure option.</div>
+          </div>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Remind me (minutes before start)</span>
+            <input type="text" data-cal-field="cal_lead_times" placeholder="30, 5" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <p id="cal-status-line" style="font-size:11.5px;color:#6b7280;margin:2px 0 0;line-height:1.45;">Calendar status: <span id="cal-status-detail">checking…</span></p>
+          <a href="https://calendar.google.com/calendar/u/0/r/week" target="_blank" rel="noopener" style="font-size:12px;color:#1d4ed8;text-decoration:underline;">Open Google Calendar in a new tab &rarr;</a>
+        </div>
+        <ul class="module-features">
+          <li>Recreates the old Outlook reminder window inside Gmail: a pop-up card slides in before each meeting with <strong>Snooze</strong> and <strong>Dismiss</strong> buttons.</li>
+          <li>Reminders fire at each lead time you list above (default <strong>30 minutes and again at 5 minutes</strong> before start). Comma-separate as many as you like, e.g. <code>30, 10, 2</code>.</li>
+          <li>Reads events from any <code>calendar.google.com</code> tab you have open &mdash; week or day view recommended so the events for the next several hours are rendered. Closing every Calendar tab pauses reminders until you reopen one.</li>
+          <li><strong>Snooze</strong> brings the reminder back after the interval you pick; <strong>Dismiss</strong> / <strong>Dismiss all</strong> clears it. Your choices sync across every open Gmail tab.</li>
+          <li>A <strong>📹 Join</strong> button appears when the event has a Google Meet link. All-day events are ignored.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: VA Calc + Student Loans ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
@@ -712,45 +750,6 @@
           <li>A new Gmail draft opens with <strong>TO</strong> = Borrower, Co-Borrower, Buyer&rsquo;s Agent, Transaction Coordinator and <strong>CC</strong> = Processor, plus a congratulatory body (with an immediate-equity figure) or a low-value variant if the appraisal came in under purchase price.</li>
           <li>Nothing sends automatically &mdash; you review and hit Send. Your Gmail signature appends as normal.</li>
           <li>Requires you to be signed in to your Zillow Salesforce session in this browser; the extension uses your active session for the lookup.</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- ============== Module: Meeting Reminders ============== -->
-    <section class="module-card" data-module>
-      <div class="module-head">
-        <div class="module-title-block">
-          <h2>Meeting Reminders</h2>
-          <p class="module-runs-on">Runs on: <code>mail.google.com</code> &mdash; Outlook-style reminder pop-ups from your Google Calendar</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" data-feature="feature_calendarReminders" />
-          <span class="slider"></span>
-          <span class="switch-label">Enabled</span>
-        </label>
-      </div>
-
-      <div class="module-body">
-        <div class="module-screenshot" style="display:flex;flex-direction:column;gap:10px;align-items:stretch;width:360px;background:transparent;border:none;padding:0;">
-          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
-            <span style="margin-bottom:4px;font-weight:600;">Private Google Calendar ICS URL</span>
-            <input type="url" data-cal-field="cal_ics_url" placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:12px Arial,sans-serif;" />
-          </label>
-          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
-            <span style="margin-bottom:4px;font-weight:600;">Remind me (minutes before start)</span>
-            <input type="text" data-cal-field="cal_lead_times" placeholder="30, 5" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
-          </label>
-          <p style="font-size:11.5px;color:#6b7280;margin:2px 0 0;line-height:1.45;">
-            In Google Calendar: <strong>Settings &rarr; Settings for my calendars &rarr; [your calendar] &rarr; Integrate calendar &rarr; Secret address in iCal format</strong>. Copy that URL and paste it above. It stays on this Chrome profile only.
-          </p>
-        </div>
-        <ul class="module-features">
-          <li>Recreates the old Outlook reminder window inside Gmail: a pop-up card slides in before each meeting with <strong>Snooze</strong> and <strong>Dismiss</strong> buttons.</li>
-          <li>Reminders fire at each lead time you list above (default <strong>30 minutes and again at 5 minutes</strong> before start). Comma-separate as many as you like, e.g. <code>30, 10, 2</code>.</li>
-          <li>Reads your calendar in the background from the private ICS link &mdash; no Google sign-in pop-up, works whenever a Gmail tab is open.</li>
-          <li><strong>Snooze</strong> brings the reminder back after the interval you pick; <strong>Dismiss</strong> / <strong>Dismiss all</strong> clears it. Your choices sync across every open Gmail tab.</li>
-          <li>A <strong>📹 Join</strong> button appears when the event has a Google Meet link. All-day events are ignored.</li>
-          <li>Note: Google can cache the private feed for a few minutes, so a meeting created moments ago may take a little while to appear; meetings scheduled in advance are unaffected.</li>
         </ul>
       </div>
     </section>

@@ -13,6 +13,22 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.1",
+    category: "improvement",
+    headline: "Meeting Reminders — pivoted from ICS-feed polling to Calendar-tab scraping. Zillow Workspace has the per-user 'Secret address in iCal format' disabled, so the v1.64.0 setup flow had no usable URL to paste. The reminder card, snooze/dismiss UI, lead-time logic, and storage schema are all unchanged; only the data source changed. Keep a calendar.google.com tab open and reminders fire as before.",
+    highlights: [
+      "Root cause: corporate Google Workspace policy hides the per-user secret iCal URL (only the Public iCal URL is exposed, and using that would require making the entire calendar public — exposing borrower info). The ICS approach is dead for the LO's account. User chose 'scrape an open Calendar tab' as the alternative.",
+      "New content script modules/calendar-events-scraper.js runs on calendar.google.com pages. It walks the rendered event chips (role=button + data-eventid for week/day views, role=gridcell for month view), parses each aria-label for a time range, a date, and a title via permissive regex, and writes the parsed events to chrome.storage.local under zhlCalEvents — exactly the shape the Gmail-side renderer already consumes.",
+      "Multi-tab safe: each Calendar tab tags its scraped events with a per-tab id and only overwrites its own contributions on each pass. So having Calendar open in two browser tabs (e.g. different accounts) doesn't make the tabs fight each other — events from all open Calendar tabs merge into the same list. On beforeunload, the tab clears its own contributions so closing a Calendar tab doesn't leave stale events lingering.",
+      "MutationObserver + 8-second backstop catches Calendar's frequent React re-renders; cross-midnight times wrap correctly; events more than 1 hour past their start time are pruned to keep the list lean.",
+      "Setup card: the ICS URL field is replaced with a blue banner explaining the open-tab requirement, the rationale, and a 'Open Google Calendar in a new tab →' link. New live status line shows 'Calendar tab active · N upcoming events loaded' (green), 'no Calendar tab detected yet' (red), or 'last scrape N min ago — Calendar tab may be closed' (amber), updating every 5 seconds.",
+      "background.js: the alarms-driven ICS poller is now a no-op. The ZHL_CAL_REFRESH_NOW message handler still answers (so Gmail-side refresh pings don't error), it just returns { skipped: true } now. The ICS parser code is kept in place as dead code for potential reuse if a personal-Google-account path is ever wired up.",
+      "manifest content_scripts: added calendar.google.com/* registration for the new scraper module. No new permissions — calendar.google.com is covered by the existing <all_urls> host permission. Bumped 1.64.0 → 1.64.1.",
+      "Setup-page ordering: moved the Meeting Reminders module card to position #2 (immediately after Loan Officer Profile, before VA Calc). It's the feature most likely to need ongoing tweaking (lead times, checking 'is my Calendar tab still open?'), so making it visible without scrolling matches how it gets used."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.0",
     category: "new",
     headline: "New module: Meeting Reminders — the Outlook reminder window, recreated inside Gmail. A pop-up card slides into the corner before each meeting with Snooze and Dismiss buttons, read from your Google Calendar. Set it up once by pasting your calendar's private ICS address in the extension Setup page (no Google sign-in pop-up). Default reminders fire at 30 minutes AND again at 5 minutes before start, fully configurable.",

@@ -100,19 +100,17 @@ document.querySelectorAll('input[data-lo-field]').forEach((input) => {
 });
 loadLoProfile();
 
-// Meeting Reminders settings — the private Google Calendar ICS URL and
-// the comma-separated lead times (minutes-before-start) that the
-// Calendar Reminders module reads. Same debounced auto-save as the LO
-// profile fields. On save we ping the background to re-poll the feed
-// immediately so a freshly-pasted URL takes effect without waiting for
-// the 5-minute alarm.
-const CAL_FIELDS = ['cal_ics_url', 'cal_lead_times'];
+// Meeting Reminders settings — the comma-separated lead times
+// (minutes-before-start) that the Calendar Reminders module reads,
+// plus a status line showing when (and whether) the Calendar-tab
+// scraper last ran.
+const CAL_FIELDS = ['cal_lead_times'];
 async function loadCalSettings() {
   const data = await chrome.storage.local.get(CAL_FIELDS);
   document.querySelectorAll('input[data-cal-field]').forEach((input) => {
     const key = input.dataset.calField;
     if (data[key] != null && data[key] !== '') input.value = data[key];
-    else if (key === 'cal_lead_times') input.value = '30, 5'; // seed default
+    else if (key === 'cal_lead_times') input.value = '30, 5';
   });
 }
 const calSaveTimers = {};
@@ -123,12 +121,42 @@ document.querySelectorAll('input[data-cal-field]').forEach((input) => {
     calSaveTimers[key] = setTimeout(async () => {
       await chrome.storage.local.set({ [key]: input.value.trim() });
       showStatus('Meeting reminder settings saved');
-      // Nudge the background to re-poll the calendar feed now.
-      try { chrome.runtime.sendMessage({ type: 'ZHL_CAL_REFRESH_NOW' }, () => { const _ = chrome.runtime.lastError; }); } catch (_) {}
     }, 500);
   });
 });
 loadCalSettings();
+
+// Calendar status line — read zhlCalMeta to tell the LO whether their
+// open Calendar tab is being scraped. Updates every 5s while the
+// Setup page is open. "Stale" = no scrape in the last 30s, which
+// almost always means no calendar.google.com tab is currently open
+// in this browser.
+function setCalStatus(text, color) {
+  const el = document.getElementById('cal-status-detail');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = color || '#6b7280';
+}
+async function refreshCalStatus() {
+  try {
+    const data = await chrome.storage.local.get(['zhlCalMeta', 'zhlCalEvents']);
+    const meta = data.zhlCalMeta || {};
+    const events = Array.isArray(data.zhlCalEvents) ? data.zhlCalEvents.length : 0;
+    if (!meta.lastScrapeMs) {
+      setCalStatus('no Calendar tab detected yet — open calendar.google.com', '#b91c1c');
+      return;
+    }
+    const ageMs = Date.now() - meta.lastScrapeMs;
+    if (ageMs < 30000) {
+      setCalStatus('Calendar tab active · ' + events + ' upcoming event' + (events === 1 ? '' : 's') + ' loaded', '#16a34a');
+    } else {
+      const mins = Math.round(ageMs / 60000);
+      setCalStatus('last scrape ' + (mins < 1 ? '<1 min' : mins + ' min') + ' ago — Calendar tab may be closed', '#b45309');
+    }
+  } catch (_) { /* ignore */ }
+}
+refreshCalStatus();
+setInterval(refreshCalStatus, 5000);
 
 // Insurance Agent defaults — used by the Intro Email module and auto-CC'd
 // on every Intro Email draft. Same auto-save-on-input pattern as the LO
