@@ -5,11 +5,12 @@
 // with <Name>"), this module:
 //
 //   1. Parses borrower name, date, time, and phone from the email body.
-//   2. Shows a 5-second confirmation toast at the top-right of Gmail
-//      saying "Detected booking from <Name> — opening Salesforce in 5s.
-//      Cancel?" with an explicit Cancel button. If the LO clicks Cancel
-//      OR clicks anywhere else in Gmail that signals "no, this is not a
-//      booking", we abort.
+//   2. Shows a confirmation panel at the top-right of Gmail with a
+//      blue "Open Salesforce & paste" button. The LO clicks the button
+//      to confirm and trigger the Salesforce note. (Earlier versions
+//      auto-fired after a 5-second countdown; the LO asked for a
+//      button-only flow like the Appraisal Blast "Send to all parties"
+//      button so nothing happens unless they explicitly confirm.)
 //   3. Stashes the parsed payload to chrome.storage.local under
 //      zhlPendingZohoBookingNote and opens a Salesforce tab. The Gmail
 //      side's job is done; the Salesforce companion module
@@ -48,7 +49,6 @@
   const DEDUP_MAX    = 200;
   const DAILY_LIMIT  = 10;
   const STASH_TTL_MS = 10 * 60 * 1000;
-  const COUNTDOWN_MS = 5000;
 
   const SALESFORCE_HOME = 'https://zillowhomeloans.lightning.force.com/lightning/page/home';
 
@@ -209,38 +209,31 @@
       '<div style="margin-bottom:6px;color:#1f2937;"><b>' + escapeHtml(booking.borrowerName) + '</b> · ' + escapeHtml(booking.friendlyDate) + ' at ' + escapeHtml(booking.friendlyTime) + '</div>' +
       '<div style="margin-bottom:10px;font-style:italic;color:#64748b;font-size:12px;">' + escapeHtml(note) + '</div>' +
       '<div style="display:flex;gap:6px;align-items:center;">' +
-        '<button id="zhl-zb-go" style="flex:1;padding:8px 12px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;font:600 12px Arial,sans-serif;cursor:pointer;">Open Salesforce &amp; paste <span id="zhl-zb-count">(5)</span></button>' +
+        '<button id="zhl-zb-go" style="flex:1;padding:8px 12px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;font:600 12px Arial,sans-serif;cursor:pointer;">Open Salesforce &amp; paste</button>' +
         '<button id="zhl-zb-cancel" style="padding:8px 12px;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;font:600 12px Arial,sans-serif;cursor:pointer;">Cancel</button>' +
       '</div>' +
       '<div style="margin-top:8px;font-size:10.5px;color:#94a3b8;">Built by Justin Case. Karma appreciated 💛</div>';
     document.body.appendChild(wrap);
 
-    let cancelled = false;
-    let remaining = COUNTDOWN_MS / 1000;
-    const countEl = wrap.querySelector('#zhl-zb-count');
-    const tick = setInterval(function () {
-      remaining--;
-      if (countEl) countEl.textContent = '(' + Math.max(0, remaining) + ')';
-      if (remaining <= 0) {
-        clearInterval(tick);
-        if (!cancelled) { try { wrap.remove(); } catch (_) {} onConfirm && onConfirm(); }
-      }
-    }, 1000);
-
+    // Button-only confirmation. Nothing fires until the LO clicks
+    // "Open Salesforce & paste" (or dismisses via Cancel / ×).
+    // No countdown / auto-fire — matches the Appraisal Blast UX.
+    let resolved = false;
     function cancel() {
-      cancelled = true;
-      clearInterval(tick);
+      if (resolved) return;
+      resolved = true;
       try { wrap.remove(); } catch (_) {}
       onCancel && onCancel();
     }
-    wrap.querySelector('#zhl-zb-cancel').addEventListener('click', cancel);
-    wrap.querySelector('#zhl-zb-x').addEventListener('click', cancel);
-    wrap.querySelector('#zhl-zb-go').addEventListener('click', function () {
-      cancelled = true;
-      clearInterval(tick);
+    function confirm() {
+      if (resolved) return;
+      resolved = true;
       try { wrap.remove(); } catch (_) {}
       onConfirm && onConfirm();
-    });
+    }
+    wrap.querySelector('#zhl-zb-cancel').addEventListener('click', cancel);
+    wrap.querySelector('#zhl-zb-x').addEventListener('click', cancel);
+    wrap.querySelector('#zhl-zb-go').addEventListener('click', confirm);
   }
 
   function escapeHtml(s) {

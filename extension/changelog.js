@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.36",
+    category: "improvement",
+    headline: "Zoho Booking watcher — removed the 5-second auto-fire countdown. The 'Booking detected' panel now waits for you to explicitly click 'Open Salesforce & paste' (or Cancel / ×) before anything happens, matching the button-only UX of the Appraisal Blast 'Send to all parties' panel.",
+    highlights: [
+      "Before: the booking-detected toast showed 'Open Salesforce & paste (5)' with a 1-second-per-tick countdown that auto-confirmed at 0. If the LO walked away or didn't notice the toast in time, the disposition note got logged automatically — fine when accurate, awkward when the LO actually wanted to ignore that detection.",
+      "After: same panel, same blue 'Open Salesforce & paste' button — but no countdown, no auto-fire. The panel persists until the LO clicks the button (confirm) or Cancel / × (dismiss). Identical behavior to the Appraisal Blast bottom-right panel where clicking 'Send to all parties' is the only way to trigger work.",
+      "Code changes: removed the COUNTDOWN_MS constant, the remaining/tick/setInterval block, and the (5) counter <span> inside the button label. Wrapped confirm + cancel in a single resolved=true latch so both paths idempotently remove the panel and fire their callback exactly once. Updated the file header comment to describe the button-only flow.",
+      "Per-message dedup, daily-limit (10/day/LO), and the firingInThisTab guard are unchanged — all the safety rails that prevented misfire loops still apply, they just no longer have a 5-second timer pulling the trigger automatically."
+    ],
+    sections: ["gmail-zoho-booking-watcher"]
+  },
+  {
     version: "1.63.35",
     category: "bugfix",
     headline: "Walkthrough — Appraisal Blast now sorts to the TOP of the '✨ New features' section instead of the bottom. The section auto-sorts cards by the newest changelog version whose `sections` array references the card's HTML id, but the Appraisal Blast changelog entries used module filenames (gmail-appraisal-blast / sf-appraisal-blast / appraisal-blast-background) as section ids, none of which matched the card's id (appraisal-blast). With no matching changelog entry the card was treated as having no recency and fell to the bottom in DOM order.",
