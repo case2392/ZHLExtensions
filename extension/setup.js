@@ -22,7 +22,8 @@ const FEATURE_KEYS = [
   "feature_pricingResultsPrint",
   "feature_coborrowerToSf",
   "feature_gmailDragAttachments",
-  "feature_appraisalBlast"
+  "feature_appraisalBlast",
+  "feature_calendarReminders"
   // feature_telemetry intentionally omitted — telemetry is always on
   // (no toggle in the UI; isTelemetryEnabled() in background.js always
   // returns true).
@@ -98,6 +99,36 @@ document.querySelectorAll('input[data-lo-field]').forEach((input) => {
   });
 });
 loadLoProfile();
+
+// Meeting Reminders settings — the private Google Calendar ICS URL and
+// the comma-separated lead times (minutes-before-start) that the
+// Calendar Reminders module reads. Same debounced auto-save as the LO
+// profile fields. On save we ping the background to re-poll the feed
+// immediately so a freshly-pasted URL takes effect without waiting for
+// the 5-minute alarm.
+const CAL_FIELDS = ['cal_ics_url', 'cal_lead_times'];
+async function loadCalSettings() {
+  const data = await chrome.storage.local.get(CAL_FIELDS);
+  document.querySelectorAll('input[data-cal-field]').forEach((input) => {
+    const key = input.dataset.calField;
+    if (data[key] != null && data[key] !== '') input.value = data[key];
+    else if (key === 'cal_lead_times') input.value = '30, 5'; // seed default
+  });
+}
+const calSaveTimers = {};
+document.querySelectorAll('input[data-cal-field]').forEach((input) => {
+  input.addEventListener('input', () => {
+    const key = input.dataset.calField;
+    clearTimeout(calSaveTimers[key]);
+    calSaveTimers[key] = setTimeout(async () => {
+      await chrome.storage.local.set({ [key]: input.value.trim() });
+      showStatus('Meeting reminder settings saved');
+      // Nudge the background to re-poll the calendar feed now.
+      try { chrome.runtime.sendMessage({ type: 'ZHL_CAL_REFRESH_NOW' }, () => { const _ = chrome.runtime.lastError; }); } catch (_) {}
+    }, 500);
+  });
+});
+loadCalSettings();
 
 // Insurance Agent defaults — used by the Intro Email module and auto-CC'd
 // on every Intro Email draft. Same auto-save-on-input pattern as the LO

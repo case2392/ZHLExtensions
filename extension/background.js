@@ -36,6 +36,7 @@ const FEATURE_KEYS = [
   "feature_updateToast",
   "feature_smsMarkAllRead",
   "feature_appraisalBlast",
+  "feature_calendarReminders",
   "feature_telemetry"
 ];
 
@@ -263,11 +264,13 @@ async function pollKillSwitch() {
 
 chrome.runtime.onInstalled.addListener(() => {
   try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
+  try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
   pollKillSwitch();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
+  try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
   pollKillSwitch();
 });
 
@@ -1812,4 +1815,308 @@ function zhlAbSendWithRetry(tabId, msg, timeoutMs) {
     };
     attempt();
   });
+}
+
+// ============================================================================
+// Calendar Reminders — private ICS poll (feature key: feature_calendarReminders)
+//
+// Polls the LO's private Google Calendar ICS feed (pasted in Setup under
+// cal_ics_url) on an alarm, parses the VEVENTs, expands near-term
+// recurrences within a ~26h window, and stores the upcoming events in
+// chrome.storage.local under zhlCalEvents. The Gmail content script
+// (modules/gmail-calendar-reminders.js) reads those and fires the
+// Outlook-style reminder cards. No OAuth — the secret token in the ICS
+// URL is the auth, and <all_urls> host permission covers the fetch.
+// ============================================================================
+
+const ZHL_CAL_ALARM   = 'ZHL_CAL_POLL';
+const ZHL_CAL_URL_KEY = 'cal_ics_url';
+const ZHL_CAL_EVENTS_KEY = 'zhlCalEvents';
+const ZHL_CAL_META_KEY   = 'zhlCalMeta';
+const ZHL_CAL_MIN_REFETCH_MS = 90 * 1000; // don't hammer the feed
+
+function zhlCalCreateAlarm() {
+  try { chrome.alarms.create(ZHL_CAL_ALARM, { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
+}
+zhlCalCreateAlarm();
+
+chrome.alarms.onAlarm.addListener(function (alarm) {
+  if (alarm && alarm.name === ZHL_CAL_ALARM) zhlCalPoll(false);
+});
+
+chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+  if (msg && msg.type === 'ZHL_CAL_REFRESH_NOW') {
+    zhlCalPoll(true).then(function (r) { sendResponse(r); }).catch(function (e) {
+      sendResponse({ ok: false, error: String(e && e.message || e) });
+    });
+    return true; // async
+  }
+  return false;
+});
+
+// ---- ICS parsing helpers --------------------------------------------------
+
+function zhlCalUnfold(text) {
+  // RFC5545 line unfolding: a CRLF followed by a space or tab continues
+  // the previous logical line.
+  return String(text || '')
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .replace(/\n[ \t]/g, '');
+}
+
+function zhlCalParseLine(line) {
+  const idx = line.indexOf(':');
+  if (idx < 0) return null;
+  const head = line.slice(0, idx);
+  let value = line.slice(idx + 1);
+  const segs = head.split(';');
+  const name = segs[0].toUpperCase();
+  const params = {};
+  for (let i = 1; i < segs.length; i++) {
+    const eq = segs[i].indexOf('=');
+    if (eq > 0) params[segs[i].slice(0, eq).toUpperCase()] = segs[i].slice(eq + 1).replace(/^"|"$/g, '');
+  }
+  // Unescape common ICS text escapes for human-facing fields.
+  value = value.replace(/\\n/gi, ' ').replace(/\\,/g, ',').replace(/\;/g, ';').replace(/\\\\/g, '\\');
+  return { name: name, params: params, value: value };
+}
+
+// Offset (local - utc, in ms) for a given IANA tz at a given instant.
+function zhlCalTzOffsetMs(instantMs, tzid) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tzid, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+  const p = {};
+  dtf.formatToParts(new Date(instantMs)).forEach(function (x) { if (x.type !== 'literal') p[x.type] = x.value; });
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return asUTC - instantMs;
+}
+
+// Convert wall-clock components in an IANA tz to an epoch ms.
+function zhlCalZonedToEpoch(Y, Mo, D, H, Mi, S, tzid) {
+  try {
+    const asUTC = Date.UTC(Y, Mo - 1, D, H, Mi, S);
+    const off1 = zhlCalTzOffsetMs(asUTC, tzid);
+    let epoch = asUTC - off1;
+    const off2 = zhlCalTzOffsetMs(epoch, tzid);
+    if (off2 !== off1) epoch = asUTC - off2;
+    return epoch;
+  } catch (_) {
+    // Unknown TZID — fall back to the service worker's local interpretation.
+    return new Date(Y, Mo - 1, D, H, Mi, S).getTime();
+  }
+}
+
+// Parse a DTSTART/DTEND/EXDATE value into { wall, ms, allDay, tzid, isUTC }.
+function zhlCalParseDate(value, params) {
+  value = (value || '').trim();
+  const dateOnly = (params && /DATE/i.test(params.VALUE || '')) || /^\d{8}$/.test(value);
+  if (/^\d{8}$/.test(value)) {
+    const Y = +value.slice(0, 4), Mo = +value.slice(4, 6), D = +value.slice(6, 8);
+    return { wall: { Y: Y, Mo: Mo, D: D, H: 0, Mi: 0, S: 0 }, ms: Date.UTC(Y, Mo - 1, D), allDay: true, tzid: null, isUTC: false };
+  }
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+  if (!m) return null;
+  const Y = +m[1], Mo = +m[2], D = +m[3], H = +m[4], Mi = +m[5], S = +m[6], Z = m[7];
+  const wall = { Y: Y, Mo: Mo, D: D, H: H, Mi: Mi, S: S };
+  if (Z) return { wall: wall, ms: Date.UTC(Y, Mo - 1, D, H, Mi, S), allDay: false, tzid: null, isUTC: true };
+  const tzid = params && params.TZID;
+  if (tzid) return { wall: wall, ms: zhlCalZonedToEpoch(Y, Mo, D, H, Mi, S, tzid), allDay: false, tzid: tzid, isUTC: false };
+  return { wall: wall, ms: new Date(Y, Mo - 1, D, H, Mi, S).getTime(), allDay: false, tzid: null, isUTC: false };
+}
+
+function zhlCalWallToEpoch(wall, tzid, isUTC) {
+  if (isUTC) return Date.UTC(wall.Y, wall.Mo - 1, wall.D, wall.H, wall.Mi, wall.S);
+  if (tzid) return zhlCalZonedToEpoch(wall.Y, wall.Mo, wall.D, wall.H, wall.Mi, wall.S, tzid);
+  return new Date(wall.Y, wall.Mo - 1, wall.D, wall.H, wall.Mi, wall.S).getTime();
+}
+
+const ZHL_CAL_WEEKDAY = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+function zhlCalDayIndexUTC(Y, Mo, D) { return Math.floor(Date.UTC(Y, Mo - 1, D) / 86400000); }
+function zhlCalDowUTC(Y, Mo, D) { return new Date(Date.UTC(Y, Mo - 1, D)).getUTCDay(); }
+
+// Does a candidate wall-date satisfy the RRULE relative to the base?
+function zhlCalMatchesRule(base, cand, rrule) {
+  const freq = (rrule.FREQ || '').toUpperCase();
+  const interval = Math.max(1, parseInt(rrule.INTERVAL, 10) || 1);
+  const bDays = zhlCalDayIndexUTC(base.Y, base.Mo, base.D);
+  const cDays = zhlCalDayIndexUTC(cand.Y, cand.Mo, cand.D);
+  if (cDays < bDays) return false;
+  const byday = rrule.BYDAY ? rrule.BYDAY.split(',').map(function (s) { return s.trim().toUpperCase().replace(/^[+-]?\d+/, ''); }) : null;
+
+  if (freq === 'DAILY') {
+    return (cDays - bDays) % interval === 0;
+  }
+  if (freq === 'WEEKLY') {
+    const cDow = zhlCalDowUTC(cand.Y, cand.Mo, cand.D);
+    const days = byday ? byday.map(function (c) { return ZHL_CAL_WEEKDAY[c]; }).filter(function (n) { return n != null; })
+                       : [zhlCalDowUTC(base.Y, base.Mo, base.D)];
+    if (days.indexOf(cDow) === -1) return false;
+    const bWeekStart = bDays - zhlCalDowUTC(base.Y, base.Mo, base.D);
+    const cWeekStart = cDays - cDow;
+    const weeks = Math.round((cWeekStart - bWeekStart) / 7);
+    return weeks % interval === 0;
+  }
+  if (freq === 'MONTHLY') {
+    if (cand.D !== base.D) return false;
+    const months = (cand.Y * 12 + cand.Mo) - (base.Y * 12 + base.Mo);
+    return months >= 0 && months % interval === 0;
+  }
+  if (freq === 'YEARLY') {
+    if (cand.Mo !== base.Mo || cand.D !== base.D) return false;
+    return (cand.Y - base.Y) % interval === 0;
+  }
+  return false;
+}
+
+// Expand an event's occurrences that fall inside [winStart, winEnd].
+function zhlCalExpand(ev, winStart, winEnd) {
+  const out = [];
+  if (!ev.rrule) {
+    if (ev.startMs >= winStart && ev.startMs <= winEnd) out.push(ev.startMs);
+    return out;
+  }
+  const untilMs = ev.rrule.UNTIL ? ((zhlCalParseDate(ev.rrule.UNTIL, {}) || {}).ms) : null;
+  const base = ev.wall;
+  const dayMs = 86400000;
+  // The window is tiny (~26h), so scan each candidate calendar day in
+  // [winStart-1d, winEnd+1d] (covers tz-offset edges) and test the rule.
+  for (let t = winStart - dayMs; t <= winEnd + dayMs; t += dayMs) {
+    const dd = new Date(t);
+    const cand = { Y: dd.getUTCFullYear(), Mo: dd.getUTCMonth() + 1, D: dd.getUTCDate(),
+                   H: base.H, Mi: base.Mi, S: base.S };
+    const candMs = zhlCalWallToEpoch(cand, ev.tzid, ev.isUTC);
+    if (candMs < winStart || candMs > winEnd) continue;
+    if (candMs < ev.startMs - 60000) continue;
+    if (untilMs && candMs > untilMs) continue;
+    if (!zhlCalMatchesRule(base, cand, ev.rrule)) continue;
+    const exKey = cand.Y + '-' + cand.Mo + '-' + cand.D;
+    if (ev.exdates && ev.exdates.indexOf(exKey) !== -1) continue;
+    if (out.indexOf(candMs) === -1) out.push(candMs);
+  }
+  return out;
+}
+
+function zhlCalFindMeetLink(text) {
+  if (!text) return '';
+  const m = String(text).match(/https:\/\/meet\.google\.com\/[a-z0-9\-]+/i);
+  return m ? m[0] : '';
+}
+
+// Parse a whole ICS document into raw event descriptors.
+function zhlCalParseIcs(icsText) {
+  const lines = zhlCalUnfold(icsText).split('\n');
+  const events = [];
+  let cur = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line === 'BEGIN:VEVENT') { cur = { exdates: [] }; continue; }
+    if (line === 'END:VEVENT') { if (cur) events.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    const p = zhlCalParseLine(line);
+    if (!p) continue;
+    switch (p.name) {
+      case 'UID': cur.uid = p.value; break;
+      case 'SUMMARY': cur.title = p.value; break;
+      case 'LOCATION': cur.location = p.value; break;
+      case 'DESCRIPTION': cur.description = p.value; break;
+      case 'STATUS': cur.status = (p.value || '').toUpperCase(); break;
+      case 'URL': if (!cur.url) cur.url = p.value; break;
+      case 'DTSTART': cur._start = zhlCalParseDate(p.value, p.params); break;
+      case 'DTEND': cur._end = zhlCalParseDate(p.value, p.params); break;
+      case 'RRULE': {
+        const r = {};
+        (p.value || '').split(';').forEach(function (kv) {
+          const eq = kv.indexOf('=');
+          if (eq > 0) r[kv.slice(0, eq).toUpperCase()] = kv.slice(eq + 1);
+        });
+        cur.rrule = r;
+        break;
+      }
+      case 'EXDATE': {
+        const d = zhlCalParseDate(p.value, p.params);
+        if (d) cur.exdates.push(d.wall.Y + '-' + d.wall.Mo + '-' + d.wall.D);
+        break;
+      }
+      default: break;
+    }
+  }
+  return events;
+}
+
+async function zhlCalPoll(force) {
+  try {
+    const data = await new Promise(function (resolve) {
+      chrome.storage.local.get([ZHL_CAL_URL_KEY, ZHL_CAL_META_KEY], function (d) { resolve(d || {}); });
+    });
+    const url = data[ZHL_CAL_URL_KEY];
+    if (!url || !/^https?:\/\//i.test(url)) {
+      // No calendar configured — clear any stale events.
+      await new Promise(function (r) { chrome.storage.local.set({ [ZHL_CAL_EVENTS_KEY]: [] }, r); });
+      return { ok: false, error: 'no_url' };
+    }
+    const meta = data[ZHL_CAL_META_KEY] || {};
+    if (!force && meta.lastPollMs && (Date.now() - meta.lastPollMs) < ZHL_CAL_MIN_REFETCH_MS) {
+      return { ok: true, skipped: true };
+    }
+
+    const resp = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    const rawEvents = zhlCalParseIcs(text);
+
+    const now = Date.now();
+    const winStart = now - 60 * 60 * 1000;       // include events that started up to 1h ago
+    const winEnd = now + 26 * 60 * 60 * 1000;    // ~next day
+    const out = [];
+    for (const ev of rawEvents) {
+      if (!ev._start) continue;
+      if (ev.status === 'CANCELLED') continue;
+      if (ev._start.allDay) continue; // skip all-day events — no timed reminder
+      ev.wall = ev._start.wall;
+      ev.tzid = ev._start.tzid;
+      ev.isUTC = ev._start.isUTC;
+      ev.startMs = ev._start.ms;
+      const durMs = (ev._end && isFinite(ev._end.ms)) ? Math.max(0, ev._end.ms - ev._start.ms) : 30 * 60000;
+      const occs = zhlCalExpand(ev, winStart, winEnd);
+      const meet = zhlCalFindMeetLink(ev.location) || zhlCalFindMeetLink(ev.description) || zhlCalFindMeetLink(ev.url);
+      for (const startMs of occs) {
+        out.push({
+          uid: ev.uid || ('x' + startMs),
+          startMs: startMs,
+          endMs: startMs + durMs,
+          title: ev.title || '(no title)',
+          location: ev.location || '',
+          meet: meet || ''
+        });
+      }
+    }
+    out.sort(function (a, b) { return a.startMs - b.startMs; });
+    const trimmed = out.slice(0, 60);
+
+    await new Promise(function (r) {
+      chrome.storage.local.set({
+        [ZHL_CAL_EVENTS_KEY]: trimmed,
+        [ZHL_CAL_META_KEY]: { lastPollMs: Date.now(), count: trimmed.length, error: '' }
+      }, r);
+    });
+    console.log('[ZHL Calendar Reminders] polled feed — ' + trimmed.length + ' upcoming event(s) in window');
+    return { ok: true, count: trimmed.length };
+  } catch (e) {
+    console.warn('[ZHL Calendar Reminders] poll failed:', e && e.message);
+    try {
+      await new Promise(function (r) {
+        chrome.storage.local.get([ZHL_CAL_META_KEY], function (d) {
+          const meta = (d && d[ZHL_CAL_META_KEY]) || {};
+          meta.error = String(e && e.message || e);
+          meta.lastErrorMs = Date.now();
+          chrome.storage.local.set({ [ZHL_CAL_META_KEY]: meta }, r);
+        });
+      });
+    } catch (_) {}
+    return { ok: false, error: String(e && e.message || e) };
+  }
 }

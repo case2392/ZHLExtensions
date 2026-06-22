@@ -13,6 +13,22 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.0",
+    category: "new",
+    headline: "New module: Meeting Reminders — the Outlook reminder window, recreated inside Gmail. A pop-up card slides into the corner before each meeting with Snooze and Dismiss buttons, read from your Google Calendar. Set it up once by pasting your calendar's private ICS address in the extension Setup page (no Google sign-in pop-up). Default reminders fire at 30 minutes AND again at 5 minutes before start, fully configurable.",
+    highlights: [
+      "One-time setup in Setup → Meeting Reminders: paste your Google Calendar 'Secret address in iCal format' (Calendar settings → your calendar → Integrate calendar) and optionally edit the lead times (default '30, 5' minutes). Both save automatically and stay on this Chrome profile only.",
+      "Background poll: a chrome.alarms job fetches the private ICS feed every 5 minutes (and immediately when you save/change the URL). No OAuth — the secret token in the URL is the auth, and the extension's existing <all_urls> host access covers the fetch. Parsed upcoming events are cached in chrome.storage.local for the Gmail side to read.",
+      "ICS parser handles real calendars: timezones via the browser's IANA database (DST-correct), recurring meetings (DAILY / WEEKLY+BYDAY / MONTHLY / YEARLY with INTERVAL, UNTIL, EXDATE) expanded across a ~26-hour look-ahead window, Google Meet link extraction for a Join button, and skips all-day and cancelled events. Recurrence is resolved by scanning only the ~2-3 candidate days inside the look-ahead window, so it stays fast regardless of how old the series is.",
+      "Reminder card (Gmail content script): Outlook-style panel top-right listing every due meeting with its time, a live 'in X minutes' / 'X minutes ago' / 'In progress' label, a 📹 Join button when a Meet link exists, and per-meeting Snooze / Dismiss plus a footer Snooze-duration dropdown, Snooze all, and Dismiss all.",
+      "Two-nudge lead-time model: the configured lead times are sorted descending and the 'active' reminder is the smallest one already reached. So a 30-minute reminder fires first; dismiss it and a fresh 5-minute reminder still fires at T-5 (separate instance). Reminders auto-expire 60 minutes after a meeting starts so nothing lingers.",
+      "Snooze/dismiss state lives in chrome.storage.local, so it's consistent across every open Gmail tab and survives reloads; old entries are pruned 2 hours after the meeting passes. The card re-renders instantly on storage changes (e.g. dismissing in one tab clears it in the others).",
+      "Caveat surfaced in Setup + walkthrough: Google can cache the private ICS feed for a few minutes, so a meeting created moments ago may lag; meetings scheduled in advance (the overwhelming majority) are unaffected.",
+      "Feature key feature_calendarReminders (default on). Toggle in Setup. New content script modules/gmail-calendar-reminders.js + background poll block; no manifest permission additions were needed (alarms + <all_urls> already present)."
+    ],
+    sections: ["gmail-calendar-reminders", "calendar-reminders"]
+  },
+  {
     version: "1.63.36",
     category: "improvement",
     headline: "Zoho Booking watcher — removed the 5-second auto-fire countdown. The 'Booking detected' panel now waits for you to explicitly click 'Open Salesforce & paste' (or Cancel / ×) before anything happens, matching the button-only UX of the Appraisal Blast 'Send to all parties' panel.",

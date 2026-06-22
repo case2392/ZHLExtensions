@@ -716,6 +716,45 @@
       </div>
     </section>
 
+    <!-- ============== Module: Meeting Reminders ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Meeting Reminders</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code> &mdash; Outlook-style reminder pop-ups from your Google Calendar</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_calendarReminders" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot" style="display:flex;flex-direction:column;gap:10px;align-items:stretch;width:360px;background:transparent;border:none;padding:0;">
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Private Google Calendar ICS URL</span>
+            <input type="url" data-cal-field="cal_ics_url" placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:12px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Remind me (minutes before start)</span>
+            <input type="text" data-cal-field="cal_lead_times" placeholder="30, 5" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <p style="font-size:11.5px;color:#6b7280;margin:2px 0 0;line-height:1.45;">
+            In Google Calendar: <strong>Settings &rarr; Settings for my calendars &rarr; [your calendar] &rarr; Integrate calendar &rarr; Secret address in iCal format</strong>. Copy that URL and paste it above. It stays on this Chrome profile only.
+          </p>
+        </div>
+        <ul class="module-features">
+          <li>Recreates the old Outlook reminder window inside Gmail: a pop-up card slides in before each meeting with <strong>Snooze</strong> and <strong>Dismiss</strong> buttons.</li>
+          <li>Reminders fire at each lead time you list above (default <strong>30 minutes and again at 5 minutes</strong> before start). Comma-separate as many as you like, e.g. <code>30, 10, 2</code>.</li>
+          <li>Reads your calendar in the background from the private ICS link &mdash; no Google sign-in pop-up, works whenever a Gmail tab is open.</li>
+          <li><strong>Snooze</strong> brings the reminder back after the interval you pick; <strong>Dismiss</strong> / <strong>Dismiss all</strong> clears it. Your choices sync across every open Gmail tab.</li>
+          <li>A <strong>📹 Join</strong> button appears when the event has a Google Meet link. All-day events are ignored.</li>
+          <li>Note: Google can cache the private feed for a few minutes, so a meeting created moments ago may take a little while to appear; meetings scheduled in advance are unaffected.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: FHA Collections / Disputed badges ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
