@@ -35,6 +35,7 @@ const FEATURE_KEYS = [
   "feature_copyAddresses",
   "feature_updateToast",
   "feature_smsMarkAllRead",
+  "feature_appraisalBlast",
   "feature_telemetry"
 ];
 
@@ -1671,3 +1672,131 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   return false;
 });
+
+// ============================================================================
+// Appraisal Blast orchestrator (feature key: feature_appraisalBlast)
+//
+// Triggered from the Gmail content script (modules/gmail-appraisal-blast.js)
+// when the LO clicks "Send to all parties" on a Reggora Appraisal
+// Submission Summary email. We:
+//   1. Open a hidden Salesforce tab in the LO's current session.
+//   2. Drive the global search for the loan number via the SF content
+//      script (modules/sf-appraisal-blast.js), capture the resulting
+//      Opportunity URL.
+//   3. Navigate the hidden tab to that URL and ask the SF content script
+//      to scrape Contact Roles.
+//   4. Return the contacts to Gmail; close the hidden tab.
+// Progress updates from the SF tab are relayed to every open Gmail tab
+// so the LO sees what step we're on.
+// ============================================================================
+
+const ZHL_AB_SF_HOME = 'https://zillowhomeloans.lightning.force.com/lightning/page/home';
+
+chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+  if (!msg) return false;
+
+  if (msg.action === 'zhlAppraisalBlast.lookupContacts') {
+    const gmailTabId = sender.tab && sender.tab.id;
+    zhlAbHandleLookup(msg.loanNumber, gmailTabId)
+      .then(function (contacts) { sendResponse({ ok: true, contacts: contacts }); })
+      .catch(function (e) { sendResponse({ ok: false, error: e.message || String(e) }); });
+    return true; // keep channel open for async response
+  }
+
+  if (msg.action === 'zhlAppraisalBlast.sfProgress') {
+    chrome.tabs.query({ url: 'https://mail.google.com/*' }, function (tabs) {
+      tabs.forEach(function (t) {
+        try { chrome.tabs.sendMessage(t.id, { action: 'zhlAppraisalBlast.status', text: msg.text }); }
+        catch (e) {}
+      });
+    });
+    return false;
+  }
+
+  return false;
+});
+
+async function zhlAbHandleLookup(loanNumber, gmailTabId) {
+  zhlAbStatus(gmailTabId, 'Opening Salesforce in the background…');
+  const tab = await new Promise(function (resolve) {
+    chrome.tabs.create({ url: ZHL_AB_SF_HOME, active: false }, resolve);
+  });
+  try {
+    await zhlAbWaitForLoad(tab.id);
+    await zhlAbDelay(1500); // let Lightning finish rendering
+
+    zhlAbStatus(gmailTabId, 'Searching Salesforce for ' + loanNumber + '…');
+    const r1 = await zhlAbSendWithRetry(tab.id,
+      { action: 'zhlAppraisalBlast.searchLoan', loanNumber: loanNumber }, 35000);
+    if (!r1.ok) throw new Error(r1.error || 'Search failed');
+    const resultUrl = r1.resultUrl;
+    if (!resultUrl) throw new Error('No loan record found for ' + loanNumber);
+
+    zhlAbStatus(gmailTabId, 'Opening the loan record…');
+    await chrome.tabs.update(tab.id, { url: resultUrl });
+    await zhlAbWaitForLoad(tab.id);
+    await zhlAbDelay(2000);
+
+    zhlAbStatus(gmailTabId, 'Reading the Contact Roles list…');
+    const r2 = await zhlAbSendWithRetry(tab.id,
+      { action: 'zhlAppraisalBlast.getContacts' }, 35000);
+    if (!r2.ok) throw new Error(r2.error || 'Failed to read contacts');
+    return r2.contacts || [];
+  } finally {
+    try { chrome.tabs.remove(tab.id); } catch (e) {}
+  }
+}
+
+function zhlAbStatus(gmailTabId, text) {
+  if (!gmailTabId) return;
+  try { chrome.tabs.sendMessage(gmailTabId, { action: 'zhlAppraisalBlast.status', text: text }); }
+  catch (e) {}
+}
+
+function zhlAbDelay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+function zhlAbWaitForLoad(tabId) {
+  return new Promise(function (resolve) {
+    chrome.tabs.get(tabId, function (tab) {
+      if (chrome.runtime.lastError || !tab) return resolve();
+      if (tab.status === 'complete') return resolve();
+      const listener = function (id, info) {
+        if (id === tabId && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+  });
+}
+
+// Retry sendMessage every ~1s until the content script answers or the
+// timeout fires. The SF content script can take a moment after
+// document_idle to register its message listener — without retry the
+// first message often gets a "Receiving end does not exist" error.
+function zhlAbSendWithRetry(tabId, msg, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    const start = Date.now();
+    const attempt = function () {
+      try {
+        chrome.tabs.sendMessage(tabId, msg, function (resp) {
+          const err = chrome.runtime.lastError;
+          if (err || !resp) {
+            if (Date.now() - start > timeoutMs) {
+              reject(new Error(err ? err.message : 'No response from Salesforce tab'));
+            } else {
+              setTimeout(attempt, 1000);
+            }
+            return;
+          }
+          resolve(resp);
+        });
+      } catch (e) {
+        if (Date.now() - start > timeoutMs) reject(e);
+        else setTimeout(attempt, 1000);
+      }
+    };
+    attempt();
+  });
+}

@@ -1143,6 +1143,23 @@
         </ul>
       </div>
     </div>
+
+    <!-- Appraisal Blast -->
+    <div class="feature" id="appraisal-blast">
+      <div class="shot"><img src="images/appraisal-blast.svg" alt="A Reggora Appraisal Submission Summary email with a navy floating panel and a gold 'Send to all parties' button bottom-right" /></div>
+      <div class="body">
+        <h3>Appraisal Blast &mdash; one-click email all parties</h3>
+        <div class="where">Reggora "Appraisal Submission Summary" emails</div>
+        <p>When a Reggora <strong>Appraisal Submission Summary</strong> email is open, a gold &ldquo;Send to all parties&rdquo; button appears bottom-right. One click:</p>
+        <ul>
+          <li>Parses the loan number, last name, address, appraised value, purchase price, and condition from the email.</li>
+          <li>Opens a hidden Salesforce tab, searches the loan, opens the Opportunity, and scrapes every Contact Role. Tab closes automatically.</li>
+          <li>Opens a new Gmail compose with <strong>TO</strong> = Borrower / Co-Borrower / Buyer&rsquo;s Agent / Transaction Coordinator and <strong>CC</strong> = Processor.</li>
+          <li>Body is congratulatory (with immediate equity figure) for normal appraisals; switches to a low-value variant if the appraisal came in under purchase price or Reggora flagged it.</li>
+        </ul>
+        <p>Nothing sends automatically &mdash; you review and hit Send. Your Gmail signature appends as normal. Requires you to be signed in to your Zillow Salesforce session.</p>
+      </div>
+    </div>
   </section>
 
   <!-- ====================== Salesforce ====================== -->

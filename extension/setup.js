@@ -21,7 +21,8 @@ const FEATURE_KEYS = [
   "feature_scenarioSort",
   "feature_pricingResultsPrint",
   "feature_coborrowerToSf",
-  "feature_gmailDragAttachments"
+  "feature_gmailDragAttachments",
+  "feature_appraisalBlast"
   // feature_telemetry intentionally omitted — telemetry is always on
   // (no toggle in the UI; isTelemetryEnabled() in background.js always
   // returns true).

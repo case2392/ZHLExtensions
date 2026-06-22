@@ -13,6 +13,23 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.27",
+    category: "new",
+    headline: "New module: Appraisal Blast — when you open a Reggora 'Appraisal Submission Summary' email, a gold 'Send to all parties' button appears bottom-right. One click parses the email, looks up the loan's Contact Roles in Salesforce via a hidden background tab, and opens a Gmail compose draft pre-filled with TO/CC/Subject/Body. Nothing sends automatically — review and hit Send.",
+    highlights: [
+      "Detection: Gmail content script tabs the open thread's subject line and shows the panel only when the subject starts with 'Appraisal Submission Summary'. MutationObserver + 1.5s polling keeps the panel correctly attached / removed as the LO navigates between emails.",
+      "Email parser pulls loan number (from subject '#ZG...' or body 'loan ZG...'), last name (from subject), property address (from subject before the first '('), appraised value, estimated/purchase value, reconciliation condition, and the explicit Low Value YES/NO flag.",
+      "Background orchestrator opens a hidden Salesforce tab in the LO's session, drives the global search header (clicks the search button, types the loan number, presses Enter), captures the resulting Opportunity URL, navigates the hidden tab to it, asks the SF content script to scrape the Contact Roles 'View All' list, then closes the hidden tab. Progress updates relay back to Gmail so the LO sees what step we're on.",
+      "Contact bucketing: TO = Borrower, Co-Borrower, Buyer's Agent, Transaction Coordinator. CC = Processor. Role matching is whitespace/punctuation tolerant ('Buyer's Agent', 'buyersagent', 'Buyer Agent' all match). Contacts with no email are skipped silently.",
+      "Two body variants: congratulatory (with the immediate-equity figure if appraised > purchase) for normal appraisals; a low-value variant if Reggora flagged Low Value: YES or if appraised < purchase. Condition phrasing is mapped — 'As-is' → 'as-is, so no repairs are required'; 'Subject to ...' → 'subject to repairs/completion — see the report for the required items'.",
+      "Signature: body ends with no hand-typed name. Gmail's own signature appends automatically when the compose window opens, so the feature works for any LO without per-user code changes.",
+      "Files: extension/modules/gmail-appraisal-blast.js (Gmail panel + parser + orchestrator caller), extension/modules/sf-appraisal-blast.js (SF tab driver — search + Contact Roles scrape), background.js orchestration block (lookupContacts handler + sfProgress relay), extension/images/appraisal-blast.svg, setup.html + setup.js + walkthrough.html feature entries, FEATURE_KEYS arrays. Both Gmail and SF host_permissions already existed, no manifest permission expansion needed.",
+      "Time saved: ~6 minutes per appraisal vs manually opening Salesforce, pulling each role's email, composing the message, and looking up the equity math. Credited once per content-script load so re-clicks don't double-count.",
+      "Feature key: feature_appraisalBlast (default on for new installs, like every other ZHL module). Disable via Setup if not needed. The Salesforce content script gates on the same key so the SF tab driver never runs on installs that have the feature off."
+    ],
+    sections: ["gmail-appraisal-blast", "sf-appraisal-blast"]
+  },
+  {
     version: "1.63.26",
     category: "improvement",
     headline: "Loan Comparison PDF page 2 — monthly cost breakdown now shows every PITIA component on its own line (P&I, MI, taxes, insurance, HOA, other) by scraping the 'Payment breakdown' popup that opens when you click the Monthly P&I / PITI value on each scenario card. The prior catchall 'MI, taxes, insurance & HOA' row is kept only as a fallback for when the popup scrape can't read the components.",

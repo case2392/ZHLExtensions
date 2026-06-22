@@ -687,6 +687,35 @@
       </div>
     </section>
 
+    <!-- ============== Module: Appraisal Blast ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Appraisal Blast</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code> + <code>*.lightning.force.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_appraisalBlast" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/appraisal-blast.svg" alt="A Reggora 'Appraisal Submission Summary' Gmail email with a navy floating panel in the bottom-right corner labeled 'Appraisal Blast' and a gold 'Send to all parties' button" />
+        </div>
+        <ul class="module-features">
+          <li>When you open a Reggora <strong>Appraisal Submission Summary</strong> email, a gold &ldquo;Send to all parties&rdquo; button appears bottom-right.</li>
+          <li>One click parses the loan number, last name, address, appraised value, purchase price, and condition out of the email body and subject.</li>
+          <li>Opens a hidden Salesforce tab, searches the loan, opens the Opportunity, scrapes every <strong>Contact Role</strong>&rsquo;s email, then closes the tab. You&rsquo;ll briefly see it appear in the tab strip.</li>
+          <li>A new Gmail draft opens with <strong>TO</strong> = Borrower, Co-Borrower, Buyer&rsquo;s Agent, Transaction Coordinator and <strong>CC</strong> = Processor, plus a congratulatory body (with an immediate-equity figure) or a low-value variant if the appraisal came in under purchase price.</li>
+          <li>Nothing sends automatically &mdash; you review and hit Send. Your Gmail signature appends as normal.</li>
+          <li>Requires you to be signed in to your Zillow Salesforce session in this browser; the extension uses your active session for the lookup.</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ============== Module: FHA Collections / Disputed badges ============== -->
     <section class="module-card" data-module>
       <div class="module-head">
