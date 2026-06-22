@@ -291,14 +291,14 @@ function zhlCalInjectOpenTabs() {
 
 chrome.runtime.onInstalled.addListener(() => {
   try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
-  try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
+  try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.1, periodInMinutes: 1 }); } catch (_) {}
   pollKillSwitch();
   zhlCalInjectOpenTabs();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
-  try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
+  try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.1, periodInMinutes: 1 }); } catch (_) {}
   pollKillSwitch();
   zhlCalInjectOpenTabs();
 });
@@ -1865,7 +1865,11 @@ const ZHL_CAL_META_KEY   = 'zhlCalMeta';
 const ZHL_CAL_MIN_REFETCH_MS = 90 * 1000; // don't hammer the feed
 
 function zhlCalCreateAlarm() {
-  try { chrome.alarms.create(ZHL_CAL_ALARM, { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
+  // 1-minute period: this alarm now drives the background due-reminder
+  // check (see zhlCalCheckDue), which brings Gmail to the front when a
+  // reminder fires even if the Gmail tab is throttled/discarded in the
+  // background. 1 minute is the smallest period Chrome honors in MV3.
+  try { chrome.alarms.create(ZHL_CAL_ALARM, { delayInMinutes: 0.1, periodInMinutes: 1 }); } catch (_) {}
 }
 zhlCalCreateAlarm();
 
@@ -1882,8 +1886,9 @@ zhlCalCreateAlarm();
 // don't see "no listener" errors — it's just a no-op now.
 chrome.alarms.onAlarm.addListener(function (alarm) {
   if (alarm && alarm.name === ZHL_CAL_ALARM) {
-    // No-op: scraper-driven now. Leaving the alarm registered means
-    // re-enabling the ICS path later is just flipping a flag.
+    // Background-driven reminder check — independent of whether any
+    // Gmail tab is awake.
+    zhlCalCheckDue();
   }
 });
 
@@ -1911,6 +1916,133 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   return false;
 });
+
+// ============================================================================
+// Background-driven "bring Gmail to the front when a reminder is due".
+//
+// The reminder CARD is drawn by the Gmail content script, but a content
+// script in a background/discarded tab is heavily throttled — so relying
+// on it to notice a due reminder and request focus is unreliable (the
+// reminder "doesn't appear until you click into Gmail"). This block moves
+// the DETECTION into the service worker, which runs on a 1-minute alarm
+// (ZHL_CAL_POLL) plus on relevant storage changes, regardless of which
+// window is focused. When a NEW reminder is due, it activates the most
+// recently used Gmail tab and focuses + raises its window. Activating a
+// discarded tab reloads it, which re-runs the content script so the card
+// draws.
+// ============================================================================
+
+function zhlCalParseLeads(str) {
+  const out = [];
+  String(str || '').split(/[,\s]+/).forEach(function (t) {
+    const n = parseInt(t, 10);
+    if (isFinite(n) && n >= 0) out.push(n);
+  });
+  if (!out.length) return [30, 5];
+  return Array.from(new Set(out)).sort(function (a, b) { return b - a; });
+}
+function zhlCalGet(keys) {
+  return new Promise(function (r) { try { chrome.storage.local.get(keys, function (d) { r(d || {}); }); } catch (_) { r({}); } });
+}
+function zhlCalSet(obj) {
+  return new Promise(function (r) { try { chrome.storage.local.set(obj, function () { r(); }); } catch (_) { r(); } });
+}
+
+function zhlCalFocusGmail() {
+  try {
+    chrome.tabs.query({ url: 'https://mail.google.com/*' }, function (tabs) {
+      if (!tabs || !tabs.length) return;
+      // Prefer the most recently used Gmail tab.
+      tabs.sort(function (a, b) { return (b.lastAccessed || 0) - (a.lastAccessed || 0); });
+      const t = tabs[0];
+      if (!t || t.id == null) return;
+      try { chrome.tabs.update(t.id, { active: true }); } catch (_) {}
+      if (t.windowId != null) {
+        chrome.windows.get(t.windowId, function (w) {
+          const _ = chrome.runtime.lastError;
+          const opts = { focused: true, drawAttention: true };
+          if (w && w.state === 'minimized') opts.state = 'normal';
+          try { chrome.windows.update(t.windowId, opts); } catch (_) {}
+        });
+      }
+      console.log('[ZHL Calendar Reminders] due reminder — brought Gmail tab', t.id, 'to front');
+    });
+  } catch (_) {}
+}
+
+let zhlCalCheckRunning = false;
+async function zhlCalCheckDue() {
+  if (zhlCalCheckRunning) return;
+  zhlCalCheckRunning = true;
+  try {
+    const data = await zhlCalGet([
+      'zhlCalEvents', 'cal_lead_times', 'zhlCalDismissed', 'zhlCalSnooze',
+      'zhlCalAlerted', 'feature_calendarReminders', 'zhl_kill_switch'
+    ]);
+    if (data.zhl_kill_switch === true) return;
+    if (data.feature_calendarReminders === false) return;
+
+    const events = Array.isArray(data.zhlCalEvents) ? data.zhlCalEvents : [];
+    const leads = zhlCalParseLeads(data.cal_lead_times);
+    const dismissed = data.zhlCalDismissed || {};
+    const snooze = data.zhlCalSnooze || {};
+    const alerted = data.zhlCalAlerted || {};
+    const now = Date.now();
+
+    const dueKeys = [];
+    const seen = {};
+    for (const ev of events) {
+      if (!ev || !isFinite(ev.startMs)) continue;
+      // Mirror the Gmail side's dedup (startMs + title prefix).
+      const tk = ev.startMs + '|' + String(ev.title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+      if (seen[tk]) continue;
+      seen[tk] = true;
+      if (now > ev.startMs + 60 * 60000) continue; // expired 1h after start
+      let activeLead = null;
+      for (const L of leads) {
+        if (now >= ev.startMs - L * 60000) { if (activeLead === null || L < activeLead) activeLead = L; }
+      }
+      if (activeLead === null) continue;
+      const occ = (ev.uid || '') + '|' + ev.startMs;
+      const instKey = occ + '|' + activeLead;
+      if (dismissed[instKey]) continue;
+      if (snooze[occ] && snooze[occ] > now) continue;
+      dueKeys.push(instKey);
+    }
+
+    const hasNew = dueKeys.some(function (k) { return !alerted[k]; });
+
+    // Persist the current due set as the new "alerted" set, but only when
+    // it actually changed (avoids needless writes / storage churn).
+    const oldSig = Object.keys(alerted).sort().join(',');
+    const newSig = dueKeys.slice().sort().join(',');
+    if (oldSig !== newSig) {
+      const newAlerted = {};
+      dueKeys.forEach(function (k) { newAlerted[k] = true; });
+      await zhlCalSet({ zhlCalAlerted: newAlerted });
+    }
+
+    if (hasNew && dueKeys.length) zhlCalFocusGmail();
+  } catch (e) {
+    console.warn('[ZHL Calendar Reminders] due-check failed', e);
+  } finally {
+    zhlCalCheckRunning = false;
+  }
+}
+
+// Run the check promptly when the stored events / settings / snooze /
+// dismiss state change (new scrape, test button, snooze, dismiss). We do
+// NOT trigger on zhlCalAlerted (our own bookkeeping) to avoid a loop.
+chrome.storage.onChanged.addListener(function (changes, area) {
+  if (area !== 'local') return;
+  if (changes.zhlCalEvents || changes.cal_lead_times ||
+      changes.zhlCalSnooze || changes.zhlCalDismissed) {
+    zhlCalCheckDue();
+  }
+});
+
+// And once shortly after the service worker spins up.
+setTimeout(function () { try { zhlCalCheckDue(); } catch (_) {} }, 2000);
 
 // ---- ICS parsing helpers --------------------------------------------------
 

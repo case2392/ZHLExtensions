@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.11",
+    category: "improvement",
+    headline: "Meeting Reminders — bring-Gmail-to-front is now bulletproof. The due-reminder detection moved into the background service worker, so a reminder pops and pulls Gmail forward even when the Gmail tab has been sitting in the background (where Chrome throttles or discards it). Previously the reminder sometimes 'didn't appear until you clicked into Gmail'.",
+    highlights: [
+      "Why it was flaky: the whole reminder system ran inside the Gmail tab's content script, and Chrome heavily throttles (and can discard) background tabs — so the code that detects a due reminder and requests focus barely ran while Gmail was buried. Chicken-and-egg: it couldn't raise Gmail because the thing that raises Gmail only ran once Gmail was already up.",
+      "Fix: the service worker now evaluates due reminders itself on a 1-minute alarm (the smallest period Chrome allows) AND immediately whenever the stored events / lead times / snooze / dismiss state change. It mirrors the Gmail side's logic exactly — same lead-time model, same dedup, same snooze/dismiss handling — and when a NEW reminder is due it activates the most recently used Gmail tab and focuses/raises its window (restoring it if minimized). Activating a discarded tab reloads it, which re-runs the content script so the card draws.",
+      "It fires the focus exactly once per new reminder (tracked in storage so it survives the service worker sleeping/waking), and re-fires for the next lead-time nudge — e.g. raises Gmail at the 30-minute reminder, and again at the 5-minute one — but won't repeatedly steal focus while a reminder just sits there.",
+      "The Gmail card now also redraws the instant the tab becomes visible (visibilitychange / window focus), so when the window is raised the pop-up appears immediately instead of waiting up to ~15s for the next render tick.",
+      "The content script's own focus request is kept as a belt-and-suspenders path for when Gmail is already in the foreground."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.10",
     category: "improvement",
     headline: "Meeting Reminders — removed the 'Snooze all' button; 'Dismiss all' now sits in its place (right side of the footer). Snoozing is handled by each reminder's own Snooze button plus the shared 'Snooze until:' dropdown.",

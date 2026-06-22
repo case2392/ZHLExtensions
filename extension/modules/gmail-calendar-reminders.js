@@ -529,6 +529,16 @@
     });
   } catch (_) {}
 
+  // Draw the card the instant this tab becomes visible — the background
+  // service worker brings Gmail to the front when a reminder is due, and
+  // the timer-driven render can otherwise lag up to ~15s after a hidden
+  // tab unhides. Rendering on visibilitychange makes the pop-up appear
+  // immediately when the window is raised.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') { try { render(); } catch (_) {} }
+  });
+  window.addEventListener('focus', function () { try { render(); } catch (_) {} });
+
 })();
   }
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
