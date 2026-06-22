@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.28",
+    category: "bugfix",
+    headline: "Appraisal Blast — loan number was being typed into the WRONG Salesforce input. The header has two inputs next to each other (a left 'Search: All' object-type combobox + the right global search input), and the v1.63.27 selector was grabbing the LEFT combobox because it appeared first in DOM order and matched the broad 'input.slds-input, input[type=\"search\"], input[role=\"combobox\"]' selector. Now requires type=\"search\" AND skips role=\"combobox\" so we always land on the right input.",
+    highlights: [
+      "Bug: v1.63.27's selector was 'input.slds-input, input[type=\"search\"], input[role=\"combobox\"]' picking the first visible match. The left object-type combobox (id=combobox-input-NNN, type='text', role='combobox', aria-label='Search by object type') appears first in DOM and matches both .slds-input and role='combobox', so it always won. The loan number landed in the object dropdown ('Search: All') instead of the global search input, so Enter just filtered the object list and no result link ever appeared — the orchestrator timed out reading 'No loan record found'.",
+      "Fix: prefer type=\"search\" without role=\"combobox\". The actual search input is type='search', placeholder='Search...', no role attribute. The left object combobox is type='text' AND role='combobox'. Two cheap discriminators that pick the right input deterministically.",
+      "Fallback: if no type='search' input is found (layout drift), fall back to any visible input.slds-input WITHOUT role='combobox' — still excludes the object switcher.",
+      "Source comment expanded to document both inputs and which selector targets which, so a future maintainer doesn't reintroduce the broad match."
+    ],
+    sections: ["sf-appraisal-blast"]
+  },
+  {
     version: "1.63.27",
     category: "new",
     headline: "New module: Appraisal Blast — when you open a Reggora 'Appraisal Submission Summary' email, a gold 'Send to all parties' button appears bottom-right. One click parses the email, looks up the loan's Contact Roles in Salesforce via a hidden background tab, and opens a Gmail compose draft pre-filled with TO/CC/Subject/Body. Nothing sends automatically — review and hit Send.",

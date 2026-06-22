@@ -83,10 +83,34 @@
     searchBtn.click();
     await sleep(500);
 
+    // The Salesforce search header has TWO inputs sitting next to
+    // each other and BOTH become visible the moment we click the
+    // search button:
+    //   LEFT  — the object-type combobox ("Search: All" dropdown).
+    //           type="text", role="combobox", placeholder="".
+    //           Typing here just filters the object dropdown — NOT
+    //           what we want.
+    //   RIGHT — the actual global search input.
+    //           type="search", placeholder="Search...", no role.
+    //           This is the one we type the loan number into.
+    // Require type="search" AND skip role="combobox" so we never
+    // land on the object switcher. (The old selector grabbed the
+    // first visible match including the left combobox, which made
+    // the loan number get typed into the object dropdown instead.)
     const input = await waitFor(function () {
-      const inputs = document.querySelectorAll('input.slds-input, input[type="search"], input[role="combobox"]');
-      for (const el of inputs) {
-        if (el.offsetParent !== null && el.type !== 'hidden') return el;
+      const searchInputs = document.querySelectorAll('input[type="search"]');
+      for (const el of searchInputs) {
+        if (el.offsetParent === null || el.type === 'hidden') continue;
+        if (el.getAttribute('role') === 'combobox') continue;
+        return el;
+      }
+      // Fallback for layout drift: any visible slds-input that
+      // isn't role="combobox".
+      const all = document.querySelectorAll('input.slds-input');
+      for (const el of all) {
+        if (el.offsetParent === null || el.type === 'hidden') continue;
+        if (el.getAttribute('role') === 'combobox') continue;
+        return el;
       }
       return null;
     }, 8000);
