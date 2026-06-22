@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.34",
+    category: "bugfix",
+    headline: "Walkthrough — Appraisal Blast now appears in the '✨ New features' section at the top of the walkthrough page. Was missing the `is-new` class on the feature div, so walkthrough.js's auto-clone (which copies every .feature.is-new card into the top section) skipped it.",
+    highlights: [
+      "extension/walkthrough.html: added the `is-new` class to the Appraisal Blast feature div (line 1148: `<div class=\"feature\" id=\"appraisal-blast\">` → `<div class=\"feature is-new\" id=\"appraisal-blast\">`).",
+      "walkthrough.js scans the document on load for every .feature.is-new card and clones it into #new-features-host in document order. Adding the class is the only step needed — the clone is automatic, so the same Gmail-section card now also renders at the top of the page next to the other recent features (Pricing Exception Workflow, Print Buyer Worksheet, etc.)."
+    ],
+    sections: ["walkthrough"]
+  },
+  {
     version: "1.63.33",
     category: "bugfix",
     headline: "Appraisal Blast — reverted the hidden minimized Salesforce window. It was causing 'Timeout waiting for element' failures because Lightning doesn't reliably render its global-search header in a minimized window, so the search button/input never appeared for the script to drive. Back to a normal visible Salesforce tab the LO can watch.",
