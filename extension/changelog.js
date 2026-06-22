@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.31",
+    category: "bugfix",
+    headline: "Appraisal Blast — the Salesforce lookup popup was opening visibly in v1.63.30 despite the 'state: minimized' hint, because Chrome silently rejects state=minimized when width/height/left/top are also passed (per chrome.windows.create docs: 'cannot be combined with bounds'). Dropped the width/height params so the minimized state actually applies; window now stays collapsed in the taskbar throughout the lookup.",
+    highlights: [
+      "Bug: v1.63.30's chrome.windows.create call passed state: 'minimized' AND width: 480 / height: 360. Chrome's docs explicitly say minimized/maximized/fullscreen states cannot be combined with bounds — so Chrome either threw (sending us into the tabs.create fallback, which puts the SF tab in the LO's main window's tab strip) or silently ignored the state hint and opened a normal 480×360 popup. Either way, the LO saw the work happen live.",
+      "Fix: removed width and height from the create options. Now passes only { url, focused: false, type: 'popup', state: 'minimized' } so Chrome can honor the state and pick its own default geometry. The popup never un-minimizes during the flow (no need to size it — Lightning renders into the off-screen DOM regardless).",
+      "Added a console.log right after chrome.windows.create returns so the LO (or me, in future debugging) can confirm whether the minimized state landed. Also added an explicit console.warn on the tabs.create fallback path so it's clear which branch ran if the minimized window ever fails to open.",
+      "Wrapped the post-create chrome.windows.update({ state: 'minimized' }) re-assert in a setTimeout(0) so it runs on the next tick — gives Chrome's window-state machine a beat to finish applying the create options before we stamp it again, instead of racing with the same call."
+    ],
+    sections: ["appraisal-blast-background"]
+  },
+  {
     version: "1.63.30",
     category: "improvement",
     headline: "Appraisal Blast — four upgrades in one push: (1) contacts are now correctly bucketed to TO/CC (role column was being misread as the contact name, so every recipient was getting dropped), (2) the second Reggora email variant 'Low appraisal valuation' is now recognized and parsed too, (3) the email body now renders as VPA-style HTML (Calibri body, ZHL-blue Georgia headings, framed highlight box with the dollar figures) instead of plain text, and (4) the Salesforce lookup runs in a minimized popup window so you don't watch it happen live in your tab strip.",

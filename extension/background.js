@@ -1735,6 +1735,14 @@ async function zhlAbHandleLookup(loanNumber, gmailTabId) {
   // search-and-scrape flow works the same. Falls back to the old
   // tabs.create approach if windows.create fails (e.g. blocked by
   // policy on managed devices).
+  //
+  // IMPORTANT: per chrome.windows.create docs, 'minimized' state
+  // CANNOT be combined with width/height/left/top. In v1.63.30 we
+  // passed all of them and Chrome either threw or silently ignored
+  // the state, so the popup came up visible. v1.63.31 drops the
+  // size params and lets Chrome choose default geometry for the
+  // minimized window (it'll be the size of the taskbar entry only
+  // since the window never un-minimizes).
   let win = null;
   try {
     win = await new Promise(function (resolve, reject) {
@@ -1743,17 +1751,17 @@ async function zhlAbHandleLookup(loanNumber, gmailTabId) {
           url: ZHL_AB_SF_HOME,
           focused: false,
           type: 'popup',
-          state: 'minimized',
-          width: 480,
-          height: 360
+          state: 'minimized'
         }, function (w) {
           if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
           else resolve(w);
         });
       } catch (e) { reject(e); }
     });
+    console.log('[ZHL Appraisal Blast] opened minimized popup window id=' + (win && win.id) +
+      ', state=' + (win && win.state) + ', focused=' + (win && win.focused));
   } catch (e) {
-    console.warn('[ZHL Appraisal Blast] windows.create failed, falling back to inactive tab:', e && e.message);
+    console.warn('[ZHL Appraisal Blast] windows.create with state=minimized failed, falling back to inactive tab in current window. Reason:', e && e.message);
   }
 
   let tab;
@@ -1762,9 +1770,14 @@ async function zhlAbHandleLookup(loanNumber, gmailTabId) {
     // Re-assert minimized + unfocused immediately after open. Some
     // platforms briefly show the window in its default state before
     // honoring the initial state hint; this stamps it again so it
-    // settles into the taskbar quickly.
-    try { chrome.windows.update(win.id, { state: 'minimized', focused: false }); } catch (_) {}
+    // settles into the taskbar quickly. Wrap in setTimeout so it
+    // runs on the next tick after Chrome's own state machine has
+    // finished applying the initial create options.
+    setTimeout(function () {
+      try { chrome.windows.update(win.id, { state: 'minimized', focused: false }); } catch (_) {}
+    }, 0);
   } else {
+    console.warn('[ZHL Appraisal Blast] using tabs.create fallback — SF tab will appear in the main window. Set chrome.runtime.lastError above for diagnosis.');
     tab = await new Promise(function (resolve) {
       chrome.tabs.create({ url: ZHL_AB_SF_HOME, active: false }, resolve);
     });
