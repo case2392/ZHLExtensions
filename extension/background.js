@@ -262,16 +262,45 @@ async function pollKillSwitch() {
   }
 }
 
+// Inject the calendar scraper into Calendar tabs that were ALREADY open
+// before the extension installed/updated/reloaded. Manifest content
+// scripts only auto-inject on page load, so a pre-existing Calendar tab
+// would otherwise never be scraped until the LO reloaded it (which is
+// exactly what the user hit). The scraper has a window.__zhlCalScraperLoaded
+// guard so this is a no-op on tabs that already have it.
+function zhlCalInjectOpenTabs() {
+  try {
+    chrome.storage.local.get(["feature_calendarReminders", "zhl_kill_switch"], (cfg) => {
+      if (cfg && cfg.zhl_kill_switch === true) return;
+      if (cfg && cfg.feature_calendarReminders === false) return;
+      chrome.tabs.query({ url: "https://calendar.google.com/*" }, (tabs) => {
+        if (!tabs || !tabs.length) return;
+        tabs.forEach((t) => {
+          if (!t.id) return;
+          try {
+            chrome.scripting.executeScript(
+              { target: { tabId: t.id }, files: ["modules/calendar-events-scraper.js"] },
+              () => { const _ = chrome.runtime.lastError; /* ignore "cannot access" on locked tabs */ }
+            );
+          } catch (_) {}
+        });
+      });
+    });
+  } catch (_) {}
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
   try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
   pollKillSwitch();
+  zhlCalInjectOpenTabs();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   try { chrome.alarms.create(KILL_SWITCH_ALARM, { delayInMinutes: 0.1, periodInMinutes: 10 }); } catch (_) {}
   try { chrome.alarms.create("ZHL_CAL_POLL", { delayInMinutes: 0.2, periodInMinutes: 5 }); } catch (_) {}
   pollKillSwitch();
+  zhlCalInjectOpenTabs();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {

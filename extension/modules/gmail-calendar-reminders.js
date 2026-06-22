@@ -140,20 +140,35 @@
   }
 
   // -------- dismiss / snooze actions -----------------------------
+  // Synthetic preview events (uid starts with "zhl-test", created by the
+  // "Show test reminder" button in Setup) are fully removed from the
+  // event store on dismiss so they don't linger for the hour-long expiry.
+  async function removeTestEvents() {
+    const d = await getStorage([EVENTS_KEY]);
+    const evs = Array.isArray(d[EVENTS_KEY]) ? d[EVENTS_KEY] : [];
+    const kept = evs.filter(function (e) { return !(e && String(e.uid).indexOf('zhl-test') === 0); });
+    if (kept.length !== evs.length) await setStorage({ [EVENTS_KEY]: kept });
+  }
   async function dismissOne(key, startMs) {
     const data = await getStorage([DISMISS_KEY]);
     const dismissed = data[DISMISS_KEY] || {};
     dismissed[key] = startMs;
     pruneMap(dismissed);
     await setStorage({ [DISMISS_KEY]: dismissed });
+    if (key.indexOf('zhl-test') === 0) await removeTestEvents();
     render();
   }
   async function dismissAll(dueList) {
     const data = await getStorage([DISMISS_KEY]);
     const dismissed = data[DISMISS_KEY] || {};
-    dueList.forEach(function (d) { dismissed[d.key] = d.ev.startMs; });
+    let hadTest = false;
+    dueList.forEach(function (d) {
+      dismissed[d.key] = d.ev.startMs;
+      if (d.key.indexOf('zhl-test') === 0) hadTest = true;
+    });
     pruneMap(dismissed);
     await setStorage({ [DISMISS_KEY]: dismissed });
+    if (hadTest) await removeTestEvents();
     render();
   }
   async function snoozeOne(key, minutes) {

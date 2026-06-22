@@ -158,6 +158,61 @@ async function refreshCalStatus() {
 refreshCalStatus();
 setInterval(refreshCalStatus, 5000);
 
+// "Show test reminder" — writes a synthetic event a couple minutes out
+// so the reminder card pops in any open Gmail tab immediately, without
+// waiting for a real meeting or relying on the scraper. Bypasses the
+// scraper entirely (writes straight to zhlCalEvents). Tagged uid
+// "zhl-test*" so the Gmail side removes it on dismiss.
+const calTestBtn = document.getElementById('cal-test-btn');
+if (calTestBtn) {
+  calTestBtn.addEventListener('click', async () => {
+    const testStatus = document.getElementById('cal-test-status');
+    try {
+      const now = Date.now();
+      const data = await chrome.storage.local.get(['zhlCalEvents', 'zhlCalDismissed', 'zhlCalSnooze']);
+      const prev = Array.isArray(data.zhlCalEvents) ? data.zhlCalEvents : [];
+      // Drop any earlier test events, then add a fresh one ~2 min out.
+      const cleaned = prev.filter((e) => !(e && String(e.uid).indexOf('zhl-test') === 0));
+      cleaned.push({
+        uid: 'zhl-test-' + now,
+        _tab: 'zhl-test-preview',
+        startMs: now + 2 * 60000,
+        endMs: now + 32 * 60000,
+        title: 'Test meeting (ZHL preview)',
+        location: '',
+        meet: ''
+      });
+      // Clear any prior dismiss/snooze on test instances so it re-shows.
+      const dism = data.zhlCalDismissed || {};
+      const snz = data.zhlCalSnooze || {};
+      Object.keys(dism).forEach((k) => { if (k.indexOf('zhl-test') === 0) delete dism[k]; });
+      Object.keys(snz).forEach((k) => { if (k.indexOf('zhl-test') === 0) delete snz[k]; });
+      await chrome.storage.local.set({ zhlCalEvents: cleaned, zhlCalDismissed: dism, zhlCalSnooze: snz });
+
+      // Is a Gmail tab open to show it in?
+      let gmailOpen = false;
+      try {
+        const tabs = await chrome.tabs.query({ url: 'https://mail.google.com/*' });
+        gmailOpen = tabs && tabs.length > 0;
+        if (gmailOpen && tabs[0].id != null) {
+          // Bring the first Gmail tab forward so the card is visible.
+          chrome.tabs.update(tabs[0].id, { active: true });
+          if (tabs[0].windowId != null) chrome.windows.update(tabs[0].windowId, { focused: true });
+        }
+      } catch (_) {}
+
+      if (testStatus) {
+        testStatus.textContent = gmailOpen
+          ? '✓ Test reminder sent — check your Gmail tab (brought to front).'
+          : '✓ Test reminder queued — open a Gmail tab to see the pop-up.';
+        testStatus.style.color = '#16a34a';
+      }
+    } catch (e) {
+      if (testStatus) { testStatus.textContent = 'Error: ' + (e && e.message || e); testStatus.style.color = '#b91c1c'; }
+    }
+  });
+}
+
 // Insurance Agent defaults — used by the Intro Email module and auto-CC'd
 // on every Intro Email draft. Same auto-save-on-input pattern as the LO
 // Profile fields.

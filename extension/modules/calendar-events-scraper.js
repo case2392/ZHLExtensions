@@ -39,6 +39,17 @@
     ? chrome.runtime.getManifest().version : '?';
   console.log('[ZHL Calendar Scraper v' + VERSION + '] loaded on', location.href);
 
+  // Guard against double-injection. The manifest content_script injects
+  // this on page load, but the background ALSO injects it into already-
+  // open Calendar tabs on startup (so a tab opened before the extension
+  // reloaded still gets scraped). Without this guard, both copies would
+  // run with different tab tags and write duplicate events.
+  if (window.__zhlCalScraperLoaded) {
+    console.log('[ZHL Calendar Scraper] already loaded in this tab — skipping duplicate injection');
+    return;
+  }
+  window.__zhlCalScraperLoaded = true;
+
   const EVENTS_KEY = 'zhlCalEvents';
   const META_KEY   = 'zhlCalMeta';
   const RESCAN_MS  = 8000;          // periodic backstop
@@ -66,66 +77,72 @@
 
   // ---- Aria-label parsing ----------------------------------------
   // Returns { startMs, endMs, title } or null.
+  //
+  // Google Calendar event chips carry an aria-label that bundles the
+  // time, title, and (usually) date together. The exact wording varies
+  // by view and locale, so this parser is deliberately permissive:
+  //   - DATE is required (we will not guess a day — guessing risks
+  //     firing reminders for the wrong day). Matches "Wednesday,
+  //     July 15", "Jul 15", "July 15, 2026", "on July 15", etc.
+  //   - TIME accepts either a range ("10:15 – 11:15am", "1 to 2pm")
+  //     OR a single start time ("10:15am") in which case we assume a
+  //     30-minute duration.
+  function to24h(h, ampm, fallbackAmPm) {
+    const tag = (ampm || fallbackAmPm || '').toLowerCase();
+    let H = h;
+    if (tag) {
+      const isPM = tag === 'pm';
+      if (isPM && H < 12) H += 12;
+      if (!isPM && H === 12) H = 0;
+    }
+    return H;
+  }
+
   function parseAria(aria) {
     if (!aria) return null;
-    // Strip "All day" / "All-day" markers — we skip all-day events
-    // (they have no useful "X minutes before" reminder time).
     if (/all[- ]day/i.test(aria)) return null;
 
-    // Time range. Each end may carry its own am/pm; the start may
-    // omit am/pm and borrow from the end ("9 to 10am").
-    const tm = aria.match(
-      /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|–|—|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i
-    );
-    if (!tm) return null;
-    const sH = +tm[1], sM = +(tm[2] || 0);
-    const sAmPm = (tm[3] || tm[6] || '').toLowerCase();
-    const eH = +tm[4], eM = +(tm[5] || 0);
-    const eAmPm = (tm[6] || '').toLowerCase();
-
-    // Date: "Wednesday, July 15" / "Wed, Jul 15" / "Jul 15, 2026".
-    // Capture both the weekday-led and the month-led variants.
-    const dRe = /(?:(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*,?\s+)?((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\s+(\d{1,2})(?:,?\s+(\d{4}))?/i;
+    // ---- Date (required) ----
+    const dRe = /(?:(?:sun|mon|tue|wed|thu|fri|sat)[a-z]*,?\s+)?((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?/i;
     const dm = aria.match(dRe);
     if (!dm) return null;
     const month = MONTH_IDX[dm[1].toLowerCase()];
     if (month == null) return null;
     const day = +dm[2];
     let year = dm[3] ? +dm[3] : new Date().getFullYear();
-    // Roll forward if the parsed date is far in the past — Calendar
-    // doesn't include the year for current-year events, so a January
-    // event read in December needs to be year+1, not the current
-    // year (which is now in the past).
     let candidate = new Date(year, month, day);
     const now = Date.now();
-    if (candidate.getTime() < now - 14 * 86400000) {
-      candidate = new Date(year + 1, month, day);
-    }
+    if (candidate.getTime() < now - 14 * 86400000) candidate = new Date(year + 1, month, day);
     year = candidate.getFullYear();
 
-    function to24h(h, ampm, fallbackAmPm) {
-      const tag = ampm || fallbackAmPm || '';
-      let H = h;
-      if (tag) {
-        const isPM = tag === 'pm';
-        if (isPM && H < 12) H += 12;
-        if (!isPM && H === 12) H = 0;
-      }
-      return H;
+    // ---- Time: try a range first, then a single start time ----
+    let startH, startM, endH, endM, matchedTime;
+    const tr = aria.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|–|—|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (tr) {
+      const sTag = tr[3] || tr[6] || '';
+      const eTag = tr[6] || '';
+      startH = to24h(+tr[1], sTag, eTag);
+      startM = +(tr[2] || 0);
+      endH   = to24h(+tr[4], eTag, sTag);
+      endM   = +(tr[5] || 0);
+      matchedTime = tr[0];
+    } else {
+      const ts = aria.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+      if (!ts) return null;
+      startH = to24h(+ts[1], ts[3], ts[3]);
+      startM = +(ts[2] || 0);
+      endH = null; endM = null;
+      matchedTime = ts[0];
     }
-    const startH = to24h(sH, sAmPm, eAmPm);
-    const endH   = to24h(eH, eAmPm, sAmPm);
-    const startMs = new Date(year, month, day, startH, sM).getTime();
-    let endMs     = new Date(year, month, day, endH,   eM).getTime();
-    // Cross-midnight events: end wraps to next day.
-    if (endMs <= startMs) endMs += 86400000;
 
-    // Title: aria minus time + date strings. Trim leading/trailing
-    // punctuation/commas the locale leaves behind.
-    let title = aria.replace(tm[0], ' ').replace(dm[0], ' ');
-    // Common trailing fragments like ", Calendar of Justin" / ", busy" —
-    // drop short tail fragments after the last comma if they look
-    // status-y. Conservative: only strip the well-known ones.
+    const startMs = new Date(year, month, day, startH, startM).getTime();
+    let endMs = (endH == null)
+      ? startMs + 30 * 60000
+      : new Date(year, month, day, endH, endM).getTime();
+    if (endMs <= startMs) endMs += 86400000; // cross-midnight
+
+    // ---- Title: aria minus the matched time + date fragments ----
+    let title = aria.replace(matchedTime, ' ').replace(dm[0], ' ');
     title = title.replace(/,\s*(busy|free|tentative)\b.*$/i, '');
     title = title.replace(/\s+/g, ' ').replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, '').trim();
     if (!title) title = '(no title)';
@@ -135,28 +152,35 @@
 
   // ---- Scrape pass ------------------------------------------------
   // Returns events de-duplicated by (uid OR title+startMs).
+  // Set window.__zhlCalDebug = true in the Calendar tab's console to see
+  // every candidate chip's aria-label, which makes it easy to share a
+  // sample if the parser ever needs tuning for a new Calendar layout.
   function scrapeOnce() {
     const seen = new Set();
     const out = [];
 
     // Selectors are intentionally broad. Google Calendar event chips
     // typically have role=button + a data-eventid (week/day view) or
-    // role=gridcell with an aria-label that contains the same shape
-    // (month view). Both are accepted.
+    // role=gridcell with an aria-label (month view). We also fall back
+    // to ANY element carrying both data-eventid and an aria-label, plus
+    // anything with a data-eventchip attribute, to survive markup drift.
     const chips = document.querySelectorAll(
-      '[role="button"][data-eventid], [role="button"][data-eventchip], ' +
-      '[role="button"][jsaction*="eventchip"], [role="button"][jslog*="eventchip"], ' +
+      '[data-eventid][aria-label], [data-eventchip][aria-label], ' +
+      '[role="button"][aria-label][jslog*="event"], ' +
       '[role="gridcell"][aria-label]'
     );
+
+    const samples = [];
+    let considered = 0;
 
     chips.forEach(function (el) {
       const aria = el.getAttribute('aria-label');
       if (!aria) return;
-      // Skip the empty grid cells of the month view (their aria-label
-      // is "Tuesday, July 15" with no time component) — parseAria
-      // already returns null when there's no time range, so this is
-      // just a fast-path.
-      if (!/(am|pm)\s*(?:to|–|—|-)/i.test(aria) && !/\d:\d{2}\s*(?:to|–|—|-)/.test(aria)) return;
+      // Must contain at least one clock time, otherwise it's an empty
+      // month-view grid cell ("Tuesday, July 15") — skip fast.
+      if (!/\d\s*(am|pm)/i.test(aria) && !/\d:\d{2}/.test(aria)) return;
+      considered++;
+      if (samples.length < 6) samples.push(aria);
 
       const parsed = parseAria(aria);
       if (!parsed) return;
@@ -166,10 +190,6 @@
       if (seen.has(key)) return;
       seen.add(key);
 
-      // Cheap location + Meet-link detection: look inside the chip's
-      // own text for a recognizable Meet URL or a "Location:" line.
-      // Most week-view chips don't expose this; the LO can still see
-      // the event title and time, which is the critical part.
       const txt = (el.textContent || '').replace(/\s+/g, ' ');
       const meetM = txt.match(/https?:\/\/meet\.google\.com\/[a-z0-9\-]+/i);
 
@@ -182,6 +202,14 @@
         meet: meetM ? meetM[0] : ''
       });
     });
+
+    // Always log a one-line summary; dump samples when nothing parsed
+    // (or when debug is on) so the actual aria-label format is visible.
+    if (out.length === 0 || window.__zhlCalDebug) {
+      console.log('[ZHL Calendar Scraper] chips matched=' + chips.length +
+        ', with-time=' + considered + ', parsed=' + out.length +
+        (samples.length ? '\n  sample aria-labels:\n   • ' + samples.join('\n   • ') : ''));
+    }
 
     out.sort(function (a, b) { return a.startMs - b.startMs; });
     return out;

@@ -125,7 +125,11 @@
             <input type="text" data-cal-field="cal_lead_times" placeholder="30, 5" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
           </label>
           <p id="cal-status-line" style="font-size:11.5px;color:#6b7280;margin:2px 0 0;line-height:1.45;">Calendar status: <span id="cal-status-detail">checking…</span></p>
-          <a href="https://calendar.google.com/calendar/u/0/r/week" target="_blank" rel="noopener" style="font-size:12px;color:#1d4ed8;text-decoration:underline;">Open Google Calendar in a new tab &rarr;</a>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <a href="https://calendar.google.com/calendar/u/0/r/week" target="_blank" rel="noopener" style="font-size:12px;color:#1d4ed8;text-decoration:underline;">Open Google Calendar in a new tab &rarr;</a>
+            <button type="button" id="cal-test-btn" title="Built by Justin Case. Karma appreciated 💛" style="padding:7px 12px;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;border-radius:5px;font:600 12px Arial,sans-serif;cursor:pointer;">Show test reminder</button>
+          </div>
+          <p id="cal-test-status" style="font-size:11.5px;color:#6b7280;margin:0;line-height:1.45;"></p>
         </div>
         <ul class="module-features">
           <li>Recreates the old Outlook reminder window inside Gmail: a pop-up card slides in before each meeting with <strong>Snooze</strong> and <strong>Dismiss</strong> buttons.</li>

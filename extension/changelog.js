@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.2",
+    category: "improvement",
+    headline: "Meeting Reminders — added a 'Show test reminder' button in Setup (see the pop-up instantly without waiting for a real meeting), made already-open Calendar tabs get scraped automatically, and broadened the event parser to handle single-time chips plus diagnostic logging when nothing parses.",
+    highlights: [
+      "Show test reminder button (Setup → Meeting Reminders): writes a synthetic 'Test meeting (ZHL preview)' event ~2 minutes out straight into the event store (bypassing the scraper), brings your first open Gmail tab to the front, and the reminder card pops immediately. Dismissing the test card removes it cleanly (synthetic uid 'zhl-test*' is stripped from the store on dismiss). Lets you see exactly what the card looks like on demand.",
+      "Already-open Calendar tabs now scraped: manifest content scripts only auto-inject on page load, so a Calendar tab you had open BEFORE reloading the extension was never scraped (you had to open a fresh window — exactly the reported bug). The background now injects the scraper into existing calendar.google.com tabs on install/startup via chrome.scripting.executeScript, guarded by a window.__zhlCalScraperLoaded flag so there's no double-injection / duplicate events.",
+      "Parser robustness: the scraper previously only accepted event chips whose aria-label had a full time RANGE ('10:15 – 11:15am'). Many Calendar chips expose only a single start time ('10:15am'), so those produced zero events. The parser now accepts a single start time (assuming a 30-minute duration) in addition to ranges, and the chip pre-filter was loosened to any aria-label containing a clock time. Date is still REQUIRED from the aria-label (we never guess a day, to avoid firing reminders for the wrong date).",
+      "Diagnostics: when a scrape parses zero events (or when you set window.__zhlCalDebug = true in the Calendar tab console), the scraper logs how many chips matched, how many had a time, how many parsed, and up to six sample aria-labels — so if a Calendar layout still isn't recognized, the exact format is one console line away.",
+      "Note on the '0 upcoming events loaded' status: that means the scraper connected to the tab but didn't recognize any event chips. With the single-time support added here it should now populate; if it still shows 0, open the Calendar tab's DevTools console and share a '[ZHL Calendar Scraper] sample aria-labels' line so the parser can be tuned to your exact layout."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.1",
     category: "improvement",
     headline: "Meeting Reminders — pivoted from ICS-feed polling to Calendar-tab scraping. Zillow Workspace has the per-user 'Secret address in iCal format' disabled, so the v1.64.0 setup flow had no usable URL to paste. The reminder card, snooze/dismiss UI, lead-time logic, and storage schema are all unchanged; only the data source changed. Keep a calendar.google.com tab open and reminders fire as before.",
