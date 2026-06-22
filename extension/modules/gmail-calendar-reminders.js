@@ -223,14 +223,6 @@
     await setStorage({ [SNOOZE_KEY]: snooze });
     render();
   }
-  async function snoozeAll(dueList, offsetMin) {
-    const data = await getStorage([SNOOZE_KEY]);
-    const snooze = data[SNOOZE_KEY] || {};
-    dueList.forEach(function (d) { snooze[d.occKey] = snoozeTarget(d.ev.startMs, offsetMin); });
-    pruneMap(snooze);
-    await setStorage({ [SNOOZE_KEY]: snooze });
-    render();
-  }
   // Drop entries whose meeting was >2h ago so the maps don't grow forever.
   function pruneMap(map) {
     const cutoff = Date.now() - 2 * 60 * 60 * 1000;
@@ -477,17 +469,15 @@
       snoozeChoiceOff = parseInt(select.value, 10);
       if (isNaN(snoozeChoiceOff)) snoozeChoiceOff = -5;
     });
-    const snoozeAllBtn = document.createElement('button');
-    snoozeAllBtn.textContent = 'Snooze all';
-    snoozeAllBtn.style.cssText = 'margin-left:auto;padding:6px 10px;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-radius:5px;font:600 11.5px Arial,sans-serif;cursor:pointer;';
-    snoozeAllBtn.addEventListener('click', function () { snoozeAll(due, snoozeChoiceOff); });
+    // Dismiss all sits on the right (where Snooze all used to be).
+    // Snooze all was removed — the per-row Snooze button + the shared
+    // "Snooze until:" dropdown cover snoozing.
     const dismissAllBtn = document.createElement('button');
     dismissAllBtn.textContent = 'Dismiss all';
-    dismissAllBtn.style.cssText = 'padding:6px 10px;background:#0f172a;color:#fff;border:none;border-radius:5px;font:600 11.5px Arial,sans-serif;cursor:pointer;';
+    dismissAllBtn.style.cssText = 'margin-left:auto;padding:6px 10px;background:#0f172a;color:#fff;border:none;border-radius:5px;font:600 11.5px Arial,sans-serif;cursor:pointer;';
     dismissAllBtn.addEventListener('click', function () { dismissAll(due); });
     footer.appendChild(snzLabel);
     footer.appendChild(select);
-    footer.appendChild(snoozeAllBtn);
     footer.appendChild(dismissAllBtn);
     panel.appendChild(footer);
 

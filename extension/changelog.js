@@ -13,6 +13,16 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.10",
+    category: "improvement",
+    headline: "Meeting Reminders — removed the 'Snooze all' button; 'Dismiss all' now sits in its place (right side of the footer). Snoozing is handled by each reminder's own Snooze button plus the shared 'Snooze until:' dropdown.",
+    highlights: [
+      "Footer is now: 'Snooze until:' dropdown on the left, 'Dismiss all' on the right. The per-row Snooze button still uses the dropdown selection to snooze that one meeting.",
+      "Removed the now-unused snoozeAll() function."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.9",
     category: "improvement",
     headline: "Meeting Reminders — fixed the same meeting showing up multiple times, and changed the Snooze options to be relative to the meeting ('5 min before event', 'at start time', '5 min after event', …) instead of plain durations.",
