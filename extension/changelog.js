@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.33",
+    category: "bugfix",
+    headline: "Appraisal Blast — reverted the hidden minimized Salesforce window. It was causing 'Timeout waiting for element' failures because Lightning doesn't reliably render its global-search header in a minimized window, so the search button/input never appeared for the script to drive. Back to a normal visible Salesforce tab the LO can watch.",
+    highlights: [
+      "Root cause of the timeout: v1.63.31's chrome.windows.create({ state: 'minimized' }) successfully hid the window, but a minimized Chromium window doesn't lay out its DOM the way a visible one does — the global-search button and input in the Salesforce header weren't present/visible, so searchLoan()'s waitFor() for those elements ran out its 15s budget and threw 'Timeout waiting for element'. The earlier assumption that 'Chrome only throttles JS in unused tabs, not minimized windows' was wrong about layout — JS runs, but offscreen/minimized layout is deprioritized enough that the header controls never materialized.",
+      "Fix: chrome.tabs.create({ url, active: true }) — a normal foreground tab in the LO's current window. The LO watches the search + Contact Roles scrape happen, then the tab auto-closes when the lookup finishes (success or error). Watching it is acceptable and actually reassures the LO that work is happening.",
+      "Removed the now-unused popup-window plumbing (the win variable, the state-reassert setTimeout calls, the windows.remove teardown branch). Teardown is back to a simple chrome.tabs.remove(tab.id) in the finally block.",
+      "If hiding the tab becomes a priority again later, the right approach is a visible-but-background tab (active: false in the SAME window) rather than a minimized window — that keeps layout intact while staying off the LO's active view. We had that in v1.63.29 and earlier; it worked but still showed in the tab strip, which is why this revert uses active: true for clarity that the operation is running."
+    ],
+    sections: ["appraisal-blast-background"]
+  },
+  {
     version: "1.63.32",
     category: "improvement",
     headline: "Appraisal Blast — the appraisal PDF from the Reggora email is now auto-attached to the new draft. No drag-and-drop required: when you click 'Send to all parties', the script fetches every attachment from the source email, stashes it alongside the formatted body, and re-injects it as a real file on the new compose tab so the PDF is already attached when the draft opens.",
