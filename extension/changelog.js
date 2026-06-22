@@ -13,6 +13,21 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.63.32",
+    category: "improvement",
+    headline: "Appraisal Blast — the appraisal PDF from the Reggora email is now auto-attached to the new draft. No drag-and-drop required: when you click 'Send to all parties', the script fetches every attachment from the source email, stashes it alongside the formatted body, and re-injects it as a real file on the new compose tab so the PDF is already attached when the draft opens.",
+    highlights: [
+      "Why not just fix drag-and-drop: cross-window Gmail-to-Gmail drag doesn't work in the existing gmail-drag-attachments module — its activeDragFile is module-scoped per content-script instance, so a drag from window A to window B never sees the file in window B's drop handler. Chrome also strips JS-constructed Files from dataTransfer.files at cross-window drop time, so the fallback path is empty too. Result: the destination compose body sees only the attachment filename as plain text and pastes that into the body. Auto-attach sidesteps the whole problem.",
+      "How it works: gatherAttachments() on the source tab walks all [download_url] elements in the open Reggora email, parses Gmail's 'mime:filename:url' format (same parser as gmail-drag-attachments), fetches each blob with credentials:include (so Gmail's auth cookies tag along), base64-encodes, and returns { name, mime, b64, size } entries. The list is added to the existing chrome.storage.local stash key zhlAppraisalBlastPendingPaste alongside the HTML body.",
+      "On the destination compose tab, the existing paste pipeline now also calls injectFilesIntoCompose() AFTER the HTML body verifies as pasted. The compose form's input[type=\"file\"] gets a fresh DataTransfer.files assignment + a synthesized 'change' event — Gmail treats this exactly like a paperclip-dialog file pick, so the attachment chip animates in normally.",
+      "Compose-form lookup handles both popup compose (closest div[role=\"dialog\"] wrapper) AND fullscreen compose (which Appraisal Blast opens via ?fs=1 — no dialog wrapper, so we walk up to the nearest ancestor that owns an input[type=\"file\"]). Mirrors the gmail-drag-attachments helper.",
+      "Per-attachment cap: 4 MB. chrome.storage.local has a 10 MB default quota; capping at 4 MB leaves headroom for the HTML body plus a few attachments. Reggora appraisal PDFs are typically 1–3 MB so this is comfortable in practice. Anything larger is logged with a console.warn and skipped — the LO would need to drag-and-drop manually for those (and we should look at that as a follow-up; an unlimitedStorage permission bump would lift the cap if it becomes a problem).",
+      "Status bar copy updated: shows 'N attachments' or 'no attachments' as it gathers, so the LO can tell at a glance whether the PDF was picked up before the draft opens.",
+      "Failure modes degrade gracefully: gather failure logs a warn and continues with zero files; per-file fetch/encode errors skip that file; the file inject runs even if the HTML verify never succeeded (so the LO at least gets the PDF attached and can Ctrl+V the body)."
+    ],
+    sections: ["gmail-appraisal-blast"]
+  },
+  {
     version: "1.63.31",
     category: "bugfix",
     headline: "Appraisal Blast — the Salesforce lookup popup was opening visibly in v1.63.30 despite the 'state: minimized' hint, because Chrome silently rejects state=minimized when width/height/left/top are also passed (per chrome.windows.create docs: 'cannot be combined with bounds'). Dropped the width/height params so the minimized state actually applies; window now stays collapsed in the taskbar throughout the lookup.",

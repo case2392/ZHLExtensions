@@ -420,16 +420,114 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
     window.open('https://mail.google.com/mail/?' + params.toString(), '_blank');
   }
 
+  // ---- Source-side: gather Reggora attachments to auto-attach ----
+  //
+  // Cross-window Gmail-to-Gmail drag-and-drop of attachment chips
+  // doesn't work today (the gmail-drag-attachments module's
+  // activeDragFile is module-scoped per content-script instance, and
+  // Chrome strips JS-constructed Files from dataTransfer.files at
+  // cross-window drop time). So instead of asking the LO to drag the
+  // PDF over from the source Reggora email, we fetch the
+  // attachment(s) on the source tab at click time, base64-encode
+  // them, stash them alongside the formatted HTML body, and
+  // re-inject as File objects on the new compose tab. End result:
+  // when the compose draft opens, the appraisal PDF is already in
+  // the attachments — no drag needed.
+  //
+  // Per-attachment cap: chrome.storage.local has a 10 MB total
+  // quota by default. We cap each file at 4 MB so the HTML body
+  // + a few attachments comfortably fit. Anything larger is logged
+  // and skipped; the LO can attach it manually.
+
+  const ATTACH_MAX_BYTES = 4 * 1024 * 1024;
+
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      const r = new FileReader();
+      r.onload = function () {
+        const s = String(r.result || '');
+        const i = s.indexOf(',');
+        resolve(i >= 0 ? s.slice(i + 1) : s);
+      };
+      r.onerror = function () { reject(r.error || new Error('read error')); };
+      r.readAsDataURL(blob);
+    });
+  }
+  function base64ToBlob(b64, mime) {
+    const binary = atob(b64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime || 'application/octet-stream' });
+  }
+
+  async function gatherAttachments() {
+    // Gmail's attachment chips carry a [download_url] attribute
+    // formatted as "<mime>:<filename>:<url>". Same parsing pattern as
+    // gmail-drag-attachments.js so we stay consistent with that
+    // module's prefetched cache.
+    const seen = new Set();
+    const infos = [];
+    document.querySelectorAll('[download_url]').forEach(function (el) {
+      const dl = el.getAttribute('download_url') || '';
+      const idx1 = dl.indexOf(':');
+      const idx2 = dl.indexOf(':', idx1 + 1);
+      if (idx1 < 1 || idx2 < idx1 + 1) return;
+      let filename = dl.slice(idx1 + 1, idx2);
+      try { filename = decodeURIComponent(filename); } catch (_) {}
+      const info = {
+        mime: dl.slice(0, idx1),
+        filename: filename,
+        url: dl.slice(idx2 + 1)
+      };
+      if (seen.has(info.url)) return;
+      seen.add(info.url);
+      infos.push(info);
+    });
+    if (!infos.length) return [];
+
+    const out = [];
+    for (const info of infos) {
+      try {
+        // credentials: 'include' so Gmail's auth cookies tag along.
+        const resp = await fetch(info.url, { credentials: 'include' });
+        if (!resp.ok) {
+          console.warn('[ZHL Appraisal Blast] attachment fetch HTTP ' + resp.status + ' for', info.filename);
+          continue;
+        }
+        const blob = await resp.blob();
+        if (blob.size > ATTACH_MAX_BYTES) {
+          console.warn('[ZHL Appraisal Blast] attachment too large to auto-attach (' +
+            blob.size + ' bytes, cap ' + ATTACH_MAX_BYTES + '), skipping:', info.filename);
+          continue;
+        }
+        const b64 = await blobToBase64(blob);
+        out.push({
+          name: info.filename || 'attachment',
+          mime: info.mime || blob.type || 'application/octet-stream',
+          b64: b64,
+          size: blob.size
+        });
+        console.log('[ZHL Appraisal Blast] gathered attachment', info.filename, '(' + blob.size + ' bytes)');
+      } catch (e) {
+        console.warn('[ZHL Appraisal Blast] attachment fetch failed for', info.filename, e);
+      }
+    }
+    return out;
+  }
+
   // Stash + clipboard mirror of sf-vpa-email.js's stashAndClip:
   // chrome.storage.local holds the HTML so the new compose tab can
   // see it; the clipboard write is a Ctrl+V fallback for the rare
   // case where the auto-paste misses (Gmail compose body never
-  // appears, extension context invalidated mid-flight, etc.).
-  function stashAndClip(html, plain) {
+  // appears, extension context invalidated mid-flight, etc.). The
+  // `files` array carries base64-encoded attachments for re-injection
+  // into the compose's file input on the destination tab.
+  function stashAndClip(html, plain, files) {
     return new Promise(function (resolve) {
       try {
         chrome.storage.local.set({
-          [PASTE_STORAGE_KEY]: { html: html, plain: plain, ts: Date.now() }
+          [PASTE_STORAGE_KEY]: { html: html, plain: plain, files: files || [], ts: Date.now() }
         }, function () {
           try {
             const data = [new ClipboardItem({
@@ -470,9 +568,17 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
       const msg = buildMessage(data, contacts);
       const html = buildHtmlBody(data);
 
+      setStatus('Gathering attachments from this email…');
+      let files = [];
+      try { files = await gatherAttachments(); }
+      catch (e) { console.warn('[ZHL Appraisal Blast] gatherAttachments failed:', e); }
+
+      const attachSummary = files.length
+        ? files.length + ' attachment' + (files.length === 1 ? '' : 's')
+        : 'no attachments';
       setStatus('Found ' + contacts.length + ' contacts; ' + msg.to.length + ' on TO, ' +
-        msg.cc.length + ' on CC. Stashing formatted body…');
-      await stashAndClip(html, msg.body);
+        msg.cc.length + ' on CC; ' + attachSummary + '. Stashing formatted body…');
+      await stashAndClip(html, msg.body, files);
 
       setStatus('Opening draft…');
       openCompose(msg);
@@ -584,6 +690,65 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
     } catch (_) { return false; }
   }
 
+  // ---- Destination-side: inject the gathered attachments ----
+  //
+  // After the HTML paste verifies as successful, find the compose
+  // form's file input and inject base64-decoded Files via a
+  // DataTransfer object. Same pattern as gmail-drag-attachments.js's
+  // injectFilesIntoCompose — Gmail listens to the change event on
+  // input[type="file"] and treats injected DataTransfer.files as if
+  // the user had picked them via the paperclip dialog. Returns the
+  // count actually attached (zero on any failure).
+  function findComposeFileInput(composeBody) {
+    if (!composeBody) return null;
+    // Popup compose wraps everything in role="dialog".
+    let scope = composeBody.closest && composeBody.closest('div[role="dialog"]');
+    if (!scope) {
+      // Full-screen compose (the one Appraisal Blast opens via
+      // ?fs=1) has no dialog wrapper. Walk up to the nearest
+      // ancestor that owns an <input type="file"> — that's the
+      // compose form regardless of mode.
+      let p = composeBody.parentElement;
+      while (p && p !== document.body) {
+        if (p.querySelector('input[type="file"]')) { scope = p; break; }
+        p = p.parentElement;
+      }
+    }
+    if (!scope) return null;
+    return scope.querySelector('input[type="file"][name="Filedata"]') ||
+           scope.querySelector('input[type="file"]');
+  }
+  function injectFilesIntoCompose(composeBody, files) {
+    if (!files || !files.length) return 0;
+    const input = findComposeFileInput(composeBody);
+    if (!input) {
+      console.warn('[ZHL Appraisal Blast paste] no <input type="file"> on compose; cannot auto-attach');
+      return 0;
+    }
+    try {
+      const dt = new DataTransfer();
+      let count = 0;
+      for (const f of files) {
+        try {
+          const blob = base64ToBlob(f.b64, f.mime);
+          const fileObj = new File([blob], f.name, { type: f.mime });
+          dt.items.add(fileObj);
+          count++;
+        } catch (e) {
+          console.warn('[ZHL Appraisal Blast paste] decode failed for', f.name, e);
+        }
+      }
+      if (!count) return 0;
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      console.log('[ZHL Appraisal Blast paste] attached ' + count + ' file(s) to compose');
+      return count;
+    } catch (e) {
+      console.warn('[ZHL Appraisal Blast paste] inject failed:', e);
+      return 0;
+    }
+  }
+
   // Fingerprint: the data-zhl-ab-html marker attribute we always
   // emit on the outer wrapper. Survives Gmail's sanitizer in
   // testing; if Gmail ever strips it the secondary check on the
@@ -599,9 +764,10 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
     } catch (_) { return false; }
   }
 
-  function pasteIntoCompose(html, onSuccess, onFail) {
+  function pasteIntoCompose(html, files, onSuccess, onFail) {
     let attempts = 0;
     let pasted = false;
+    let filesInjected = false;
     const interval = setInterval(function () {
       attempts++;
       const target = findComposeBody();
@@ -619,6 +785,13 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
           if (!stillTarget) return;
           if (looksLikeFormattedPaste(stillTarget)) {
             clearInterval(verifyInterval);
+            // Body verified — now attach the gathered files. Do this
+            // ONLY after the HTML is settled so the attach toolbar
+            // animation in Gmail doesn't fight the paste insert.
+            if (!filesInjected && files && files.length) {
+              filesInjected = true;
+              injectFilesIntoCompose(stillTarget, files);
+            }
             if (typeof onSuccess === 'function') onSuccess();
             return;
           }
@@ -628,6 +801,13 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
           } else {
             clearInterval(verifyInterval);
             console.warn('[ZHL Appraisal Blast paste] gave up after re-paste retries; clipboard fallback (Ctrl+V) still works');
+            // Still attempt the file inject even if the HTML never
+            // verified — the LO at least gets the PDF attached
+            // (they'd Ctrl+V the body manually).
+            if (!filesInjected && files && files.length) {
+              filesInjected = true;
+              injectFilesIntoCompose(stillTarget, files);
+            }
             if (typeof onFail === 'function') onFail();
           }
         }, 500);
@@ -659,9 +839,11 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
           return;
         }
         pasteRanInThisTab = true;
-        console.log('[ZHL Appraisal Blast paste] pending paste found (age=' + age + ' ms, HTML length=' + (pending.html || '').length + ' bytes), running…');
+        const files = Array.isArray(pending.files) ? pending.files : [];
+        console.log('[ZHL Appraisal Blast paste] pending paste found (age=' + age + ' ms, HTML length=' + (pending.html || '').length + ' bytes, files=' + files.length + '), running…');
         pasteIntoCompose(
           pending.html,
+          files,
           function onOk() {
             try { chrome.storage.local.remove([PASTE_STORAGE_KEY]); } catch (_) {}
             console.log('[ZHL Appraisal Blast paste] verified formatted body in compose — storage cleared');
