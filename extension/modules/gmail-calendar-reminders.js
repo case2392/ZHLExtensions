@@ -140,13 +140,24 @@
   }
 
   // -------- dismiss / snooze actions -----------------------------
+  // An instance key is "uid|startMs|lead" — the uid is everything before
+  // the final two segments.
+  function uidFromKey(key) {
+    const parts = String(key).split('|');
+    return parts.slice(0, parts.length - 2).join('|');
+  }
   // Synthetic preview events (uid starts with "zhl-test", created by the
-  // "Show test reminder" button in Setup) are fully removed from the
-  // event store on dismiss so they don't linger for the hour-long expiry.
-  async function removeTestEvents() {
+  // "Show test reminder" button in Setup) are removed from the event
+  // store on dismiss so they don't linger for the hour-long expiry. We
+  // remove ONLY the specific dismissed event(s) — not every test event —
+  // so dismissing one of the three previews leaves the other two showing.
+  async function removeTestEventsByUid(uids) {
+    if (!uids || !uids.length) return;
+    const set = {};
+    uids.forEach(function (u) { set[u] = true; });
     const d = await getStorage([EVENTS_KEY]);
     const evs = Array.isArray(d[EVENTS_KEY]) ? d[EVENTS_KEY] : [];
-    const kept = evs.filter(function (e) { return !(e && String(e.uid).indexOf('zhl-test') === 0); });
+    const kept = evs.filter(function (e) { return !(e && set[e.uid]); });
     if (kept.length !== evs.length) await setStorage({ [EVENTS_KEY]: kept });
   }
   async function dismissOne(key, startMs) {
@@ -155,20 +166,20 @@
     dismissed[key] = startMs;
     pruneMap(dismissed);
     await setStorage({ [DISMISS_KEY]: dismissed });
-    if (key.indexOf('zhl-test') === 0) await removeTestEvents();
+    if (key.indexOf('zhl-test') === 0) await removeTestEventsByUid([uidFromKey(key)]);
     render();
   }
   async function dismissAll(dueList) {
     const data = await getStorage([DISMISS_KEY]);
     const dismissed = data[DISMISS_KEY] || {};
-    let hadTest = false;
+    const testUids = [];
     dueList.forEach(function (d) {
       dismissed[d.key] = d.ev.startMs;
-      if (d.key.indexOf('zhl-test') === 0) hadTest = true;
+      if (d.key.indexOf('zhl-test') === 0) testUids.push(uidFromKey(d.key));
     });
     pruneMap(dismissed);
     await setStorage({ [DISMISS_KEY]: dismissed });
-    if (hadTest) await removeTestEvents();
+    if (testUids.length) await removeTestEventsByUid(testUids);
     render();
   }
   async function snoozeOne(key, minutes) {

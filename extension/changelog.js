@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.7",
+    category: "bugfix",
+    headline: "Meeting Reminders — dismissing one of the test-preview reminders no longer closes the whole pop-up. It now removes only the reminder you clicked, leaving the others showing.",
+    highlights: [
+      "Bug: the test-event cleanup (removeTestEvents) stripped EVERY event whose uid started with 'zhl-test' on any dismiss, so dismissing one of the three previews wiped all three and the panel collapsed.",
+      "Fix: cleanup is now scoped to the specific dismissed event's uid (parsed from the instance key 'uid|startMs|lead'). Dismiss-one removes just that uid; Dismiss-all removes only the test uids that were actually in the due list. Real (non-test) reminders were never affected — this only touched the synthetic preview events.",
+      "Note: this was a test-preview-only quirk; live calendar reminders dismiss individually as expected."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.6",
     category: "improvement",
     headline: "Meeting Reminders — the pop-up now brings your Gmail window to the front when a new reminder fires (so you can't miss it even if you're in another tab/app), and the meeting title is cleaned up — no more 'Melynda Florea and 15-minute meeting, Justin Case, Accepted, No location, …' word salad.",
