@@ -45,16 +45,19 @@
   const EXPIRE_AFTER_START_MS = 60 * 60 * 1000; // stop nagging 1h after start
   const TICK_MS = 15000;
 
-  // Snooze dropdown options (minutes).
+  // Snooze options are RELATIVE TO THE EVENT (offset in minutes from the
+  // meeting's start; negative = before, 0 = at start, positive = after).
+  // Snoozing hides the reminder until start + offset, then it pops again.
   const SNOOZE_OPTIONS = [
-    { label: '1 minute',  min: 1 },
-    { label: '5 minutes', min: 5 },
-    { label: '10 minutes', min: 10 },
-    { label: '15 minutes', min: 15 },
-    { label: '30 minutes', min: 30 },
-    { label: '1 hour', min: 60 }
+    { label: '15 min before event', off: -15 },
+    { label: '5 min before event',  off: -5 },
+    { label: '1 min before event',  off: -1 },
+    { label: 'At start time',       off: 0 },
+    { label: '1 min after event',   off: 1 },
+    { label: '5 min after event',   off: 5 },
+    { label: '15 min after event',  off: 15 }
   ];
-  let snoozeChoiceMin = 5; // default snooze duration
+  let snoozeChoiceOff = -5; // default: remind again 5 min before the event
 
   // -------- helpers ----------------------------------------------
   function escHtml(s) {
@@ -109,10 +112,25 @@
     return ev.uid + '|' + ev.startMs + '|' + lead;
   }
 
+  // Final-guard dedup, mirroring the scraper's eventKey: collapse the
+  // same meeting (same start + same title prefix) so a messy store can
+  // never surface the same reminder twice. Keeps the cleaner title.
+  function dedupEvents(events) {
+    const byKey = {};
+    events.forEach(function (e) {
+      if (!e || !isFinite(e.startMs)) return;
+      const t = String(e.title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+      const k = e.startMs + '|' + t;
+      const cur = byKey[k];
+      if (!cur || String(e.title || '').length < String(cur.title || '').length) byKey[k] = e;
+    });
+    return Object.keys(byKey).map(function (k) { return byKey[k]; });
+  }
+
   // -------- core: which reminders are due ------------------------
   async function computeDue() {
     const data = await getStorage([EVENTS_KEY, DISMISS_KEY, SNOOZE_KEY, LEADS_KEY]);
-    const events = Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : [];
+    const events = dedupEvents(Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : []);
     const dismissed = data[DISMISS_KEY] || {};
     const snooze = data[SNOOZE_KEY] || {};
     const leads = parseLeads(data[LEADS_KEY]);
@@ -132,8 +150,12 @@
       if (activeLead === null) continue;
       const key = instanceKey(ev, activeLead);
       if (dismissed[key]) continue;
-      if (snooze[key] && snooze[key] > now) continue;
-      due.push({ ev: ev, lead: activeLead, key: key });
+      // Snooze is keyed to the event OCCURRENCE (uid|startMs), not the
+      // per-lead instance — so "remind me 5 min before the event"
+      // suppresses every lead's reminder until that moment, then pops.
+      const occ = ev.uid + '|' + ev.startMs;
+      if (snooze[occ] && snooze[occ] > now) continue;
+      due.push({ ev: ev, lead: activeLead, key: key, occKey: occ });
     }
     due.sort(function (a, b) { return a.ev.startMs - b.ev.startMs; });
     return due;
@@ -182,19 +204,29 @@
     if (testUids.length) await removeTestEventsByUid(testUids);
     render();
   }
-  async function snoozeOne(key, minutes) {
+  // Snooze until the event's start time plus `offsetMin` (negative =
+  // before start). Keyed by the occurrence (occKey = uid|startMs) so it
+  // suppresses all of that event's lead-time reminders until then.
+  // If the chosen relative time has already passed (e.g. "5 min before"
+  // picked when it's already 2 min before), floor the snooze to 1 minute
+  // from now so the reminder at least goes away briefly instead of
+  // re-appearing on the very next tick.
+  function snoozeTarget(startMs, offsetMin) {
+    const t = startMs + offsetMin * 60000;
+    return Math.max(t, Date.now() + 60000);
+  }
+  async function snoozeOne(occKey, startMs, offsetMin) {
     const data = await getStorage([SNOOZE_KEY]);
     const snooze = data[SNOOZE_KEY] || {};
-    snooze[key] = Date.now() + minutes * 60000;
+    snooze[occKey] = snoozeTarget(startMs, offsetMin);
     pruneMap(snooze);
     await setStorage({ [SNOOZE_KEY]: snooze });
     render();
   }
-  async function snoozeAll(dueList, minutes) {
+  async function snoozeAll(dueList, offsetMin) {
     const data = await getStorage([SNOOZE_KEY]);
     const snooze = data[SNOOZE_KEY] || {};
-    const until = Date.now() + minutes * 60000;
-    dueList.forEach(function (d) { snooze[d.key] = until; });
+    dueList.forEach(function (d) { snooze[d.occKey] = snoozeTarget(d.ev.startMs, offsetMin); });
     pruneMap(snooze);
     await setStorage({ [SNOOZE_KEY]: snooze });
     render();
@@ -304,7 +336,7 @@
     const now = Date.now();
     const sig = due.map(function (d) {
       return d.key + '@' + Math.round((d.ev.startMs - now) / 60000);
-    }).join(';') + '#snz=' + snoozeChoiceMin;
+    }).join(';') + '#snz=' + snoozeChoiceOff;
     if (sig === lastSignature && document.getElementById(PANEL_ID)) return;
     lastSignature = sig;
 
@@ -417,7 +449,7 @@
           '<button data-act="dismiss" style="padding:5px 10px;background:#1d4ed8;color:#fff;border:none;border-radius:5px;font:600 11.5px Arial,sans-serif;cursor:pointer;">Dismiss</button>' +
         '</div>';
       row.querySelector('[data-act="snooze"]').addEventListener('click', function () {
-        snoozeOne(d.key, snoozeChoiceMin);
+        snoozeOne(d.occKey, d.ev.startMs, snoozeChoiceOff);
       });
       row.querySelector('[data-act="dismiss"]').addEventListener('click', function () {
         dismissOne(d.key, d.ev.startMs);
@@ -430,24 +462,25 @@
     const footer = document.createElement('div');
     footer.style.cssText = 'padding:10px 14px;background:#f8fafc;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
     const snzLabel = document.createElement('span');
-    snzLabel.textContent = 'Snooze for:';
+    snzLabel.textContent = 'Snooze until:';
     snzLabel.style.cssText = 'font-size:11.5px;color:#6b7280;';
     const select = document.createElement('select');
     select.style.cssText = 'padding:4px 6px;border:1px solid #cbd5e1;border-radius:5px;font:12px Arial,sans-serif;';
     SNOOZE_OPTIONS.forEach(function (o) {
       const opt = document.createElement('option');
-      opt.value = String(o.min);
+      opt.value = String(o.off);
       opt.textContent = o.label;
-      if (o.min === snoozeChoiceMin) opt.selected = true;
+      if (o.off === snoozeChoiceOff) opt.selected = true;
       select.appendChild(opt);
     });
     select.addEventListener('change', function () {
-      snoozeChoiceMin = parseInt(select.value, 10) || 5;
+      snoozeChoiceOff = parseInt(select.value, 10);
+      if (isNaN(snoozeChoiceOff)) snoozeChoiceOff = -5;
     });
     const snoozeAllBtn = document.createElement('button');
     snoozeAllBtn.textContent = 'Snooze all';
     snoozeAllBtn.style.cssText = 'margin-left:auto;padding:6px 10px;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-radius:5px;font:600 11.5px Arial,sans-serif;cursor:pointer;';
-    snoozeAllBtn.addEventListener('click', function () { snoozeAll(due, snoozeChoiceMin); });
+    snoozeAllBtn.addEventListener('click', function () { snoozeAll(due, snoozeChoiceOff); });
     const dismissAllBtn = document.createElement('button');
     dismissAllBtn.textContent = 'Dismiss all';
     dismissAllBtn.style.cssText = 'padding:6px 10px;background:#0f172a;color:#fff;border:none;border-radius:5px;font:600 11.5px Arial,sans-serif;cursor:pointer;';

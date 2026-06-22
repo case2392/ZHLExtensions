@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.9",
+    category: "improvement",
+    headline: "Meeting Reminders — fixed the same meeting showing up multiple times, and changed the Snooze options to be relative to the meeting ('5 min before event', 'at start time', '5 min after event', …) instead of plain durations.",
+    highlights: [
+      "Duplicate fix: a single meeting was appearing up to 4 times because it gets scraped from several DOM representations (week grid + agenda + the side-panel iframe) — some without a stable event id, and one was a stale entry from before the title fix (hence the leftover word-salad title on one copy). De-dup now keys on start-time + the first 16 alphanumerics of the title, which collapses the clean title and the comma-salad variant into one, and always keeps the cleaner title. Applied both in the scraper's merge and as a final guard on the Gmail render side.",
+      "Stale cleanup: events contributed by a frame/tab are now stamped with a 'last seen' time and dropped if they haven't been re-scraped in 90 seconds (so a closed Calendar surface stops leaving ghost reminders), and any stale copy that collides with a freshly-scraped event is replaced by the fresh one.",
+      "Snooze options are now event-relative: 15/5/1 min before event, at start time, and 1/5/15 min after event. Snoozing hides the reminder until that point relative to the meeting and then pops it again — far more useful than 'snooze 10 minutes'. The footer label is now 'Snooze until:'. Snooze is keyed to the event occurrence so it suppresses every lead-time reminder for that meeting until the chosen moment.",
+      "If you pick a relative time that's already passed (e.g. '5 min before' when it's already 2 min before), the reminder still hides for ~1 minute rather than re-appearing instantly."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.8",
     category: "improvement",
     headline: "Meeting Reminders — now reads the Google Calendar side-panel inside Gmail (and the Schedule/agenda view), so events show up and fire reminders even when you're using the little calendar panel rather than a full Calendar tab. Events already inside your reminder window when the calendar loads now pop right away.",

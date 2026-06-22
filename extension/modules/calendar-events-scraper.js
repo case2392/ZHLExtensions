@@ -350,36 +350,62 @@
   let tabTag = 'tab-' + Math.random().toString(36).slice(2, 10);
   let scanTimer = null;
 
+  // Dedup key that's robust to title variation. The SAME meeting can be
+  // scraped from several DOM representations (week grid + agenda + the
+  // side-panel iframe) and even from a stale store entry produced by an
+  // older parser — sometimes a clean title, sometimes word-salad. We key
+  // on the start time plus the first 16 alphanumerics of the title, so
+  // "dxfghnfcvgbncvbn" and "dxfghnfcvgbncvbn, Justin Case, No location…"
+  // collapse to the same key while two genuinely different meetings at
+  // the same time stay distinct.
+  function eventKey(e) {
+    const t = String(e.title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+    return e.startMs + '|' + t;
+  }
+  // Prefer the cleaner title when collapsing duplicates (shorter usually
+  // == the real title vs the comma-salad variant).
+  function preferTitle(a, b) {
+    return (String(b.title || '').length < String(a.title || '').length) ? b : a;
+  }
+
   async function scrapeAndStore() {
+    const now = Date.now();
     const fresh = scrapeOnce();
-    fresh.forEach(function (e) { e._tab = tabTag; });
+    fresh.forEach(function (e) { e._tab = tabTag; e._seenAt = now; });
+    const freshKeys = {};
+    fresh.forEach(function (e) { freshKeys[eventKey(e)] = true; });
 
     const data = await getStorage([EVENTS_KEY]);
     const prev = Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : [];
-    // Keep events from OTHER tabs as-is; replace ours wholesale.
-    const otherTabs = prev.filter(function (e) { return e && e._tab && e._tab !== tabTag; });
-    const merged = otherTabs.concat(fresh);
-
-    // Drop anything more than 1h past its start time — saves the
-    // Gmail-side renderer from filtering stale events.
-    const now = Date.now();
-    const filtered = merged.filter(function (e) { return isFinite(e.startMs) && (e.startMs + 60 * 60000) > now; });
-    // Dedup by uid|startMs so the SAME event seen in two frames (e.g.
-    // a full Calendar tab AND the Gmail side-panel iframe, both running
-    // the scraper via all_frames) doesn't produce duplicate reminders.
-    const live = [];
-    const seenKeys = {};
-    filtered.forEach(function (e) {
-      const k = (e.uid || '') + '|' + e.startMs;
-      if (seenKeys[k]) return;
-      seenKeys[k] = true;
-      live.push(e);
+    // Keep events contributed by OTHER frames/tabs, but only if they're
+    // (a) still fresh — re-seen within the last 90s, so a closed tab's
+    // events stop lingering — and (b) NOT a duplicate of something we
+    // just scraped (drops the stale old-parser salad copy in favor of
+    // the fresh clean one). Test-preview events (no _seenAt) are exempt
+    // from the freshness check so the Setup test button still works.
+    const otherTabs = prev.filter(function (e) {
+      if (!e || !e._tab || e._tab === tabTag) return false;
+      if (freshKeys[eventKey(e)]) return false;
+      const isPreview = String(e.uid || '').indexOf('zhl-test') === 0;
+      if (!isPreview && e._seenAt && (now - e._seenAt) > 90000) return false;
+      return true;
     });
+
+    const merged = otherTabs.concat(fresh)
+      .filter(function (e) { return isFinite(e.startMs) && (e.startMs + 60 * 60000) > now; });
+
+    // Final dedup by eventKey, keeping the cleaner-titled copy.
+    const byKey = {};
+    merged.forEach(function (e) {
+      const k = eventKey(e);
+      byKey[k] = byKey[k] ? preferTitle(byKey[k], e) : e;
+    });
+    const live = Object.keys(byKey).map(function (k) { return byKey[k]; });
     live.sort(function (a, b) { return a.startMs - b.startMs; });
 
     await setStorage({
       [EVENTS_KEY]: live.slice(0, 200),
-      [META_KEY]: { lastScrapeMs: Date.now(), count: fresh.length, source: 'tab-scrape' }
+      [META_KEY]: { lastScrapeMs: now, count: fresh.length, source: 'tab-scrape' }
     });
   }
 
