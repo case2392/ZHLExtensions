@@ -464,10 +464,89 @@
     if (scanTimer) return;
     scanTimer = setTimeout(function () {
       scanTimer = null;
-      try { scrapeAndStore(); } catch (e) { console.warn('[ZHL Calendar Scraper] scrape failed', e); }
+      try { scrapeAndStore().then(function () {
+        // After each scrape, try to attach any buffered fetch-hook
+        // links to newly-stored events. Runs after scrapeAndStore so
+        // the events store is fresh.
+        try { attachBufferedLinks(); } catch (_) {}
+      }); } catch (e) { console.warn('[ZHL Calendar Scraper] scrape failed', e); }
       try { harvestDetailPopovers(); } catch (e) { console.warn('[ZHL Calendar Scraper] popover harvest failed', e); }
     }, DEBOUNCE_MS);
   }
+
+  // ---- Fetch-hook bridge (page-world → isolated-world) ------------
+  // The MAIN-world calendar-fetch-hook.js intercepts Google's internal
+  // calendar API responses and posts {link, titleHint} pairs to the
+  // page via postMessage. titleHint is extracted from the closest
+  // preceding "summary":"..." / "title":"..." field, so each link is
+  // already attributed to one specific event title — no fuzzy
+  // proximity matching, no false-positive attachments. We buffer them
+  // here (TTL ~10 min) and stamp each link onto stored events whose
+  // normalized title matches the hint. Matched entries are removed
+  // from the buffer so we don't keep retrying forever.
+  const linkBuffer = []; // [{link, titleHint, ts}]
+  const LINK_BUFFER_TTL_MS = 10 * 60 * 1000;
+  const LINK_BUFFER_MAX = 500;
+
+  function pruneLinkBuffer() {
+    const now = Date.now();
+    let i = 0;
+    while (i < linkBuffer.length) {
+      if (now - linkBuffer[i].ts > LINK_BUFFER_TTL_MS) linkBuffer.splice(i, 1);
+      else i++;
+    }
+    if (linkBuffer.length > LINK_BUFFER_MAX) linkBuffer.splice(0, linkBuffer.length - LINK_BUFFER_MAX);
+  }
+
+  async function attachBufferedLinks() {
+    pruneLinkBuffer();
+    if (!linkBuffer.length) return;
+    const data = await getStorage([EVENTS_KEY]);
+    const evs = Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : [];
+    if (!evs.length) return;
+    // Index stored events by normalized title (multiple events may
+    // share a title for recurring meetings — attach the link to all).
+    const byTitle = {};
+    for (const ev of evs) {
+      if (!ev.meet) {
+        const k = normTitle(ev.title);
+        if (k) (byTitle[k] = byTitle[k] || []).push(ev);
+      }
+    }
+    if (!Object.keys(byTitle).length) return;
+    let changed = false;
+    let i = 0;
+    while (i < linkBuffer.length) {
+      const entry = linkBuffer[i];
+      const k = normTitle(entry.titleHint);
+      const targets = k ? byTitle[k] : null;
+      if (targets) {
+        targets.forEach(function (ev) { if (!ev.meet) { ev.meet = entry.link; changed = true; } });
+        linkBuffer.splice(i, 1);
+      } else {
+        i++;
+      }
+    }
+    if (changed) await setStorage({ [EVENTS_KEY]: evs });
+  }
+
+  window.addEventListener('message', function (e) {
+    try {
+      if (e.source !== window) return;
+      const msg = e.data;
+      if (!msg || msg.source !== 'zhl-cal-fetch-hook') return;
+      const harvest = (msg.payload && msg.payload.harvest) || [];
+      if (!harvest.length) return;
+      const now = Date.now();
+      for (const h of harvest) {
+        if (!h || !h.link || !h.titleHint) continue;
+        linkBuffer.push({ link: h.link, titleHint: h.titleHint, ts: now });
+      }
+      // Try attaching right away — most often the events store is
+      // already populated by the time the first calendar fetch lands.
+      attachBufferedLinks();
+    } catch (_) {}
+  });
 
   // First-pass slight delay so Calendar finishes its initial render.
   setTimeout(function () { try { scrapeAndStore(); } catch (_) {} }, 1500);

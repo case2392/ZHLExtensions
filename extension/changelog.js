@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.13",
+    category: "improvement",
+    headline: "Meeting Reminders — Zoom/Meet Join buttons now appear automatically on every reminder card, without needing you to open each event manually. A new MAIN-world content script hooks fetch + XMLHttpRequest on calendar.google.com, harvests conferencing URLs from Google's own internal API responses (which include every event's link), and attaches each link to the matching stored event by Google's `summary` / `title` field.",
+    highlights: [
+      "New module: modules/calendar-fetch-hook.js runs in the page's main JS world on calendar.google.com (document_start, all_frames) and wraps window.fetch + XMLHttpRequest.prototype.send. After each calendar.google.com response, it scans the body text for Meet / *.zoom.us / *.zoomgov.com URLs.",
+      "Attribution is precise (no false positives): for each link, it walks back up to 2000 chars looking for the closest preceding `\"summary\":\"...\"`, `\"title\":\"...\"`, or `\"name\":\"...\"` field — those are Google's own event-title fields in their internal calendar protocol. If no such field is present we drop the link rather than guessing. ICS-format responses are also handled via `SUMMARY:...`.",
+      "Bridge: each {link, titleHint} pair is posted to the page via window.postMessage with source 'zhl-cal-fetch-hook'. modules/calendar-events-scraper.js (isolated world) listens, buffers them with a 10-minute TTL, and stamps each link onto stored events whose normalized title matches the hint. Buffered entries are retried after every scrape so a link harvested before an event was scraped still gets attached.",
+      "Result: open calendar.google.com once and every event with a Zoom or Meet link gets its 📹 Join button on the reminder card automatically. No clicking into events required, no popovers flashing, no extra setup.",
+      "Caveat (acknowledged): we're reading Google's undocumented internal calendar API responses. If Google ever changes their internal field names (e.g. renames `summary`), Join buttons would stop appearing for new events — let me know and I'll retune. The opportunistic popover-harvest path (v1.64.12) stays in place as a fallback for that case."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper", "calendar-fetch-hook"]
+  },
+  {
     version: "1.64.12",
     category: "improvement",
     headline: "Meeting Reminders — fixed two issues: (1) multiple reminder panels appearing when Gmail is open in more than one tab/window (only ONE Gmail tab now shows the panel at a time via a storage-based leader lease), and (2) Zoom links from your meetings now appear as a 📹 Join button — we harvest the link from the Calendar event-details popover when you open it, since the link isn't on the chip itself.",
