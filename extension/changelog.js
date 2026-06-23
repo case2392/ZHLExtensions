@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.19",
+    category: "bugfix",
+    headline: "Print Buyer Worksheet — strips LOP's new 'LOWEST COST' / 'LOWEST MONTHLY' / 'LOWEST UPFRONT' indicator badges from the loan-product name. The worksheet was showing 'Conf 30 Yr FixedLOWEST COSTLOWEST MONTHLY' instead of just 'Conf 30 Yr Fixed' because LOP recently started rendering those badges INSIDE the product cell, which the scrape's textContent grabs.",
+    highlights: [
+      "Bug: pricing-results-print.js read the product cell with `textContent` on td[2], which is the right cell — but LOP recently nested 'LOWEST COST', 'LOWEST MONTHLY', and 'LOWEST UPFRONT' indicator chips into that same cell. textContent flattens those into the product string, so the worksheet rendered them as 'Conf 30 Yr FixedLOWEST COST…' (no space because no whitespace exists between the elements).",
+      "Fix: new cleanProduct() helper that strips a hardcoded list of known markers (COST, MONTHLY, UPFRONT, PAYMENT, RATE, POINTS) AND a generic 'LOWEST <UPPERCASE-WORD>' fallback so a new marker LOP adds later (e.g. 'LOWEST RATE') also gets removed without an extension update.",
+      "Verified against the screenshot's three cases: 'Conf 30 Yr FixedLOWEST COSTLOWEST MONTHLY' → 'Conf 30 Yr Fixed'; 'Conf 30 Yr FixedLOWEST UPFRONT' → 'Conf 30 Yr Fixed'; 'Conf 30 Yr Fixed' (no badge) → 'Conf 30 Yr Fixed'; plus an unknown 'LOWEST FUTUREFLAG' that also strips cleanly."
+    ],
+    sections: ["pricing-results-print"]
+  },
+  {
     version: "1.64.18",
     category: "bugfix",
     headline: "Meeting Reminders — fixed the 'in X minutes' / 'now' label rounding. At 3:29 PM with a 3:30 PM meeting the card was saying 'now' instead of 'in 1 minute' because Math.round was bucketing sub-30-second remainders to zero.",

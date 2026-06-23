@@ -183,7 +183,20 @@
     //              [4]DTI [5]rate [6]points [7]price$ [8]breakeven
     //              [9]closing costs [10]cash to/from
     function txt(i) { return ((tds[i] && tds[i].textContent) || '').replace(/\s+/g, ' ').trim(); }
-    const product = txt(2);
+    // LOP recently added inline indicator badges INSIDE the loan-product
+    // cell — "LOWEST COST", "LOWEST MONTHLY", "LOWEST UPFRONT" — which
+    // got concatenated onto the product textContent (e.g. "Conf 30 Yr
+    // FixedLOWEST COSTLOWEST MONTHLY"). Strip every known marker and
+    // any other "LOWEST <word>" badge as a defensive fallback so a new
+    // marker LOP adds later doesn't leak through either.
+    function cleanProduct(s) {
+      return String(s || '')
+        .replace(/\s*LOWEST\s+(?:COST|MONTHLY|UPFRONT|PAYMENT|RATE|POINTS)\b/gi, ' ')
+        .replace(/\s*LOWEST\s+[A-Z][A-Z\-]*\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    const product = cleanProduct(txt(2));
     const piti = parseMoney(txt(3));
     const dtiRaw = txt(4);
     const rate = parsePercent(txt(5));
