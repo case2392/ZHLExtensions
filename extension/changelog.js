@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.16",
+    category: "bugfix",
+    headline: "Meeting Reminders — broadened the in-DOM Zoom/Meet link harvester so it catches links in Google Calendar's current event-details panel (which is a plain <div>, not a role=dialog like the older layout). The Join button should now appear on reminders for events you've opened in Calendar, regardless of which Calendar layout Google is showing you.",
+    highlights: [
+      "Bug: the popover harvester required role=\"dialog\" or role=\"region\" on the event-details container. Google's current event-details panel (e.g. for 'Laila Working Sessions' in the user's screenshot) is just a plain <div> with no special role, so the harvester silently skipped it even though the Zoom link was right there in the DOM.",
+      "Fix: switched to anchor-anchored scanning. For every visible <a href> pointing at zoom.us / zoomgov.com / meet.google.com, walk up to 15 ancestor levels looking for an h1/h2/h3/role=heading — that's the event title. Map title → link, then stamp onto stored events by normalized title. Kept the older role-anchored path as a secondary backstop for layouts that still use a real dialog.",
+      "Visibility check: anchors are only considered if their offsetParent isn't null (or their bounding rect has area) — so hidden / off-screen mailto-style links inside collapsed UI don't get harvested.",
+      "Existing fetch-hook path (v1.64.13) is unaffected — this is the DOM fallback. If you reload your Calendar surface, the fetch hook will catch links out of Google's API responses for ALL events on the calendar, even ones you haven't opened. The popover-harvester is the safety net for events the fetch hook missed."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.15",
     category: "bugfix",
     headline: "Zoho Booking watcher — clicking Cancel / × on the 'Booking detected' panel no longer makes it pop right back up. The cancel path now marks the Gmail messageId as seen so the next DOM scan doesn't re-detect it.",

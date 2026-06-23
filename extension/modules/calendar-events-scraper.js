@@ -409,28 +409,64 @@
     });
   }
 
-  // Opportunistic conferencing-link harvest from the event-details
-  // popover. Week/agenda chips don't expose the Zoom/Meet URL — it
-  // only lives inside the full event-details panel that Google opens
-  // when you click an event. Whenever such a popover is visible, we
-  // pull any conferencing link out and stamp it onto the matching
-  // stored event (by title) so the next reminder card shows the Join
-  // button.
+  // Opportunistic conferencing-link harvest from whatever's visible on
+  // the calendar surface. Week/agenda chips don't expose the Zoom/Meet
+  // URL — it only lives inside the full event-details panel Google
+  // opens when you click an event. Older Calendar layouts used a
+  // role="dialog"/"region" container that was easy to find; the
+  // current layout (June 2026+) is a plain <div> with no special role,
+  // which is why the role-anchored harvester missed the Laila Working
+  // Sessions popover even though the Zoom link was right there in the
+  // DOM. The strategy is now anchor-anchored: find every visible
+  // Zoom/Meet <a href>, walk up to the nearest heading (event title),
+  // and stamp that mapping onto matching stored events.
   function normTitle(s) {
     return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24);
   }
+  function isElVisible(el) {
+    if (!el) return false;
+    try {
+      if (el.offsetParent !== null) return true;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    } catch (_) { return false; }
+  }
   async function harvestDetailPopovers() {
-    // Open Google Calendar event-detail popovers are dialogs/popups
-    // with role="dialog" or role="region", whose first heading is the
-    // event title and whose body text contains the Zoom/Meet link.
-    const popovers = document.querySelectorAll('[role="dialog"], [role="region"][aria-modal], [aria-label][role="region"]');
-    if (!popovers.length) return;
     const matches = {}; // normTitle -> link
+    // Path A (modern): scan visible Zoom/Meet anchors. For each one,
+    // walk up looking for a heading-like ancestor whose text we can
+    // use as the event title. Bound the walk to 15 levels so we don't
+    // pick up a heading from an unrelated section of the page.
+    const anchors = document.querySelectorAll(
+      'a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]'
+    );
+    anchors.forEach(function (a) {
+      const href = a.getAttribute('href') || '';
+      if (!LINK_RE.test(href)) return;
+      if (!isElVisible(a)) return;
+      let node = a;
+      for (let depth = 0; depth < 15 && node; depth++) {
+        const h = node.querySelector ? node.querySelector('h1, h2, h3, [role="heading"]') : null;
+        if (h) {
+          const title = (h.textContent || '').replace(/\s+/g, ' ').trim();
+          if (title && title.length >= 2 && title.length <= 200) {
+            const k = normTitle(title);
+            if (k && !matches[k]) matches[k] = href;
+            break;
+          }
+        }
+        node = node.parentElement;
+      }
+    });
+    // Path B (older / fallback): role=dialog/region popovers with a
+    // heading + body text containing the link. Cheap to keep as a
+    // backstop for Calendar layouts that DO use a real dialog.
+    const popovers = document.querySelectorAll('[role="dialog"], [role="region"]');
     popovers.forEach(function (dlg) {
-      // Skip tiny containers — the event-details popover is large.
+      if (!isElVisible(dlg)) return;
       let area = 0;
       try { const r = dlg.getBoundingClientRect(); area = r.width * r.height; } catch (_) {}
-      if (area < 40000) return;
+      if (area < 30000) return;
       const txt = (dlg.textContent || '').replace(/\s+/g, ' ');
       const link = (txt.match(LINK_RE) || [null])[0]
         || (function () {
@@ -438,17 +474,19 @@
           return a ? a.getAttribute('href') : null;
         })();
       if (!link) return;
-      // Title: first heading-like element, falling back to a large
-      // text node near the top.
       const h = dlg.querySelector('h1, h2, h3, [role="heading"]');
-      const title = h ? (h.textContent || '').trim() : '';
+      const title = h ? (h.textContent || '').replace(/\s+/g, ' ').trim() : '';
       if (!title) return;
-      matches[normTitle(title)] = link;
+      const k = normTitle(title);
+      if (k && !matches[k]) matches[k] = link;
     });
+
     if (!Object.keys(matches).length) return;
 
-    // Stamp the harvested links onto stored events whose normalized
-    // titles match. Don't overwrite an existing link.
+    // Stamp harvested links onto stored events whose normalized title
+    // matches. Multiple events can share a title (recurring meetings)
+    // — attach the link to all of them. Don't overwrite an existing
+    // link.
     const data = await getStorage([EVENTS_KEY]);
     const evs = Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : [];
     let changed = false;
