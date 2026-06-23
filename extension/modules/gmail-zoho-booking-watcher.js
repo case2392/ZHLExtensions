@@ -312,9 +312,23 @@
           }
           firingInThisTab = false;
         },
-        function onCancel() {
+        async function onCancel() {
+          // Mark this Gmail message as "seen" so the very next DOM
+          // scan doesn't re-detect the same email and pop the toast
+          // again. Without this, clicking Cancel / × cleared
+          // firingInThisTab but left the messageId out of the dedup
+          // set, so the panel reappeared instantly. We do NOT bump the
+          // daily counter on cancel — that's reserved for confirms.
           console.log('[ZHL Zoho Booking Watcher] LO cancelled — booking not auto-logged');
           try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'zoho_booking_cancelled' }); } catch (_) {}
+          try {
+            if (booking.messageId) {
+              const trimmedSeen = seen.concat([booking.messageId]).slice(-DEDUP_MAX);
+              const payload = {};
+              payload[DEDUP_KEY] = trimmedSeen;
+              await setStorage(payload);
+            }
+          } catch (_) {}
           firingInThisTab = false;
         }
       );

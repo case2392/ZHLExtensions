@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.15",
+    category: "bugfix",
+    headline: "Zoho Booking watcher — clicking Cancel / × on the 'Booking detected' panel no longer makes it pop right back up. The cancel path now marks the Gmail messageId as seen so the next DOM scan doesn't re-detect it.",
+    highlights: [
+      "Bug: the panel kept reappearing after every dismiss because the dedup record (DEDUP_KEY → list of seen Gmail messageIds) was only written on Confirm. Cancel cleared firingInThisTab but left the messageId out of the seen list, so the next MutationObserver tick (~600ms later) detected the same email and re-opened the panel.",
+      "Fix: onCancel now appends the messageId to the seen list (capped at DEDUP_MAX) before clearing the firing flag. The daily fire-counter is NOT bumped on cancel — that's still reserved for actual confirms — so a cancelled booking doesn't eat into the 10/day/LO safety budget.",
+      "If you want the panel back for that specific email after cancelling (rare), the seen list is bounded to ~200 most-recent IDs and gets pruned automatically; refreshing Gmail or opening another booking email continues to work normally."
+    ],
+    sections: ["gmail-zoho-booking-watcher"]
+  },
+  {
     version: "1.64.14",
     category: "improvement",
     headline: "Meeting Reminders — three fixes from the latest screenshot: (1) titles like 'Busy' that were rendering as '(no title)' or the calendar owner's name are now corrected to the real title, (2) duplicate cards for the same event collapse correctly now that titles are authoritative, and (3) the time line on each card shows the full range (e.g. '12:05 – 12:55 PM, Tuesday, June 23') instead of just the start.",
