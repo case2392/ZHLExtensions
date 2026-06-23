@@ -67,7 +67,35 @@
     { label: '5 min after event',   off: 5 },
     { label: '15 min after event',  off: 15 }
   ];
-  let snoozeChoiceOff = -5; // default: remind again 5 min before the event
+  // Default snooze offset. We dynamically pick the largest-magnitude
+  // BEFORE-event option that's still in the future relative to the
+  // soonest due meeting — so at T-30 you get "5 min before" (snooze
+  // ~25 min) and at the final-5-min reminder you get "1 min before"
+  // (snooze ~4 min) instead of a degenerate "snooze to now" choice.
+  // Once the LO manually picks an option, that choice sticks until
+  // every reminder is cleared.
+  let snoozeChoiceOff = -5;
+  let snoozeUserSet = false;
+
+  function computeSmartSnoozeDefault(due) {
+    let minMinsTo = Infinity;
+    const now = Date.now();
+    for (const d of due) {
+      if (d.ev.allDay) continue;
+      const minsTo = (d.ev.startMs - now) / 60000;
+      if (minsTo < minMinsTo) minMinsTo = minsTo;
+    }
+    if (!isFinite(minMinsTo)) return -5; // only all-day events or none
+    // Try the preferred cascade: -5, then -1, then 0, then 1, then 5.
+    // Pick the FIRST that's still meaningfully in the future
+    // (off > -minMinsTo + 0.5 min buffer, so "snooze to 1 min before"
+    // doesn't immediately re-pop when you're already at T-0.6).
+    const preferred = [-5, -1, 0, 1, 5];
+    for (const off of preferred) {
+      if (off > -minMinsTo + 0.5) return off;
+    }
+    return 15;
+  }
 
   // -------- helpers ----------------------------------------------
   function escHtml(s) {
@@ -359,8 +387,13 @@
       lastSignature = '';
       closedKeysSnapshot = null; // nothing due — clear any prior X-suppression
       focusedKeys = new Set();   // reset focus tracking so a re-fire focuses again
+      snoozeUserSet = false;     // next reminder batch gets a fresh smart default
       return;
     }
+    // Update the smart snooze default for the current due batch
+    // (unless the LO has explicitly picked an option since the last
+    // time everything was clear).
+    if (!snoozeUserSet) snoozeChoiceOff = computeSmartSnoozeDefault(due);
     // X-close suppression: if every due key was already present when
     // the LO clicked X, keep the panel hidden. A single new key breaks
     // the snapshot and the panel re-appears.
@@ -528,6 +561,7 @@
     select.addEventListener('change', function () {
       snoozeChoiceOff = parseInt(select.value, 10);
       if (isNaN(snoozeChoiceOff)) snoozeChoiceOff = -5;
+      snoozeUserSet = true; // freeze this choice for the current batch
     });
     // Dismiss all sits on the right (where Snooze all used to be).
     // Snooze all was removed — the per-row Snooze button + the shared

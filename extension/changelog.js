@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.17",
+    category: "improvement",
+    headline: "Meeting Reminders — the 'Snooze until' dropdown now smart-defaults based on how soon the meeting is. At the 30-minute reminder it still defaults to '5 min before event'; at the final 5-minute reminder it defaults to '1 min before event' so snoozing actually delays the next nudge instead of being a no-op.",
+    highlights: [
+      "Algorithm: pick the FIRST option in the preferred cascade [-5, -1, 0, 1, 5] (event-relative minutes) that's still meaningfully in the future for the soonest due meeting (with a 0.5-min buffer). So a meeting at T-30 yields '5 min before' (snooze ~25 min), a meeting at T-5 yields '1 min before' (snooze ~4 min), a meeting at T-1 yields 'At start time', and so on.",
+      "Stickiness: once you manually pick an option from the dropdown, the choice freezes for the current reminder batch (so re-renders every 15s don't keep yanking it back to the smart default). The auto-pick resumes after every reminder is cleared — i.e. on the next batch.",
+      "Mixed batches use the SOONEST meeting's value: if you have a 30-min reminder and a 5-min reminder up at the same time, the dropdown defaults to '1 min before' because that's the only option that's still meaningfully in the future for the 5-minute one."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.16",
     category: "bugfix",
     headline: "Meeting Reminders — broadened the in-DOM Zoom/Meet link harvester so it catches links in Google Calendar's current event-details panel (which is a plain <div>, not a role=dialog like the older layout). The Join button should now appear on reminders for events you've opened in Calendar, regardless of which Calendar layout Google is showing you.",
