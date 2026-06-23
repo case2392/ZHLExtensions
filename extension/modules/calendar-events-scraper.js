@@ -409,11 +409,63 @@
     });
   }
 
+  // Opportunistic conferencing-link harvest from the event-details
+  // popover. Week/agenda chips don't expose the Zoom/Meet URL — it
+  // only lives inside the full event-details panel that Google opens
+  // when you click an event. Whenever such a popover is visible, we
+  // pull any conferencing link out and stamp it onto the matching
+  // stored event (by title) so the next reminder card shows the Join
+  // button.
+  function normTitle(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24);
+  }
+  async function harvestDetailPopovers() {
+    // Open Google Calendar event-detail popovers are dialogs/popups
+    // with role="dialog" or role="region", whose first heading is the
+    // event title and whose body text contains the Zoom/Meet link.
+    const popovers = document.querySelectorAll('[role="dialog"], [role="region"][aria-modal], [aria-label][role="region"]');
+    if (!popovers.length) return;
+    const matches = {}; // normTitle -> link
+    popovers.forEach(function (dlg) {
+      // Skip tiny containers — the event-details popover is large.
+      let area = 0;
+      try { const r = dlg.getBoundingClientRect(); area = r.width * r.height; } catch (_) {}
+      if (area < 40000) return;
+      const txt = (dlg.textContent || '').replace(/\s+/g, ' ');
+      const link = (txt.match(LINK_RE) || [null])[0]
+        || (function () {
+          const a = dlg.querySelector('a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]');
+          return a ? a.getAttribute('href') : null;
+        })();
+      if (!link) return;
+      // Title: first heading-like element, falling back to a large
+      // text node near the top.
+      const h = dlg.querySelector('h1, h2, h3, [role="heading"]');
+      const title = h ? (h.textContent || '').trim() : '';
+      if (!title) return;
+      matches[normTitle(title)] = link;
+    });
+    if (!Object.keys(matches).length) return;
+
+    // Stamp the harvested links onto stored events whose normalized
+    // titles match. Don't overwrite an existing link.
+    const data = await getStorage([EVENTS_KEY]);
+    const evs = Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : [];
+    let changed = false;
+    for (const ev of evs) {
+      if (ev.meet) continue;
+      const nt = normTitle(ev.title);
+      if (matches[nt]) { ev.meet = matches[nt]; changed = true; }
+    }
+    if (changed) await setStorage({ [EVENTS_KEY]: evs });
+  }
+
   function schedule() {
     if (scanTimer) return;
     scanTimer = setTimeout(function () {
       scanTimer = null;
       try { scrapeAndStore(); } catch (e) { console.warn('[ZHL Calendar Scraper] scrape failed', e); }
+      try { harvestDetailPopovers(); } catch (e) { console.warn('[ZHL Calendar Scraper] popover harvest failed', e); }
     }, DEBOUNCE_MS);
   }
 

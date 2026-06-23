@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.12",
+    category: "improvement",
+    headline: "Meeting Reminders — fixed two issues: (1) multiple reminder panels appearing when Gmail is open in more than one tab/window (only ONE Gmail tab now shows the panel at a time via a storage-based leader lease), and (2) Zoom links from your meetings now appear as a 📹 Join button — we harvest the link from the Calendar event-details popover when you open it, since the link isn't on the chip itself.",
+    highlights: [
+      "Multiple-windows bug: with Gmail open in 2 tabs/windows, you were seeing a panel in each — sometimes with different sets of reminders because each tab's X-close suppression was independent. Now there's a render lease in chrome.storage.local. Each Gmail tab has a transient id; the currently-visible tab claims the lease (12-second TTL, refreshed on each render). Other tabs see they don't hold the lease, drop their panels, and stay quiet. When you switch tabs, the new tab's visibilitychange fires render, the new tab claims the lease, the old tab sees the lease change via storage.onChanged and removes its panel. Best-effort lease release on visibility-hidden / pagehide / beforeunload so a peer tab takes over without waiting for the TTL.",
+      "Zoom link missing on the reminder card: the week/day/agenda chip's aria-label and visible text don't include the conferencing URL — that lives only in the event-details popover Google opens when you click an event. The scraper now opportunistically harvests Zoom/Meet links from any visible event-details popover (any sizeable role=dialog / aria-modal region with a heading + link) and stamps them onto the matching stored event by normalized title. So once you've opened a meeting's details in Calendar at least once, the next reminder card for that meeting shows the 📹 Join button.",
+      "Caveat for #2: it's opportunistic — if you never open an event's details, we never get its link (the chip alone doesn't carry it). Most LOs naturally open events to see what they are, so this catches the common case. A future improvement could programmatically click each event to harvest links, but that would be intrusive.",
+      "Existing dedup still applies: even if multiple frames scrape the same meeting, it's still collapsed by (startMs + title prefix) and the cleaner-titled copy wins."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.11",
     category: "improvement",
     headline: "Meeting Reminders — bring-Gmail-to-front is now bulletproof. The due-reminder detection moved into the background service worker, so a reminder pops and pulls Gmail forward even when the Gmail tab has been sitting in the background (where Chrome throttles or discards it). Previously the reminder sometimes 'didn't appear until you clicked into Gmail'.",

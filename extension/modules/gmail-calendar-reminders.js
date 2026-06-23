@@ -42,6 +42,16 @@
   const PANEL_ID      = 'zhl-cal-reminder-panel';
   const ZHL_TIP       = 'Built by Justin Case. Karma appreciated 💛';
 
+  // Multi-tab leader election: only ONE Gmail tab renders the reminder
+  // panel at a time. Without this, opening Gmail in two tabs/windows
+  // shows two separate panels for the same event (the user's actual
+  // bug report). Each tab generates a transient id, claims the lease
+  // when it's visible, and releases it when it goes hidden. Other tabs
+  // see the lease via storage.onChanged and remove their panels.
+  const RENDER_LEASE_KEY = 'zhlCalRenderLease';
+  const RENDER_LEASE_TTL_MS = 12000;
+  const RENDER_TAB_ID = 'tab-' + Math.random().toString(36).slice(2, 10);
+
   const EXPIRE_AFTER_START_MS = 60 * 60 * 1000; // stop nagging 1h after start
   const TICK_MS = 15000;
 
@@ -291,7 +301,41 @@
     } catch (_) {}
   });
 
+  // Claim or refresh the render-lease. Only the holder draws the panel.
+  // Hidden tabs never claim; visible tabs claim unless another visible
+  // tab is currently holding a fresh lease.
+  async function tryClaimLease() {
+    if (document.visibilityState !== 'visible') return false;
+    const now = Date.now();
+    const data = await getStorage([RENDER_LEASE_KEY]);
+    const lease = data[RENDER_LEASE_KEY] || {};
+    const expired = !lease.ts || (now - lease.ts) > RENDER_LEASE_TTL_MS;
+    if (lease.tabId === RENDER_TAB_ID || expired) {
+      await setStorage({ [RENDER_LEASE_KEY]: { tabId: RENDER_TAB_ID, ts: now } });
+      return true;
+    }
+    return false;
+  }
+  async function releaseLeaseIfOurs() {
+    try {
+      const data = await getStorage([RENDER_LEASE_KEY]);
+      const lease = data[RENDER_LEASE_KEY] || {};
+      if (lease.tabId === RENDER_TAB_ID) {
+        await setStorage({ [RENDER_LEASE_KEY]: { tabId: null, ts: 0 } });
+      }
+    } catch (_) {}
+  }
+
   async function render() {
+    // Leader election — bail out if this tab isn't the render holder.
+    // Removes any panel we'd previously rendered so two visible tabs
+    // never show simultaneous panels for the same event.
+    const isLeader = await tryClaimLease();
+    if (!isLeader) {
+      const ex = document.getElementById(PANEL_ID);
+      if (ex) ex.remove();
+      return;
+    }
     const due = await computeDue();
     if (!due.length) {
       const ex = document.getElementById(PANEL_ID);
@@ -518,12 +562,14 @@
   setInterval(requestRefresh, 4 * 60 * 1000);
 
   // React immediately when the background updates events, or when the
-  // LO dismisses/snoozes in another Gmail tab.
+  // LO dismisses/snoozes in another Gmail tab. Also react when the
+  // render lease changes — so a tab that just lost the lease drops its
+  // panel immediately and a tab that just gained it can draw.
   try {
     chrome.storage.onChanged.addListener(function (changes, area) {
       if (area !== 'local') return;
       if (changes[EVENTS_KEY] || changes[DISMISS_KEY] || changes[SNOOZE_KEY] ||
-          changes[LEADS_KEY]) {
+          changes[LEADS_KEY] || changes[RENDER_LEASE_KEY]) {
         try { render(); } catch (_) {}
       }
     });
@@ -535,9 +581,19 @@
   // tab unhides. Rendering on visibilitychange makes the pop-up appear
   // immediately when the window is raised.
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') { try { render(); } catch (_) {} }
+    if (document.visibilityState === 'visible') {
+      try { render(); } catch (_) {}
+    } else {
+      // Tab went hidden — release the lease so another visible tab can
+      // pick it up immediately instead of waiting for the TTL.
+      releaseLeaseIfOurs();
+    }
   });
   window.addEventListener('focus', function () { try { render(); } catch (_) {} });
+  // Best-effort lease release on tab close so a peer tab doesn't have
+  // to wait for the TTL to expire.
+  window.addEventListener('pagehide', function () { releaseLeaseIfOurs(); });
+  window.addEventListener('beforeunload', function () { releaseLeaseIfOurs(); });
 
 })();
   }
