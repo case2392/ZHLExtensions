@@ -84,12 +84,69 @@
     return out;
   }
 
-  function dispatch(harvest, url) {
-    if (!harvest || !harvest.length) return;
+  // Full event records harvested by walking every "summary":"..." in
+  // the response and finding the nearest dateTime/end pair plus any
+  // co-located conferencing link. Used by the scraper to FIX stored
+  // event titles (some chip aria-labels carry the calendar owner's
+  // name where the title belongs, or are empty, producing wrong/empty
+  // titles in the DOM-scraped record). startMs is the authoritative
+  // match key — stored events within 60s of a fetch-hook startMs are
+  // treated as the same event.
+  function harvestEventsFromText(text) {
+    if (!text || text.length < 50) return [];
+    const out = [];
+    // First pass: find every "summary" offset so we can bound each
+    // event's payload to [thisOffset, nextSummaryOffset). Without
+    // this bound, a forward search for "dateTime" / Zoom URLs from
+    // event N would happily reach into event N+1's payload and
+    // wrongly attach event N+1's data to event N (e.g. "Busy" picking
+    // up the next meeting's Zoom link).
+    const summaryRe = /"summary"\s*:\s*"((?:\\.|[^"\\]){1,200})"/gi;
+    const positions = [];
+    let m;
+    while ((m = summaryRe.exec(text)) !== null) {
+      positions.push({ index: m.index, raw: m[0], title: m[1] });
+    }
+    for (let i = 0; i < positions.length; i++) {
+      const cur = positions[i];
+      const title = cur.title
+        .replace(/\\"/g, '"').replace(/\\'/g, "'")
+        .replace(/\\n/g, ' ').replace(/\\t/g, ' ')
+        .replace(/\\\\/g, '\\').trim();
+      if (!title) continue;
+      const evStart = cur.index + cur.raw.length;
+      const evEnd = (i + 1 < positions.length) ? positions[i + 1].index : Math.min(text.length, evStart + 1500);
+      const slice = text.slice(evStart, evEnd);
+      const dts = [];
+      const dtRe = /"dateTime"\s*:\s*"([^"]+)"/g;
+      let dt;
+      while ((dt = dtRe.exec(slice)) !== null) {
+        const t = Date.parse(dt[1]);
+        if (isFinite(t)) dts.push(t);
+        if (dts.length >= 2) break;
+      }
+      if (!dts.length) continue; // can't match without a start time
+      const linkM = slice.match(LINK_RE);
+      out.push({
+        title: title,
+        startMs: dts[0],
+        endMs: dts[1] || null,
+        link: linkM ? linkM[0] : null
+      });
+    }
+    return out;
+  }
+
+  function dispatch(harvest, events, url) {
+    if ((!harvest || !harvest.length) && (!events || !events.length)) return;
     try {
       window.postMessage({
         source: 'zhl-cal-fetch-hook',
-        payload: { harvest: harvest, url: String(url || '') }
+        payload: {
+          harvest: harvest || [],
+          events: events || [],
+          url: String(url || '')
+        }
       }, '*');
     } catch (_) {}
   }
@@ -111,7 +168,8 @@
             const clone = resp.clone();
             clone.text().then(function (text) {
               const h = harvestFromText(text);
-              if (h.length) dispatch(h, url);
+              const e = harvestEventsFromText(text);
+              if (h.length || e.length) dispatch(h, e, url);
             }).catch(function () {});
           } catch (_) {}
         }).catch(function () {});
@@ -140,7 +198,8 @@
             try { text = xhr.responseText || ''; } catch (_) {}
             if (!text) return;
             const h = harvestFromText(text);
-            if (h.length) dispatch(h, url);
+            const e = harvestEventsFromText(text);
+            if (h.length || e.length) dispatch(h, e, url);
           } catch (_) {}
         });
       } catch (_) {}

@@ -469,6 +469,7 @@
         // links to newly-stored events. Runs after scrapeAndStore so
         // the events store is fresh.
         try { attachBufferedLinks(); } catch (_) {}
+        try { applyAuthoritativeEvents(); } catch (_) {}
       }); } catch (e) { console.warn('[ZHL Calendar Scraper] scrape failed', e); }
       try { harvestDetailPopovers(); } catch (e) { console.warn('[ZHL Calendar Scraper] popover harvest failed', e); }
     }, DEBOUNCE_MS);
@@ -530,21 +531,119 @@
     if (changed) await setStorage({ [EVENTS_KEY]: evs });
   }
 
+  // ---- Authoritative event records from fetch hook ----------------
+  // The fetch hook also emits full event records harvested from
+  // Google's internal API responses ({title, startMs, endMs, link}).
+  // We match these to stored events by startMs (±60s tolerance) and
+  // use the authoritative title to OVERWRITE titles produced by the
+  // DOM scraper, which can be wrong for events whose chip aria-label
+  // doesn't carry the title in the expected position (e.g. "Busy"
+  // events where the aria-label only has owner-name and time, so the
+  // scraper would land on the owner's name or come up empty).
+  const eventsBuffer = []; // [{title, startMs, endMs, link, ts}]
+  const EVENTS_BUFFER_TTL_MS = 10 * 60 * 1000;
+  const EVENTS_BUFFER_MAX = 1000;
+
+  function pruneEventsBuffer() {
+    const now = Date.now();
+    let i = 0;
+    while (i < eventsBuffer.length) {
+      if (now - eventsBuffer[i].ts > EVENTS_BUFFER_TTL_MS) eventsBuffer.splice(i, 1);
+      else i++;
+    }
+    if (eventsBuffer.length > EVENTS_BUFFER_MAX) {
+      eventsBuffer.splice(0, eventsBuffer.length - EVENTS_BUFFER_MAX);
+    }
+  }
+
+  async function applyAuthoritativeEvents() {
+    pruneEventsBuffer();
+    if (!eventsBuffer.length) return;
+    const data = await getStorage([EVENTS_KEY]);
+    const evs = Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : [];
+    if (!evs.length) return;
+    let changed = false;
+    for (const fhe of eventsBuffer) {
+      if (!fhe || !isFinite(fhe.startMs)) continue;
+      for (const ev of evs) {
+        if (!ev || !isFinite(ev.startMs)) continue;
+        // Same event = startMs within 60s. (Cross-tz / encoder rounding
+        // is the only realistic drift; events legitimately starting at
+        // the same minute are typically distinct meetings, which we
+        // disambiguate below by also requiring an empty/junk title or
+        // matching title prefix.)
+        if (Math.abs(ev.startMs - fhe.startMs) > 60000) continue;
+        // Always prefer the authoritative title — DOM-scraped titles
+        // for the same event can be "(no title)", "Justin Case" (the
+        // calendar owner), etc. The fetch hook reads Google's own
+        // `summary` field which is the source of truth.
+        if (fhe.title && ev.title !== fhe.title) {
+          ev.title = fhe.title;
+          changed = true;
+        }
+        // Fill in missing endMs from the authoritative record so the
+        // reminder card can show the time range.
+        if (fhe.endMs && (!isFinite(ev.endMs) || ev.endMs <= ev.startMs)) {
+          ev.endMs = fhe.endMs;
+          changed = true;
+        }
+        // Attach link too (covers the case where titleHint failed).
+        if (fhe.link && !ev.meet) {
+          ev.meet = fhe.link;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      // Re-dedup the array using the same key the renderer uses
+      // (startMs + title prefix). Two scraped copies of the same
+      // event that previously had different DOM-derived titles will
+      // collapse now that the authoritative title is applied to both.
+      const byKey = {};
+      evs.forEach(function (e) {
+        const t = String(e.title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+        const k = e.startMs + '|' + t;
+        const cur = byKey[k];
+        if (!cur) byKey[k] = e;
+        else {
+          // Keep the one with the link / endMs / fresher _seenAt.
+          if (!cur.meet && e.meet) cur.meet = e.meet;
+          if (!cur.endMs && e.endMs) cur.endMs = e.endMs;
+          if ((e._seenAt || 0) > (cur._seenAt || 0)) cur._seenAt = e._seenAt;
+        }
+      });
+      const collapsed = Object.keys(byKey).map(function (k) { return byKey[k]; });
+      collapsed.sort(function (a, b) { return a.startMs - b.startMs; });
+      await setStorage({ [EVENTS_KEY]: collapsed });
+    }
+  }
+
   window.addEventListener('message', function (e) {
     try {
       if (e.source !== window) return;
       const msg = e.data;
       if (!msg || msg.source !== 'zhl-cal-fetch-hook') return;
       const harvest = (msg.payload && msg.payload.harvest) || [];
-      if (!harvest.length) return;
+      const events = (msg.payload && msg.payload.events) || [];
       const now = Date.now();
       for (const h of harvest) {
         if (!h || !h.link || !h.titleHint) continue;
         linkBuffer.push({ link: h.link, titleHint: h.titleHint, ts: now });
       }
-      // Try attaching right away — most often the events store is
-      // already populated by the time the first calendar fetch lands.
+      for (const fhe of events) {
+        if (!fhe || !isFinite(fhe.startMs)) continue;
+        eventsBuffer.push({
+          title: fhe.title || '',
+          startMs: fhe.startMs,
+          endMs: fhe.endMs || null,
+          link: fhe.link || null,
+          ts: now
+        });
+      }
+      // Apply right away — most often the events store is already
+      // populated by the time the first calendar fetch lands.
       attachBufferedLinks();
+      applyAuthoritativeEvents();
     } catch (_) {}
   });
 

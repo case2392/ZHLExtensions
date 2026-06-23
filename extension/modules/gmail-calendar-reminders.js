@@ -100,12 +100,28 @@
     });
   }
 
-  function fmtClock(ms) {
+  function fmtClock(startMs, endMs) {
     try {
-      const d = new Date(ms);
-      const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const d = new Date(startMs);
+      const startTime = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
       const date = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-      return time + ', ' + date;
+      // Show "12:05 PM – 12:55 PM" when we have a meaningful end time;
+      // otherwise just the start. Strip a duplicate AM/PM marker when
+      // both ends are in the same half of the day for compactness.
+      if (isFinite(endMs) && endMs > startMs) {
+        const e = new Date(endMs);
+        let endTime = e.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const sampm = (startTime.match(/(AM|PM)$/i) || [''])[0];
+        const eampm = (endTime.match(/(AM|PM)$/i) || [''])[0];
+        const sameDay = d.toDateString() === e.toDateString();
+        if (sameDay && sampm && sampm === eampm) {
+          // "12:05 – 12:55 PM" — drop the start's AM/PM marker.
+          const startNoTag = startTime.replace(/\s*(AM|PM)\s*$/i, '');
+          return startNoTag + ' – ' + endTime + ', ' + date;
+        }
+        return startTime + ' – ' + endTime + ', ' + date;
+      }
+      return startTime + ', ' + date;
     } catch (_) { return ''; }
   }
 
@@ -472,7 +488,7 @@
           '<span style="font-size:15px;line-height:1.2;">📅</span>' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:700;color:#0f172a;word-break:break-word;">' + escHtml(d.ev.title || '(no title)') + '</div>' +
-            '<div style="font-size:11.5px;color:#6b7280;margin-top:1px;">' + escHtml(fmtClock(d.ev.startMs)) + '</div>' +
+            '<div style="font-size:11.5px;color:#6b7280;margin-top:1px;">' + escHtml(fmtClock(d.ev.startMs, d.ev.endMs)) + '</div>' +
             loc +
             '<div style="font-weight:700;color:' + relColor + ';margin-top:4px;">' +
               (d.ev.allDay ? 'ALL DAY' : (inProgress ? 'In progress' : rel)) +

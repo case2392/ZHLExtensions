@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.14",
+    category: "improvement",
+    headline: "Meeting Reminders — three fixes from the latest screenshot: (1) titles like 'Busy' that were rendering as '(no title)' or the calendar owner's name are now corrected to the real title, (2) duplicate cards for the same event collapse correctly now that titles are authoritative, and (3) the time line on each card shows the full range (e.g. '12:05 – 12:55 PM, Tuesday, June 23') instead of just the start.",
+    highlights: [
+      "Authoritative titles from the fetch hook: the MAIN-world hook now emits FULL event records {title, startMs, endMs, link} for every event in Google's internal calendar API responses, not just links. The scraper buffers these and stamps the authoritative title (from Google's own `summary` field) onto stored events whose startMs matches within 60s — fixing rows that the DOM scraper produced as '(no title)' (chip aria-label had no title segment) or 'Justin Case' (chip aria-label put the calendar owner where the title belongs).",
+      "Duplicate fix: when both copies of a duplicate event get their titles corrected to the same authoritative value, the existing (startMs + title-prefix) dedup collapses them. The scraper now also re-dedups the stored array right after an authoritative-title update so the storage doesn't keep the duplicate row around either.",
+      "End-time display: fmtClock now takes both startMs and endMs and renders '12:05 – 12:55 PM, Tuesday, June 23'. When start and end share an AM/PM marker, the start's marker is dropped for compactness ('12:05 – 12:55 PM' rather than '12:05 PM – 12:55 PM'). Falls back to start-only when endMs is missing or invalid.",
+      "Bounded event payload in the harvester (correctness fix): the previous version looked ±1500 chars forward from each `summary` and could happily reach into the NEXT event's payload — meaning, in a response with [Busy, quick shadow sesh, Focus time], the harvester would attach quick-shadow-sesh's Zoom link to Busy. Now bounded to [thisSummary, nextSummary) so each event only sees its own payload. Verified with a synthetic three-event response: Busy gets no link, quick-shadow-sesh gets its Zoom link, Focus time gets no link.",
+      "If Google's internal API ever stops shipping `summary` (or the dateTime structure changes), the DOM-scraped titles remain as the fallback — the new authoritative-title step only OVERRIDES, never deletes."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders", "calendar-events-scraper", "calendar-fetch-hook"]
+  },
+  {
     version: "1.64.13",
     category: "improvement",
     headline: "Meeting Reminders — Zoom/Meet Join buttons now appear automatically on every reminder card, without needing you to open each event manually. A new MAIN-world content script hooks fetch + XMLHttpRequest on calendar.google.com, harvests conferencing URLs from Google's own internal API responses (which include every event's link), and attaches each link to the matching stored event by Google's `summary` / `title` field.",
