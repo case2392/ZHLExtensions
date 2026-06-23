@@ -153,13 +153,30 @@
     } catch (_) { return ''; }
   }
 
+  // The label tracks how far away the meeting is. We deliberately use
+  // ceil for future deltas and floor for past deltas so the wall-clock
+  // line up matches the user's expectation:
+  //   - Math.round used to bucket 29-second remainders as "now", which
+  //     was wrong: at 3:29:31 PM with a 3:30 event the label said "now"
+  //     even though the user's clock still showed 3:29.
+  //   - With ceil, anything still BEFORE start (even 1 second before)
+  //     shows "in 1 minute" — so the user always gets a heads-up minute
+  //     while the clock hasn't ticked over yet.
+  //   - With floor on the past side, the first 60 seconds AFTER start
+  //     show "now" (or "In progress" via the renderer's separate check
+  //     when an end time is present), and "1 minute ago" only appears
+  //     once the wall-clock minute actually ticks past.
   function relLabel(startMs, now) {
-    const mins = Math.round((startMs - now) / 60000);
-    if (mins > 1) return 'in ' + mins + ' minutes';
-    if (mins === 1) return 'in 1 minute';
+    const ms = startMs - now;
+    if (ms > 0) {
+      const mins = Math.ceil(ms / 60000);
+      return mins === 1 ? 'in 1 minute' : 'in ' + mins + ' minutes';
+    }
+    const past = -ms;
+    const mins = Math.floor(past / 60000);
     if (mins === 0) return 'now';
-    if (mins === -1) return '1 minute ago';
-    return (-mins) + ' minutes ago';
+    if (mins === 1) return '1 minute ago';
+    return mins + ' minutes ago';
   }
 
   function instanceKey(ev, lead) {

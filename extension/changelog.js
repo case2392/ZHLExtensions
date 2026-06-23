@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.18",
+    category: "bugfix",
+    headline: "Meeting Reminders — fixed the 'in X minutes' / 'now' label rounding. At 3:29 PM with a 3:30 PM meeting the card was saying 'now' instead of 'in 1 minute' because Math.round was bucketing sub-30-second remainders to zero.",
+    highlights: [
+      "Bug: relLabel used Math.round on the minute delta. At 3:29:31 PM with the event at 3:30:00, the delta is 29 seconds → round(29/60) = round(0.483) = 0 → label said 'now'. Wall-clock didn't match.",
+      "Fix: ceil for future deltas, floor for past. Anything still BEFORE the start time (even 1 second before) shows 'in 1 minute', so the heads-up always lasts the full final minute on the user's clock. After start, the first 60 seconds show 'now' (or 'In progress' when the renderer detects an end time), then '1 minute ago' kicks in only once the wall-clock minute actually ticks past start.",
+      "Verified the boundaries: start+60s → 'in 1 minute', start+1s → 'in 1 minute', start exactly → 'now', start-30s → 'now', start-60s → '1 minute ago'."
+    ],
+    sections: ["calendar-reminders", "gmail-calendar-reminders"]
+  },
+  {
     version: "1.64.17",
     category: "improvement",
     headline: "Meeting Reminders — the 'Snooze until' dropdown now smart-defaults based on how soon the meeting is. At the 30-minute reminder it still defaults to '5 min before event'; at the final 5-minute reminder it defaults to '1 min before event' so snoozing actually delays the next nudge instead of being a no-op.",
