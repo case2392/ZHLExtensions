@@ -503,7 +503,14 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
   // + a few attachments comfortably fit. Anything larger is logged
   // and skipped; the LO can attach it manually.
 
-  const ATTACH_MAX_BYTES = 4 * 1024 * 1024;
+  // Raised from 4 MB to 20 MB in v1.64.21 — Reggora Property Data
+  // Reports (PDRs) contain inline photos of the property and routinely
+  // run 6–12 MB, well above the old cap. Standard appraisal PDFs are
+  // text-heavy and stay under 4 MB, which is why the bug only showed
+  // up on a PDR. 20 MB encodes to ~27 MB of base64 in storage; the
+  // manifest now requests "unlimitedStorage" so we comfortably fit
+  // past chrome.storage.local's default 10 MB cap.
+  const ATTACH_MAX_BYTES = 20 * 1024 * 1024;
 
   function blobToBase64(blob) {
     return new Promise(function (resolve, reject) {
@@ -548,21 +555,26 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
       seen.add(info.url);
       infos.push(info);
     });
-    if (!infos.length) return [];
+    if (!infos.length) return { files: [], skipped: [] };
 
     const out = [];
+    const skipped = []; // {name, reason} for status reporting
     for (const info of infos) {
       try {
         // credentials: 'include' so Gmail's auth cookies tag along.
         const resp = await fetch(info.url, { credentials: 'include' });
         if (!resp.ok) {
           console.warn('[ZHL Appraisal Blast] attachment fetch HTTP ' + resp.status + ' for', info.filename);
+          skipped.push({ name: info.filename, reason: 'fetch HTTP ' + resp.status });
           continue;
         }
         const blob = await resp.blob();
         if (blob.size > ATTACH_MAX_BYTES) {
+          const mb = (blob.size / 1024 / 1024).toFixed(1);
+          const capMb = (ATTACH_MAX_BYTES / 1024 / 1024).toFixed(0);
           console.warn('[ZHL Appraisal Blast] attachment too large to auto-attach (' +
             blob.size + ' bytes, cap ' + ATTACH_MAX_BYTES + '), skipping:', info.filename);
+          skipped.push({ name: info.filename, reason: mb + ' MB > ' + capMb + ' MB cap' });
           continue;
         }
         const b64 = await blobToBase64(blob);
@@ -575,9 +587,10 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
         console.log('[ZHL Appraisal Blast] gathered attachment', info.filename, '(' + blob.size + ' bytes)');
       } catch (e) {
         console.warn('[ZHL Appraisal Blast] attachment fetch failed for', info.filename, e);
+        skipped.push({ name: info.filename, reason: 'fetch error' });
       }
     }
-    return out;
+    return { files: out, skipped: skipped };
   }
 
   // Stash + clipboard mirror of sf-vpa-email.js's stashAndClip:
@@ -634,12 +647,26 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
 
       setStatus('Gathering attachments from this email…');
       let files = [];
-      try { files = await gatherAttachments(); }
-      catch (e) { console.warn('[ZHL Appraisal Blast] gatherAttachments failed:', e); }
+      let skipped = [];
+      try {
+        const g = await gatherAttachments();
+        files = g.files || [];
+        skipped = g.skipped || [];
+      } catch (e) { console.warn('[ZHL Appraisal Blast] gatherAttachments failed:', e); }
 
-      const attachSummary = files.length
-        ? files.length + ' attachment' + (files.length === 1 ? '' : 's')
-        : 'no attachments';
+      let attachSummary;
+      if (files.length && skipped.length) {
+        attachSummary = files.length + ' attachment' + (files.length === 1 ? '' : 's') +
+          ' (skipped ' + skipped.length + ': ' + skipped.map(function (s) { return s.reason; }).join(', ') + ')';
+      } else if (files.length) {
+        attachSummary = files.length + ' attachment' + (files.length === 1 ? '' : 's');
+      } else if (skipped.length) {
+        attachSummary = 'no attachments auto-attached (skipped ' +
+          skipped.map(function (s) { return s.name + ': ' + s.reason; }).join(', ') +
+          ' — drag manually from the source email)';
+      } else {
+        attachSummary = 'no attachments';
+      }
       setStatus('Found ' + contacts.length + ' contacts; ' + msg.to.length + ' on TO, ' +
         msg.cc.length + ' on CC; ' + attachSummary + '. Stashing formatted body…');
       await stashAndClip(html, msg.body, files);

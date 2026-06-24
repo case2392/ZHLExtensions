@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.21",
+    category: "bugfix",
+    headline: "Appraisal Blast — PDR reports (Property Data Reports) now actually get attached to the outbound draft. The old 4 MB cap was silently dropping them because PDRs include inline property photos and routinely run 6–12 MB, while standard appraisal PDFs stay under 4 MB (which is why PDRs failed but regular appraisals worked).",
+    highlights: [
+      "Bug: gatherAttachments() compared the fetched blob size against ATTACH_MAX_BYTES = 4 MB and skipped over-cap files with a console.warn nobody sees. PDRs are inspection reports with embedded photos and easily hit 6–12 MB, so every one of them got dropped on the floor.",
+      "Fix #1: cap raised from 4 MB to 20 MB. Comfortably covers PDRs without inviting truly absurd attachments.",
+      "Fix #2: manifest now requests 'unlimitedStorage' so a 20 MB attachment (≈27 MB after base64 encoding) doesn't bump into chrome.storage.local's default 10 MB cap. No effect on the LO experience — Chrome just stops counting against the per-extension quota.",
+      "Fix #3: skipped attachments are now surfaced in the panel's status text instead of silently logged. If a future PDR ever exceeds even 20 MB, the LO will see e.g. 'no attachments auto-attached (skipped ZG…pdf: 23.4 MB > 20 MB cap — drag manually from the source email)' and know what to do, instead of wondering why the draft has no PDF.",
+      "Standard appraisal forwarding is unchanged — it already worked because those PDFs are well under the old cap. This is a PDR-specific fix."
+    ],
+    sections: ["gmail-appraisal-blast"]
+  },
+  {
     version: "1.64.20",
     category: "improvement",
     headline: "Appraisal Blast — Property Data Reports (where Appraised value is 'N/A') now render as a celebratory 'came back good and at value via PDR' message instead of treating the missing dollar amount as a $0 appraisal and showing a giant shortfall.",
