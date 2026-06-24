@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.24",
+    category: "bugfix",
+    headline: "Meeting Reminders — 'Busy' (and 'Out of office' / 'Focus time' / 'Working elsewhere' / 'Tentative') events now title correctly and collapse into a single reminder. The v1.64.14 authoritative-title fix couldn't help here because Google's API response has an empty `summary` for these auto-generated events — the title only exists in the chip's rendered text.",
+    highlights: [
+      "Bug: for events with no real user-set title (Google auto-fills them from declined invites or time-blocks), the aria-label only carries the calendar OWNER'S NAME plus time, and the API response's `summary` field is empty. My parser ended up extracting 'Justin Case' from the aria-label as the title for one copy and '(no title)' for another, producing TWO reminder cards for one event that the dedup couldn't collapse (different titles → different dedup keys).",
+      "Fix: a new detectGoogleRenderedLabel() helper scans the chip's visible text for the labels Google's UI layer paints onto these auto-busy events — Busy, Out of office, Working elsewhere, Focus time, Tentative. When present, that label takes priority over the aria-label-derived title, so all copies of the same event end up with the same authoritative title and the dedup collapses them.",
+      "Lookaheads use `(?![a-z])` instead of `\\b` so adjacent digits work — Google's chip textContent has no whitespace separator between 'Busy' and the time stamp ('Busy12:05'). Word-boundary regex doesn't fire between a letter and a digit (both are word chars), so the old `^Busy\\b` would have failed on that real-world chip text.",
+      "Safety: 'Busyness consulting' (a hypothetical real meeting starting with the word Busy) does NOT match — the lookahead requires the next character to be non-letter, so any 'Busy<letter>' continues into the regular title-extraction path.",
+      "Verified the dedup pipeline end-to-end: both copies of a 12:05-12:55 'Busy' block scrape with title 'Busy' → identical (startMs, title-prefix) keys → collapsed to one reminder card."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.23",
     category: "improvement",
     headline: "Appraisal Blast — added a third email variant: the hand-typed coworker forward ('Appraisal Received <LastName> ZG…' with body lines Loan Amount / Appraised Value / Purchase Price / Report Completed as). Same Send-to-all-parties flow works; body templates fall back to address-less wording since this variant has no property address.",

@@ -272,11 +272,53 @@
       return null; // no time and not all-day — not a usable event chip
     }
 
-    // ---- Title ---- (prefer aria's segments; fall back to chip text)
-    let title = extractTitle(aria, time && time.matched);
-    if (title === '(no title)' && text) title = extractTitle(text, time && time.matched);
+    // ---- Title ----
+    // Some Google Calendar events have no real title — they're auto-
+    // generated from declined invites or blocked time-slots. Google
+    // renders one of a fixed set of UI labels (Busy / Out of office /
+    // Focus time / Working elsewhere / Tentative) in the chip's
+    // visible text, but the aria-label often carries only the
+    // calendar OWNER'S NAME ("Justin Case") and time, with no title
+    // segment at all. Without this check, extractTitle(aria) would
+    // pick up "Justin Case" as the title or fall through to "(no
+    // title)", producing duplicate reminders that don't collapse.
+    // The chip's rendered text is the source of truth for these.
+    const renderedLabel = detectGoogleRenderedLabel(text);
+    let title;
+    if (renderedLabel) {
+      title = renderedLabel;
+    } else {
+      title = extractTitle(aria, time && time.matched);
+      if (title === '(no title)' && text) title = extractTitle(text, time && time.matched);
+    }
 
     return { startMs: startMs, endMs: endMs, title: title, allDay: allDay };
+  }
+
+  // Google renders these labels in the chip TEXT for auto-busy /
+  // status-only events that don't have a user-set title. We promote
+  // them to the title field since that's what the LO actually sees
+  // on the calendar. Case-insensitive match anchored at the start
+  // of the chip text (the label always leads).
+  // Lookaheads end each label with "non-letter" rather than \b so
+  // adjacent digits (e.g. "Busy12:05") don't break the match — \b
+  // doesn't fire between a word char and a digit since digits are
+  // also word chars.
+  const GOOGLE_RENDERED_LABELS = [
+    { re: /^Busy(?![a-z])/i,                label: 'Busy' },
+    { re: /^Out of office(?![a-z])/i,       label: 'Out of office' },
+    { re: /^Working elsewhere(?![a-z])/i,   label: 'Working elsewhere' },
+    { re: /^Focus time(?![a-z])/i,          label: 'Focus time' },
+    { re: /^Tentative(?![a-z])/i,           label: 'Tentative' }
+  ];
+  function detectGoogleRenderedLabel(text) {
+    if (!text) return null;
+    const t = String(text).replace(/\s+/g, ' ').trim();
+    if (!t) return null;
+    for (const p of GOOGLE_RENDERED_LABELS) {
+      if (p.re.test(t)) return p.label;
+    }
+    return null;
   }
 
   // ---- Scrape pass ------------------------------------------------
