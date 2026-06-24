@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.22",
+    category: "improvement",
+    headline: "Meeting Reminders — Zoom/Meet link discovery is now bulletproof for the cases where the fetch hook misses an event. Two changes: (1) the popover title detector now handles popovers whose title is a styled <div> instead of a semantic heading, and (2) the scraper now AUTOMATICALLY opens any upcoming event without a link briefly, harvests its Zoom URL from the rendered popover, and closes it — without you having to click the event yourself.",
+    highlights: [
+      "Fix #1 — title detection: the popover-anchor harvester required the event title to live in an h1/h2/h3/role=heading element. Google's current event-details panel uses a plain styled <div> for the title (no semantic role), which is why the 'ZHL -Preferred Sales Huddle' title wasn't found and the Zoom link wasn't attached even though the popover was visible. New findPanelTitle() tries semantic headings first, then falls back to the largest-font leaf text element near the top of the panel (cap 600 element scan, skip obvious non-titles like 'Passcode'/'Going'/etc.). This catches modern Material-styled popovers.",
+      "Fix #2 — auto-open: a new autoOpenUpcoming() routine runs 8 seconds after Calendar loads and every 3 minutes thereafter. It picks the next upcoming event (within 4 hours) that has no meet link, finds its chip in the current view by aria-label match, programmatically clicks to open the popover, waits up to 2.5s for it to render, runs the popover harvester, then closes with Escape. One event per tick. Tracks tried events in storage so a no-link event isn't retried for an hour.",
+      "Defensive rails so this isn't annoying: (a) top-level Calendar tab only — never runs in the Gmail side-panel iframe, where a popover flash would be jarring; (b) skips entirely if you clicked or pressed a key in the last 5 seconds, so it doesn't pop something up while you're reading your calendar; (c) only events that need a link (skips ones the fetch hook already attached); (d) only events within 4 hours of starting (covers reminder lead times without scanning the whole calendar).",
+      "The fetch hook remains the primary path — it's silent, fast, and covers ~all events. Auto-open is the fallback for the leftovers."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.21",
     category: "bugfix",
     headline: "Appraisal Blast — PDR reports (Property Data Reports) now actually get attached to the outbound draft. The old 4 MB cap was silently dropping them because PDRs include inline property photos and routinely run 6–12 MB, while standard appraisal PDFs stay under 4 MB (which is why PDRs failed but regular appraisals worked).",

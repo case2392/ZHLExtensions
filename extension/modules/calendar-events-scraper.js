@@ -431,12 +431,64 @@
       return r.width > 0 && r.height > 0;
     } catch (_) { return false; }
   }
+  // Find a likely event-title within a popover panel. Tries (in order):
+  //   1. Real semantic headings — h1/h2/h3/h4 or role=heading / aria-level.
+  //   2. The largest-font leaf text element near the top of the panel.
+  // The fallback is what catches Google Calendar's current event-
+  // details panel, where the title is just a styled <div> (no semantic
+  // heading) — which is why "ZHL -Preferred Sales Huddle" was missed
+  // even with the popover clearly visible and the Zoom link present.
+  function findPanelTitle(panel) {
+    if (!panel || !panel.querySelector) return '';
+    // Path 1: semantic.
+    const h = panel.querySelector('h1, h2, h3, h4, [role="heading"], [aria-level]');
+    if (h) {
+      const t = (h.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t && t.length >= 2 && t.length <= 200) return t;
+    }
+    // Path 2: biggest-font leaf-ish text node near the top. We cap
+    // iteration at 600 elements so a freakishly large popover doesn't
+    // tank the page; titles always live near the top so we walk in
+    // document order and stop once we have a strong candidate.
+    let best = '';
+    let bestSize = 0;
+    let scanned = 0;
+    const walker = panel.querySelectorAll('div, span, p, header');
+    for (const el of walker) {
+      if (++scanned > 600) break;
+      // Skip elements that contain another candidate's text — we want
+      // the leaf-most node, not a wrapper.
+      let hasChildText = false;
+      for (const c of el.children) {
+        if ((c.textContent || '').trim().length >= 2) { hasChildText = true; break; }
+      }
+      if (hasChildText) continue;
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!t || t.length < 2 || t.length > 200) continue;
+      // Skip obvious non-titles by quick text fingerprint.
+      if (/^https?:\/\//i.test(t)) continue;
+      if (/^(passcode|id|join|going|maybe|guests?|edit|location|description|joining instructions|view meeting insights)\b/i.test(t)) continue;
+      let size = 0;
+      try { size = parseFloat(window.getComputedStyle(el).fontSize) || 0; } catch (_) {}
+      // Titles are visibly larger than body text; 18px is a safe floor
+      // for Google Calendar's popover title in the current layout.
+      if (size < 18) continue;
+      if (size > bestSize) {
+        bestSize = size;
+        best = t;
+        // Once we have a 22px+ candidate near the top, we're confident.
+        if (size >= 22) break;
+      }
+    }
+    return best;
+  }
+
   async function harvestDetailPopovers() {
     const matches = {}; // normTitle -> link
     // Path A (modern): scan visible Zoom/Meet anchors. For each one,
-    // walk up looking for a heading-like ancestor whose text we can
-    // use as the event title. Bound the walk to 15 levels so we don't
-    // pick up a heading from an unrelated section of the page.
+    // walk up the DOM looking for the popover container, then extract
+    // the title via findPanelTitle (semantic heading first, largest-
+    // font leaf text as fallback).
     const anchors = document.querySelectorAll(
       'a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]'
     );
@@ -444,16 +496,27 @@
       const href = a.getAttribute('href') || '';
       if (!LINK_RE.test(href)) return;
       if (!isElVisible(a)) return;
-      let node = a;
-      for (let depth = 0; depth < 15 && node; depth++) {
-        const h = node.querySelector ? node.querySelector('h1, h2, h3, [role="heading"]') : null;
-        if (h) {
-          const title = (h.textContent || '').replace(/\s+/g, ' ').trim();
-          if (title && title.length >= 2 && title.length <= 200) {
+      let node = a.parentElement;
+      // Walk up until we find a panel-sized container OR a recognized
+      // dialog/region role. Bounded so we don't bubble out to the
+      // whole document.
+      for (let depth = 0; depth < 18 && node; depth++) {
+        const role = node.getAttribute && (node.getAttribute('role') || '');
+        const isDialog = role === 'dialog' || role === 'region';
+        let bigEnough = false;
+        try {
+          const r = node.getBoundingClientRect();
+          bigEnough = r.width >= 320 && r.height >= 240;
+        } catch (_) {}
+        if (isDialog || bigEnough) {
+          const title = findPanelTitle(node);
+          if (title) {
             const k = normTitle(title);
             if (k && !matches[k]) matches[k] = href;
-            break;
+            return; // done with this anchor
           }
+          // Panel found but no title resolved — keep walking up in
+          // case the title is in a wider ancestor.
         }
         node = node.parentElement;
       }
@@ -474,8 +537,7 @@
           return a ? a.getAttribute('href') : null;
         })();
       if (!link) return;
-      const h = dlg.querySelector('h1, h2, h3, [role="heading"]');
-      const title = h ? (h.textContent || '').replace(/\s+/g, ' ').trim() : '';
+      const title = findPanelTitle(dlg);
       if (!title) return;
       const k = normTitle(title);
       if (k && !matches[k]) matches[k] = link;
@@ -687,6 +749,166 @@
 
   // First-pass slight delay so Calendar finishes its initial render.
   setTimeout(function () { try { scrapeAndStore(); } catch (_) {} }, 1500);
+
+  // ---- Auto-open popovers to harvest Zoom links --------------------
+  // The fetch hook (calendar-fetch-hook.js) is the primary path —
+  // it reads conferencing URLs straight from Google's internal API
+  // responses without touching the UI. But for some events the link
+  // is in a place the fetch hook doesn't reach (recurring events
+  // with hidden guest lists, response shapes that don't follow the
+  // standard `summary` → `dateTime` → conferenceData layout). For
+  // those, this routine briefly opens each upcoming event's details
+  // popover so harvestDetailPopovers can extract the link from the
+  // rendered DOM, then closes the popover with Escape.
+  //
+  // Defensive limits to keep this from being annoying:
+  //   - Top-level Calendar tab only (not the Gmail side-panel iframe).
+  //   - Only events that have NO meet link yet.
+  //   - Only events starting within the next 4 hours (covers reminder
+  //     lead times comfortably without scanning the whole calendar).
+  //   - At most ONE event per tick.
+  //   - Skip if the user clicked anywhere in the last 5 seconds (so
+  //     a popover doesn't flash up while they're actively reading
+  //     their calendar).
+  //   - Per-event tried-timestamp persisted so a failed lookup isn't
+  //     retried for an hour.
+
+  const LOOKUP_TRIED_KEY = 'zhlCalLookupTried';
+  const LOOKUP_RETRY_MS = 60 * 60 * 1000;
+  const LOOKUP_LOOKAHEAD_MS = 4 * 60 * 60 * 1000;
+
+  function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function findChipForEvent(ev) {
+    const title = ev && ev.title;
+    if (!title || title === '(no title)') return null;
+    const chips = document.querySelectorAll('[role="button"][aria-label], [data-eventid][aria-label]');
+    for (const chip of chips) {
+      const aria = chip.getAttribute('aria-label') || '';
+      if (aria.indexOf(title) === -1) continue;
+      try {
+        const r = chip.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+      } catch (_) { continue; }
+      return chip;
+    }
+    return null;
+  }
+
+  function simulateChipClick(el) {
+    try {
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const opts = {
+        bubbles: true, cancelable: true, composed: true, view: window,
+        button: 0, buttons: 1, clientX: x, clientY: y
+      };
+      el.dispatchEvent(new MouseEvent('mousedown', opts));
+      el.dispatchEvent(new MouseEvent('mouseup', opts));
+      el.dispatchEvent(new MouseEvent('click', opts));
+    } catch (_) {}
+  }
+
+  function findOpenPopover() {
+    // Marker: a visible close button ("X") inside a panel-sized
+    // ancestor. Multiple selectors because Google has shipped this
+    // button with different aria-labels over time.
+    const closeBtns = document.querySelectorAll(
+      '[aria-label="Close"], [aria-label="Dismiss"], button[data-tooltip="Close"]'
+    );
+    for (const btn of closeBtns) {
+      try {
+        const r = btn.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+      } catch (_) { continue; }
+      let panel = btn;
+      for (let i = 0; i < 15 && panel; i++) {
+        try {
+          const pr = panel.getBoundingClientRect();
+          if (pr.width >= 320 && pr.height >= 240) return panel;
+        } catch (_) {}
+        panel = panel.parentElement;
+      }
+    }
+    return null;
+  }
+
+  function closeOpenPopover() {
+    const opts = { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true };
+    try { document.dispatchEvent(new KeyboardEvent('keydown', opts)); } catch (_) {}
+    try { document.dispatchEvent(new KeyboardEvent('keyup', opts)); } catch (_) {}
+  }
+
+  // Suppress auto-open right after the user clicks something — we
+  // don't want a popover flashing while they're reading.
+  let lastUserActivityMs = 0;
+  document.addEventListener('click', function () { lastUserActivityMs = Date.now(); }, true);
+  document.addEventListener('keydown', function () { lastUserActivityMs = Date.now(); }, true);
+
+  async function autoOpenUpcoming() {
+    if (Date.now() - lastUserActivityMs < 5000) return;
+    try {
+      const data = await getStorage([EVENTS_KEY, LOOKUP_TRIED_KEY]);
+      const evs = Array.isArray(data[EVENTS_KEY]) ? data[EVENTS_KEY] : [];
+      const tried = data[LOOKUP_TRIED_KEY] || {};
+      const now = Date.now();
+
+      const candidate = evs.find(function (ev) {
+        if (!ev || ev.meet || ev.allDay) return false;
+        if (!isFinite(ev.startMs)) return false;
+        if (ev.startMs - now > LOOKUP_LOOKAHEAD_MS) return false;
+        if (ev.startMs + 60 * 60 * 1000 < now) return false;
+        const key = (ev.uid || '') + '|' + ev.startMs;
+        if (tried[key] && now - tried[key] < LOOKUP_RETRY_MS) return false;
+        return true;
+      });
+      if (!candidate) return;
+
+      const chip = findChipForEvent(candidate);
+      if (!chip) return; // not in the current visible view — try later
+
+      // Mark as tried before clicking, so a failed open doesn't loop.
+      const key = (candidate.uid || '') + '|' + candidate.startMs;
+      tried[key] = now;
+      // Prune entries > 24h old to keep the map bounded.
+      Object.keys(tried).forEach(function (k) {
+        if (now - tried[k] > 24 * 60 * 60 * 1000) delete tried[k];
+      });
+      await setStorage({ [LOOKUP_TRIED_KEY]: tried });
+
+      console.log('[ZHL Calendar Scraper] auto-opening popover for', candidate.title);
+      simulateChipClick(chip);
+
+      // Wait for popover (up to 2.5s).
+      let popover = null;
+      for (let i = 0; i < 25; i++) {
+        await _sleep(100);
+        popover = findOpenPopover();
+        if (popover) break;
+      }
+      if (popover) {
+        // Let it settle before harvesting.
+        await _sleep(350);
+        try { await harvestDetailPopovers(); } catch (_) {}
+      }
+      // Always close — even if no popover detected, an Escape is safe.
+      closeOpenPopover();
+    } catch (e) {
+      console.warn('[ZHL Calendar Scraper] autoOpenUpcoming failed', e);
+    }
+  }
+
+  // Top-level Calendar tab only (skip iframes — the Gmail side panel
+  // shares this content script via all_frames, but auto-opening
+  // popovers inside that tiny iframe would be jarring).
+  if (window === window.top) {
+    // First attempt 8 seconds after page load (gives Calendar time to
+    // render and the fetch hook time to harvest links the easy way),
+    // then every 3 minutes.
+    setTimeout(function () { autoOpenUpcoming(); }, 8000);
+    setInterval(function () { autoOpenUpcoming(); }, 3 * 60 * 1000);
+  }
 
   const obs = new MutationObserver(schedule);
   obs.observe(document.documentElement, { childList: true, subtree: true });
