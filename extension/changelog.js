@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.25",
+    category: "improvement",
+    headline: "Meeting Reminders — auto-open popover harvester now runs in the Gmail Calendar side panel (not just top-level Calendar tabs) and stops marking events as 'already tried' when their chip isn't even rendered yet. Three changes together make Zoom link discovery far more reliable for events you only see in the side panel.",
+    highlights: [
+      "Dropped the top-window gate: autoOpenUpcoming now runs in the Gmail Calendar side-panel iframe too (it was previously top-level Calendar tab only). For LOs who don't keep a standalone Calendar tab open, the side panel was the only Calendar surface available — gating it out meant the harvester never ran. Trade-off: a small popover may briefly flash inside the side panel during a harvest. Worth it.",
+      "Don't burn the retry slot on a not-found chip. Previously: if the event's chip wasn't in the currently rendered view (e.g. calendar is on Day view, event is tomorrow; or event scrolled off-screen), we still wrote a 1-hour tried timestamp and never came back to it. Now: chip-not-found exits early with NO storage write, so the next tick can find the chip if the view has changed.",
+      "Two retry windows instead of one. Storage entry shape upgraded from a plain timestamp to `{ ts, retryMs }`. A soft retry (5 min) is set up front in case the popover never opens; once the popover successfully renders, we promote to the full 1-hour retry. Legacy plain-number entries are read transparently (assumed full retry).",
+      "These fixes mean: side-panel users now get auto-harvest, off-screen events get tried again when they scroll into view, and transient popover open failures recover in 5 minutes instead of an hour. Should pick up events like 'Leadership Update: Agentic VPA' that v1.64.22 missed on side-panel-only setups."
+    ],
+    sections: ["calendar-reminders", "calendar-events-scraper"]
+  },
+  {
     version: "1.64.24",
     category: "bugfix",
     headline: "Meeting Reminders — 'Busy' (and 'Out of office' / 'Focus time' / 'Working elsewhere' / 'Tentative') events now title correctly and collapse into a single reminder. The v1.64.14 authoritative-title fix couldn't help here because Google's API response has an empty `summary` for these auto-generated events — the title only exists in the chip's rendered text.",

@@ -816,7 +816,14 @@
   //     retried for an hour.
 
   const LOOKUP_TRIED_KEY = 'zhlCalLookupTried';
+  // Retry window after a SUCCESSFUL popover open (we ran the harvester
+  // and either got the link or confirmed the popover had none — no
+  // point hammering it again soon).
   const LOOKUP_RETRY_MS = 60 * 60 * 1000;
+  // Retry window after a FAILED popover open (chip wasn't clickable,
+  // popover didn't render, etc.). Shorter so a transient failure
+  // doesn't suppress a whole hour of attempts.
+  const LOOKUP_SOFT_RETRY_MS = 5 * 60 * 1000;
   const LOOKUP_LOOKAHEAD_MS = 4 * 60 * 60 * 1000;
 
   function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -896,26 +903,50 @@
       const tried = data[LOOKUP_TRIED_KEY] || {};
       const now = Date.now();
 
+      // Each entry in `tried` is { ts, retryMs } so a failed attempt
+      // can use the shorter SOFT retry window. Migrate plain-number
+      // legacy entries (which always meant full 1h) on read.
+      function triedExpired(entry) {
+        if (!entry) return true;
+        const ts = (typeof entry === 'object') ? entry.ts : entry;
+        const retry = (typeof entry === 'object' && entry.retryMs) ? entry.retryMs : LOOKUP_RETRY_MS;
+        return (now - ts) >= retry;
+      }
+      function markTried(key, retryMs) {
+        tried[key] = { ts: now, retryMs: retryMs };
+      }
+
       const candidate = evs.find(function (ev) {
         if (!ev || ev.meet || ev.allDay) return false;
         if (!isFinite(ev.startMs)) return false;
         if (ev.startMs - now > LOOKUP_LOOKAHEAD_MS) return false;
         if (ev.startMs + 60 * 60 * 1000 < now) return false;
         const key = (ev.uid || '') + '|' + ev.startMs;
-        if (tried[key] && now - tried[key] < LOOKUP_RETRY_MS) return false;
+        if (!triedExpired(tried[key])) return false;
         return true;
       });
       if (!candidate) return;
 
-      const chip = findChipForEvent(candidate);
-      if (!chip) return; // not in the current visible view — try later
-
-      // Mark as tried before clicking, so a failed open doesn't loop.
       const key = (candidate.uid || '') + '|' + candidate.startMs;
-      tried[key] = now;
+      const chip = findChipForEvent(candidate);
+      if (!chip) {
+        // Chip isn't in the rendered view (calendar isn't showing
+        // this date or this event is off-screen). DO NOT consume the
+        // tried slot — we want to try again next tick when the view
+        // may have changed. Just exit; no storage write.
+        return;
+      }
+
+      // Mark with soft-retry up front. If we successfully open the
+      // popover below, we upgrade to the full LOOKUP_RETRY_MS so we
+      // don't keep cycling the popover for an event whose link we
+      // already harvested (or that genuinely has no link).
+      markTried(key, LOOKUP_SOFT_RETRY_MS);
       // Prune entries > 24h old to keep the map bounded.
       Object.keys(tried).forEach(function (k) {
-        if (now - tried[k] > 24 * 60 * 60 * 1000) delete tried[k];
+        const e = tried[k];
+        const ts = (typeof e === 'object') ? e.ts : e;
+        if (now - ts > 24 * 60 * 60 * 1000) delete tried[k];
       });
       await setStorage({ [LOOKUP_TRIED_KEY]: tried });
 
@@ -930,6 +961,10 @@
         if (popover) break;
       }
       if (popover) {
+        // Popover opened — promote to the full retry window so we
+        // don't hammer it again soon.
+        markTried(key, LOOKUP_RETRY_MS);
+        await setStorage({ [LOOKUP_TRIED_KEY]: tried });
         // Let it settle before harvesting.
         await _sleep(350);
         try { await harvestDetailPopovers(); } catch (_) {}
@@ -941,16 +976,15 @@
     }
   }
 
-  // Top-level Calendar tab only (skip iframes — the Gmail side panel
-  // shares this content script via all_frames, but auto-opening
-  // popovers inside that tiny iframe would be jarring).
-  if (window === window.top) {
-    // First attempt 8 seconds after page load (gives Calendar time to
-    // render and the fetch hook time to harvest links the easy way),
-    // then every 3 minutes.
-    setTimeout(function () { autoOpenUpcoming(); }, 8000);
-    setInterval(function () { autoOpenUpcoming(); }, 3 * 60 * 1000);
-  }
+  // Runs in BOTH top-level Calendar tabs AND the Gmail Calendar side-
+  // panel iframe. The side panel is where most LOs interact with their
+  // calendar day-to-day — gating to top-level only meant the auto-open
+  // never ran when only the side panel was available, which is exactly
+  // when reminders need it the most. Acceptable trade-off: a small
+  // popover may briefly flash inside the side panel during a harvest.
+  // First attempt 8 seconds after page load, then every 3 minutes.
+  setTimeout(function () { autoOpenUpcoming(); }, 8000);
+  setInterval(function () { autoOpenUpcoming(); }, 3 * 60 * 1000);
 
   const obs = new MutationObserver(schedule);
   obs.observe(document.documentElement, { childList: true, subtree: true });
