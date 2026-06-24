@@ -40,14 +40,21 @@
     ? chrome.runtime.getManifest().version : '?';
   console.log('[ZHL Appraisal Blast v' + VERSION + '] loaded on', location.href);
 
-  // Subjects we accept. The standard submission email begins with
-  // "Appraisal Submission Summary:"; Reggora's low-value flag email
-  // begins with "Low appraisal valuation:". Both share the same
-  // "#ZG... - LastName, Address (County County)" tail in the subject
-  // so name/address parsing is unified.
+  // Subjects we accept. Three variants:
+  //   1. "Appraisal Submission Summary: #ZG... - LastName, Address (..."
+  //      — the standard Reggora submission email.
+  //   2. "Low appraisal valuation: #ZG... - LastName, Address (..."
+  //      — Reggora's low-value flag email.
+  //   3. "Appraisal Received <LastName> ZG..." — a forwarded, hand-typed
+  //      summary from a coworker (e.g. jallspach@zillowgroup.com) that
+  //      shows up in inboxes when Reggora's automated email isn't the
+  //      one the LO sees. Body shape is different (Loan Amount /
+  //      Appraised Value / Purchase Price / Report Completed as lines)
+  //      and there's no property address in this variant.
   const SUBJECT_PATTERNS = [
     /^Appraisal Submission Summary[:\s]/i,
-    /^Low appraisal valuation[:\s]/i
+    /^Low appraisal valuation[:\s]/i,
+    /^Appraisal Received\s+\S+\s+ZG\d+/i
   ];
 
   const NAVY = '#1F3864', GOLD = '#BF8F00';
@@ -163,22 +170,31 @@
     const subject = openEmailSubject();
     const body = openEmailBodyText();
 
-    // Loan number. Subject is the primary source; body provides a
-    // backup ("loan ZG..." in the submission email, "Loan Number:
-    // #ZG..." or "Loan Number: ZG..." in the low-value email).
+    // Loan number. Try (in order): subject with "#ZG..." prefix (the
+    // Reggora variants), subject with bare "ZG..." (the coworker
+    // forward variant where there's no hash), body's "Loan Number:
+    // #?ZG...", body's "loan ZG...".
     const loan =
       (subject.match(/#\s*(ZG\d+)/) || [])[1] ||
+      (subject.match(/\b(ZG\d+)\b/) || [])[1] ||
       (body.match(/Loan Number:\s*#?\s*(ZG\d+)/i) || [])[1] ||
       (body.match(/loan\s+(ZG\d+)/i) || [])[1] || '';
 
-    // Last name from the subject's "#ZG... - <Last>, ..." segment.
-    const ln = subject.match(/#\s*ZG\d+\s*-\s*([^,]+?),/i);
-    const lastName = ln ? ln[1].trim() : '';
+    // Last name extraction depends on the subject variant:
+    //   Reggora:  "...#ZG... - <Last>, ..."  → comma-terminated.
+    //   Coworker: "Appraisal Received <Last> ZG..."  → space-terminated.
+    let lastName = '';
+    const lnReggora  = subject.match(/#\s*ZG\d+\s*-\s*([^,]+?),/i);
+    const lnCoworker = subject.match(/Appraisal Received\s+(\S+)\s+ZG\d+/i);
+    if (lnReggora)        lastName = lnReggora[1].trim();
+    else if (lnCoworker)  lastName = lnCoworker[1].trim();
 
-    // Property address. Subject's tail is the primary source; both
-    // body formats can serve as a backup ("at <addr> (..." in the
-    // submission email, "Order Address: <addr> (..." in the
-    // low-value email).
+    // Property address. Subject's tail is the primary source on the
+    // Reggora variants; both body formats can serve as a backup
+    // ("at <addr> (..." in the submission email, "Order Address:
+    // <addr> (..." in the low-value email). The coworker-forward
+    // variant has NO address anywhere, so this can come back empty;
+    // buildMessage / buildHtmlBody handle a missing address gracefully.
     const addrMatch =
       subject.match(/#\s*ZG\d+\s*-\s*[^,]+,\s*(.+?)\s*\(/i) ||
       body.match(/Order Address:\s*(.+?)\s*\(/i) ||
@@ -188,12 +204,41 @@
     // Branch on email variant. The low-value email is unambiguously
     // marked by its subject prefix; the submission email carries its
     // own "Low Value: YES/NO" line that may also indicate a low
-    // value even when the subject is the standard prefix.
+    // value even when the subject is the standard prefix. The
+    // coworker-forward variant is also detected by subject prefix.
     const isLowValueEmail = /^Low appraisal valuation/i.test(subject);
+    const isCoworkerForward = /^Appraisal Received\s+\S+\s+ZG\d+/i.test(subject);
 
     let appraised = 0, purchase = 0, condition = '', lowValue = 'NO', pdr = false;
 
-    if (isLowValueEmail) {
+    if (isCoworkerForward) {
+      // Hand-typed forward from a coworker. Body shape:
+      //   Appraisal for the file above has been Received
+      //   Loan Amount: <num>
+      //   Appraised Value: <num>
+      //   Purchase Price: <num>
+      //   Report Completed as: <condition>   (e.g. AsIs / SubjectToRepairs)
+      // No address, no explicit Low Value flag — we infer the low-value
+      // path purely from appraised < purchase.
+      const num = function (re) {
+        const m = body.match(re);
+        return m ? parseFloat(m[1].replace(/,/g, '')) : 0;
+      };
+      appraised = num(/Appraised\s*Value:\s*\$?([\d,]+(?:\.\d{1,2})?)/i);
+      purchase  = num(/Purchase\s*Price:\s*\$?([\d,]+(?:\.\d{1,2})?)/i);
+      const condM = body.match(/Report\s*Completed\s*as:\s*([^\r\n]+)/i);
+      condition = condM ? condM[1].trim() : '';
+      // PDR equivalent: if the coworker explicitly typed N/A for the
+      // appraised value, treat it the same way as a Reggora PDR.
+      pdr = /Appraised\s*Value:\s*N\/A/i.test(body);
+      if (pdr) {
+        appraised = purchase;
+        lowValue = 'NO';
+        if (/^n\/a$/i.test(condition)) condition = '';
+      } else {
+        lowValue = (appraised > 0 && appraised < purchase) ? 'YES' : 'NO';
+      }
+    } else if (isLowValueEmail) {
       // "The appraisal valued the property at $175000.00.
       //  The Purchase Price is $178000.00."
       const aMatch = body.match(/valued the property at\s*\$?([\d,]+(?:\.\d{2})?)/i);
@@ -310,7 +355,18 @@
     const pdr = !!data.pdr;
     const lowValue = !pdr && (data.lowValue === 'YES' || equity < 0);
 
-    const subject = 'Appraisal Received - ' + data.lastName + ' - ' + data.address;
+    // Subject: include the address tail only when we have one. The
+    // coworker-forward variant has no address, so the subject becomes
+    // "Appraisal Received - <LastName>" (no trailing " - <Address>").
+    const subject = 'Appraisal Received - ' + data.lastName +
+      (data.address ? ' - ' + data.address : '');
+
+    // Phrase used wherever we'd say "the appraisal on <address>".
+    // Falls back to "the appraisal" when we don't have an address.
+    const onPhrase = data.address ? 'on ' + data.address : '';
+    const onAppraisal = data.address
+      ? 'the appraisal on ' + data.address
+      : 'the appraisal';
 
     // Plain-text body — Gmail's compose-URL `body=` param renders this
     // verbatim, and it's also the Ctrl+V fallback if the HTML paste
@@ -322,12 +378,13 @@
       // the buyer / agent don't see a misleading $0 / shortfall.
       body =
 'Hey all,\n\n' +
-'Great news — the appraisal on ' + data.address + ' came back good and at value via Property Data Report. 🎉\n\n' +
+'Great news — ' + onAppraisal + ' came back good and at value via Property Data Report. 🎉\n\n' +
 'Reach out with any questions.';
     } else if (lowValue) {
       body =
 'Hey all,\n\n' +
-'The appraisal on ' + data.address + ' came back at ' + money(data.appraised) +
+onAppraisal.charAt(0).toUpperCase() + onAppraisal.slice(1) +
+' came back at ' + money(data.appraised) +
 ' against a purchase price of ' + money(data.purchase) + '. Let\'s connect on next steps.';
       if (data.condition) {
         body += '\n\nThe home came back ' + conditionPhrase(data.condition) + '.';
@@ -338,8 +395,8 @@
       // appraisal there's no equity to celebrate.
       body =
 'Hey all,\n\n' +
-'Congratulations! The appraisal on ' + data.address + ' came back at ' +
-money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
+'Congratulations! ' + onAppraisal.charAt(0).toUpperCase() + onAppraisal.slice(1) +
+' came back at ' + money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
 (equity > 0 ? ', which means ' + money(equity) + ' in immediate equity 🎉' : '. 🎉');
       if (data.condition) {
         body += '\n\nThe home came back ' + conditionPhrase(data.condition) + '.';
@@ -377,6 +434,11 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
     const addressH = escHtml(data.address);
     const appraisedH = escHtml(money(data.appraised));
     const purchaseH = escHtml(money(data.purchase));
+    // "the appraisal on <addr>" when we have an address, otherwise
+    // just "the appraisal" — used in every intro variant below.
+    const onAppraisalHtml = data.address
+      ? 'the appraisal on <strong>' + addressH + '</strong>'
+      : 'the appraisal';
 
     let headline, intro, highlightBox, closing;
 
@@ -387,8 +449,8 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
       // result as "Came back at value" so the borrower / agents don't
       // see a $0 figure that reads as a misfire.
       headline = '<h1 style="' + h1Style + '">🎉 Appraisal Results</h1>';
-      intro = '<p>Great news &mdash; the appraisal on <strong>' + addressH +
-              '</strong> came back <strong>good and at value</strong> via Property Data Report.</p>';
+      intro = '<p>Great news &mdash; ' + onAppraisalHtml +
+              ' came back <strong>good and at value</strong> via Property Data Report.</p>';
       highlightBox =
         '<table cellpadding="0" cellspacing="0" border="0" width="100%" ' +
           'style="margin: 18px 0; border-collapse: collapse;">' +
@@ -406,8 +468,8 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
     } else if (lowValue) {
       const shortfall = Math.max(0, data.purchase - data.appraised);
       headline = '<h1 style="' + h1Style + '">Appraisal Results</h1>';
-      intro = '<p>The appraisal on <strong>' + addressH + '</strong> has come back.' +
-              ' Let&rsquo;s connect on next steps.</p>';
+      intro = '<p>' + onAppraisalHtml.charAt(0).toUpperCase() + onAppraisalHtml.slice(1) +
+              ' has come back. Let&rsquo;s connect on next steps.</p>';
       highlightBox =
         '<table cellpadding="0" cellspacing="0" border="0" width="100%" ' +
           'style="margin: 18px 0; border-collapse: collapse;">' +
@@ -429,8 +491,7 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
       closing = '<p style="margin-top: 18px;">I&rsquo;ll follow up shortly with options.</p>';
     } else {
       headline = '<h1 style="' + h1Style + '">🎉 Congratulations!</h1>';
-      intro = '<p>Great news &mdash; the appraisal on <strong>' + addressH +
-              '</strong> just came back.</p>';
+      intro = '<p>Great news &mdash; ' + onAppraisalHtml + ' just came back.</p>';
       highlightBox =
         '<table cellpadding="0" cellspacing="0" border="0" width="100%" ' +
           'style="margin: 18px 0; border-collapse: collapse;">' +
@@ -632,7 +693,14 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
       setStatus('Parsing email…');
       const data = parseEmail();
       if (!data.loan) throw new Error('Could not find loan number in this email.');
-      if (!data.address) throw new Error('Could not find the property address.');
+      // Address is required for the Reggora variants (it's in their
+      // subject line). The coworker-forward variant has no address
+      // anywhere in the email; for that case we let it through and
+      // the body templates fall back to wording that doesn't require
+      // it ("the appraisal for [LastName]'s purchase came back…").
+      if (!data.address && !/^Appraisal Received\s+\S+\s+ZG\d+/i.test(openEmailSubject())) {
+        throw new Error('Could not find the property address.');
+      }
 
       setStatus('Looking up loan ' + data.loan + ' in Salesforce…');
       const resp = await chrome.runtime.sendMessage({

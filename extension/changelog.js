@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.23",
+    category: "improvement",
+    headline: "Appraisal Blast — added a third email variant: the hand-typed coworker forward ('Appraisal Received <LastName> ZG…' with body lines Loan Amount / Appraised Value / Purchase Price / Report Completed as). Same Send-to-all-parties flow works; body templates fall back to address-less wording since this variant has no property address.",
+    highlights: [
+      "Third SUBJECT_PATTERN: /^Appraisal Received\\s+\\S+\\s+ZG\\d+/i. Won't false-positive on our own outgoing 'Appraisal Received - LastName - Address' subject because the new pattern requires a bare 'ZG#' (no dash, no quotes) directly after the LastName.",
+      "parseEmail now extracts: loan number via the bare 'ZG…' (or '#ZG…' for the Reggora variants); lastName from 'Appraisal Received <Last> ZG…'; appraised / purchase / condition from the body's 'Appraised Value:' / 'Purchase Price:' / 'Report Completed as:' lines. No 'Low Value:' line in this variant — lowValue is inferred from appraised < purchase. 'Appraised Value: N/A' still triggers the PDR path.",
+      "Address-less body templates: 'the appraisal on <address>' phrases now degrade to 'the appraisal' when no address is in the source email, and the outbound subject becomes 'Appraisal Received - <LastName>' (no trailing address). Capitalization at sentence start is preserved with the explicit charAt(0).toUpperCase() so the body still reads 'The appraisal came back at $X' / 'Great news — the appraisal just came back at $X' cleanly.",
+      "onClick's address-required check is relaxed for the coworker-forward variant only; the two Reggora variants still require an address (it's always in their subject, so a missing one means the parse genuinely failed).",
+      "Verified against the screenshot's exact text: parses as { loan: 'ZG001260253010', lastName: 'Marrs', appraised: 650000, purchase: 627500, condition: 'AsIs', lowValue: 'NO', pdr: false }, equity = +$22,500, celebration branch fires, subject = 'Appraisal Received - Marrs'."
+    ],
+    sections: ["gmail-appraisal-blast"]
+  },
+  {
     version: "1.64.22",
     category: "improvement",
     headline: "Meeting Reminders — Zoom/Meet link discovery is now bulletproof for the cases where the fetch hook misses an event. Two changes: (1) the popover title detector now handles popovers whose title is a styled <div> instead of a semantic heading, and (2) the scraper now AUTOMATICALLY opens any upcoming event without a link briefly, harvests its Zoom URL from the rendered popover, and closes it — without you having to click the event yourself.",
