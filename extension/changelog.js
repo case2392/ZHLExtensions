@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.20",
+    category: "improvement",
+    headline: "Appraisal Blast — Property Data Reports (where Appraised value is 'N/A') now render as a celebratory 'came back good and at value via PDR' message instead of treating the missing dollar amount as a $0 appraisal and showing a giant shortfall.",
+    highlights: [
+      "Bug: a Reggora appraisal email with 'Appraised value: N/A' (their flag for a Property Data Report — a condition check rather than a numeric appraisal) made the parser fall through to appraised=$0. Equity = 0 − purchase = −$419,900 → low-value branch fired → the draft showed 'Appraised value $0 / Shortfall $419,900' even though the actual outcome was good.",
+      "Detection: parseEmail() now checks /Appraised value:\\s*N\\/A/ in the body. When present, sets pdr=true, forces appraised=purchase (so equity calc lands on $0, not negative), forces lowValue='NO', and clears any 'Condition: N/A' string so it doesn't appear in the rendered email.",
+      "Plain-text body: new PDR branch reads 'Great news — the appraisal on [address] came back good and at value via Property Data Report. 🎉 / Reach out with any questions.' Same friendly tone as the celebratory variant, no equity figure, no condition line.",
+      "HTML body: new PDR variant uses the same blue-bordered highlight box as the celebration path but shows Purchase price + 'Appraisal result: Came back at value — verified in good condition ✓' in green instead of the appraised/equity rows. Subject and recipient bucketing are unchanged.",
+      "Verified against the screenshot's body: parseEmail returns { appraised: $419,900, purchase: $419,900, equity: $0, lowValue: 'NO', pdr: true } and the PDR branch fires."
+    ],
+    sections: ["gmail-appraisal-blast"]
+  },
+  {
     version: "1.64.19",
     category: "bugfix",
     headline: "Print Buyer Worksheet — strips LOP's new 'LOWEST COST' / 'LOWEST MONTHLY' / 'LOWEST UPFRONT' indicator badges from the loan-product name. The worksheet was showing 'Conf 30 Yr FixedLOWEST COSTLOWEST MONTHLY' instead of just 'Conf 30 Yr Fixed' because LOP recently started rendering those badges INSIDE the product cell, which the scrape's textContent grabs.",

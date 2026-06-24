@@ -191,7 +191,7 @@
     // value even when the subject is the standard prefix.
     const isLowValueEmail = /^Low appraisal valuation/i.test(subject);
 
-    let appraised = 0, purchase = 0, condition = '', lowValue = 'NO';
+    let appraised = 0, purchase = 0, condition = '', lowValue = 'NO', pdr = false;
 
     if (isLowValueEmail) {
       // "The appraisal valued the property at $175000.00.
@@ -211,6 +211,22 @@
       appraised = num(/Appraised value:\s*\$?([\d,]+(?:\.\d{2})?)/i);
       purchase  = num(/Estimated value:\s*\$?([\d,]+(?:\.\d{2})?)/i);
 
+      // "Appraised value: N/A" means Reggora did a Property Data
+      // Report (PDR) — a condition check rather than a numeric
+      // appraisal. The home was verified in good shape; there is no
+      // appraised dollar amount to compare against the purchase price.
+      // We surface this so buildMessage / buildHtmlBody can render an
+      // "at value, came back good via PDR" message instead of treating
+      // the missing number as a $0 appraised value and therefore a
+      // huge shortfall.
+      pdr = /Appraised value:\s*N\/A/i.test(body);
+      if (pdr) {
+        // Equity math should land on $0 (not negative purchase price),
+        // and the low-value path must not fire.
+        appraised = purchase;
+        lowValue = 'NO';
+      }
+
       // Reggora writes "Reconciliation/Report Condition: <value>"
       // (no spaces around the slash in the screenshots). The regex
       // is permissive about whitespace either way. Condition can be
@@ -218,14 +234,20 @@
       // "SubjectToRepairs;SubjectToInspections".
       const condMatch = body.match(/Reconciliation\s*\/\s*Report\s*Condition:\s*([^\r\n]+)/i);
       condition = condMatch ? condMatch[1].trim() : '';
+      // PDR emails carry "Condition: N/A" — don't pass that through to
+      // the rendered email body; it isn't informative.
+      if (pdr && /^n\/a$/i.test(condition)) condition = '';
 
       const lowMatch = body.match(/Low\s*Value:\s*(YES|NO)/i);
-      lowValue = lowMatch ? lowMatch[1].toUpperCase() : 'NO';
+      if (!pdr) {
+        lowValue = lowMatch ? lowMatch[1].toUpperCase() : 'NO';
+      }
     }
 
     return { loan: loan, lastName: lastName, address: address,
              appraised: appraised, purchase: purchase,
-             condition: condition, lowValue: lowValue };
+             condition: condition, lowValue: lowValue,
+             pdr: pdr };
   }
 
   // -------- build the email --------
@@ -285,7 +307,8 @@
   function buildMessage(data, contacts) {
     const buckets = bucketContacts(contacts);
     const equity = data.appraised - data.purchase;
-    const lowValue = data.lowValue === 'YES' || equity < 0;
+    const pdr = !!data.pdr;
+    const lowValue = !pdr && (data.lowValue === 'YES' || equity < 0);
 
     const subject = 'Appraisal Received - ' + data.lastName + ' - ' + data.address;
 
@@ -293,7 +316,15 @@
     // verbatim, and it's also the Ctrl+V fallback if the HTML paste
     // never lands. Gmail appends the LO's signature automatically.
     let body;
-    if (lowValue) {
+    if (pdr) {
+      // Property Data Report: no numeric appraised value, but the home
+      // was verified in good condition. Reads "good and at value" so
+      // the buyer / agent don't see a misleading $0 / shortfall.
+      body =
+'Hey all,\n\n' +
+'Great news — the appraisal on ' + data.address + ' came back good and at value via Property Data Report. 🎉\n\n' +
+'Reach out with any questions.';
+    } else if (lowValue) {
       body =
 'Hey all,\n\n' +
 'The appraisal on ' + data.address + ' came back at ' + money(data.appraised) +
@@ -325,7 +356,8 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
   // (#D97706 / #b91c1c) for the low-value variant.
   function buildHtmlBody(data) {
     const equity = data.appraised - data.purchase;
-    const lowValue = data.lowValue === 'YES' || equity < 0;
+    const pdr = !!data.pdr;
+    const lowValue = !pdr && (data.lowValue === 'YES' || equity < 0);
     const condPhrase = conditionPhrase(data.condition);
 
     const wrapStyle =
@@ -348,7 +380,30 @@ money(data.appraised) + '. We\'re purchasing for ' + money(data.purchase) +
 
     let headline, intro, highlightBox, closing;
 
-    if (lowValue) {
+    if (pdr) {
+      // Property Data Report variant. Same green / celebratory palette
+      // as the normal "came back at value" path, but the highlight box
+      // omits the dollar-amount equity row and instead labels the
+      // result as "Came back at value" so the borrower / agents don't
+      // see a $0 figure that reads as a misfire.
+      headline = '<h1 style="' + h1Style + '">🎉 Appraisal Results</h1>';
+      intro = '<p>Great news &mdash; the appraisal on <strong>' + addressH +
+              '</strong> came back <strong>good and at value</strong> via Property Data Report.</p>';
+      highlightBox =
+        '<table cellpadding="0" cellspacing="0" border="0" width="100%" ' +
+          'style="margin: 18px 0; border-collapse: collapse;">' +
+          '<tr><td style="background: #F5F9FF; border-left: 4px solid ' + ZHL_BLUE + '; padding: 16px 20px;">' +
+            '<div style="' + labelStyle + '">Purchase price</div>' +
+            '<div style="font-size: 22px; color: ' + ZHL_BLUE + '; font-weight: bold; ' +
+              'font-family: Georgia, \'Times New Roman\', serif; margin-bottom: 12px;">' +
+              purchaseH + '</div>' +
+            '<div style="' + labelStyle + '">Appraisal result</div>' +
+            '<div style="font-size: 18px; color: #16a34a; font-weight: bold;">' +
+              'Came back at value &mdash; verified in good condition ✓</div>' +
+          '</td></tr>' +
+        '</table>';
+      closing = '<p style="margin-top: 18px;">Reach out with any questions!</p>';
+    } else if (lowValue) {
       const shortfall = Math.max(0, data.purchase - data.appraised);
       headline = '<h1 style="' + h1Style + '">Appraisal Results</h1>';
       intro = '<p>The appraisal on <strong>' + addressH + '</strong> has come back.' +
