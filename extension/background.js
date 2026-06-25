@@ -1938,7 +1938,7 @@ function zhlCalParseLeads(str) {
     const n = parseInt(t, 10);
     if (isFinite(n) && n >= 0) out.push(n);
   });
-  if (!out.length) return [30, 5];
+  if (!out.length) return [15];
   return Array.from(new Set(out)).sort(function (a, b) { return b - a; });
 }
 function zhlCalGet(keys) {

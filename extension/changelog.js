@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.29",
+    category: "improvement",
+    headline: "Meeting Reminders — default lead time is now just 15 minutes before the meeting (was 30 + 5). One pop-up per meeting instead of two by default. Customize freely in Setup → Meeting Reminders.",
+    highlights: [
+      "Old default: '30, 5' — fired one reminder 30 minutes before the meeting, then another 5 minutes before. Two interruptions per meeting.",
+      "New default: '15' — single reminder 15 minutes before the meeting starts. Closer to the Outlook default most LOs were used to.",
+      "Applied in three places that all need to agree: the Gmail-side parseLeads() fallback (gmail-calendar-reminders.js), the service worker's zhlCalParseLeads() fallback (background.js, used by the focus-Gmail-on-due alarm), and the Setup page's placeholder + auto-fill value (setup.js, setup.html).",
+      "Still a free-form list — comma-separate anything, e.g. '30, 15, 5' or '60, 10, 2' to recreate the old behavior or stack more reminders.",
+      "If you already have a value saved in Setup, it stays — this change only affects users on the default and new installs."
+    ],
+    sections: ["calendar-reminders"]
+  },
+  {
     version: "1.64.28",
     category: "bugfix",
     headline: "Meeting Reminders — Zoom links now actually attach to reminders, even when Google Calendar wraps the Zoom URL in its www.google.com/url?q=… redirect. This was THE reason events like 'ZHL Preferred Sales Huddle' / 'Brian Kirk weekly team meeting' / 'Leadership Update: Agentic VPA' never showed a Join button despite the popover containing the link.",

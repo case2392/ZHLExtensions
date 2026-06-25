@@ -110,7 +110,7 @@ async function loadCalSettings() {
   document.querySelectorAll('input[data-cal-field]').forEach((input) => {
     const key = input.dataset.calField;
     if (data[key] != null && data[key] !== '') input.value = data[key];
-    else if (key === 'cal_lead_times') input.value = '30, 5';
+    else if (key === 'cal_lead_times') input.value = '15';
   });
 }
 const calSaveTimers = {};

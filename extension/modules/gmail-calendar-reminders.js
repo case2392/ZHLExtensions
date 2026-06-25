@@ -110,7 +110,7 @@
       const n = parseInt(t, 10);
       if (isFinite(n) && n >= 0) out.push(n);
     });
-    if (!out.length) return [30, 5];
+    if (!out.length) return [15];
     // unique, descending
     return Array.from(new Set(out)).sort(function (a, b) { return b - a; });
   }
