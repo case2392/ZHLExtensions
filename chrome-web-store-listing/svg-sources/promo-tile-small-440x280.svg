@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 280" width="440" height="280">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E35C4"/>
+      <stop offset="1" stop-color="#0A2899"/>
+    </linearGradient>
+  </defs>
+  <rect width="440" height="280" fill="url(#bg)"/>
+  <!-- subtle decorative blue square -->
+  <rect x="-40" y="-40" width="180" height="180" fill="#1d4ed8" opacity="0.18" transform="rotate(18 50 50)"/>
+
+  <!-- title -->
+  <text x="32" y="92" font-family="Georgia, 'Times New Roman', serif" font-size="34" font-weight="700" fill="#ffffff">ZHL Productivity</text>
+  <text x="32" y="130" font-family="Georgia, 'Times New Roman', serif" font-size="34" font-weight="700" fill="#ffffff">Pack</text>
+
+  <!-- subtitle -->
+  <text x="32" y="166" font-family="Calibri, Arial, sans-serif" font-size="14" font-weight="600" fill="#cfd9ff">30+ shortcuts for Zillow Home Loans staff</text>
+
+  <!-- feature chips -->
+  <g font-family="Calibri, Arial, sans-serif" font-size="11" font-weight="600" fill="#ffffff">
+    <rect x="32" y="190" width="100" height="26" rx="13" fill="#1d4ed8"/><text x="82" y="207" text-anchor="middle">📧  Appraisal Blast</text>
+    <rect x="140" y="190" width="100" height="26" rx="13" fill="#1d4ed8"/><text x="190" y="207" text-anchor="middle">📅  Reminders</text>
+    <rect x="248" y="190" width="80" height="26" rx="13" fill="#1d4ed8"/><text x="288" y="207" text-anchor="middle">🧮  Calcs</text>
+    <rect x="32" y="222" width="100" height="26" rx="13" fill="#1d4ed8"/><text x="82" y="239" text-anchor="middle">📄  Borrower PDF</text>
+    <rect x="140" y="222" width="90" height="26" rx="13" fill="#1d4ed8"/><text x="185" y="239" text-anchor="middle">📞  Caller ID</text>
+    <rect x="238" y="222" width="90" height="26" rx="13" fill="#1d4ed8"/><text x="283" y="239" text-anchor="middle">🪄  VPA Email</text>
+  </g>
+
+  <text x="408" y="262" font-family="Calibri, Arial, sans-serif" font-size="10" fill="#cfd9ff" text-anchor="end">Built by Justin Case · 💛</text>
+</svg>

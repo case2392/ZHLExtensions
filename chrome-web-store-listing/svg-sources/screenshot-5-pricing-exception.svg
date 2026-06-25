@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="1280" height="800">
+  <!-- LOP-ish dark bg -->
+  <rect width="1280" height="800" fill="#0f172a"/>
+  <!-- LOP nav (dimmed behind modal) -->
+  <rect x="0" y="0" width="1280" height="60" fill="#1e293b"/>
+  <rect x="32" y="18" width="120" height="24" rx="4" fill="#334155"/>
+  <text x="42" y="36" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="#cbd5e1">Zillow LOP</text>
+  <rect x="180" y="18" width="80" height="24" rx="4" fill="#334155"/>
+  <text x="220" y="36" font-family="Arial,sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">Pricing</text>
+  <rect x="270" y="18" width="80" height="24" rx="4" fill="#334155"/>
+  <text x="310" y="36" font-family="Arial,sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">Tasks</text>
+
+  <!-- Faded loan body behind modal -->
+  <rect x="0" y="60" width="1280" height="740" fill="#1e293b" opacity="0.6"/>
+  <rect x="40" y="92" width="1200" height="44" rx="6" fill="#0f172a" opacity="0.4"/>
+
+  <!-- Modal -->
+  <rect x="220" y="80" width="840" height="660" rx="12" fill="#ffffff"/>
+  <rect x="220" y="80" width="840" height="64" rx="12" fill="#0E35C4"/>
+  <rect x="220" y="112" width="840" height="32" fill="#0E35C4"/>
+  <text x="244" y="120" font-family="Calibri,Arial,sans-serif" font-size="20" font-weight="700" fill="#ffffff">⚖  Pricing Exception Workflow</text>
+  <text x="1040" y="120" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#ffffff" text-anchor="end">×</text>
+  <text x="244" y="138" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#cfd9ff">Step 4 of 5 · Locked-loan path · Conf 30 Yr Fixed</text>
+
+  <!-- Progress bar -->
+  <rect x="244" y="166" width="792" height="6" rx="3" fill="#e5e7eb"/>
+  <rect x="244" y="166" width="635" height="6" rx="3" fill="#0E35C4"/>
+
+  <!-- Computed PE box -->
+  <rect x="244" y="200" width="380" height="180" rx="10" fill="#F5F9FF" stroke="#0E35C4"/>
+  <text x="262" y="226" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#0E35C4" letter-spacing="0.5">AUTO-COMPUTED FROM COMP &amp; ZHL PRICING</text>
+
+  <text x="262" y="258" font-family="Calibri,Arial,sans-serif" font-size="11" font-weight="600" fill="#6b7280" letter-spacing="0.6">PE DOLLARS</text>
+  <text x="262" y="288" font-family="Georgia,'Times New Roman',serif" font-size="28" font-weight="700" fill="#0E35C4">$3,847.20</text>
+
+  <text x="262" y="318" font-family="Calibri,Arial,sans-serif" font-size="11" font-weight="600" fill="#6b7280" letter-spacing="0.6">PE POINTS</text>
+  <text x="262" y="348" font-family="Georgia,'Times New Roman',serif" font-size="22" font-weight="700" fill="#0E35C4">1.327%</text>
+  <text x="364" y="348" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#6b7280">  ✓ Under 2.5 pts threshold</text>
+
+  <!-- Right: prerequisite checklist -->
+  <rect x="640" y="200" width="396" height="180" rx="10" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="660" y="226" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#1f2937">Prerequisite checklist</text>
+  <g font-family="Calibri,Arial,sans-serif" font-size="12.5">
+    <text x="660" y="252" fill="#16a34a">✓</text><text x="678" y="252" fill="#1f2937">Pricing imported</text>
+    <text x="660" y="278" fill="#16a34a">✓</text><text x="678" y="278" fill="#1f2937">Comp PE fields entered</text>
+    <text x="660" y="304" fill="#16a34a">✓</text><text x="678" y="304" fill="#1f2937">Comp LE in eFolder</text>
+    <text x="660" y="330" fill="#16a34a">✓</text><text x="678" y="330" fill="#1f2937">No lock-diff alert</text>
+    <text x="660" y="356" fill="#6b7280">○</text><text x="678" y="356" fill="#6b7280">Email drafted — next step</text>
+  </g>
+
+  <!-- Email preview -->
+  <text x="244" y="416" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#1f2937">Generated email — ready to send</text>
+  <rect x="244" y="430" width="792" height="240" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="262" y="456" font-family="Arial,sans-serif" font-size="12" fill="#5f6368">To: rm@zillowhomeloans.com</text>
+  <text x="262" y="476" font-family="Arial,sans-serif" font-size="12" fill="#202124">Subject: PE Request — Smith — Conf 30 Yr Fixed — 1.327 pts ($3,847)</text>
+  <line x1="262" y1="488" x2="1018" y2="488" stroke="#e5e7eb"/>
+  <g font-family="Calibri,Arial,sans-serif" font-size="12" fill="#1f2937">
+    <text x="262" y="510">Hi RM,</text>
+    <text x="262" y="534">Requesting a 1.327% / $3,847 pricing exception on the Smith file (Conf 30 Yr Fixed).</text>
+    <text x="262" y="552">ZHL Box A: $11,420 · ZHL credits: $0 · Comp Box A: $7,573 · Comp credits: $0</text>
+    <text x="262" y="570">→ PE $ = ($11,420 − $0) − ($7,573 − $0) = $3,847.20</text>
+    <text x="262" y="588">→ PE pts = $3,847.20 / $290,000 × 100 = 1.327%</text>
+    <text x="262" y="612">Reason: needed to match competitor's terms; borrower expectation set verbally last week.</text>
+    <text x="262" y="630">Comp LE attached in the eFolder. AUS clean. Ready to lock.</text>
+    <text x="262" y="654">Thanks,</text>
+  </g>
+
+  <!-- Action buttons -->
+  <rect x="244" y="686" width="160" height="36" rx="6" fill="#0E35C4"/>
+  <text x="324" y="710" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">📧  Open in Gmail</text>
+  <rect x="420" y="686" width="140" height="36" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="490" y="710" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">📋  Copy body</text>
+  <rect x="576" y="686" width="140" height="36" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="646" y="710" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">📋  Copy subject</text>
+
+  <!-- Caption -->
+  <text x="640" y="780" font-family="Georgia,'Times New Roman',serif" font-size="20" font-weight="700" fill="#cfd9ff" text-anchor="middle">Pricing Exception Workflow — branched checklist, auto-math, ready-to-send email.</text>
+</svg>

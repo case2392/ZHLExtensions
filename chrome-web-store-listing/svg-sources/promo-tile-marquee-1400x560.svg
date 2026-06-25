@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 560" width="1400" height="560">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0E35C4"/>
+      <stop offset="1" stop-color="#0A2899"/>
+    </linearGradient>
+  </defs>
+  <rect width="1400" height="560" fill="url(#bg)"/>
+  <!-- decorative accents -->
+  <rect x="-100" y="-100" width="380" height="380" fill="#1d4ed8" opacity="0.18" transform="rotate(18 100 100)"/>
+  <rect x="1180" y="380" width="280" height="280" fill="#1d4ed8" opacity="0.15" transform="rotate(20 1280 480)"/>
+
+  <!-- LEFT: title + tagline -->
+  <text x="80" y="200" font-family="Georgia, 'Times New Roman', serif" font-size="74" font-weight="700" fill="#ffffff">ZHL Productivity Pack</text>
+  <text x="80" y="244" font-family="Calibri, Arial, sans-serif" font-size="22" font-weight="600" fill="#cfd9ff">30+ workflow shortcuts for Zillow Home Loans staff —</text>
+  <text x="80" y="276" font-family="Calibri, Arial, sans-serif" font-size="22" font-weight="600" fill="#cfd9ff">Gmail, Salesforce, LOP, and Genesys, all in one Chrome extension.</text>
+
+  <!-- feature chips row -->
+  <g font-family="Calibri, Arial, sans-serif" font-size="16" font-weight="600" fill="#ffffff">
+    <rect x="80"  y="338" width="220" height="46" rx="23" fill="#1d4ed8"/><text x="190" y="367" text-anchor="middle">📧  Appraisal Blast</text>
+    <rect x="312" y="338" width="240" height="46" rx="23" fill="#1d4ed8"/><text x="432" y="367" text-anchor="middle">📅  Meeting Reminders</text>
+    <rect x="564" y="338" width="220" height="46" rx="23" fill="#1d4ed8"/><text x="674" y="367" text-anchor="middle">📄  Loan Comparison</text>
+    <rect x="796" y="338" width="170" height="46" rx="23" fill="#1d4ed8"/><text x="881" y="367" text-anchor="middle">🪄  VPA Email</text>
+
+    <rect x="80"  y="398" width="200" height="46" rx="23" fill="#1d4ed8"/><text x="180" y="427" text-anchor="middle">🧮  2-1 Buydown</text>
+    <rect x="292" y="398" width="200" height="46" rx="23" fill="#1d4ed8"/><text x="392" y="427" text-anchor="middle">📞  Caller ID</text>
+    <rect x="504" y="398" width="200" height="46" rx="23" fill="#1d4ed8"/><text x="604" y="427" text-anchor="middle">⚖  PE Workflow</text>
+    <rect x="716" y="398" width="200" height="46" rx="23" fill="#1d4ed8"/><text x="816" y="427" text-anchor="middle">📌  DTI Max Pill</text>
+    <rect x="928" y="398" width="160" height="46" rx="23" fill="#1d4ed8"/><text x="1008" y="427" text-anchor="middle">… and more</text>
+  </g>
+
+  <text x="80" y="500" font-family="Calibri, Arial, sans-serif" font-size="14" fill="#cfd9ff">Toggle any module on or off from the Setup page · Nothing leaves your browser · Built by Justin Case 💛</text>
+
+  <!-- RIGHT: stylized "reminder card" preview -->
+  <g transform="translate(1020,90)">
+    <!-- card -->
+    <rect x="0" y="0" width="320" height="220" rx="14" fill="#ffffff" stroke="#c7ccd1"/>
+    <!-- header -->
+    <rect x="0" y="0" width="320" height="44" rx="14" fill="#1d4ed8"/>
+    <rect x="0" y="22" width="320" height="22" fill="#1d4ed8"/>
+    <text x="18" y="29" font-family="Calibri, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">🔔  1 Reminder</text>
+    <text x="302" y="29" font-family="Calibri, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="end" opacity="0.85">ZHL Meeting Reminders</text>
+
+    <!-- row -->
+    <text x="18" y="74" font-family="Calibri, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">📅  Borrower call — Smith</text>
+    <text x="18" y="94" font-family="Calibri, Arial, sans-serif" font-size="12" fill="#6b7280">2:05 – 3:00 PM, Wednesday, June 24</text>
+    <text x="18" y="116" font-family="Calibri, Arial, sans-serif" font-size="13" font-weight="700" fill="#b91c1c">in 5 minutes</text>
+    <!-- join -->
+    <rect x="18" y="126" width="84" height="28" rx="6" fill="#16a34a"/>
+    <text x="60" y="145" font-family="Calibri, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">📹 Join</text>
+
+    <!-- buttons -->
+    <rect x="180" y="170" width="58" height="26" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="209" y="187" font-family="Calibri, Arial, sans-serif" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Snooze</text>
+    <rect x="244" y="170" width="58" height="26" rx="6" fill="#1d4ed8"/>
+    <text x="273" y="187" font-family="Calibri, Arial, sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Dismiss</text>
+  </g>
+</svg>

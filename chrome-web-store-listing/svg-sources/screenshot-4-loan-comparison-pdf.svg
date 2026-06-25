@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="1280" height="800">
+  <!-- print-preview gray bg -->
+  <rect width="1280" height="800" fill="#525659"/>
+  <!-- "paper" -->
+  <rect x="200" y="40" width="880" height="720" fill="#ffffff"/>
+  <!-- subtle paper shadow -->
+  <rect x="200" y="40" width="880" height="6" fill="#000000" opacity="0.05"/>
+
+  <!-- Header -->
+  <g transform="translate(240,80)">
+    <text x="0" y="32" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="22" font-weight="700" fill="#1f2937">Loan Comparison</text>
+    <text x="0" y="54" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280">Pre-approval Letter</text>
+    <text x="800" y="54" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="11" fill="#6b7280" text-anchor="end">Issued 6/24/2026 11:32 AM</text>
+    <line x1="0" y1="68" x2="800" y2="68" stroke="#0E35C4" stroke-width="1.5"/>
+  </g>
+
+  <!-- Banner -->
+  <text x="640" y="180" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="11" fill="#374151" text-anchor="middle">Your actual rate, payment and costs could be higher: get an official loan estimate before choosing a loan.</text>
+
+  <!-- Comparison table -->
+  <g font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="10.5">
+    <!-- Header row -->
+    <rect x="240" y="200" width="800" height="36" fill="#f3f4f6"/>
+    <text x="256" y="222" font-size="11" font-weight="700" fill="#1f2937">Loan program</text>
+    <text x="540" y="222" font-size="11" font-weight="700" fill="#1f2937">Conf Home Poss 30 Yr Fixed</text>
+    <text x="800" y="222" font-size="11" font-weight="700" fill="#1f2937">FHA 30 Yr Fixed</text>
+
+    <!-- Rows -->
+    <g fill="#1f2937">
+      <text x="256" y="252" font-weight="600">Loan purpose</text>
+      <text x="540" y="252">Purchase</text>
+      <text x="800" y="252">Purchase</text>
+
+      <rect x="240" y="262" width="800" height="22" fill="#f9fafb"/>
+      <text x="256" y="278" font-weight="600">Purchase price</text>
+      <text x="540" y="278">$305,000.00</text>
+      <text x="800" y="278">$305,000.00</text>
+
+      <text x="256" y="298" font-weight="600">Down payment</text>
+      <text x="540" y="298">$15,250.00 / 5.000%</text>
+      <text x="800" y="298">$10,675.00 / 3.500%</text>
+
+      <rect x="240" y="308" width="800" height="22" fill="#f9fafb"/>
+      <text x="256" y="324" font-weight="600">Total loan amount</text>
+      <text x="540" y="324">$289,750.00</text>
+      <text x="800" y="324">$298,663.00</text>
+
+      <text x="256" y="344" font-weight="600">LTV</text>
+      <text x="540" y="344">95.000%</text>
+      <text x="800" y="344">96.500%</text>
+
+      <rect x="240" y="354" width="800" height="22" fill="#f9fafb"/>
+      <text x="256" y="370" font-weight="600">Interest rate</text>
+      <text x="540" y="370">6.375%</text>
+      <text x="800" y="370">6.250%</text>
+
+      <text x="256" y="390" font-weight="600">APR</text>
+      <text x="540" y="390">6.842%</text>
+      <text x="800" y="390">7.211%</text>
+
+      <rect x="240" y="400" width="800" height="22" fill="#f9fafb"/>
+      <text x="256" y="416" font-weight="600">Points / Price</text>
+      <text x="540" y="416">1.302% / $3,772.55</text>
+      <text x="800" y="416">0.871% / $2,601.34</text>
+
+      <text x="256" y="436" font-weight="600">Lock period</text>
+      <text x="540" y="436">45 days</text>
+      <text x="800" y="436">45 days</text>
+    </g>
+
+    <!-- Spacer -->
+    <rect x="240" y="446" width="800" height="8" fill="#ffffff"/>
+
+    <!-- Total closing + seller credit -->
+    <text x="256" y="472" font-weight="600" fill="#1f2937">Total closing costs</text>
+    <text x="540" y="472" fill="#1f2937">$12,180.81</text>
+    <text x="800" y="472" fill="#1f2937">$13,420.00</text>
+
+    <rect x="240" y="482" width="800" height="22" fill="#f9fafb"/>
+    <text x="256" y="498" font-weight="600" fill="#1f2937">Seller credit</text>
+    <text x="540" y="498" fill="#1f2937">$9,150.00</text>
+    <text x="800" y="498" fill="#1f2937">$9,150.00</text>
+
+    <!-- BIG ROW: PITIA -->
+    <rect x="240" y="512" width="800" height="34" fill="#f5f9ff" stroke="#0E35C4"/>
+    <text x="256" y="535" font-size="13" font-weight="700" fill="#0E35C4">Estimated monthly cost (PITIA)</text>
+    <text x="540" y="535" font-size="13" font-weight="700" fill="#0E35C4">$2,716.21</text>
+    <text x="800" y="535" font-size="13" font-weight="700" fill="#0E35C4">$2,994.55</text>
+
+    <!-- BIG ROW: cash to close -->
+    <rect x="240" y="556" width="800" height="34" fill="#f5f9ff" stroke="#0E35C4"/>
+    <text x="256" y="579" font-size="13" font-weight="700" fill="#0E35C4">Cash (to) / from at closing</text>
+    <text x="540" y="579" font-size="13" font-weight="700" fill="#0E35C4">$18,280.81</text>
+    <text x="800" y="579" font-size="13" font-weight="700" fill="#0E35C4">$14,945.34</text>
+  </g>
+
+  <!-- LO contact box -->
+  <rect x="240" y="620" width="800" height="56" fill="#ffffff" stroke="#0E35C4"/>
+  <text x="640" y="644" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1f2937" text-anchor="middle">📞  Questions?  Justin Case  |  NMLS ID# 2182068  |  P 913-845-9564  |  E justinca@zillowhomeloans.com</text>
+  <text x="640" y="662" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1f2937" text-anchor="middle">Mortgage interest rates can change daily, sometimes hourly. Contact your loan officer today!</text>
+
+  <!-- Footer disclaimer -->
+  <text x="240" y="700" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="9" fill="#6b7280">This worksheet is for illustration only — final pricing, rate, and closing costs are subject to credit approval and underwriting review. Not a commitment to lend.</text>
+  <text x="240" y="714" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="9" fill="#6b7280">Zillow Home Loans, LLC. NMLS # 10287.</text>
+
+  <!-- caption -->
+  <rect x="0" y="40" width="200" height="720" fill="#525659"/>
+  <text x="40" y="100" font-family="Calibri,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">Loan</text>
+  <text x="40" y="124" font-family="Calibri,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">Comparison</text>
+  <text x="40" y="148" font-family="Calibri,Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">PDF</text>
+  <text x="40" y="184" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#cfd9ff">Borrower-facing</text>
+  <text x="40" y="202" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#cfd9ff">handout — one</text>
+  <text x="40" y="220" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#cfd9ff">click from the</text>
+  <text x="40" y="238" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#cfd9ff">Pricing &amp;</text>
+  <text x="40" y="256" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#cfd9ff">Scenarios page.</text>
+
+  <text x="40" y="300" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#ffffff" font-weight="700">Includes:</text>
+  <text x="40" y="320" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">• Per-scenario PITIA</text>
+  <text x="40" y="338" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">  breakdown</text>
+  <text x="40" y="358" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">• Itemized closing</text>
+  <text x="40" y="376" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">  costs (page 2)</text>
+  <text x="40" y="396" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">• Cash to close +</text>
+  <text x="40" y="414" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">  immediate equity</text>
+  <text x="40" y="434" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">• 2% Grant variant</text>
+  <text x="40" y="452" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#cfd9ff">  when eligible</text>
+</svg>

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="1280" height="800">
+  <!-- Gmail backdrop -->
+  <rect width="1280" height="800" fill="#f6f8fc"/>
+  <rect x="0" y="0" width="1280" height="60" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="32" y="38" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#ea4335">M</text>
+  <text x="58" y="38" font-family="Arial,sans-serif" font-size="16" font-weight="600" fill="#5f6368">Gmail</text>
+  <rect x="200" y="14" width="600" height="32" rx="6" fill="#eaf1fb"/>
+  <text x="220" y="34" font-family="Arial,sans-serif" font-size="13" fill="#5f6368">🔍  Search mail</text>
+
+  <!-- Sidebar -->
+  <rect x="0" y="60" width="200" height="740" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="20" y="76" width="160" height="40" rx="20" fill="#c2e7ff"/>
+  <text x="44" y="100" font-family="Arial,sans-serif" font-size="13" font-weight="600" fill="#001d35">✎  Compose</text>
+  <g font-family="Arial,sans-serif" font-size="13" fill="#202124">
+    <text x="32" y="138" font-weight="700">Inbox  (12)</text>
+    <text x="32" y="166">Starred</text>
+    <text x="32" y="194">Snoozed</text>
+    <text x="32" y="222">Sent</text>
+    <text x="32" y="250">Drafts</text>
+  </g>
+
+  <!-- Inbox list -->
+  <rect x="200" y="60" width="1080" height="40" fill="#ffffff" stroke="#e5e7eb"/>
+  <g font-family="Arial,sans-serif" font-size="13" fill="#202124">
+    <rect x="216" y="120" width="1048" height="56" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="236" y="142" font-weight="700">Reggora Notifications</text>
+    <text x="436" y="142">Appraisal Submission Summary: #ZG00126…</text>
+    <text x="1242" y="142" text-anchor="end" fill="#5f6368">10:31 AM</text>
+    <text x="236" y="162" fill="#5f6368">New Notification — Appraised value: $385,000 · Estimated value: $385,000 …</text>
+
+    <rect x="216" y="180" width="1048" height="56" fill="#f9fafb" stroke="#e5e7eb"/>
+    <text x="236" y="202" font-weight="700">loan-officer-portal</text>
+    <text x="436" y="202">Jacob Griffin has completed Pre-approval</text>
+    <text x="1242" y="202" text-anchor="end" fill="#5f6368">Jun 21</text>
+    <text x="236" y="222" fill="#5f6368">Your borrower has completed the Pre-approval…</text>
+
+    <rect x="216" y="240" width="1048" height="56" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="236" y="262" font-weight="700">Reggora Notifications</text>
+    <text x="436" y="262">Low appraisal valuation: #ZG00126…</text>
+    <text x="1242" y="262" text-anchor="end" fill="#5f6368">Jun 20</text>
+    <text x="236" y="282" fill="#5f6368">The appraisal valued the property at $175,000 …</text>
+
+    <rect x="216" y="300" width="1048" height="56" fill="#f9fafb" stroke="#e5e7eb"/>
+    <text x="236" y="322" font-weight="700">Jill Allspach</text>
+    <text x="436" y="322">Appraisal Received Marrs ZG001260253010</text>
+    <text x="1242" y="322" text-anchor="end" fill="#5f6368">Jun 19</text>
+    <text x="236" y="342" fill="#5f6368">Appraisal for the file above has been Received · Appraised Value: 650000 …</text>
+  </g>
+
+  <!-- Reminder card popped up center -->
+  <g transform="translate(440,260)">
+    <!-- card shadow -->
+    <rect x="4" y="6" width="400" height="320" rx="12" fill="#000000" opacity="0.18"/>
+    <!-- card -->
+    <rect x="0" y="0" width="400" height="320" rx="12" fill="#ffffff" stroke="#c7ccd1"/>
+    <!-- header -->
+    <rect x="0" y="0" width="400" height="50" rx="12" fill="#1d4ed8"/>
+    <rect x="0" y="25" width="400" height="25" fill="#1d4ed8"/>
+    <text x="18" y="32" font-family="Calibri,Arial,sans-serif" font-size="16" font-weight="700" fill="#ffffff">🔔  2 Reminders</text>
+    <text x="380" y="32" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#ffffff" text-anchor="end" opacity="0.85">ZHL Meeting Reminders</text>
+    <rect x="365" y="14" width="22" height="22" rx="4" fill="#ffffff" opacity="0.18"/>
+    <text x="376" y="31" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">×</text>
+
+    <!-- Row 1: in 5 minutes -->
+    <text x="18" y="80" font-family="Calibri,Arial,sans-serif" font-size="15" font-weight="700" fill="#0f172a">📅  Borrower call — Smith</text>
+    <text x="18" y="100" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#6b7280">2:05 – 3:00 PM, Wednesday, June 24</text>
+    <text x="18" y="124" font-family="Calibri,Arial,sans-serif" font-size="14" font-weight="700" fill="#b91c1c">in 5 minutes</text>
+    <!-- Join button -->
+    <rect x="18" y="134" width="88" height="28" rx="6" fill="#16a34a"/>
+    <text x="62" y="153" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">📹  Join</text>
+    <!-- Snooze / Dismiss -->
+    <rect x="246" y="138" width="64" height="24" rx="5" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="278" y="155" font-family="Calibri,Arial,sans-serif" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Snooze</text>
+    <rect x="316" y="138" width="64" height="24" rx="5" fill="#1d4ed8"/>
+    <text x="348" y="155" font-family="Calibri,Arial,sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">Dismiss</text>
+
+    <!-- divider -->
+    <line x1="18" y1="180" x2="382" y2="180" stroke="#eef0f2"/>
+
+    <!-- Row 2: in 30 minutes -->
+    <text x="18" y="206" font-family="Calibri,Arial,sans-serif" font-size="15" font-weight="700" fill="#0f172a">📅  ZHL — Preferred Sales Huddle</text>
+    <text x="18" y="226" font-family="Calibri,Arial,sans-serif" font-size="12" fill="#6b7280">11:05 – 11:20 AM, Wednesday, June 24</text>
+    <text x="18" y="250" font-family="Calibri,Arial,sans-serif" font-size="14" font-weight="700" fill="#1d4ed8">in 30 minutes</text>
+    <rect x="18" y="260" width="88" height="28" rx="6" fill="#16a34a"/>
+    <text x="62" y="279" font-family="Calibri,Arial,sans-serif" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">📹  Join</text>
+    <rect x="246" y="264" width="64" height="24" rx="5" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="278" y="281" font-family="Calibri,Arial,sans-serif" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Snooze</text>
+    <rect x="316" y="264" width="64" height="24" rx="5" fill="#1d4ed8"/>
+    <text x="348" y="281" font-family="Calibri,Arial,sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">Dismiss</text>
+
+    <!-- footer -->
+    <rect x="0" y="298" width="400" height="22" fill="#f8fafc"/>
+    <text x="18" y="313" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#6b7280">Snooze until:</text>
+    <rect x="92" y="302" width="120" height="16" rx="3" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="100" y="314" font-family="Calibri,Arial,sans-serif" font-size="11" fill="#0f172a">1 min before event ▾</text>
+    <rect x="324" y="302" width="68" height="16" rx="3" fill="#0f172a"/>
+    <text x="358" y="314" font-family="Calibri,Arial,sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Dismiss all</text>
+  </g>
+
+  <!-- Caption -->
+  <rect x="0" y="740" width="1280" height="60" fill="#0E35C4"/>
+  <text x="640" y="775" font-family="Georgia,'Times New Roman',serif" font-size="22" font-weight="700" fill="#ffffff" text-anchor="middle">Outlook-style meeting reminders, right inside Gmail.</text>
+</svg>
