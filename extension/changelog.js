@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.26",
+    category: "bugfix",
+    headline: "Appraisal Blast — attachment scan no longer picks up files from your other open emails or compose drafts. The draft was including the appraisal PDF AND the VPA letter / no-cost appraisal handout / LO one-pager from a previous draft because the scan ran against the whole Gmail document instead of just the open Reggora message.",
+    highlights: [
+      "Bug: gatherAttachments() used document.querySelectorAll('[download_url]') — Gmail's attachment-chip attribute. That selector matches every chip on the page, so attachments from other expanded messages in the thread, lingering compose drafts (e.g. the VPA letter the LO just sent), or even adjacent emails got swept into the appraisal draft.",
+      "Fix: new openEmailContainer() helper walks up from the currently-open message body (div.a3s.aiL) to the nearest .adn / role=listitem ancestor — Gmail's per-message wrapper — and the attachment scan now only queries inside that scope. Falls back to the whole document only if the container can't be located (defensive — shouldn't happen on a normal open email).",
+      "Result: dragging from a Reggora appraisal email now attaches ONLY the Reggora PDF, not the VPA / handout / bio files that were left over in the DOM from a previous draft.",
+      "No change to which attachments are forwarded once correctly identified — the size cap (20 MB) and skipped-too-large reporting from v1.64.21 still apply within the scoped query."
+    ],
+    sections: ["gmail-appraisal-blast"]
+  },
+  {
     version: "1.64.25",
     category: "improvement",
     headline: "Meeting Reminders — auto-open popover harvester now runs in the Gmail Calendar side panel (not just top-level Calendar tabs) and stops marking events as 'already tried' when their chip isn't even rendered yet. Three changes together make Zoom link discovery far more reliable for events you only see in the side panel.",

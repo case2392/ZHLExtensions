@@ -96,11 +96,37 @@
   }
 
   function openEmailBodyText() {
-    const bodyEl =
-      document.querySelector('div.a3s.aiL') ||
-      document.querySelector('div[role="listitem"] div.a3s') ||
-      document.querySelector('div.adn div.a3s');
+    const bodyEl = openEmailBodyEl();
     return bodyEl ? bodyEl.innerText : '';
+  }
+
+  function openEmailBodyEl() {
+    return document.querySelector('div.a3s.aiL') ||
+           document.querySelector('div[role="listitem"] div.a3s') ||
+           document.querySelector('div.adn div.a3s');
+  }
+
+  // The DOM container of just the currently-OPEN Reggora message —
+  // not the whole Gmail document. Used to scope the attachment scan
+  // so we only pick up chips that belong to THIS email, not chips
+  // from other expanded thread messages, lingering compose drafts, or
+  // adjacent open emails. Without this, gatherAttachments would
+  // sweep up the VPA letter / handouts / LO bio from a previous
+  // draft that's still attached somewhere in the DOM.
+  function openEmailContainer() {
+    const body = openEmailBodyEl();
+    if (!body) return null;
+    // Walk up to Gmail's per-message container. `.adn` is Gmail's
+    // stable class for that wrapper; falls back to `[role="listitem"]`
+    // (Gmail's accessibility marker for an open message) if Google
+    // ever drops the class.
+    let n = body;
+    for (let i = 0; i < 12 && n; i++) {
+      if (n.classList && n.classList.contains('adn')) return n;
+      if (n.getAttribute && n.getAttribute('role') === 'listitem') return n;
+      n = n.parentElement;
+    }
+    return null;
   }
 
   function subjectMatches(subj) {
@@ -598,9 +624,19 @@ onAppraisal.charAt(0).toUpperCase() + onAppraisal.slice(1) +
     // formatted as "<mime>:<filename>:<url>". Same parsing pattern as
     // gmail-drag-attachments.js so we stay consistent with that
     // module's prefetched cache.
+    //
+    // Scope the chip scan to ONLY the currently-open Reggora message
+    // container. Without this, a [download_url] query against the
+    // whole document picks up attachments from any other expanded
+    // message in the thread, any open compose drafts, or the VPA
+    // letter the LO sent earlier — which is the bug behind drafts
+    // showing 4 attachments when only the appraisal PDF was wanted.
+    // Fall back to the whole document only if we somehow can't find
+    // the message container.
+    const scope = openEmailContainer() || document;
     const seen = new Set();
     const infos = [];
-    document.querySelectorAll('[download_url]').forEach(function (el) {
+    scope.querySelectorAll('[download_url]').forEach(function (el) {
       const dl = el.getAttribute('download_url') || '';
       const idx1 = dl.indexOf(':');
       const idx2 = dl.indexOf(':', idx1 + 1);
