@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.27",
+    category: "improvement",
+    headline: "Manifest description refreshed for the Chrome Web Store listing. The card-level blurb that shows on the listing tile and in search results now reflects the actual scope of the pack (30+ modules) instead of the original 5-feature description from v1.x.",
+    highlights: [
+      "Old: 'Productivity helpers for Zillow Home Loans staff: VA Calc, 2-1 Buydown, Caller ID, SMS shortcuts, and Gmail tweaks.' (113 chars — accurate in 2024, way too narrow now).",
+      "New: 'The Zillow Home Loans productivity pack: VPA & appraisal emails, loan-calc shortcuts, Caller ID, meeting reminders, and more.' (131 chars — under the 132-char Chrome Web Store limit, names the headline modules).",
+      "Doesn't affect functionality — manifest.description is purely metadata that Chrome surfaces on the extension card and Web Store listing."
+    ],
+    sections: ["manifest"]
+  },
+  {
     version: "1.64.26",
     category: "bugfix",
     headline: "Appraisal Blast — attachment scan no longer picks up files from your other open emails or compose drafts. The draft was including the appraisal PDF AND the VPA letter / no-cost appraisal handout / LO one-pager from a previous draft because the scan ran against the whole Gmail document instead of just the open Reggora message.",
