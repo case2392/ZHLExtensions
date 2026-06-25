@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.28",
+    category: "bugfix",
+    headline: "Meeting Reminders — Zoom links now actually attach to reminders, even when Google Calendar wraps the Zoom URL in its www.google.com/url?q=… redirect. This was THE reason events like 'ZHL Preferred Sales Huddle' / 'Brian Kirk weekly team meeting' / 'Leadership Update: Agentic VPA' never showed a Join button despite the popover containing the link.",
+    highlights: [
+      "Bug: every Zoom anchor in a Google Calendar event-details popover renders as https://www.google.com/url?q=https://…zoom.us/j/123?pwd%3DAelna4…&sa=D&source=calendar&ust=…&usg=… (Google's click-tracking redirect). My LINK_RE required the URL to BEGIN with the conferencing host, so it rejected the wrapped form outright — the anchor scan in harvestDetailPopovers, the fetch-hook text scan, and the chip-text scan ALL silently missed every wrapped Zoom URL.",
+      "Even when LINK_RE happened to match (substring-match via a[href*=\"zoom.us\"]), what got stored was the Google redirect URL with all its tracking junk and percent-encoded inner query — which can break on click and isn't the actual Zoom join URL.",
+      "Fix: new unwrapMeetLink() helper handles both wrap shapes — full wrapper (extract & decode the q= value) and inner percent-encoded URL extracted from inside a wrapper. Applied in calendar-fetch-hook.js (harvestFromText + harvestEventsFromText) and calendar-events-scraper.js (findJoinLink + harvestDetailPopovers Path A + Path B). LINK_RE also tightened to forbid `&` in the URL char class so wrapper trailers like `&sa=D&source=calendar` no longer get swallowed into the match.",
+      "Tightened the Path A anchor filter too: previously it tested LINK_RE against the raw href (which failed on every wrapped href), now it unwraps first then validates — meaning every Zoom anchor in a popover is now eligible for the title→link match step, not just the rare clean ones.",
+      "Result: stored zhlCalEvents entries now carry the actual `https://zillowgroup.zoom.us/j/…?pwd=…` link as ev.meet, and the reminder card's 📹 Join button appears for events whose popover has been opened (auto or manual) at least once."
+    ],
+    sections: ["calendar-events-scraper", "calendar-fetch-hook", "calendar-reminders"]
+  },
+  {
     version: "1.64.27",
     category: "improvement",
     headline: "Manifest description refreshed for the Chrome Web Store listing. The card-level blurb that shows on the listing tile and in search results now reflects the actual scope of the pack (30+ modules) instead of the original 5-feature description from v1.x.",

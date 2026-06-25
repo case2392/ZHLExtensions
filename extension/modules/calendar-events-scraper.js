@@ -184,12 +184,35 @@
 
   // Conferencing link: Google Meet OR Zoom (incl. corporate subdomains
   // and zoomgov). Searched in the chip's text + aria + any <a href>.
-  const LINK_RE = /https?:\/\/(?:meet\.google\.com\/[a-z0-9\-]+|[a-z0-9.\-]*zoom\.us\/[^\s"'<>]+|[a-z0-9.\-]*zoomgov\.com\/[^\s"'<>]+)/i;
+  // `&` is forbidden in the URL char class so that, when a Zoom URL is
+  // wrapped in Google Calendar's www.google.com/url?q=<encoded>&sa=D…
+  // redirect (which is what every Zoom anchor href in the event-details
+  // popover actually looks like), LINK_RE matches the inner Zoom URL
+  // and stops at the wrapper's trailing `&`, not at end-of-string.
+  // unwrapMeetLink then strips the wrapper / percent-decodes the inner
+  // form so we store the real Zoom join URL instead of the wrapped one.
+  const LINK_RE = /https?:\/\/(?:meet\.google\.com\/[a-z0-9\-]+|[a-z0-9.\-]*zoom\.us\/[^\s"'<>&]+|[a-z0-9.\-]*zoomgov\.com\/[^\s"'<>&]+)/i;
+
+  function unwrapMeetLink(url) {
+    if (!url) return url;
+    // (a) Full wrapper, e.g. anchor href in the popover:
+    //     https://www.google.com/url?q=https://…zoom.us/j/123?pwd%3Dabc&sa=D&…
+    const wm = /^https?:\/\/(?:www\.)?google\.com\/url\?(?:[^&]*&)*q=([^&]+)/i.exec(url);
+    if (wm) {
+      try { return decodeURIComponent(wm[1]); } catch (_) { return wm[1]; }
+    }
+    // (b) Inner URL extracted from inside a wrapper — percent-encoded.
+    if (/%(?:3D|26|2F|3F)/i.test(url)) {
+      try { return decodeURIComponent(url); } catch (_) { return url; }
+    }
+    return url;
+  }
+
   function findJoinLink(el, hay) {
     const m = hay.match(LINK_RE);
-    if (m) return m[0];
+    if (m) return unwrapMeetLink(m[0]);
     const a = el.querySelector && el.querySelector('a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]');
-    if (a) return a.getAttribute('href') || '';
+    if (a) return unwrapMeetLink(a.getAttribute('href') || '');
     return '';
   }
 
@@ -535,8 +558,16 @@
       'a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]'
     );
     anchors.forEach(function (a) {
-      const href = a.getAttribute('href') || '';
-      if (!LINK_RE.test(href)) return;
+      const rawHref = a.getAttribute('href') || '';
+      // The anchor's href is almost always the Google redirect form
+      // (https://www.google.com/url?q=<encoded zoom url>&sa=D&source=
+      // calendar&ust=…), so testing the RAW href against LINK_RE — which
+      // requires the URL to BEGIN with the conferencing host — would
+      // skip every wrapped link. Unwrap first, then validate.
+      const href = unwrapMeetLink(rawHref);
+      if (!href) return;
+      if (!LINK_RE.test(href) && rawHref.indexOf('zoom.us') === -1 &&
+          rawHref.indexOf('meet.google.com') === -1 && rawHref.indexOf('zoomgov.com') === -1) return;
       if (!isElVisible(a)) return;
       let node = a.parentElement;
       // Walk up until we find a panel-sized container OR a recognized
@@ -573,11 +604,12 @@
       try { const r = dlg.getBoundingClientRect(); area = r.width * r.height; } catch (_) {}
       if (area < 30000) return;
       const txt = (dlg.textContent || '').replace(/\s+/g, ' ');
-      const link = (txt.match(LINK_RE) || [null])[0]
-        || (function () {
-          const a = dlg.querySelector('a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]');
-          return a ? a.getAttribute('href') : null;
-        })();
+      const rawTextLink = (txt.match(LINK_RE) || [null])[0];
+      const rawHrefLink = rawTextLink ? null : (function () {
+        const a = dlg.querySelector('a[href*="zoom.us"], a[href*="meet.google.com"], a[href*="zoomgov.com"]');
+        return a ? a.getAttribute('href') : null;
+      })();
+      const link = unwrapMeetLink(rawTextLink || rawHrefLink);
       if (!link) return;
       const title = findPanelTitle(dlg);
       if (!title) return;

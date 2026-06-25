@@ -29,7 +29,35 @@
   window.__zhlCalFetchHookLoaded = true;
 
   // Same link regex used elsewhere — Meet, *.zoom.us, *.zoomgov.com.
-  const LINK_RE = /https?:\/\/(?:meet\.google\.com\/[a-z0-9\-]+|[a-z0-9.\-]*zoom\.us\/[^\s"'<>\\]+|[a-z0-9.\-]*zoomgov\.com\/[^\s"'<>\\]+)/gi;
+  // `&` is forbidden in the URL char class so that, when a Zoom/Meet
+  // URL is wrapped in a Google calendar redirect
+  // (https://www.google.com/url?q=<encoded zoom url>&sa=D&source=calendar
+  // &ust=…), the match stops at the wrapper's trailing `&sa=…` rather
+  // than swallowing it. The genuine Zoom URL's internal `&from=addon`
+  // is lost in unwrapped strings too, but the resulting URL is still
+  // a valid join URL — preferable to a wrapped-and-mangled match.
+  const LINK_RE = /https?:\/\/(?:meet\.google\.com\/[a-z0-9\-]+|[a-z0-9.\-]*zoom\.us\/[^\s"'<>\\&]+|[a-z0-9.\-]*zoomgov\.com\/[^\s"'<>\\&]+)/gi;
+
+  // Unwrap Google Calendar's www.google.com/url?q=<encoded> redirect.
+  // Two shapes appear in the wild:
+  //   (a) Full wrapper as the URL itself — straight off an anchor href:
+  //       https://www.google.com/url?q=https://…zoom.us/j/123?pwd%3Dabc&sa=D&source=calendar
+  //       → decodeURIComponent of the q= value gives the real Zoom URL.
+  //   (b) Inner URL extracted by LINK_RE from inside a wrapper in JSON
+  //       text — the inner URL is percent-encoded
+  //       (https://…zoom.us/j/123?pwd%3Dabc%26from%3Daddon). Decode it.
+  // No-op when the URL is already a clean Meet/Zoom URL.
+  function unwrapMeetLink(url) {
+    if (!url) return url;
+    const wm = /^https?:\/\/(?:www\.)?google\.com\/url\?(?:[^&]*&)*q=([^&]+)/i.exec(url);
+    if (wm) {
+      try { return decodeURIComponent(wm[1]); } catch (_) { return wm[1]; }
+    }
+    if (/%(?:3D|26|2F|3F)/i.test(url)) {
+      try { return decodeURIComponent(url); } catch (_) { return url; }
+    }
+    return url;
+  }
 
   // For each conferencing URL in `text`, find the closest preceding
   // "summary":"..." / "title":"..." / "name":"..." field — Google's
@@ -76,7 +104,7 @@
     const linkRe = new RegExp(LINK_RE.source, 'gi');
     let m;
     while ((m = linkRe.exec(text)) !== null) {
-      const link = m[0];
+      const link = unwrapMeetLink(m[0]);
       const titleHint = extractTitleHint(text, m.index);
       if (!titleHint) continue; // skip ambiguous matches
       out.push({ link: link, titleHint: titleHint });
@@ -131,7 +159,7 @@
         title: title,
         startMs: dts[0],
         endMs: dts[1] || null,
-        link: linkM ? linkM[0] : null
+        link: linkM ? unwrapMeetLink(linkM[0]) : null
       });
     }
     return out;
