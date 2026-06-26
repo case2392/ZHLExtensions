@@ -18,21 +18,16 @@
   // In iframes (legacy Visualforce-embedded Genesys), scan the whole frame.
   const IS_TOP_FRAME = window.top === window.self;
 
-  // As of mid-2026 Genesys Cloud renders caller-ID names natively in the
-  // Salesforce Lightning EMBEDDED widget (the openctiSoftPhone iframe whose
-  // src is apps.*.pure.cloud / apps.*.mypurecloud.*). They have NOT shipped
-  // that to the STANDALONE Genesys CRM (the same URL opened directly in a
-  // top-level tab). Without this guard our badges duplicate Genesys's own
-  // labels everywhere inside the Lightning widget (call history,
-  // voicemails, active interactions). Detection: sub-frame + Genesys host
-  // == the embedded widget. The standalone CRM has window.top === self so
-  // it falls through and keeps running (Genesys's native feature isn't
-  // there yet on that surface).
-  const GENESYS_HOSTS_RE = /(?:^|\.)(?:mypurecloud\.(?:com|ie|de|com\.au|jp)|pure\.cloud)$/i;
-  if (!IS_TOP_FRAME && GENESYS_HOSTS_RE.test(location.hostname)) {
-    console.log('[CallerID] Lightning-embedded Genesys widget detected — skipping (Genesys provides native caller ID here)');
-    return;
-  }
+  // (Removed in v1.64.32: a v1.64.30 guard that skipped caller-id on
+  // Genesys hosts. The "native names" the LO saw in earlier screenshots
+  // turned out to be (a) the Salesforce-CTI active-call auto-match
+  // surfacing the matched contact on a connected call, plus (b) our
+  // own badges that the guard then stripped. The standalone Genesys
+  // call history / voicemail list / Lightning-embedded widget all
+  // still need ZHL caller-id — confirmed by the user's call-history
+  // dump showing only geo locations ("Raleigh NC", "Austin TX") with
+  // no names. So caller-id now runs everywhere again as it did before
+  // v1.64.30.)
 
   // Diagnostic: confirms the script actually loaded in this frame and which version.
   // If the version logged here is older than the manifest.json on disk, Chrome is

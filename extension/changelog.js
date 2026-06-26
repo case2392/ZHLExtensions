@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.32",
+    category: "bugfix",
+    headline: "Two follow-up fixes: (1) Caller ID is BACK on the Genesys widget — turns out Genesys did NOT actually add native names there. The 'native names' the LO saw earlier were either the Salesforce-CTI active-call auto-match or our own badges that the v1.64.30 guard then stripped. The Genesys call-history list / voicemail list / active-call panel all need ZHL caller-id. (2) DTI Max pill auto-expand now targets the EXACT clickable element confirmed by the LO — the leaf div that contains both the chevron SVG and the 'Eligibility details' span.",
+    highlights: [
+      "Caller ID: removed the Genesys host-based skip entirely. Confirmed by the LO's call-history dump showing only geo locations ('Raleigh NC', 'Austin TX', 'Des Moines IA' …) with no contact names where our badges used to be. caller-id now runs everywhere it did before v1.64.30 — Salesforce Lightning AND the standalone Genesys CRM AND the Lightning-embedded Genesys widget.",
+      "DTI Max: new Pass 0 in findExpandTarget — if the 'Eligibility details' span's IMMEDIATE PARENT also contains a chevron icon, click that parent. That leaf div was confirmed by the LO as the exact c11n disclosure-header target. Pure styled-components: no aria-expanded, no role='button', no <button> ancestor, and the chevron SVG has pointer-events:none so clicking it directly was a no-op.",
+      "DTI Max: the explicit-ARIA / cursor:pointer / chevron-ancestor passes from v1.64.31 are kept as fallbacks for other LOP disclosure cards that might have a different shape."
+    ],
+    sections: ["caller-id", "dti-max-estimator"]
+  },
+  {
     version: "1.64.31",
     category: "bugfix",
     headline: "Three fixes: (1) Caller ID skip-on-Genesys logic was inverted — now correctly skips on the Salesforce Lightning Genesys widget (where Genesys ships native names) and keeps running on the standalone Genesys CRM (where they don't). (2) DTI Max pill auto-expand is smarter — finds aria-expanded='false' / role='button' / chevron icons instead of blindly clicking ancestors. (3) Send VPA Email button now becomes clickable the moment you advance the lead to Pre-Approval, without needing a tab switch to wake it up.",

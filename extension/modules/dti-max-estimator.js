@@ -126,46 +126,79 @@
   }
 
   // Find the most likely "toggle this section" target near the label.
-  // Order of preference (best first):
-  //   1. An ancestor with aria-expanded="false" — that's the definitive
-  //      collapsed-region toggle handle in WAI-ARIA. LOP uses this on
-  //      its styled-component disclosure cards.
-  //   2. An ancestor with role="button" or a <button> ancestor.
-  //   3. A sibling chevron/caret icon (SVG / i.fa-chevron-* / [data-
-  //      icon*='chevron']) whose click handler toggles the section.
-  //   4. The label's immediate parent (catches simple onClick-on-header
-  //      patterns).
-  // Returns null when none are found in 12 ancestor hops.
+  // Three passes, best signal first:
+  //
+  //   Pass 1 — explicit ARIA/semantic: aria-expanded="false",
+  //     role="button", or <button> ancestor. Definitive when present.
+  //
+  //   Pass 2 — cursor:pointer up the tree. This is the actual signal
+  //     in styled-components / React apps that don't use semantic
+  //     roles. LOP's c11n disclosure cards fall here — the header
+  //     wrapper is just a styled <div> whose CSS sets cursor:pointer
+  //     over the chevron+label group; the onClick handler is bound
+  //     to that same wrapper.
+  //
+  //   Pass 3 — ancestor that contains BOTH the label AND a chevron.
+  //     The c11n IconChevron* SVGs have pointer-events:none (clicks
+  //     pass through to the underlying header), so clicking the SVG
+  //     directly is a no-op — we must click the wrapper div instead.
+  //     The closest ancestor that contains both the label text and a
+  //     chevron icon is almost always that wrapper.
+  //
+  // Returns the label's immediate parent as a last resort.
   function findExpandTarget(labelEl) {
     if (!labelEl) return null;
+
+    const CHEV_SEL =
+      'svg[class*="Chevron" i], svg[class*="Caret" i], ' +
+      'svg[data-icon*="chevron" i], svg[data-icon*="caret" i], ' +
+      'i[class*="chevron" i], i[class*="caret" i]';
+
+    // Pass 0 (highest priority for c11n disclosure cards): if the
+    // label's IMMEDIATE PARENT also contains a chevron, that parent
+    // is the clickable header. Confirmed by the LO pointing at the
+    // exact element on the Pricing & Scenarios page:
+    //   <div class="...sc-b39bca77-1 eHAYmk iBCvKQ">
+    //     <svg class="...IconChevronUp...">…</svg>
+    //     <span>Eligibility details</span>
+    //   </div>
+    // The chevron SVG has pointer-events:none (clicks pass through),
+    // and there's no aria-expanded / role=button / <button> ancestor
+    // — pure styled-components disclosure. So this leaf div is the
+    // only correct click target on c11n surfaces.
+    if (labelEl.parentElement && labelEl.parentElement.querySelector &&
+        labelEl.parentElement.querySelector(CHEV_SEL)) {
+      return labelEl.parentElement;
+    }
+
+    // Pass 1: explicit ARIA / semantic signals.
     let cur = labelEl;
     for (let depth = 0; depth < 12 && cur && cur !== document.body; depth++) {
       if (cur.getAttribute) {
-        const exp = cur.getAttribute('aria-expanded');
-        if (exp === 'false') return cur;
-        const role = cur.getAttribute('role');
-        if (role === 'button') return cur;
+        if (cur.getAttribute('aria-expanded') === 'false') return cur;
+        if (cur.getAttribute('role') === 'button') return cur;
       }
       if (cur.tagName === 'BUTTON') return cur;
-      // Look for a sibling chevron at this ancestor level.
-      const chev = cur.querySelector && cur.querySelector(
-        'svg[data-icon*="chevron" i], svg[data-icon*="caret" i], ' +
-        'i[class*="chevron" i], i[class*="caret" i], ' +
-        '[class*="Chevron" i], [class*="Caret" i], ' +
-        '[aria-label*="expand" i], [aria-label*="collapse" i]'
-      );
-      if (chev) {
-        // Walk up from the icon to the smallest clickable wrapper
-        // (button / role=button / element with cursor:pointer).
-        let n = chev;
-        for (let i = 0; i < 5 && n && n !== cur; i++) {
-          if (n.tagName === 'BUTTON' || (n.getAttribute && n.getAttribute('role') === 'button')) return n;
-          n = n.parentElement;
-        }
-        return chev;
-      }
       cur = cur.parentElement;
     }
+
+    // Pass 2: cursor:pointer.
+    cur = labelEl;
+    for (let depth = 0; depth < 12 && cur && cur !== document.body; depth++) {
+      try {
+        const cs = window.getComputedStyle(cur);
+        if (cs && cs.cursor === 'pointer') return cur;
+      } catch (_) {}
+      cur = cur.parentElement;
+    }
+
+    // Pass 3: nearest ancestor that contains BOTH label and a chevron.
+    cur = labelEl;
+    for (let depth = 0; depth < 8 && cur && cur !== document.body; depth++) {
+      if (cur.querySelector && cur.querySelector(CHEV_SEL)) return cur;
+      cur = cur.parentElement;
+    }
+
     return labelEl.parentElement || null;
   }
 
