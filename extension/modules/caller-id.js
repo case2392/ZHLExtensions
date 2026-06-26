@@ -18,6 +18,20 @@
   // In iframes (legacy Visualforce-embedded Genesys), scan the whole frame.
   const IS_TOP_FRAME = window.top === window.self;
 
+  // As of mid-2026 Genesys Cloud renders caller-ID names natively on the
+  // STANDALONE Genesys CRM (apps.mypurecloud.com / apps.*.pure.cloud opened
+  // directly, top-level tab). They have NOT shipped that to the Genesys
+  // CRM iframe embedded inside Salesforce Lightning. Without this guard our
+  // badges duplicate Genesys's own labels everywhere on the standalone
+  // page (call history, voicemails, active interactions). Detection: top
+  // frame + Genesys host. The Lightning-embedded copy lives inside an
+  // iframe whose top !== self, so it falls through and keeps running.
+  const GENESYS_HOSTS_RE = /(?:^|\.)(?:mypurecloud\.(?:com|ie|de|com\.au|jp)|pure\.cloud)$/i;
+  if (IS_TOP_FRAME && GENESYS_HOSTS_RE.test(location.hostname)) {
+    console.log('[CallerID] standalone Genesys CRM detected — skipping (Genesys provides native caller ID here)');
+    return;
+  }
+
   // Diagnostic: confirms the script actually loaded in this frame and which version.
   // If the version logged here is older than the manifest.json on disk, Chrome is
   // serving a stale build — go to chrome://extensions and click the reload icon

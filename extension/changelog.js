@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.30",
+    category: "improvement",
+    headline: "Caller ID — no more duplicate badges on the standalone Genesys CRM. Genesys Cloud now renders caller-ID names natively when the CRM is opened in its own tab (apps.*.pure.cloud), so our blue ZHL badges were doubling up Genesys's own labels on the call history, voicemail list, and active interaction panels. The Salesforce Lightning-embedded Genesys iframe still gets our badges (Genesys hasn't shipped the native feature to that surface yet).",
+    highlights: [
+      "Bug: caller-id.js runs in BOTH the standalone Genesys CRM (top-level apps.mypurecloud.com / apps.*.pure.cloud) and the Genesys iframe inside Salesforce Lightning. With Genesys's own caller-ID rollout, every voicemail / call-history / interaction row in the standalone CRM had TWO name labels right next to each other.",
+      "Fix: at the top of caller-id.js, detect (window.top === window.self) AND a Genesys host (mypurecloud.com / mypurecloud.ie / mypurecloud.de / mypurecloud.com.au / mypurecloud.jp / pure.cloud), and exit immediately. The Lightning-embedded copy lives inside an iframe whose top !== self, so it falls through the guard and keeps running — that surface STILL needs our badges because Genesys's native feature isn't there.",
+      "Result: no more duplicate names on the standalone Genesys app. Open Genesys from your Lightning utility bar and you'll still see ZHL caller-ID badges as before."
+    ],
+    sections: ["caller-id"]
+  },
+  {
     version: "1.64.29",
     category: "improvement",
     headline: "Meeting Reminders — default lead time is now just 15 minutes before the meeting (was 30 + 5). One pop-up per meeting instead of two by default. Customize freely in Setup → Meeting Reminders.",
