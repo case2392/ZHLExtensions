@@ -13,6 +13,17 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.34",
+    category: "bugfix",
+    headline: "Caller ID — fix the timing race that left a duplicate ZHL badge on the active-call interaction even with v1.64.33's surgical skip. The badge is now stripped retroactively when Genesys's native participant name appears later.",
+    highlights: [
+      "Bug: v1.64.33's skip ran inside annotate() — but our async Salesforce lookup usually resolves BEFORE Genesys populates its .participant-name span (which lands a few hundred ms after a call connects). annotate() ran, saw no participant-name yet, added the badge. Then Genesys filled in the name and we never re-checked — the row's data-callerid-phone marker made the scanner skip it forever.",
+      "Fix: new sweepGenesysStaleBadges() runs at the start of every scan tick. It walks every existing .callerid-badge in the document and asks genesysHasNativeName(host) afresh. If the answer is now true, the badge is removed and the data-callerid-name attribute cleared. We deliberately leave the row's data-callerid-phone marker in place so we don't re-add the badge on the next tick — Genesys's native label wins permanently for that row.",
+      "Surfaces unaffected: anywhere without a .center-container ancestor (call history, voicemails, Salesforce-CTI utility bar, standalone Genesys CRM, Salesforce record page) keeps the ZHL badge as normal."
+    ],
+    sections: ["caller-id"]
+  },
+  {
     version: "1.64.33",
     category: "bugfix",
     headline: "Caller ID — surgical skip on the Genesys active-call interaction panel where Genesys NOW renders a native participant name. The rest of the Genesys widget (call history, voicemail list, etc.) still gets our badges. No more dual-name duplicate on the active call, no missing badges anywhere else.",

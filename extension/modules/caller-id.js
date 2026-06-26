@@ -282,6 +282,29 @@
     return roots.length ? Array.from(roots) : [];
   }
 
+  // Sweep stale badges: a badge added BEFORE Genesys populated its
+  // native .participant-name (timing race — Genesys's WebRTC interaction
+  // panel fills in the participant name a few hundred ms after the call
+  // connects, but our async Salesforce lookup often resolves first)
+  // doesn't go through annotate() again on later scans, so the in-place
+  // check there can't catch it. This sweep runs every scan tick: for
+  // every existing .callerid-badge, re-check genesysHasNativeName on
+  // its parent. If true now, strip the badge and the data-callerid-name
+  // attribute. We DON'T clear the row's data-callerid-phone-NNN marker
+  // — that keeps the row skipped on future scans so we don't try to
+  // re-add the badge a tick later.
+  function sweepGenesysStaleBadges() {
+    const badges = document.querySelectorAll('.' + BADGE_CLASS);
+    for (const badge of badges) {
+      const host = badge.parentElement;
+      if (!host) continue;
+      if (genesysHasNativeName(host)) {
+        badge.remove();
+        host.removeAttribute(ANNOTATED_ATTR);
+      }
+    }
+  }
+
   let scheduled = false;
   function scheduleScan() {
     if (extensionDead) return;
@@ -291,6 +314,7 @@
       scheduled = false;
       if (extensionDead) return;
       try {
+        sweepGenesysStaleBadges();
         for (const root of getScanRoots()) scanTextNodes(root);
       } catch (e) {
         console.warn("[CallerID] scan failed", e);
