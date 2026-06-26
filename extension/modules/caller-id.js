@@ -47,8 +47,41 @@
     return m[1] + m[2] + m[3];
   }
 
+  // Genesys's active-call interaction panel now renders a native
+  // participant name via <span class="interaction-data participant-name">
+  // inside the .center-container of the active interaction. When that
+  // span is present and non-empty, our badge on the same row's
+  // .salesforce-displayaddress duplicates Genesys's label right next
+  // to it. Detect by walking up to a .center-container ancestor and
+  // checking for a populated .participant-name child — skip the badge
+  // when both are true. This is surgical: call history items, voicemail
+  // rows, and any other DOM that doesn't use Genesys's interaction-
+  // panel structure DON'T have .center-container ancestors, so they're
+  // unaffected and still get badges.
+  function genesysHasNativeName(el) {
+    let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      if (cur.classList && cur.classList.contains('center-container')) {
+        const pn = cur.querySelector(':scope > .interaction-data.participant-name, :scope .participant-name');
+        if (pn && (pn.textContent || '').trim().length > 0) return true;
+        return false; // .center-container found but no participant-name — annotate as normal
+      }
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+
   function annotate(el, name) {
     if (!el) return;
+    if (genesysHasNativeName(el)) {
+      // Strip any stale badge we previously added before Genesys
+      // started rendering the native name (LO upgraded Genesys mid-
+      // session, etc.).
+      const stale = el.querySelector(":scope > ." + BADGE_CLASS);
+      if (stale) stale.remove();
+      el.removeAttribute(ANNOTATED_ATTR);
+      return;
+    }
     if (el.getAttribute(ANNOTATED_ATTR) === name) return;
     el.setAttribute(ANNOTATED_ATTR, name);
     let badge = el.querySelector(":scope > ." + BADGE_CLASS);

@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.33",
+    category: "bugfix",
+    headline: "Caller ID — surgical skip on the Genesys active-call interaction panel where Genesys NOW renders a native participant name. The rest of the Genesys widget (call history, voicemail list, etc.) still gets our badges. No more dual-name duplicate on the active call, no missing badges anywhere else.",
+    highlights: [
+      "Bug: in v1.64.30/.31 the skip was applied at the entire-host level — that wiped our badges from call history and voicemails too. v1.64.32 reverted to running everywhere, which brought back the duplicate name on the active-call interaction (Genesys's 'participant-name' span + our 'callerid-badge' both shown).",
+      "Root cause: Genesys's new native name lives in one specific element — <span class='interaction-data participant-name'> — inside the active interaction's .center-container. That element exists only on the active call, not in call history rows or voicemail rows.",
+      "Fix: annotate() walks up from the candidate target looking for a .center-container ancestor. If it finds one AND that container has a non-empty .participant-name span, skip and remove any stale badge we added earlier. If no .center-container ancestor exists at all (call history rows, voicemails, Salesforce fields, etc.), the check returns false and our badge renders as normal.",
+      "Result: active-call interaction now shows ONLY Genesys's native name. Call history list, voicemail list, Salesforce-CTI utility bar, and the standalone Genesys CRM all keep our blue ZHL caller-id badges."
+    ],
+    sections: ["caller-id"]
+  },
+  {
     version: "1.64.32",
     category: "bugfix",
     headline: "Two follow-up fixes: (1) Caller ID is BACK on the Genesys widget — turns out Genesys did NOT actually add native names there. The 'native names' the LO saw earlier were either the Salesforce-CTI active-call auto-match or our own badges that the v1.64.30 guard then stripped. The Genesys call-history list / voicemail list / active-call panel all need ZHL caller-id. (2) DTI Max pill auto-expand now targets the EXACT clickable element confirmed by the LO — the leaf div that contains both the chevron SVG and the 'Eligibility details' span.",
