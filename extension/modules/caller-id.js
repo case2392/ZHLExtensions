@@ -18,17 +18,19 @@
   // In iframes (legacy Visualforce-embedded Genesys), scan the whole frame.
   const IS_TOP_FRAME = window.top === window.self;
 
-  // As of mid-2026 Genesys Cloud renders caller-ID names natively on the
-  // STANDALONE Genesys CRM (apps.mypurecloud.com / apps.*.pure.cloud opened
-  // directly, top-level tab). They have NOT shipped that to the Genesys
-  // CRM iframe embedded inside Salesforce Lightning. Without this guard our
-  // badges duplicate Genesys's own labels everywhere on the standalone
-  // page (call history, voicemails, active interactions). Detection: top
-  // frame + Genesys host. The Lightning-embedded copy lives inside an
-  // iframe whose top !== self, so it falls through and keeps running.
+  // As of mid-2026 Genesys Cloud renders caller-ID names natively in the
+  // Salesforce Lightning EMBEDDED widget (the openctiSoftPhone iframe whose
+  // src is apps.*.pure.cloud / apps.*.mypurecloud.*). They have NOT shipped
+  // that to the STANDALONE Genesys CRM (the same URL opened directly in a
+  // top-level tab). Without this guard our badges duplicate Genesys's own
+  // labels everywhere inside the Lightning widget (call history,
+  // voicemails, active interactions). Detection: sub-frame + Genesys host
+  // == the embedded widget. The standalone CRM has window.top === self so
+  // it falls through and keeps running (Genesys's native feature isn't
+  // there yet on that surface).
   const GENESYS_HOSTS_RE = /(?:^|\.)(?:mypurecloud\.(?:com|ie|de|com\.au|jp)|pure\.cloud)$/i;
-  if (IS_TOP_FRAME && GENESYS_HOSTS_RE.test(location.hostname)) {
-    console.log('[CallerID] standalone Genesys CRM detected — skipping (Genesys provides native caller ID here)');
+  if (!IS_TOP_FRAME && GENESYS_HOSTS_RE.test(location.hostname)) {
+    console.log('[CallerID] Lightning-embedded Genesys widget detected — skipping (Genesys provides native caller ID here)');
     return;
   }
 

@@ -759,7 +759,29 @@
         }
         if (!getRecordInfo()) return;
         const existing = document.getElementById(BUTTON_ID);
-        if (existing && isElementVisible(existing)) return;
+        if (existing && isElementVisible(existing)) {
+          // Re-evaluate pre-approval status on every tick so the button
+          // becomes enabled the moment the LO advances the path on this
+          // same record. Without this, the one-shot setTimeout in
+          // injectButton only ran 1.5s after first inject — if the
+          // status was still "Qualification" / "Active Outreach" at
+          // that moment and the LO later moved it to Pre-Approval, the
+          // button stayed disabled until a tab switch re-injected it
+          // (the bug the user hit).
+          // Only flip between 'disabled' and 'default' — leave loading/
+          // success/error states alone so we don't trample mid-click.
+          const cur = existing.classList.contains('zhl-vpa-btn--loading') ? 'loading'
+            : existing.classList.contains('zhl-vpa-btn--success') ? 'success'
+            : existing.classList.contains('zhl-vpa-btn--error') ? 'error'
+            : existing.classList.contains('zhl-vpa-btn--disabled') ? 'disabled'
+            : 'default';
+          if (cur === 'disabled' && isPreApprovalStatus()) {
+            setButtonState(existing, 'default');
+          } else if (cur === 'default' && !isPreApprovalStatus()) {
+            setButtonState(existing, 'disabled');
+          }
+          return;
+        }
         if (existing) {
           const li = existing.closest('li.slds-button-group-item');
           if (li) li.remove(); else existing.remove();

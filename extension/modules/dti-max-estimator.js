@@ -104,23 +104,69 @@
     return { row: row, income: income, liabilities: liab };
   }
 
-  // Auto-expand state. We try ONE label-ancestor per scan tick (not
-  // all 6 at once), so we don't accidentally toggle the section
-  // open-then-closed when multiple ancestors handle the click event
+  // Auto-expand state. We try ONE click target per scan tick (not all
+  // candidates at once), so we don't accidentally toggle the section
+  // open→closed→open when multiple ancestors handle the click event
   // (e.g. an inner toggle + an outer delegated handler). Reset
   // implicitly per page load since the module reloads.
   let autoExpandAttempt = 0;
+  let lastSectionStateMs = 0;
 
   function findEligibilityLabel() {
     // Label text changed case in LOP's redesign: "Eligibility Details"
     // -> "Eligibility details". Match case-insensitively to survive
-    // either spelling.
-    const spans = document.querySelectorAll('span');
-    for (const sp of spans) {
-      const txt = (sp.textContent || '').trim();
-      if (/^eligibility details$/i.test(txt)) return sp;
+    // either spelling. Also match p/h2/h3/button in case LOP rerolls
+    // the heading element type.
+    const nodes = document.querySelectorAll('span, p, h1, h2, h3, h4, button, [role="button"]');
+    for (const n of nodes) {
+      const txt = (n.textContent || '').trim();
+      if (/^eligibility details$/i.test(txt)) return n;
     }
     return null;
+  }
+
+  // Find the most likely "toggle this section" target near the label.
+  // Order of preference (best first):
+  //   1. An ancestor with aria-expanded="false" — that's the definitive
+  //      collapsed-region toggle handle in WAI-ARIA. LOP uses this on
+  //      its styled-component disclosure cards.
+  //   2. An ancestor with role="button" or a <button> ancestor.
+  //   3. A sibling chevron/caret icon (SVG / i.fa-chevron-* / [data-
+  //      icon*='chevron']) whose click handler toggles the section.
+  //   4. The label's immediate parent (catches simple onClick-on-header
+  //      patterns).
+  // Returns null when none are found in 12 ancestor hops.
+  function findExpandTarget(labelEl) {
+    if (!labelEl) return null;
+    let cur = labelEl;
+    for (let depth = 0; depth < 12 && cur && cur !== document.body; depth++) {
+      if (cur.getAttribute) {
+        const exp = cur.getAttribute('aria-expanded');
+        if (exp === 'false') return cur;
+        const role = cur.getAttribute('role');
+        if (role === 'button') return cur;
+      }
+      if (cur.tagName === 'BUTTON') return cur;
+      // Look for a sibling chevron at this ancestor level.
+      const chev = cur.querySelector && cur.querySelector(
+        'svg[data-icon*="chevron" i], svg[data-icon*="caret" i], ' +
+        'i[class*="chevron" i], i[class*="caret" i], ' +
+        '[class*="Chevron" i], [class*="Caret" i], ' +
+        '[aria-label*="expand" i], [aria-label*="collapse" i]'
+      );
+      if (chev) {
+        // Walk up from the icon to the smallest clickable wrapper
+        // (button / role=button / element with cursor:pointer).
+        let n = chev;
+        for (let i = 0; i < 5 && n && n !== cur; i++) {
+          if (n.tagName === 'BUTTON' || (n.getAttribute && n.getAttribute('role') === 'button')) return n;
+          n = n.parentElement;
+        }
+        return chev;
+      }
+      cur = cur.parentElement;
+    }
+    return labelEl.parentElement || null;
   }
 
   // Full pointer/mouse event sequence. LOP's styled-component
@@ -160,13 +206,13 @@
     // DOM until the LO clicks the header chevron.
     const labelSpan = findEligibilityLabel();
     if (!labelSpan) return null;
-    // Walk up to 8 ancestor levels from the label looking for a Flex
+    // Walk up to 10 ancestor levels from the label looking for a Flex
     // that contains both "Monthly income" and "Credit score" text.
     // Case-insensitive — LOP's redesign uses title case ("Monthly
     // Income" / "Credit Score") while the old layout used sentence
     // case. Match both.
     let cur = labelSpan;
-    for (let depth = 0; depth < 8 && cur; depth++) {
+    for (let depth = 0; depth < 10 && cur; depth++) {
       const flexes = cur.querySelectorAll ? cur.querySelectorAll('div') : [];
       for (const f of flexes) {
         const t = (f.textContent || '');
@@ -174,22 +220,23 @@
       }
       cur = cur.parentElement;
     }
-    // Section is likely collapsed. Try ONE label-ancestor per scan
-    // tick. We tried "click every ancestor at once" in v1.63.22 and
-    // it cancelled itself out — if two ancestors both respond to the
-    // click (inner toggle + a delegated handler higher up), the
-    // section toggles open→closed→open→closed and ends up back where
-    // it started. Walking one ancestor per tick lets a successful
-    // expand on one tick STOP further attempts (because the walk-up
-    // above finds the pill row and returns before we get here).
-    if (autoExpandAttempt < 6) {
-      let target = labelSpan.parentElement;
-      for (let i = 0; i < autoExpandAttempt && target; i++) target = target.parentElement;
+    // Section is collapsed. Click the most likely toggle target (the
+    // closest aria-expanded="false" / role=button / chevron icon).
+    // One click per scan tick — multiple clicks per tick from different
+    // ancestors cancel each other out (open→closed→open ends back where
+    // it started). The 1.5s throttle on subsequent attempts gives LOP
+    // time to animate the disclosure open before we re-evaluate; without
+    // it we'd race the animation and click again before the pill row
+    // mounted, closing the section we just opened.
+    const now = Date.now();
+    if (now - lastSectionStateMs > 1500 && autoExpandAttempt < 8) {
+      const target = findExpandTarget(labelSpan);
       if (target) {
-        console.log('[ZHL DTI Max Estimator] expand attempt #' + autoExpandAttempt + ' on', target);
+        console.log('[ZHL DTI Max Estimator] auto-expand attempt #' + autoExpandAttempt + ' on', target);
         fullClickSequence(target);
+        lastSectionStateMs = now;
+        autoExpandAttempt++;
       }
-      autoExpandAttempt++;
     }
     return null;
   }

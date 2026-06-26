@@ -13,6 +13,19 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.31",
+    category: "bugfix",
+    headline: "Three fixes: (1) Caller ID skip-on-Genesys logic was inverted — now correctly skips on the Salesforce Lightning Genesys widget (where Genesys ships native names) and keeps running on the standalone Genesys CRM (where they don't). (2) DTI Max pill auto-expand is smarter — finds aria-expanded='false' / role='button' / chevron icons instead of blindly clicking ancestors. (3) Send VPA Email button now becomes clickable the moment you advance the lead to Pre-Approval, without needing a tab switch to wake it up.",
+    highlights: [
+      "Caller ID: v1.64.30 had the iframe/top-frame test inverted. The Salesforce Lightning Genesys widget runs INSIDE an iframe (window.top !== self) — that's the surface where Genesys now provides native caller ID. The standalone CRM page opened directly in a tab is the TOP frame and still needs our badges. The check is now (!IS_TOP_FRAME && Genesys host) → skip.",
+      "DTI Max: findEligibilityRow used to walk up label ancestors and click each blindly (capped at 6). It cancelled itself out when two ancestors both responded to the click (open → closed → open). New findExpandTarget() picks ONE smart target per scan tick — aria-expanded='false' first, then role='button' / <button>, then sibling chevron icons (svg[data-icon*=chevron], i.fa-chevron-*, [class*=Chevron]), with a 1.5s throttle between clicks so the disclosure animation has time to settle before we re-evaluate.",
+      "DTI Max: extended ancestor search depth from 8 → 10 and clickable-ancestor walk from 6 → 8 attempts. Also broadened findEligibilityLabel to match h1-h4 / p / button / role=button in addition to span — survives LOP re-rolling the heading element type.",
+      "Send VPA Email button: bug was that injectButton ran setButtonState('disabled') then ONE setTimeout(1500ms) that checked isPreApprovalStatus() once and never again. If the LO advanced the lead to Pre-Approval after that single check fired, the button stayed disabled — and the 1s tick early-returned because the button 'already exists and is visible.' Tab switching forced a re-inject which re-ran the setTimeout, so the button became enabled — exactly the workaround the user described.",
+      "Fix: the 1s tick now re-evaluates pre-approval status on every pass and flips the button between 'disabled' and 'default' to match the current path stage. Loading / success / error states are left alone so a mid-click action isn't trampled. The button also correctly disables itself if the LO walks the lead back from Pre-Approval to an earlier stage."
+    ],
+    sections: ["caller-id", "dti-max-estimator", "sf-vpa-email"]
+  },
+  {
     version: "1.64.30",
     category: "improvement",
     headline: "Caller ID — no more duplicate badges on the standalone Genesys CRM. Genesys Cloud now renders caller-ID names natively when the CRM is opened in its own tab (apps.*.pure.cloud), so our blue ZHL badges were doubling up Genesys's own labels on the call history, voicemail list, and active interaction panels. The Salesforce Lightning-embedded Genesys iframe still gets our badges (Genesys hasn't shipped the native feature to that surface yet).",
