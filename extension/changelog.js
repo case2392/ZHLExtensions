@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.35",
+    category: "improvement",
+    headline: "VA Entitlement Calculator — 'Entitlement used by veteran' now saves per LOP file. Type it once on a loan and it's pre-filled every time you reopen the calculator on that same file. No more retyping the used-entitlement amount.",
+    highlights: [
+      "Bug: the 'Entitlement used by veteran ($)' field reset to 0 every time the panel opened, so on a veteran with prior entitlement used, the LO had to re-enter it on every visit.",
+      "Fix: the value is now stored in chrome.storage.local keyed on the LOP file UUID (the id in /loan-officer-portal/<uuid>/…). Opening the calculator on that file hydrates the field from storage; editing it saves immediately. Clearing the field back to 0 removes the saved value.",
+      "Scoped per file — file A's used-entitlement doesn't bleed into file B. Falls back to the ZG loan id / a path slug on any URL without the UUID segment so the value still persists.",
+      "Housekeeping: saved entries older than 180 days are pruned automatically so the store can't grow unbounded across every VA file you ever open."
+    ],
+    sections: ["va-calc"]
+  },
+  {
     version: "1.64.34",
     category: "bugfix",
     headline: "Caller ID — fix the timing race that left a duplicate ZHL badge on the active-call interaction even with v1.64.33's surgical skip. The badge is now stripped retroactively when Genesys's native participant name appears later.",

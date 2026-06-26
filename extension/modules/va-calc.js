@@ -2346,7 +2346,10 @@
     });
     limitVal.appendChild(limitInput);
 
-    // Entitlement used
+    // Entitlement used — persisted PER LOP FILE so the LO doesn't have
+    // to retype it every time they reopen the calculator on the same
+    // loan. Keyed on the LOP file UUID in the URL.
+    const entFileKey = getEntitlementFileKey();
     const usedVal = labeledRow('Entitlement used by veteran ($)');
     const usedInput = document.createElement('input');
     usedInput.type = 'text';
@@ -2355,9 +2358,21 @@
     usedInput.addEventListener('input', function () {
       const n = parseMoney(usedInput.value);
       st.used = isFinite(n) && n > 0 ? n : 0;
+      setStoredEntitlementUsed(entFileKey, st.used); // persist per file
       renderOutputs();
     });
     usedVal.appendChild(usedInput);
+
+    // Hydrate the saved "used" value for this file (async). Done after
+    // the input is in the DOM; updates state + field + outputs if a
+    // value was previously saved.
+    getStoredEntitlementUsed(entFileKey).then(function (saved) {
+      if (saved != null && isFinite(saved) && saved > 0) {
+        st.used = saved;
+        usedInput.value = String(Math.round(saved));
+        renderOutputs();
+      }
+    });
 
     // Target loan
     const targetVal = labeledRow('Target loan amount ($) — optional');
@@ -3287,6 +3302,63 @@
 
   function hasChromeStorage() {
     return typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+  }
+
+  // Per-LOP-file key for persisting the VA Entitlement Calculator's
+  // "Entitlement used by veteran" amount. The LOP file URL is
+  //   …/loan-officer-portal/<uuid>/pricing-and-scenarios/…
+  // so the UUID right after loan-officer-portal/ uniquely identifies
+  // the file. Fall back to the ZG-loan-id helper, then a path slug,
+  // so the value still persists (just less precisely) on URLs without
+  // the UUID segment.
+  function getEntitlementFileKey() {
+    const m = (location.pathname || '').match(/loan-officer-portal\/([0-9a-f-]{8,})/i);
+    if (m) return m[1].toLowerCase();
+    try {
+      const lid = getLoanId();
+      if (lid && lid.indexOf('unknown-') !== 0) return lid;
+    } catch (_) {}
+    return 'path-' + (location.pathname || '').replace(/[^a-z0-9]/gi, '-').slice(-40);
+  }
+
+  const ENTITLEMENT_USED_STORE = 'rric_vaEntitlementUsed';
+
+  function getStoredEntitlementUsed(fileKey) {
+    if (!hasChromeStorage()) return Promise.resolve(null);
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.get([ENTITLEMENT_USED_STORE], function (data) {
+          const all = (data && data[ENTITLEMENT_USED_STORE]) || {};
+          const rec = all[fileKey];
+          resolve(rec && isFinite(rec.used) ? rec.used : null);
+        });
+      } catch (_) { resolve(null); }
+    });
+  }
+
+  function setStoredEntitlementUsed(fileKey, used) {
+    if (!hasChromeStorage()) return Promise.resolve();
+    return new Promise(function (resolve) {
+      try {
+        chrome.storage.local.get([ENTITLEMENT_USED_STORE], function (data) {
+          const all = (data && data[ENTITLEMENT_USED_STORE]) || {};
+          // Prune entries older than 180 days so the store can't grow
+          // unbounded across every VA file the LO ever touches.
+          const now = Date.now();
+          Object.keys(all).forEach(function (k) {
+            const ts = all[k] && all[k].ts;
+            if (ts && (now - ts) > 180 * 24 * 60 * 60 * 1000) delete all[k];
+          });
+          if (used > 0) {
+            all[fileKey] = { used: used, ts: now };
+          } else {
+            // Clearing the field back to 0 removes the saved value.
+            delete all[fileKey];
+          }
+          chrome.storage.local.set({ [ENTITLEMENT_USED_STORE]: all }, function () { resolve(); });
+        });
+      } catch (_) { resolve(); }
+    });
   }
 
   function getOurPayments(loanId) {
