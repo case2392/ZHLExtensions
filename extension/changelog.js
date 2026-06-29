@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.36",
+    category: "bugfix",
+    headline: "Privacy — Hard Pull Guardrail no longer sends a borrower's raw credit score in its telemetry event. The score is now bucketed into a coarse band (e.g. '680-699') before the event leaves the browser, so no borrower financial PII is transmitted to the analytics endpoint.",
+    highlights: [
+      "Found in a PII audit of the telemetry events: hard_pull_guardrail was sending { softScore } — the worst soft credit score across borrowers on the loan, a real numeric FICO (e.g. 682) — to the analytics endpoint on both the 'proceed' and 'cancel' decisions. That's borrower financial PII leaving the browser.",
+      "Fix: a new softScoreBucket() helper maps the raw score to a band ('<580', '580-619', '620-659', '660-679', '680-699', '700-719', '720-739', '740-759', '760+', or 'none'). Both TRACK calls now send softScoreBucket instead of softScore. The bands align with the credit tiers the guardrail logic already keys on (620 / 700 / 720), so the analytics still show which score tier triggered the warning — without the exact number.",
+      "Unchanged: the raw score is still used locally for the guardrail decision and shown in the on-screen warning dialog to the LO (never transmitted). The DU / LPA AUS status strings are loan-level underwriting data, not borrower identity, and remain as-is.",
+      "No other telemetry event in the pack transmits PII — this was the only flagged event."
+    ],
+    sections: ["hard-pull-guardrail"]
+  },
+  {
     version: "1.64.35",
     category: "improvement",
     headline: "VA Entitlement Calculator — 'Entitlement used by veteran' now saves per LOP file. Type it once on a loan and it's pre-filled every time you reopen the calculator on that same file. No more retyping the used-entitlement amount.",

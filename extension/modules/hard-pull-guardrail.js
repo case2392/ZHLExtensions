@@ -148,6 +148,26 @@
     return isAusApproval(duStatus, lpaStatus);
   }
 
+  // Bucket a raw credit score into a coarse band before it leaves the
+  // browser in a telemetry event. A raw FICO (e.g. 682) is borrower
+  // financial PII; the band ("680-699") preserves the analytical value
+  // — understanding which score tier triggered the guardrail — without
+  // transmitting the actual score to the external telemetry endpoint.
+  // Bands align with the credit-tier boundaries the guardrail logic
+  // already keys on (620 / 700 / 720).
+  function softScoreBucket(softScore) {
+    if (softScore == null || !isFinite(softScore)) return 'none';
+    if (softScore < 580) return '<580';
+    if (softScore < 620) return '580-619';
+    if (softScore < 660) return '620-659';
+    if (softScore < 680) return '660-679';
+    if (softScore < 700) return '680-699';
+    if (softScore < 720) return '700-719';
+    if (softScore < 740) return '720-739';
+    if (softScore < 760) return '740-759';
+    return '760+';
+  }
+
   function buildReason(softScore, duStatus, lpaStatus) {
     const softTxt = (softScore == null) ? '<b>no soft on file</b>' : 'Worst soft score across borrowers: <b>' + softScore + '</b>';
     return softTxt +
@@ -261,7 +281,7 @@
     showWarningDialog(softScore, duStatus, lpaStatus,
       function onProceed() {
         console.log('[ZHL Hard Pull Guardrail] LO confirmed override — proceeding.');
-        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'proceed', softScore: softScore, du: duStatus, lpa: lpaStatus } }); } catch (_) {}
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'proceed', softScoreBucket: softScoreBucket(softScore), du: duStatus, lpa: lpaStatus } }); } catch (_) {}
         window[SKIP_FLAG] = true;
         try { btn.click(); } finally {
           setTimeout(function () { window[SKIP_FLAG] = false; }, 1500);
@@ -269,7 +289,7 @@
       },
       function onCancel() {
         console.log('[ZHL Hard Pull Guardrail] LO cancelled — Pull credit dialog stays open.');
-        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'cancel', softScore: softScore, du: duStatus, lpa: lpaStatus } }); } catch (_) {}
+        try { chrome.runtime.sendMessage({ type: 'TRACK', event: 'hard_pull_guardrail', props: { decision: 'cancel', softScoreBucket: softScoreBucket(softScore), du: duStatus, lpa: lpaStatus } }); } catch (_) {}
       });
   }, true);
 })();
