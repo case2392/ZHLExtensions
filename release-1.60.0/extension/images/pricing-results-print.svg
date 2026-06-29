@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f1f5f9"/>
+
+  <!-- LTV section header bar with the button -->
+  <rect x="12" y="12" width="336" height="30" rx="5" fill="#fff" stroke="#e2e8f0"/>
+  <text x="22" y="31" font-size="10" font-weight="700" fill="#0f172a">3.50% Down Payment | 96.5% LTV</text>
+  <rect x="232" y="19" width="108" height="16" rx="8" fill="#006aff"/>
+  <text x="286" y="30" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">📄 Print Buyer Worksheet (1)</text>
+
+  <!-- Buyer worksheet "page" -->
+  <rect x="60" y="54" width="240" height="150" rx="8" fill="#fff" stroke="#006aff" stroke-width="2"/>
+  <rect x="60" y="54" width="240" height="7" rx="3" fill="#006aff"/>
+
+  <text x="74" y="80" font-size="7" font-weight="700" fill="#006aff" letter-spacing="1">MORTGAGE RATE WORKSHEET</text>
+  <text x="74" y="95" font-size="13" font-weight="800" fill="#0f172a">Rate Options</text>
+  <rect x="232" y="72" width="56" height="14" rx="7" fill="#e0eaff"/>
+  <text x="260" y="82" text-anchor="middle" font-size="7" font-weight="700" fill="#003a99">FHA 30 Yr</text>
+
+  <!-- big two-up -->
+  <rect x="74" y="104" width="100" height="40" rx="6" fill="#f0f6ff"/>
+  <text x="82" y="118" font-size="6" font-weight="700" fill="#475569">MONTHLY PAYMENT</text>
+  <text x="82" y="134" font-size="14" font-weight="800" fill="#006aff">$2,887.65</text>
+  <rect x="186" y="104" width="100" height="40" rx="6" fill="#f0f6ff"/>
+  <text x="194" y="118" font-size="6" font-weight="700" fill="#475569">CASH TO CLOSE</text>
+  <text x="194" y="134" font-size="14" font-weight="800" fill="#006aff">$25,432.04</text>
+
+  <!-- detail rows -->
+  <line x1="74" y1="158" x2="286" y2="158" stroke="#e2e8f0"/>
+  <text x="74" y="170" font-size="8" fill="#334155">Loan amount</text>
+  <text x="286" y="170" text-anchor="end" font-size="8" font-weight="700" fill="#0f172a">$347,400</text>
+  <line x1="74" y1="176" x2="286" y2="176" stroke="#e2e8f0"/>
+  <text x="74" y="188" font-size="8" fill="#334155">Interest rate</text>
+  <text x="286" y="188" text-anchor="end" font-size="8" font-weight="700" fill="#0f172a">6.500%</text>
+  <line x1="74" y1="194" x2="286" y2="194" stroke="#e2e8f0"/>
+  <text x="74" y="201" font-size="7" fill="#334155">Points: −0.032% (lender credit $113.11)</text>
+</svg>

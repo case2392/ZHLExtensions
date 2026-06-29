@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eff6ff"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+  </defs>
+  <rect width="360" height="220" fill="url(#bg)"/>
+
+  <!-- Modal card -->
+  <g transform="translate(30,18)">
+    <rect width="300" height="184" rx="8" fill="#fff" stroke="#0b3a73" stroke-width="1.5"/>
+    <text x="14" y="22" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#0b3a73">Loan Story for Encompass</text>
+    <text x="14" y="34" font-family="Arial,sans-serif" font-size="7.5" fill="#475569">Auto-drafted from this file — edit any section before copying.</text>
+
+    <!-- 5 sections -->
+    <g transform="translate(14,44)">
+      <!-- Property -->
+      <text x="0" y="8" font-family="Arial,sans-serif" font-size="7" font-weight="700" fill="#0b3a73" letter-spacing="0.5">PROPERTY NOTES</text>
+      <rect x="232" y="0" width="36" height="11" rx="2" fill="#006aff"/>
+      <text x="250" y="8" font-family="Arial,sans-serif" font-size="6.5" font-weight="700" fill="#fff" text-anchor="middle">Copy</text>
+      <rect x="0" y="14" width="272" height="14" rx="2" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.5"/>
+      <text x="4" y="23" font-family="monospace" font-size="6" fill="#0f172a">PUD · SFR · TX. Loan purpose: Purchase.</text>
+
+      <!-- Borrower -->
+      <g transform="translate(0,32)">
+        <text x="0" y="8" font-family="Arial,sans-serif" font-size="7" font-weight="700" fill="#0b3a73" letter-spacing="0.5">BORROWER NOTES</text>
+        <rect x="232" y="0" width="36" height="11" rx="2" fill="#006aff"/>
+        <text x="250" y="8" font-family="Arial,sans-serif" font-size="6.5" font-weight="700" fill="#fff" text-anchor="middle">Copy</text>
+        <rect x="0" y="14" width="272" height="14" rx="2" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.5"/>
+        <text x="4" y="23" font-family="monospace" font-size="6" fill="#0f172a">B1 = Hazel R. FTHB. Married.</text>
+      </g>
+
+      <!-- Employment -->
+      <g transform="translate(0,64)">
+        <text x="0" y="8" font-family="Arial,sans-serif" font-size="7" font-weight="700" fill="#0b3a73" letter-spacing="0.5">EMPLOYMENT / INCOME NOTES</text>
+        <rect x="232" y="0" width="36" height="11" rx="2" fill="#006aff"/>
+        <text x="250" y="8" font-family="Arial,sans-serif" font-size="6.5" font-weight="700" fill="#fff" text-anchor="middle">Copy</text>
+        <rect x="0" y="14" width="272" height="22" rx="2" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.5"/>
+        <text x="4" y="22" font-family="monospace" font-size="6" fill="#0f172a">B1 current: CMS — start 8/18/25 ($4,204/mo).</text>
+        <text x="4" y="32" font-family="monospace" font-size="6" fill="#0f172a">B1 prior: CA Creative Learning (8/8/23→6/30/25).</text>
+      </g>
+
+      <!-- Asset -->
+      <g transform="translate(0,104)">
+        <text x="0" y="8" font-family="Arial,sans-serif" font-size="7" font-weight="700" fill="#0b3a73" letter-spacing="0.5">ASSET NOTES</text>
+        <rect x="232" y="0" width="36" height="11" rx="2" fill="#006aff"/>
+        <text x="250" y="8" font-family="Arial,sans-serif" font-size="6.5" font-weight="700" fill="#fff" text-anchor="middle">Copy</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Sparkle to suggest auto-fill -->
+  <g transform="translate(296,32)">
+    <circle cx="0" cy="0" r="9" fill="#10b981"/>
+    <text x="0" y="3" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">✓</text>
+  </g>
+</svg>

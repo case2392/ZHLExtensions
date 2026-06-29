@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Gmail email card -->
+  <rect x="14" y="14" width="170" height="192" rx="8" fill="#ffffff" stroke="#dddbda"/>
+  <text x="22" y="32" font-size="11" font-weight="700" fill="#1f2937">documents</text>
+  <text x="22" y="46" font-size="9" fill="#6b7280">Sergio Lopez</text>
+  <line x1="22" y1="54" x2="176" y2="54" stroke="#e5e7eb"/>
+
+  <!-- Attachment chips -->
+  <g transform="translate(22, 64)">
+    <!-- Chip 1 (with green ready badge - being dragged from) -->
+    <rect x="0" y="0" width="68" height="48" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+    <rect x="6" y="8" width="56" height="20" rx="3" fill="#dc2626"/>
+    <text x="34" y="22" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">PDF</text>
+    <text x="34" y="40" text-anchor="middle" font-size="7" fill="#374151">W2.pdf</text>
+    <!-- Green ↓ badge -->
+    <circle cx="62" cy="6" r="7" fill="#10b981"/>
+    <text x="62" y="9" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">↓</text>
+
+    <!-- Chip 2 (sitting still) -->
+    <rect x="78" y="0" width="68" height="48" rx="6" fill="#fff" stroke="#d1d5db"/>
+    <rect x="84" y="8" width="56" height="20" rx="3" fill="#dc2626"/>
+    <text x="112" y="22" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">PDF</text>
+    <text x="112" y="40" text-anchor="middle" font-size="7" fill="#374151">paystub.pdf</text>
+    <!-- Yellow … badge (still prefetching) -->
+    <circle cx="140" cy="6" r="7" fill="#f59e0b"/>
+    <text x="140" y="9" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">…</text>
+  </g>
+
+  <!-- Drag arrow -->
+  <g transform="translate(190, 100)">
+    <path d="M 0 0 Q 20 -20 50 0" stroke="#3b82f6" stroke-width="2" fill="none" stroke-dasharray="4 3"/>
+    <polygon points="46,-4 56,0 46,4" fill="#3b82f6"/>
+    <text x="28" y="-26" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6">drag</text>
+  </g>
+
+  <!-- LOP upload zone -->
+  <g transform="translate(252, 50)">
+    <rect width="94" height="118" rx="8" fill="#ffffff" stroke="#0070d2" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="47" y="22" text-anchor="middle" font-size="9" font-weight="700" fill="#0070d2">Loan Officer</text>
+    <text x="47" y="34" text-anchor="middle" font-size="9" font-weight="700" fill="#0070d2">Portal</text>
+    <line x1="14" y1="44" x2="80" y2="44" stroke="#e5e7eb"/>
+    <text x="47" y="60" text-anchor="middle" font-size="8" fill="#6b7280">Upload area</text>
+    <!-- Upload icon -->
+    <g transform="translate(34, 70)">
+      <rect width="26" height="26" rx="4" fill="#ebf5ff" stroke="#0070d2"/>
+      <path d="M 13 8 L 13 18 M 9 12 L 13 8 L 17 12" stroke="#0070d2" stroke-width="2" fill="none"/>
+    </g>
+    <text x="47" y="112" text-anchor="middle" font-size="8" fill="#0070d2">Drop a ZIP / file</text>
+  </g>
+
+  <!-- Caption -->
+  <g transform="translate(14, 184)">
+    <rect width="332" height="22" rx="4" fill="#1f2937"/>
+    <text x="166" y="14" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Hover → green ↓ badge → drag anywhere as a real file</text>
+  </g>
+</svg>

@@ -1,0 +1,60 @@
+/* ZHL Productivity Pack — Send VPA Email button + toast */
+
+.zhl-vpa-btn {
+  background: #0b5cab;
+  border-color: #0b5cab;
+  color: #fff;
+  font-weight: 600;
+}
+.zhl-vpa-btn:hover:not([disabled]) {
+  background: #0a4f93;
+  border-color: #0a4f93;
+  color: #fff;
+}
+.zhl-vpa-btn--disabled {
+  background: #b6c2cf !important;
+  border-color: #b6c2cf !important;
+  color: #fff !important;
+  cursor: not-allowed;
+}
+.zhl-vpa-btn--loading {
+  background: #6b7280 !important;
+  border-color: #6b7280 !important;
+  color: #fff !important;
+}
+.zhl-vpa-btn--success {
+  background: #10b981 !important;
+  border-color: #10b981 !important;
+  color: #fff !important;
+}
+.zhl-vpa-btn--error {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #fff !important;
+}
+
+/* Toast */
+.zhl-vpa-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 99999;
+  max-width: 360px;
+  padding: 12px 16px;
+  background: #111827;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+.zhl-vpa-toast--show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.zhl-vpa-toast--success { background: #065f46; }
+.zhl-vpa-toast--error { background: #991b1b; }

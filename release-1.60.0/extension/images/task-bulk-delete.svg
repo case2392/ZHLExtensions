@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Card -->
+  <rect x="14" y="14" width="332" height="192" rx="6" fill="#ffffff" stroke="#d1d5db"/>
+
+  <!-- Header bar: gleam + Unsent title + Delete Selected button + Send unsent -->
+  <circle cx="28" cy="34" r="8" fill="#ea580c"/>
+  <text x="28" y="38" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff">3</text>
+  <text x="44" y="38" font-size="12" font-weight="700" fill="#1f2937">Unsent</text>
+
+  <!-- Delete Selected button (red, our injection) -->
+  <rect x="100" y="22" width="92" height="24" rx="4" fill="#b91c1c"/>
+  <text x="146" y="38" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff">Delete Selected</text>
+
+  <!-- Send unsent tasks (LOP's existing button) -->
+  <text x="332" y="38" text-anchor="end" font-size="10" font-weight="700" fill="#0070d2">↗ Send unsent tasks</text>
+
+  <line x1="14" y1="56" x2="346" y2="56" stroke="#e5e7eb"/>
+
+  <!-- Table header -->
+  <text x="58" y="74" font-size="9" font-weight="700" fill="#6b7280">Task name</text>
+  <text x="200" y="74" font-size="9" font-weight="700" fill="#6b7280">Assigned to</text>
+  <text x="280" y="74" font-size="9" font-weight="700" fill="#6b7280">Last updated</text>
+
+  <!-- Select-all checkbox (our injection) -->
+  <rect x="26" y="65" width="12" height="12" rx="2" fill="#ffffff" stroke="#0070d2" stroke-width="1.5"/>
+  <path d="M 28 71 L 31 74 L 36 68" stroke="#0070d2" stroke-width="1.5" fill="none"/>
+
+  <line x1="14" y1="84" x2="346" y2="84" stroke="#e5e7eb"/>
+
+  <!-- Row 1: checked -->
+  <rect x="26" y="93" width="12" height="12" rx="2" fill="#0070d2"/>
+  <path d="M 28 99 L 31 102 L 36 96" stroke="#ffffff" stroke-width="1.5" fill="none"/>
+  <text x="58" y="102" font-size="9" fill="#1f2937">Most recent paystubs</text>
+  <text x="200" y="102" font-size="9" fill="#6b7280">David Bigwood</text>
+  <text x="280" y="102" font-size="9" fill="#6b7280">2 min ago</text>
+  <text x="338" y="102" text-anchor="end" font-size="9" fill="#9ca3af">🗑</text>
+
+  <line x1="14" y1="110" x2="346" y2="110" stroke="#f3f4f6"/>
+
+  <!-- Row 2: checked -->
+  <rect x="26" y="119" width="12" height="12" rx="2" fill="#0070d2"/>
+  <path d="M 28 125 L 31 128 L 36 122" stroke="#ffffff" stroke-width="1.5" fill="none"/>
+  <text x="58" y="128" font-size="9" fill="#1f2937">Bank statements - 60 day</text>
+  <text x="200" y="128" font-size="9" fill="#6b7280">David Bigwood</text>
+  <text x="280" y="128" font-size="9" fill="#6b7280">2 min ago</text>
+  <text x="338" y="128" text-anchor="end" font-size="9" fill="#9ca3af">🗑</text>
+
+  <line x1="14" y1="136" x2="346" y2="136" stroke="#f3f4f6"/>
+
+  <!-- Row 3: checked -->
+  <rect x="26" y="145" width="12" height="12" rx="2" fill="#0070d2"/>
+  <path d="M 28 151 L 31 154 L 36 148" stroke="#ffffff" stroke-width="1.5" fill="none"/>
+  <text x="58" y="154" font-size="9" fill="#1f2937">2024 W-2 - TD Bank NA</text>
+  <text x="200" y="154" font-size="9" fill="#6b7280">David Bigwood</text>
+  <text x="280" y="154" font-size="9" fill="#6b7280">3 min ago</text>
+  <text x="338" y="154" text-anchor="end" font-size="9" fill="#9ca3af">🗑</text>
+
+  <line x1="14" y1="162" x2="346" y2="162" stroke="#f3f4f6"/>
+
+  <!-- Row 4: unchecked, not deleted -->
+  <rect x="26" y="171" width="12" height="12" rx="2" fill="#ffffff" stroke="#9ca3af"/>
+  <text x="58" y="180" font-size="9" fill="#1f2937">Driver's license</text>
+  <text x="200" y="180" font-size="9" fill="#6b7280">David Bigwood</text>
+  <text x="280" y="180" font-size="9" fill="#6b7280">5 min ago</text>
+  <text x="338" y="180" text-anchor="end" font-size="9" fill="#9ca3af">🗑</text>
+
+  <!-- Caption -->
+  <text x="180" y="200" text-anchor="middle" font-size="9" font-style="italic" fill="#6b7280">
+    Pick multiple → click <tspan font-weight="700" fill="#b91c1c">Delete Selected</tspan> → confirms each in one pass
+  </text>
+</svg>

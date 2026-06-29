@@ -1,0 +1,169 @@
+/* 2-1 Buydown calc — button under each scenario card + popup panel */
+
+.zhlbd-button-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 8px;
+  box-sizing: border-box;
+}
+
+.zhlbd-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  background: #006aff;
+  color: #ffffff;
+  border: 1px solid #006aff;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.zhlbd-button:hover {
+  background: #0056d2;
+  border-color: #0056d2;
+}
+
+.zhlbd-button:active {
+  background: #0047b3;
+  border-color: #0047b3;
+}
+
+.zhlbd-button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* Popup panel — matches VA residual-income calculator visual style */
+.zhlbd-panel {
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
+  z-index: 99999;
+  width: 480px;
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 64px);
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.zhlbd-panel * { box-sizing: border-box; }
+
+.zhlbd-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: #006aff;
+  color: #ffffff;
+}
+
+.zhlbd-panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  flex: 1;
+  margin-right: 12px;
+}
+
+.zhlbd-panel-close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 24px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zhlbd-panel-close:hover { background: rgba(255, 255, 255, 0.18); }
+
+.zhlbd-panel-body {
+  padding: 14px 22px 18px;
+  overflow-y: auto;
+}
+
+.zhlbd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+  font-size: 14px;
+}
+
+.zhlbd-row.zhlbd-divider {
+  border-top: 1px solid #e5e7eb;
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+.zhlbd-row.zhlbd-emphasis .zhlbd-label,
+.zhlbd-row.zhlbd-emphasis .zhlbd-value {
+  font-weight: 700;
+  color: #111827;
+}
+
+.zhlbd-row.zhlbd-muted .zhlbd-label,
+.zhlbd-row.zhlbd-muted .zhlbd-value {
+  color: #6b7280;
+  font-size: 12.5px;
+}
+
+.zhlbd-label { color: #374151; }
+
+.zhlbd-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  color: #111827;
+  white-space: nowrap;
+}
+
+.zhlbd-subhead {
+  margin: 14px 0 4px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 4px;
+}
+
+.zhlbd-panel-footer {
+  padding: 10px 22px 14px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.zhlbd-panel-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.zhlbd-panel-note strong { color: #92400e; }

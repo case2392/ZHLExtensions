@@ -1,0 +1,146 @@
+/* Gmail Reply All Button — styling to match Gmail's native icon buttons */
+
+.gm-reply-all-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #202124;
+  user-select: none;
+  vertical-align: middle;
+  transition: background-color 0.15s ease;
+}
+
+.gm-reply-all-btn:hover {
+  background-color: rgba(60, 64, 67, 0.08);
+}
+
+.gm-reply-all-btn:active {
+  background-color: rgba(60, 64, 67, 0.16);
+}
+
+.gm-reply-all-btn:focus {
+  outline: none;
+  background-color: rgba(60, 64, 67, 0.12);
+}
+
+.gm-reply-all-btn img {
+  display: block;
+  pointer-events: none;
+}
+
+/* Dark theme support */
+@media (prefers-color-scheme: dark) {
+  .gm-reply-all-btn {
+    color: #e8eaed;
+  }
+  .gm-reply-all-btn:hover {
+    background-color: rgba(232, 234, 237, 0.08);
+  }
+  .gm-reply-all-btn:active {
+    background-color: rgba(232, 234, 237, 0.16);
+  }
+}
+
+/* Gmail's dark theme uses a body class — cover that too */
+body.dark .gm-reply-all-btn,
+html[dir] body[class*="dark"] .gm-reply-all-btn {
+  color: #e8eaed;
+}
+
+/* Mask Gmail's auto-expansion of the sidebar "More" section during an
+   email drag. content.js tags the expanded sibling <div> with this class
+   as soon as Gmail flips the toggle to "Less labels" during a drag, then
+   removes the class when the drag ends. Hides only that single node, so
+   the rest of the sidebar (Labels section, drop targets) stays live. */
+.gm-more-drag-mask-target {
+  display: none !important;
+}
+
+/* Inline compose wrapper needs an explicit positioning context when we
+   move it to the top of the thread. Gmail's compose has internal
+   position:absolute children (.aDj, .Ur's toolbar wrapper) that assume
+   they resolve against a positioned ancestor set up by the thread's
+   bottom slot; when the compose moves, they end up resolving against
+   the viewport and the formatting toolbar can land on top of the
+   To/Cc/Bcc recipient row. position:relative on the compose wrapper
+   pins absolute children to the compose box, where they're designed
+   to live. */
+.aDg {
+  position: relative !important;
+}
+
+/* Compose drag (gmail-tweaks.js): pin the bottom send/formatting toolbar
+   wrapper to the dialog's bottom edge. Our drag uses transform on the
+   role=dialog so it establishes a containing block for fixed children;
+   Gmail otherwise writes a viewport-y `top` on .aDj that briefly leaves
+   the toolbar at viewport bottom-left during minimize → restore. CSS
+   !important applied here wins over Gmail's inline non-!important
+   styles, eliminating the half-second flash before our JS re-syncs. */
+[data-zhl-compose-drag] .aDj,
+[data-zhl-compose-drag] .ahe {
+  position: fixed !important;
+  top: auto !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: auto !important;
+}
+
+/* (Removed.) An earlier version of this stylesheet hid overflow on
+   the outer dialog and a handful of inner wrappers (.GP, .qz, etc.)
+   to suppress a brief scrollbar that appeared during the minimize →
+   restore animation. That had a worse side effect: the attachment
+   row that Gmail inserts between the body and the toolbar was being
+   clipped, so attachments looked invisible under the toolbar.
+   Letting the scrollbar flicker during the animation is a much
+   smaller UX hit than permanently hiding attachments. */
+
+/* Push the absolutely-positioned attachment container (.bv8) up by
+   the toolbar's height plus a small gap so chips clear the toolbar
+   visually.
+
+   Background: stock Gmail anchors .bv8 to .GP's bottom edge, but
+   because Gmail's natural layout places .GP's bottom 32px BELOW the
+   dialog's bottom (the toolbar overlays the bottom 60px of the
+   dialog and another ~32px of slack), .bv8 extends well past the
+   toolbar's top before any transform. We need to move it up by the
+   toolbar height plus the slack plus a small visual gap.
+
+   Empirically (diagnostic logs): with translateY(-60) the GM chip
+   row cleared the toolbar by only 24px and .bv8's empty bottom area
+   still extended 32px behind the toolbar. -90px gives ~54px chip
+   clearance and pulls .bv8's bottom up to ~22px above the toolbar
+   top — visually matching stock Gmail's gap. */
+[data-zhl-compose-drag] .bv8 {
+  transform: translateY(-90px) !important;
+}
+
+/* Same problem applies to the compose BODY area: our position:fixed
+   toolbar (.aDj) takes itself out of flow, but Gmail's body wrapper
+   (.GP and the inner .Am / .Ar contenteditable region) still grows
+   to fill the dialog's full height. The bottom ~60-90px of the body
+   ends up underneath the toolbar — including the scrollbar thumb,
+   which is why users typing past the visible area can't see (or
+   click) the scrollbar.
+
+   padding-bottom on .GP shifts the inner body's effective bottom
+   above where the toolbar starts. scroll-padding-bottom keeps the
+   typing cursor visible above the toolbar when Gmail auto-scrolls
+   the body to follow the caret. */
+[data-zhl-compose-drag] .GP {
+  padding-bottom: 90px !important;
+}
+[data-zhl-compose-drag] .GP,
+[data-zhl-compose-drag] .Am,
+[data-zhl-compose-drag] .Ar,
+[data-zhl-compose-drag] div[contenteditable="true"][role="textbox"][aria-label*="Body"] {
+  scroll-padding-bottom: 90px;
+}

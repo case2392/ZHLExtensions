@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Sticky red banner at top -->
+  <rect x="0" y="0" width="360" height="38" fill="#b91c1c"/>
+  <rect x="0" y="38" width="360" height="3" fill="#7f1d1d"/>
+  <text x="180" y="18" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">⚠ FHA INELIGIBLE</text>
+  <text x="180" y="32" text-anchor="middle" font-size="8" fill="#fee2e2">Nayibe Arenas, Sandra Arenas are marked Non-Permanent Resident Alien on an FHA loan.</text>
+
+  <!-- Loan Details mini-card -->
+  <rect x="232" y="58" width="114" height="58" rx="4" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="240" y="72" font-size="8" font-weight="700" fill="#6b7280">Loan Details</text>
+  <text x="240" y="86" font-size="8" fill="#6b7280">Product name</text>
+  <text x="338" y="86" text-anchor="end" font-size="8" font-weight="700" fill="#b91c1c">FHA 30 Yr Fixed</text>
+  <text x="240" y="100" font-size="8" fill="#6b7280">Loan purpose</text>
+  <text x="338" y="100" text-anchor="end" font-size="8" fill="#1f2937">Purchase</text>
+  <text x="240" y="114" font-size="8" fill="#6b7280">LTV</text>
+  <text x="338" y="114" text-anchor="end" font-size="8" fill="#1f2937">66.667%</text>
+
+  <!-- Borrower 1 card with flagged citizenship -->
+  <rect x="14" y="58" width="104" height="148" rx="4" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="22" y="74" font-size="9" font-weight="700" fill="#1f2937">Nayibe Arenas</text>
+  <text x="22" y="86" font-size="7" fill="#6b7280">Primary borrower</text>
+
+  <text x="22" y="106" font-size="7" fill="#6b7280">Legal first name</text>
+  <rect x="22" y="110" width="84" height="14" rx="2" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="26" y="120" font-size="8" fill="#1f2937">Nayibe</text>
+
+  <text x="22" y="138" font-size="7" fill="#6b7280">Citizenship</text>
+  <!-- Red-outlined select -->
+  <rect x="22" y="142" width="84" height="16" rx="2" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="26" y="153" font-size="7" font-weight="700" fill="#b91c1c">Non-permanent res. alien ▾</text>
+
+  <text x="22" y="172" font-size="7" fill="#6b7280">Date of birth</text>
+  <rect x="22" y="176" width="84" height="14" rx="2" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="26" y="186" font-size="8" fill="#1f2937">3/17/1987</text>
+
+  <!-- Borrower 2 card with flagged citizenship -->
+  <rect x="124" y="58" width="104" height="148" rx="4" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="132" y="74" font-size="9" font-weight="700" fill="#1f2937">Sandra Arenas</text>
+  <text x="132" y="86" font-size="7" fill="#6b7280">Co-borrower</text>
+
+  <text x="132" y="106" font-size="7" fill="#6b7280">Legal first name</text>
+  <rect x="132" y="110" width="84" height="14" rx="2" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="136" y="120" font-size="8" fill="#1f2937">Sandra</text>
+
+  <text x="132" y="138" font-size="7" fill="#6b7280">Citizenship</text>
+  <rect x="132" y="142" width="84" height="16" rx="2" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="136" y="153" font-size="7" font-weight="700" fill="#b91c1c">Non-permanent res. alien ▾</text>
+
+  <text x="132" y="172" font-size="7" fill="#6b7280">Date of birth</text>
+  <rect x="132" y="176" width="84" height="14" rx="2" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="136" y="186" font-size="8" fill="#1f2937">10/22/1985</text>
+
+  <!-- Arrow from banner to flagged field -->
+  <path d="M 64 150 Q 50 170 130 152" stroke="#b91c1c" stroke-width="1.5" fill="none" stroke-dasharray="2 2" opacity="0"/>
+</svg>

@@ -1,0 +1,1228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ZHL Productivity Pack — Setup</title>
+  <link rel="stylesheet" href="setup.css" />
+</head>
+<body>
+  <header class="page-header">
+    <div class="brand">
+      <div class="brand-mark"><img src="images/zhl-logo.png" alt="Zillow" /></div>
+      <div class="brand-text">
+        <h1>ZHL Productivity Pack</h1>
+        <p class="tagline">Workflow tweaks bundled into one extension. Toggle the ones you want — the rest stay quiet.</p>
+        <p class="byline">
+          <img class="byline-avatar" src="images/justin-case.png" alt="Justin Case" onerror="this.outerHTML='<span class=&quot;byline-avatar fallback&quot;>JC</span>'" />
+          <span>by <strong>Justin Case</strong></span>
+        </p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <a href="walkthrough.html?src=setup_link" style="background:#0b5cab;color:#fff;padding:8px 14px;border-radius:6px;font:600 13px/1 Arial,sans-serif;text-decoration:none;" title="Built by Justin Case. Karma appreciated 💛">📖 Open walkthrough</a>
+      <div id="save-status" class="save-status"></div>
+    </div>
+  </header>
+
+  <div style="max-width:980px;margin:8px auto 20px;background:linear-gradient(90deg,#fff7ed 0%,#fef3c7 100%);border:1px solid #fbbf24;border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#7c2d12;">
+    <span style="font-size:20px;">💛</span>
+    <div>
+      Built by <strong>Justin Case</strong>. If this pack saves you time, please
+      <a href="https://zallwall.zillowgroup.com/justinca" target="_blank" rel="noopener" data-zhl-karma-link="setup" style="color:#9a3412;font-weight:700;text-decoration:underline;">drop me karma on my Zall Wall</a> —
+      it directly helps me keep building stuff like this.
+    </div>
+  </div>
+
+  <!-- First-run wizard banner. Shown when ?firstrun=1 in the URL OR when
+       lo_name is blank. Auto-triggers SF pull on load and links straight
+       to the LO Profile card. Dismissible. -->
+  <div id="firstrun-banner" style="display:none;max-width:980px;margin:8px auto 20px;background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 100%);border:2px solid #2563eb;border-radius:10px;padding:18px 20px;font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1e3a8a;box-shadow:0 4px 14px rgba(37,99,235,0.18);">
+    <div style="display:flex;align-items:flex-start;gap:14px;">
+      <span style="font-size:28px;line-height:1;">👋</span>
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:17px;margin-bottom:4px;color:#1e3a8a;">Welcome — let's get you set up in 30 seconds</div>
+        <div style="margin-bottom:12px;color:#1e40af;">A few tools (PE Workflow, branded PDFs, comparison emails) personalize output with your name and NMLS. The fastest way to fill them in is one click below — we'll grab Name / Email / Phone / NMLS straight from your Salesforce profile.</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button type="button" id="firstrun-pull-btn" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:10px 18px;font:700 13px Arial,sans-serif;cursor:pointer;box-shadow:0 2px 6px rgba(37,99,235,0.3);">⚡ Auto-fill from Salesforce</button>
+          <span id="firstrun-status" style="font-size:12px;color:#1e40af;"></span>
+          <button type="button" id="firstrun-manual-btn" style="background:transparent;color:#1e40af;border:none;font:600 12px Arial,sans-serif;cursor:pointer;text-decoration:underline;padding:6px 8px;">Or fill in manually below</button>
+          <button type="button" id="firstrun-dismiss-btn" style="background:transparent;color:#6b7280;border:none;font:500 12px Arial,sans-serif;cursor:pointer;padding:6px 8px;margin-left:auto;">Dismiss</button>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#6b7280;font-style:italic;">Salesforce sign-in required. Nothing leaves your browser — values are stored locally on this Chrome profile.</div>
+      </div>
+    </div>
+  </div>
+
+  <main class="modules">
+
+    <!-- ============== Section: Loan Officer Profile ============== -->
+    <section class="module-card" data-module data-profile>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Loan Officer Profile</h2>
+          <p class="module-runs-on">Stamped onto borrower-facing PDFs. Stored locally on this Chrome profile only.</p>
+        </div>
+      </div>
+      <div class="module-body">
+        <div class="module-screenshot" style="display:flex;flex-direction:column;gap:10px;align-items:stretch;width:340px;background:transparent;border:none;padding:0;">
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Name</span>
+            <input type="text" data-lo-field="lo_name" placeholder="e.g. Justin Case" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">NMLS ID</span>
+            <input type="text" data-lo-field="lo_nmls" placeholder="e.g. 2182068" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Phone</span>
+            <input type="tel" data-lo-field="lo_phone" placeholder="e.g. +1 913-845-9564" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Email</span>
+            <input type="email" data-lo-field="lo_email" placeholder="e.g. justinca@zillowhomeloans.com" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <label style="display:flex;flex-direction:column;font-size:12px;color:#374151;">
+            <span style="margin-bottom:4px;font-weight:600;">Zillow Webpage URL</span>
+            <input type="url" data-lo-field="lo_zillow_url" placeholder="e.g. https://www.zillow.com/home-loans/loan-officer/justincase" autocomplete="off" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font:13px Arial,sans-serif;" />
+          </label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+            <button type="button" id="lo-pull-from-sf" title="Built by Justin Case. Karma appreciated 💛" style="padding:8px 12px;border:1px solid #0b5cab;background:#0b5cab;color:#fff;border-radius:4px;font:600 12px Arial,sans-serif;cursor:pointer;">Pull from Salesforce</button>
+            <span id="lo-pull-status" style="font:12px Arial,sans-serif;color:#6b7280;"></span>
+          </div>
+        </div>
+        <ul class="module-features">
+          <li>These four fields are stored for use in borrower-facing PDFs generated by the extension.</li>
+          <li><strong>Pull from Salesforce</strong> fills Name / Email / Phone from your Salesforce profile and tries to auto-discover your NMLS field. You must be logged into Salesforce in this browser.</li>
+          <li>Values are saved to <code>chrome.storage.local</code> on this Chrome profile only &mdash; they don&rsquo;t sync to other devices and never leave your browser.</li>
+          <li>If you leave a field blank, the corresponding line is omitted from the PDF footer rather than showing a placeholder.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: VA Calc + Student Loans ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>VA Residual Income &amp; Student Loan Calc</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_vaCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/va-calc.svg" alt="Residual income panel showing taxes, debts, and VA table requirement" />
+        </div>
+        <ul class="module-features">
+          <li><strong>Run Residual Income Calc</strong> button shows up on VA loans (Regular military / National Guard / reserves). Reads income, debts, PITI, family size, and property state, then shows residual vs. the VA table requirement.</li>
+          <li>Editable rows for Non-Taxable Income, Maintenance &amp; Utilities, and Childcare — tweak and re-run.</li>
+          <li><strong>Calc Student Loans</strong> button on the Liabilities table fills monthly payments using FHA / DU / LPA / VA formulas.</li>
+          <li><strong>VA Entitlement Calc</strong> button (beside Run Residual Income Calc): enter the entitlement already used and it shows the max <strong>$0-down</strong> loan and the down payment required above it. County limit auto-fills from the property ZIP using the 2026 FHFA table (all high-cost counties, 1&ndash;4 unit), with a county dropdown + editable override and an FHFA lookup link.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: 2-1 Buydown Calc ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>2-1 Buydown Calculator</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — scenarios page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_buydownCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/buydown-calc.svg" alt="Calc 2-1 Buydown button under a scenario card with a popup showing year 1, 2, and 3+ payments" />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Calc 2-1 Buydown</strong> button under every scenario card on the Pricing &amp; Scenarios page (works for up to 10 cards).</li>
+          <li>Reads the card's loan amount, note rate, term, and monthly P&amp;I/PITI automatically.</li>
+          <li>Pop-up shows the <strong>Year 1</strong> (rate − 2%), <strong>Year 2</strong> (rate − 1%), and <strong>Year 3+</strong> P&amp;I payments — plus total payment with escrow if PITI is on the card.</li>
+          <li>Computes the exact buydown cost (sum of monthly P&amp;I savings × 12 over years 1 and 2) and shows what it does to the total closing costs. Result is typically ~2.0–2.5% of the loan amount, varying by rate.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Scenario Snapshot ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Scenario Snapshot</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal/pricing-and-scenarios/scenarios</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_scenarioSnapshot" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
+            <rect width="360" height="220" fill="#f3f4f6"/>
+            <rect x="34" y="22" width="292" height="176" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+            <rect x="34" y="22" width="292" height="44" rx="8" fill="#0b3a73"/>
+            <rect x="34" y="56" width="292" height="10" fill="#0b3a73"/>
+            <text x="50" y="38" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#006aff" letter-spacing="1.2">SCENARIO SNAPSHOT</text>
+            <text x="50" y="54" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#fff">Conf Home Ready 30 Yr Fixed</text>
+            <text x="50" y="84" font-family="Arial,sans-serif" font-size="8" fill="#475569">Loan purpose</text>
+            <text x="310" y="84" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">Purchase</text>
+            <line x1="50" y1="90" x2="310" y2="90" stroke="#f1f5f9"/>
+            <text x="50" y="104" font-family="Arial,sans-serif" font-size="8" fill="#475569">Total loan amount</text>
+            <text x="310" y="104" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">$291,000.00</text>
+            <line x1="50" y1="110" x2="310" y2="110" stroke="#f1f5f9"/>
+            <text x="50" y="124" font-family="Arial,sans-serif" font-size="8" fill="#475569">Interest rate</text>
+            <text x="310" y="124" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">6.750%</text>
+            <line x1="50" y1="130" x2="310" y2="130" stroke="#f1f5f9"/>
+            <text x="50" y="144" font-family="Arial,sans-serif" font-size="8" fill="#475569">DTI</text>
+            <text x="310" y="144" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#0f172a" text-anchor="end">37.55% / 45.77%</text>
+            <rect x="170" y="160" width="60" height="22" rx="3" fill="#fff" stroke="#cbd5e1"/>
+            <text x="200" y="174" font-family="Arial,sans-serif" font-size="8" font-weight="600" fill="#0f172a" text-anchor="middle">Copy as text</text>
+            <rect x="236" y="160" width="40" height="22" rx="3" fill="#0b3a73"/>
+            <text x="256" y="174" font-family="Arial,sans-serif" font-size="8" font-weight="600" fill="#fff" text-anchor="middle">Print</text>
+            <rect x="282" y="160" width="40" height="22" rx="3" fill="#006aff"/>
+            <text x="302" y="174" font-family="Arial,sans-serif" font-size="8" font-weight="600" fill="#fff" text-anchor="middle">Close</text>
+          </svg>
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Snapshot</strong> button under every scenario card on the Pricing &amp; Scenarios → Scenarios page. Clicking it opens a clean single-viewport modal that lists every label / value on the card — so the LO can capture one screenshot instead of scrolling and stitching multiple.</li>
+          <li>Modal includes the scenario title, the <strong>Purchase / Refinance</strong> subtitle, the <strong>ASSIGNED TO LOAN / RE-PRICE</strong> status badge, and the <strong>Priced:</strong> timestamp at the top so support tickets carry the freshness context with them.</li>
+          <li><strong>Print</strong> opens a print-formatted new tab and auto-triggers the print dialog — saves as PDF for ticket attachments or sends straight to a printer.</li>
+          <li><strong>Copy as text</strong> writes a plain-text version to the clipboard, labels padded into fixed columns so it reads cleanly when pasted into a Slack code block or a ticket body.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Scenario Sort ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Sort &amp; reorder scenario cards</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — scenarios page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_scenarioSort" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/scenario-sort.svg" alt="Sort toolbar above the scenario cards row with Rate ascending/descending buttons" />
+        </div>
+        <ul class="module-features">
+          <li>Adds a small toolbar above the scenario cards with <strong>Rate ↑</strong> (low → high) and <strong>Rate ↓</strong> (high → low) buttons.</li>
+          <li>One click reorders the cards in place. Generate PDF then walks them in the new order.</li>
+          <li><strong>Drag-and-drop</strong> any card to fine-tune the order manually after sorting.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Caller ID ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Genesys Caller ID for Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.mypurecloud.com</code> + related</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_callerId" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/caller-id.svg" alt="Genesys widget showing matched name badge next to caller phone number" />
+        </div>
+        <ul class="module-features">
+          <li>Watches for phone numbers in the Genesys softphone widget and looks them up against Salesforce <strong>Lead</strong>, <strong>Contact</strong>, and <strong>Loan__c</strong> records.</li>
+          <li>Displays the matched record's name as a blue badge next to the number — works on incoming calls, voicemail rows, and call history.</li>
+          <li>Uses your existing Salesforce session cookie (no Connected App setup needed).</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Auto Call Details Tab ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Auto-switch Lead pages to Call Details</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> — Lead pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_autoCallDetailsTab" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/auto-call-details-tab.svg" alt="Lead page tabs with Active Listening dimmed and Call Details auto-selected" />
+        </div>
+        <ul class="module-features">
+          <li>When you open a Lead, automatically clicks the <strong>Call Details</strong> tab so you don&rsquo;t have to navigate away from <em>Active Listening</em> every time.</li>
+          <li>Runs <strong>once per Lead</strong>: if you click back to Active Listening (or any other tab), it leaves you alone.</li>
+          <li>If you&rsquo;re already on Call Details when a Lead loads, it does nothing.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Auto Messaging Tab ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Auto-switch Contact pages to Messaging</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> — Contact pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_autoMessagingTab" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/auto-messaging-tab.svg" alt="Contact page tabs with Activity dimmed and Messaging auto-selected" />
+        </div>
+        <ul class="module-features">
+          <li>When you open a Contact, automatically clicks the <strong>Messaging</strong> tab so you land on the SMS thread instead of <em>Activity</em>.</li>
+          <li>Runs <strong>once per Contact</strong>: if you click back to Activity (or any other tab), it leaves you alone.</li>
+          <li>If you&rsquo;re already on Messaging when a Contact loads, it does nothing.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Gmail Tweaks ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Gmail &amp; Salesforce QoL</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code>, <code>*.lightning.force.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_gmailTweaks" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/gmail-tweaks.svg" alt="Gmail with Reply All button next to Reply" />
+        </div>
+        <ul class="module-features">
+          <li><strong>Reply All button</strong> in every message header — no need to open the ⋮ menu.</li>
+          <li><strong>Delete key deletes</strong> the open thread / selected emails (no need to remember <kbd>#</kbd>).</li>
+          <li><strong>Inline compose</strong> moves to the top of the thread so the message you're replying to stays visible.</li>
+          <li><strong>Stops the sidebar "More" section</strong> from auto-expanding while dragging an email.</li>
+          <li><strong>Salesforce Lead pages:</strong> auto-disables the "Show Promotions" toggle.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Salesforce SMS ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Salesforce Contact SMS Quick Open</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.salesforce.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_contactSms" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/contact-sms.svg" alt="Salesforce contact phone with Open SMS button next to it" />
+        </div>
+        <ul class="module-features">
+          <li>Adds an <strong>Open SMS</strong> button next to phone numbers on Contact records.</li>
+          <li>Clicking it opens the <strong>Messaging utility</strong>, finds an existing thread, or starts a new one with that number pre-filled.</li>
+          <li>Skips Highlights panel, datatables, TCPA / DNC sections, and non-Contact records to avoid clutter.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: SMS Quick-Add Participants ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>SMS Quick-Add Participants</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> — Lead pages with the Messaging utility open</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_smsAddParticipants" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sms-add-participants.svg" alt="New SMS Conversation panel with Add Buyer's Agent and Add Co-Borrower buttons added by the extension" />
+        </div>
+        <ul class="module-features">
+          <li>Adds <strong>Add Buyer&rsquo;s Agent</strong> and <strong>Add Co-Borrower</strong> buttons inside the New SMS Conversation panel.</li>
+          <li>One click fills the participant search input with the right phone and presses + so you don&rsquo;t have to type the number or hover the contact card.</li>
+          <li><strong>Buyer&rsquo;s Agent</strong> phone is read straight from the <em>Buyer&rsquo;s Agent Phone</em> field on the Lead page.</li>
+          <li><strong>Co-Borrower</strong> phone is fetched from Salesforce by Contact id (uses the same session cookie as Caller ID — no Connected App needed).</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Send VPA Email from Salesforce ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Send VPA Email from Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code>, <code>*.salesforce.com</code> &mdash; Lead / Contact pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_sfVpaEmail" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sf-vpa-email.svg" alt="Salesforce Lead page on the left with the borrower's name, email, and purchase price; an arrow points to a Gmail New Message window on the right that's pre-filled with To, Subject, and a body draft, with the Send button highlighted." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Send VPA Email</strong> button to the Lead / Contact action bar &mdash; activates once the lead reaches the <em>Pre-Approval</em> stage.</li>
+          <li>One click scrapes <strong>borrower name, email, purchase price, co-borrower, and agent</strong> off the page &mdash; including hover-card email extraction for the co-borrower and Buyer&rsquo;s Agent.</li>
+          <li>Opens a <strong>pre-filled Gmail compose tab</strong> with To / CC / Subject / Body ready &mdash; the LO attaches the Verified Pre-Approval PDF and clicks Send.</li>
+          <li><strong>No OAuth, no Connected App, no per-user enrollment.</strong> Uses the public Gmail compose URL, so rollout is just flipping this toggle. No Google verification, no 100-user test cap.</li>
+        </ul>
+
+        <div class="vpa-email-config">
+          <h3>VPA Email template</h3>
+          <p class="vpa-helper">Customize the subject line and body. Click a placeholder chip below to insert it at your cursor &mdash; chips get replaced with real lead data when the email is sent. Pulls <strong>Loan Officer name / email / Zillow Webpage URL</strong> from the LO Profile card at the top of this page.</p>
+
+          <div class="vpa-placeholders">
+            <span class="placeholder-tag" data-insert="{Greeting}" title="Borrower's first name, or 'First & Co-First' if there's a co-borrower">{Greeting}</span>
+            <span class="placeholder-tag" data-insert="{Borrower}" title="Borrower's first name only">{Borrower}</span>
+            <span class="placeholder-tag" data-insert="{Full Names}" title="Full borrower + co-borrower names (subject only)">{Full Names}</span>
+            <span class="placeholder-tag" data-insert="{Amount}" title="Purchase price / pre-approval amount">{Amount}</span>
+            <span class="placeholder-tag" data-insert="{Agent}" title="Buyer's Agent name, styled red bold and linked to their email when available">{Agent}</span>
+            <span class="placeholder-tag" data-insert="{Agent Name}" title="Buyer's Agent plain-text name (subject only)">{Agent Name}</span>
+            <span class="placeholder-tag" data-insert="{LO Name}" title="Your name, styled blue bold and linked to your email">{LO Name}</span>
+            <span class="placeholder-tag" data-insert="{LO Email}" title="Your email address (plain text)">{LO Email}</span>
+            <span class="placeholder-tag" data-insert="{Zillow URL}" title="Your Zillow Webpage URL (plain text)">{Zillow URL}</span>
+          </div>
+
+          <label class="vpa-label">Subject line
+            <input id="vpa-subject-tmpl" type="text" placeholder="Verified Pre-Approval for {Full Names} - Up to {Amount}! - {LO Name} from Zillow Home Loans" />
+          </label>
+
+          <label class="vpa-label">Email body
+            <span class="vpa-helper-inline">Edit like a Word document. The default template includes the Congratulations headline, Zillow / Bonus icons, and disclaimer footnote.</span>
+          </label>
+          <div class="vpa-body-toolbar">
+            <button type="button" class="vpa-tb" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" class="vpa-tb" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" class="vpa-tb" data-cmd="underline" title="Underline"><u>U</u></button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="insertUnorderedList" title="Bullet list">&bull; List</button>
+            <button type="button" class="vpa-tb" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="createLink" title="Insert link">&#128279; Link</button>
+            <button type="button" class="vpa-tb" data-cmd="removeFormat" title="Clear formatting">&times; Clear</button>
+          </div>
+          <div id="vpa-body-tmpl" class="vpa-body-editor" contenteditable="true"></div>
+
+          <div class="vpa-config-row">
+            <button id="vpa-reset-btn" type="button" class="secondary">Reset to default template</button>
+            <span id="vpa-status" class="vpa-status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== Module: Send Intro Email from Salesforce ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Send Intro Email from Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> &mdash; Opportunity pages</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_sfIntroEmail" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sf-vpa-email.svg" alt="Salesforce Opportunity page on the left with the borrower's Contact Roles list; arrow points to a Gmail compose window pre-filled with the disclosures-signed intro email." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Send Intro Email</strong> button to the Opportunity action ribbon &mdash; same slot as the Send VPA Email button on Leads / Contacts.</li>
+          <li>Scrapes the <strong>Borrower + Co-Borrower</strong> from the Contact Roles related list (name + email), plus <strong>Close Date</strong> and <strong>Loan Number</strong> from the Opportunity highlights.</li>
+          <li>Opens a pre-filled Gmail compose tab with To = borrower, CC = co-borrower, subject + body populated from the customizable template below. The Gmail companion content script auto-pastes the formatted HTML body once compose loads.</li>
+          <li><strong>No OAuth, no Connected App.</strong> Uses the same public Gmail compose URL pattern as the VPA email and Pricing Exception Workflow.</li>
+        </ul>
+
+        <div class="vpa-email-config">
+          <h3>Intro Email template</h3>
+          <p class="vpa-helper">Customize the subject line and body. Click a placeholder chip below to insert it at your cursor &mdash; chips get replaced with real data when the email is sent. Pulls <strong>Loan Officer name / email / NMLS</strong> from the LO Profile card at the top of this page. Property Address / Loan Number / Close Date are scraped from the Opportunity; if any aren't visible they stay as <code>[bracketed]</code> placeholders for you to fill in.</p>
+
+          <div class="vpa-placeholders">
+            <span class="placeholder-tag" data-insert="{Greeting}" title="Borrower's first name, or 'First & Co-First' when there's a co-borrower">{Greeting}</span>
+            <span class="placeholder-tag" data-insert="{First Name}" title="Primary borrower's first name only">{First Name}</span>
+            <span class="placeholder-tag" data-insert="{Borrower Name}" title="Primary borrower's full name">{Borrower Name}</span>
+            <span class="placeholder-tag" data-insert="{Borrower Phone}" title="Primary borrower's phone (from Contact Roles)">{Borrower Phone}</span>
+            <span class="placeholder-tag" data-insert="{Borrower Email}" title="Primary borrower's email (from Contact Roles)">{Borrower Email}</span>
+            <span class="placeholder-tag" data-insert="{Co-Borrower Name}" title="Co-borrower full name (n/a if no co-borrower)">{Co-Borrower Name}</span>
+            <span class="placeholder-tag" data-insert="{Co-Borrower Phone}" title="Co-borrower phone">{Co-Borrower Phone}</span>
+            <span class="placeholder-tag" data-insert="{Co-Borrower Email}" title="Co-borrower email">{Co-Borrower Email}</span>
+            <span class="placeholder-tag" data-insert="{Property Address}" title="Property Street + City + State + Zip from the Opportunity">{Property Address}</span>
+            <span class="placeholder-tag" data-insert="{Loan Number}" title="Loan / ZG number from the Opportunity">{Loan Number}</span>
+            <span class="placeholder-tag" data-insert="{Closing Date}" title="Close Date from the Opportunity">{Closing Date}</span>
+            <span class="placeholder-tag" data-insert="{Purchase Price}" title="Purchase Price from the Opportunity">{Purchase Price}</span>
+            <span class="placeholder-tag" data-insert="{LO Name}" title="Your name (from LO Profile)">{LO Name}</span>
+            <span class="placeholder-tag" data-insert="{LO Email}" title="Your email (from LO Profile)">{LO Email}</span>
+            <span class="placeholder-tag" data-insert="{NMLS}" title="Your NMLS # (from LO Profile)">{NMLS}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Name}" title="From the Insurance Agent block below">{Insurance Agent Name}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Company}" title="From the Insurance Agent block below">{Insurance Agent Company}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Phone}" title="From the Insurance Agent block below">{Insurance Agent Phone}</span>
+            <span class="placeholder-tag" data-insert="{Insurance Agent Email}" title="From the Insurance Agent block below — also auto-CC'd on every Intro Email">{Insurance Agent Email}</span>
+          </div>
+
+          <h3 style="margin-top: 18px;">Default homeowners insurance agent</h3>
+          <p class="vpa-helper">Set once, used on every Intro Email. The agent&rsquo;s email is <strong>auto-CC&rsquo;d</strong> on every draft so you don&rsquo;t have to remember to add them. The body template includes their contact info via the <code>{Insurance Agent Name / Company / Phone / Email}</code> placeholders.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px;">
+            <label class="vpa-label" style="margin-top:0;">Agent name
+              <input type="text" data-ia-field="insurance_agent_name" placeholder="e.g. Karson Carter" autocomplete="off" />
+            </label>
+            <label class="vpa-label" style="margin-top:0;">Agency / company
+              <input type="text" data-ia-field="insurance_agent_company" placeholder="e.g. Goosehead Insurance" autocomplete="off" />
+            </label>
+            <label class="vpa-label" style="margin-top:0;">Agent phone
+              <input type="tel" data-ia-field="insurance_agent_phone" placeholder="e.g. (336) 596-3603" autocomplete="off" />
+            </label>
+            <label class="vpa-label" style="margin-top:0;">Agent email (auto-CC'd)
+              <input type="email" data-ia-field="insurance_agent_email" placeholder="e.g. karson.carter@goosehead.com" autocomplete="off" />
+            </label>
+          </div>
+
+          <label class="vpa-label">Subject line
+            <input id="intro-subject-tmpl" type="text" placeholder="Disclosures signed — here's what happens next" />
+          </label>
+
+          <label class="vpa-label">Email body
+            <span class="vpa-helper-inline">Edit like a Word document. Default includes the three-step intro, the homeowners insurance agent info, your signature, and the bottom Borrower Information summary block.</span>
+          </label>
+          <div class="vpa-body-toolbar">
+            <button type="button" class="vpa-tb" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" class="vpa-tb" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" class="vpa-tb" data-cmd="underline" title="Underline"><u>U</u></button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="insertUnorderedList" title="Bullet list">&bull; List</button>
+            <button type="button" class="vpa-tb" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+            <span class="vpa-tb-sep"></span>
+            <button type="button" class="vpa-tb" data-cmd="createLink" title="Insert link">&#128279; Link</button>
+            <button type="button" class="vpa-tb" data-cmd="removeFormat" title="Clear formatting">&times; Clear</button>
+          </div>
+          <div id="intro-body-tmpl" class="vpa-body-editor" contenteditable="true"></div>
+
+          <div class="vpa-config-row">
+            <button id="intro-reset-btn" type="button" class="secondary">Reset to default template</button>
+            <span id="intro-status" class="vpa-status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== Module: SMS Mark All As Read ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>SMS Mark All As Read</h2>
+          <p class="module-runs-on">Runs on: <code>*.lightning.force.com</code> &mdash; the Salesforce Messaging utility panel</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_smsMarkAllRead" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/sms-mark-all-read.svg" alt="Salesforce Messaging panel with a Mark All Read button in the header and four thread rows whose unread badges have been cleared" />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Mark All As Read</strong> button in the Messaging panel header next to <em>New thread</em>.</li>
+          <li>One click walks every unread thread, opens it (which is how Salesforce registers a read receipt), then clicks Back to return to the inbox.</li>
+          <li>Detects unread threads via the bold subject text, the right-side unread count pill (<code>.unread-count</code> / <code>.unread-countZuid</code>), or any <code>.unread</code> class.</li>
+          <li>Verbose console logging at every step &mdash; if anything misbehaves, F12 &rarr; Console will say exactly what it found / clicked / waited on.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Loan Amount Field ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>ZHL Loan Amount Field</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_loanAmount" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/loan-amount.svg" alt="Loan amount editable field beneath purchase price and down payment" />
+        </div>
+        <ul class="module-features">
+          <li>Adds an editable <strong>Loan amount</strong> field below the purchase price / down payment row in Pricing &amp; Scenarios.</li>
+          <li>Edit loan amount and the down payment / down payment % update automatically (loan = purchase − down).</li>
+          <li>Edit purchase or down payment and the loan amount recalculates live.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Gmail Drag Attachments as Files ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Drag Gmail attachments as files</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_gmailDragAttachments" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/gmail-drag-attachments.svg" alt="Gmail attachment chip with a green down-arrow badge being dragged into the Loan Officer Portal upload area" />
+        </div>
+        <ul class="module-features">
+          <li>Lets you drag Gmail attachments to <strong>any external drop zone</strong> (Loan Officer Portal upload area, Slack, file inputs on other websites, etc.) as a real file — like Outlook used to.</li>
+          <li>When you hover over an attachment chip in Gmail, the extension pre-fetches it in the background. A small green <strong>↓</strong> badge appears in the corner when it&rsquo;s ready to drag.</li>
+          <li>Drop the attachment into a <strong>Gmail compose window</strong> body and it now <strong>attaches the file</strong> instead of inlining it as an HTML image — handy for forwarding attachments without losing them.</li>
+          <li>If you drag before the prefetch finishes, the badge is yellow / red — give it a second and try again, or grab it after the badge turns green.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: FHA Collections / Disputed badges ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA Collections &amp; Disputed badges</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaBadges" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/fha-badges.svg" alt="Liabilities section header with two green pill badges: Total Collections $1,342 and Total Disputed $0, above the liabilities table" />
+        </div>
+        <ul class="module-features">
+          <li>Adds two pill badges in the <strong>Liabilities</strong> section header that sum cumulative balances against the FHA caps:
+            <ul>
+              <li><strong>Total Collections</strong> &mdash; green ✓ under $2,000, red ✕ at $2,000+. Counts only collection accounts (account type = Unknown or Collection). Charge-offs, repossessions, and late-pay rows are excluded per the FHA rule.</li>
+              <li><strong>Total Disputed</strong> &mdash; green ✓ under $1,000, red ✕ at $1,000+. Counts disputed derogatory accounts (collections, charge-offs, or 30+ day late within last 24 months). Zero-balance disputed accounts and disputed medical accounts are excluded.</li>
+            </ul>
+          </li>
+          <li>Medical collections are excluded from both totals via a payee keyword filter (hospital, clinic, AR Resources, Optum, etc.). Hover the badge for a tooltip listing every row counted vs. excluded.</li>
+          <li>Reads live from LOP&rsquo;s React state &mdash; updates the instant a liability is added, edited, or excluded. No row expansion, no UI flicker.</li>
+          <li>Each borrower-pair tab on multi-borrower loans gets its own badge pair with its own scoped totals.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Gmail Caller ID ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Gmail Caller ID for Switchboard emails</h2>
+          <p class="module-runs-on">Runs on: <code>mail.google.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_gmailCallerId" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/gmail-caller-id.svg" alt="Gmail open-email subject reading 'Do Not Reply: Incoming Text Message from +1 (336) 707-3765' with a blue 'Aspen Vaughn' Caller ID pill appended" />
+        </div>
+        <ul class="module-features">
+          <li>When Switchboard sends a <strong>&ldquo;Do Not Reply: Incoming Text Message from &lt;phone&gt;&rdquo;</strong> email and the phone number is in a Salesforce contact&rsquo;s <strong>Phone</strong> or <strong>Work Phone</strong> field (not Mobile), Switchboard&rsquo;s subject has no name &mdash; just the digits. This module fills the gap.</li>
+          <li>Looks the number up in Salesforce via the same Caller ID plumbing the Genesys / Salesforce widget uses (searches Phone <em>and</em> MobilePhone across Lead / Contact / Loan), then appends a blue <strong>Caller ID</strong> pill with the contact&rsquo;s name next to the subject.</li>
+          <li>Only triggers on phone-only subjects. Emails where Switchboard already put a name in the subject (because the number was in Mobile) are left alone &mdash; no duplicate badging.</li>
+          <li>Requires you to be signed into Salesforce in the same browser, same as the existing Caller ID module.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: FHA / Non-Permanent Resident Alien warning ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA + Non-Permanent Resident Alien warning</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaNprWarning" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/fha-npr-warning.svg" alt="Sticky red FHA INELIGIBLE banner across the top of an LOP loan page; both borrowers' Citizenship dropdowns are outlined in red because they are set to Non-permanent resident alien" />
+        </div>
+        <ul class="module-features">
+          <li>Watches the <strong>Product name</strong> and every borrower&rsquo;s <strong>Citizenship</strong> field. If the loan is FHA and any borrower is marked <strong>Non-Permanent Resident Alien</strong>, a sticky red banner appears across the top of the page and the offending citizenship dropdown is outlined in red.</li>
+          <li>HUD removed NPRA borrowers from FHA eligibility on May 25, 2025. The warning is intentionally hard to miss so this combination doesn&rsquo;t slip into application.</li>
+          <li>Banner auto-clears the moment the product is changed off FHA or the citizenship is changed to US citizen / Permanent resident alien.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: VA + non-spouse co-borrower warning ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>VA + non-spouse co-borrower warning</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_vaNonSpouseWarning" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/va-non-spouse-warning.svg" alt="Sticky red VA INELIGIBLE CO-BORROWER banner across the top of an LOP loan page; the co-borrower's Veteran type (Non-military) and both borrowers' Marital status (Unmarried) dropdowns are outlined in red." />
+        </div>
+        <ul class="module-features">
+          <li>Watches the <strong>Product name</strong>, every borrower&rsquo;s <strong>Veteran type</strong>, and every borrower&rsquo;s <strong>Marital status</strong>. If the loan is VA, one borrower is a qualifying veteran (Regular military / National Guard or reserves), another is non-veteran, and any borrower is not marked <strong>Married</strong>, a sticky red banner appears across the top and the offending fields are outlined in red.</li>
+          <li>ZHL only allows a non-veteran co-borrower on a VA loan when they&rsquo;re the veteran&rsquo;s legally married spouse, or when they independently qualify for VA. Two unmarried unrelated parties (one veteran, one not) is an underwriting error &mdash; this warning catches it before it slips into application.</li>
+          <li>Banner auto-clears the moment the product is changed off VA, the co-borrower&rsquo;s veteran type is set to a qualifying value, or all borrowers are marked Married.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Hard Pull Guardrail ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Hard Pull Guardrail</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_hardPullGuardrail" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
+            <rect width="360" height="220" fill="#f3f4f6"/>
+            <rect x="40" y="28" width="280" height="164" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+            <circle cx="62" cy="56" r="11" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+            <text x="62" y="60" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#92400e" text-anchor="middle">!</text>
+            <text x="82" y="60" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#92400e">Hard pull may be outside ZHL guidance</text>
+            <text x="58" y="86" font-family="Arial,sans-serif" font-size="9" fill="#334155">Worst soft score: <tspan font-weight="700" fill="#0b3a73">687</tspan> &#183; DU: <tspan font-weight="700" fill="#0b3a73">Approve/Eligible</tspan></text>
+            <rect x="58" y="100" width="244" height="46" rx="4" fill="#fffbeb" stroke="#f59e0b" stroke-width="1"/>
+            <text x="66" y="115" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#78350f">ZHL guidance</text>
+            <text x="66" y="128" font-family="Arial,sans-serif" font-size="7.5" fill="#78350f">Soft &gt; 620 + DU approved &#8594; pull soft, not hard,</text>
+            <text x="66" y="138" font-family="Arial,sans-serif" font-size="7.5" fill="#78350f">unless reaching for an LLPA pricing tier (680&#8211;719).</text>
+            <rect x="158" y="160" width="68" height="20" rx="3" fill="#fff" stroke="#cbd5e1"/>
+            <text x="192" y="174" font-family="Arial,sans-serif" font-size="9" font-weight="600" fill="#0f172a" text-anchor="middle">Cancel</text>
+            <rect x="232" y="160" width="76" height="20" rx="3" fill="#b45309"/>
+            <text x="270" y="174" font-family="Arial,sans-serif" font-size="9" font-weight="600" fill="#fff" text-anchor="middle">Proceed</text>
+          </svg>
+        </div>
+        <ul class="module-features">
+          <li>When the Pull Credit dialog opens and <strong>Hard</strong> is selected, the toolkit reads the worst soft qualifying score across borrowers + the most recent non-error DU result and compares them against ZHL&rsquo;s guidance matrix.</li>
+          <li><strong>Fires when</strong> the soft score is greater than 620 <em>and</em> DU shows approval &mdash; <em>unless</em> the soft falls in the 680&ndash;719 optional pricing window (reaching for an LLPA tier improvement at 700 / 720).</li>
+          <li><strong>Not a hard stop</strong> &mdash; shows the full matrix in a confirmation dialog with two buttons: <strong>Cancel</strong> (keeps the Pull Credit dialog open) or <strong>Proceed with Hard Pull anyway</strong> (re-fires the click). LO override is logged so usage / override rates can be reviewed later.</li>
+          <li>If the score / DU combination falls within guidance, the dialog never appears &mdash; Pull Credit fires normally without any extra friction.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Generate Loan Story for Encompass ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Generate Loan Story for Encompass</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> &mdash; Full Application page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_loanStoryGenerator" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/loan-story-generator.svg" alt="Modal titled Loan Story for Encompass with five editable sections (Property Notes, Borrower Notes, Employment / Income Notes, Asset Notes, Credit Notes) and a blue Copy button on each section." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>Generate Loan Story for Encompass</strong> button next to the existing Copy LOP file / PE Workflow buttons in the Full Application subnav. <strong>Activates only after a hard credit pull is on file</strong> &mdash; stays disabled before that with a tooltip explaining why.</li>
+          <li>Reads the full file and drafts the five Encompass ZG-Loan-Story sections in a modal: <strong>Property Notes, Borrower Notes, Employment / Income Notes, Asset Notes, Credit Notes</strong>. Each section gets an editable textarea and its own Copy button so you paste them one at a time into the matching Encompass field.</li>
+          <li>Auto-surfaces the things processors actually want to know: PUD / under-construction property, FTHB flag, borrower employment timeline with current / previous employer dates, gift fund totals and sources, liabilities the LO has flagged for payoff or excluded from DTI, and a callout when collections / student-loan handling needs verification.</li>
+          <li><strong>Editable by design.</strong> The auto-draft is a starting point &mdash; type over anything, add bullets the file can&rsquo;t tell us (point-of-contact, loan goals, NBS), then Copy and paste into Encompass.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Copy LOP file ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Copy LOP file (stage &amp; paste)</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_lopFileCopy" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/lop-file-copy.svg" alt="Two LOP loan files side by side; the source loan has every section (Borrowers, Addresses, Employment, Assets, Liabilities, Real estate, Subject property, Pricing) staged, with an arrow labeled 'paste' pointing to the destination loan where every section is green-checked. Footer reads 'Credit auto-pulled, Pricing assigned'." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a floating <strong>Copy LOP file: Stage / Paste</strong> bar to the Full Application page. On the source loan, click <strong>Stage from this file</strong> &mdash; the extension snapshots every editable Personal info / Contact / Marital / Military / Declarations / Demographics field and stores it under chrome.storage keyed by the source loan ID. On the new loan, click <strong>Paste from staged</strong> and pick which stored loan to fill from.</li>
+          <li>Handles co-borrowers on the same pair: fields in <code>personal-info-section-0</code> (Primary) and <code>personal-info-section-1</code> (Co-borrower) are tracked separately so primary&rarr;primary and co-borrower&rarr;co-borrower stay aligned. If the destination doesn&rsquo;t have a co-borrower yet, add them first (<strong>+</strong> tab &rarr; <em>Coborrower with [primary]</em>) then re-paste.</li>
+          <li>Tables (Addresses, Employment, Other income, Assets, Gifts, Liabilities, Real estate) are NOT auto-pasted in this version &mdash; each row needs to be added through LOP&rsquo;s own <em>Add</em> button flow. The summary panel lists the table row counts from the source so you know what&rsquo;s left to enter manually.</li>
+          <li>Multiple stages persist (up to 10). Source field values that are readonly on the destination are skipped and reported in the summary so you can see exactly what was written vs. what needs manual entry.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: ZHL Loan Comparison PDF ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>ZHL Loan Comparison PDF</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_loanComparisonPdf" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/loan-comparison-pdf.svg" alt="Borrower-facing loan comparison PDF with two columns (Option A vs Option B) showing loan amount, rate, points, monthly P&amp;I, total PITI, and closing costs. Bottom green callout reads 'Option B saves $103.65/mo, $37,314 over 30 yr'." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>ZHL Comparison PDF</strong> button next to LOP&rsquo;s existing <strong>Generate PDF</strong> on the Scenarios review page. Click to generate a borrower-facing comparison PDF for every selected scenario.</li>
+          <li>Mirrors LOP&rsquo;s standard comparison output with the following changes: <strong>Seller credit</strong> is shown as its own line, the <strong>Credit score</strong> and <strong>DTI</strong> rows are removed (the borrower doesn&rsquo;t need their qualifying credit pulled into a handout), and <strong>Estimated monthly cost (PITI)</strong> and <strong>Cash (to)/from</strong> are rendered noticeably bigger / bolder so the borrower&rsquo;s eye lands on the two numbers that matter.</li>
+          <li>Adds a <strong>Page 2 cost summary</strong> per scenario with the monthly cost broken into Principal &amp; interest vs Taxes/insurance/escrows, plus a closing-cost summary showing total closing costs, seller credit applied, net closing cost, down payment, and the final Cash (to)/from at closing.</li>
+          <li>Uses the browser&rsquo;s native &ldquo;Save as PDF&rdquo; print flow &mdash; pick <em>Save as PDF</em> in the print dialog to save, or send straight to your printer.</li>
+          <li>A <strong>2% Grant PDF</strong> button sits beside it: the same comparison doc plus a <strong>ZHL Grant = 2% of the loan amount</strong> credited toward the down payment and a <em>Cash to close after ZHL Grant</em> total. Only enabled when every selected scenario is <strong>Conf Home Ready 30 Yr Fixed</strong> with a loan amount &le; $350,000 and the property state is CA, DC, GA, MD, NJ, PA, TX, or VA &mdash; otherwise it&rsquo;s disabled with a hover explaining why.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Pricing Results Print (Buyer Worksheet) ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Print Buyer Worksheet</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_pricingResultsPrint" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/pricing-results-print.svg" alt="LTV section header with a blue Print Buyer Worksheet button, and a Zillow-blue borrower worksheet page showing the big Monthly payment and Cash to close numbers above a details list of loan amount, rate, and points." />
+        </div>
+        <ul class="module-features">
+          <li>On the eligibility / pricing-results table, adds a <strong>Print Buyer Worksheet</strong> button into each LTV section header (next to <em>Base Loan Amount</em>). Check one or more rows in the section, then click the button to open a borrower-facing handout in a new tab.</li>
+          <li>Three scenarios per page, Zillow-blue branded. Each shows the big two numbers buyers care about &mdash; <strong>Estimated monthly payment</strong> and <strong>Estimated cash to close</strong> &mdash; then a clean details row with rate, points (plain-English credit vs. cost), closing costs, and breakeven. DTI is intentionally omitted (the borrower doesn&rsquo;t need their qualifying ratio on a handout).</li>
+          <li>Auto-fires the print dialog &mdash; pick <em>Save as PDF</em> to save, or send straight to your printer.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: DTI Max Purchase Price estimator ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Max purchase price estimator</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_dtiMaxEstimator" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/dti-max-estimator.svg" alt="LOP Pricing & Scenarios Eligibility row with two yellow estimator pills appearing next to the DTI labels, showing 'Max purchase at 43% DTI: $398,200' and 'Max purchase at 50% DTI: $472,800'." />
+        </div>
+        <ul class="module-features">
+          <li>On the <strong>Pricing &amp; Scenarios</strong> page, adds a pill in the Eligibility Details row showing the estimated max purchase price that would push back-end DTI to its program cap: <strong>Conv 49.99%</strong>, <strong>FHA 56.99%</strong>, <strong>VA 60%</strong>.</li>
+          <li>If a scenario priced multiple loan types, shows one pill per type side-by-side.</li>
+          <li>Reads the current scenario&rsquo;s PITI and back-end DTI, plus monthly income and liabilities from the top of the page, then back-solves the price assuming taxes / HOI / MI scale linearly with PP (accurate to within 1&ndash;2%).</li>
+          <li>Hover the pill for the math behind it.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: FHA 90-Day Flip Rule checker ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA 90-Day Flip Rule checker</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaFlipRule" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/fha-flip-rule.svg" alt="FHA 90-Day Flip Rule analyzer panel with seller's purchase date 02/15/2026, contract date 05/01/2026, 75 days between, and a red 'FAILS FHA 90-Day Flip Rule' banner explaining the loan is ineligible for FHA financing. Includes a Look-up-on-Zillow button." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a small card under <strong>Loan Details</strong> on the right rail (FHA loans only) with inputs for the property address, the seller&rsquo;s purchase date, and the contract date.</li>
+          <li>One click on <strong>🔎 Look up on Zillow</strong> opens a new tab searched for the property so you can grab the seller&rsquo;s acquisition date from the price history.</li>
+          <li>Computes the days between dates and shows a color-coded result: <strong style="color:#16a34a;">&gt; 180 days</strong> clear, <strong style="color:#d97706;">91&ndash;180 days</strong> may require a second appraisal, <strong style="color:#dc2626;">&le; 90 days</strong> NOT eligible for FHA.</li>
+          <li>Your inputs persist while you&rsquo;re on the loan, so navigating around the application keeps the entered dates.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: FHA Manual Underwrite eligibility badge ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>FHA Manual Underwrite eligibility</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_fhaManualEligible" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/fha-manual-eligible.svg" alt="Green 'FHA Manual Eligible' pill next to an 'Analyze Manual UW' button, with an open analyzer panel listing six Handbook 4000.1 conditions (FICO, housing payment history, reserves, collections, bankruptcy/foreclosure, DTI) all checked, plus a green verdict bar reading 'All Handbook 4000.1 conditions met'." />
+        </div>
+        <ul class="module-features">
+          <li>Reads each borrower&rsquo;s three bureau scores from the Credit section, takes the middle, then uses the <strong>LOWER middle score</strong> across borrowers as the qualifying score.</li>
+          <li>Pins a green <strong>&check; FHA Manual Eligible</strong> pill under the Credit heading when the qualifying score is <strong>&ge; 640</strong> (ZHL&rsquo;s manual-UW floor), or a red <strong>&times; FHA Manual Ineligible</strong> pill when below 640.</li>
+          <li>Hovering the pill reveals the full <strong>FHA Manual UW guideline matrix</strong> &mdash; min-score overlays (PHH &ge; 680, Mr.&nbsp;Cooper not allowed), max DTI 50%, reserve requirements, the four ratio tiers (31/43, 37/47, 40/40, 40/50), and the compensating-factor options for each.</li>
+          <li>If credit hasn&rsquo;t been pulled yet, the pill shows a neutral &ldquo;eligibility unknown&rdquo; state and still surfaces the guideline matrix on hover.</li>
+          <li><strong>VA loans:</strong> the pill and analyzer automatically switch to <strong>VA Manual Eligible / Ineligible</strong> at ZHL&rsquo;s <strong>660</strong> floor. The VA analysis checks min score 660, max DTI 43%, and residual income via the VA table (120% of the requirement when DTI &gt; 41%), plus manual confirmations for VA Handbook Ch. 4 and VA guaranty eligibility &mdash; no FHA ratio tiers or investor score overlays.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Copy addresses primary → co-borrower ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Copy addresses primary &rarr; co-borrower</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_copyAddresses" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/address-copy.svg" alt="Primary borrower's Addresses card on the left with current and mailing addresses listed, an arrow labeled 'copy all addresses' pointing right to the co-borrower's card, where every line is green-checked indicating the addresses were copied over." />
+        </div>
+        <ul class="module-features">
+          <li>On the <strong>Full application &rarr; Addresses</strong> section, every empty co-borrower gets a <strong>Copy addresses from primary</strong> button next to its <em>Add address</em> link.</li>
+          <li>One click re-adds every address on the primary borrower&rsquo;s list for the co-borrower &mdash; leans on LOP&rsquo;s built-in <em>Use existing address</em> dropdown so Street / City / State / Zip / Country come in cleanly, then fills the four fields LOP leaves blank: <strong>Address type</strong>, <strong>Mailing same as current</strong> checkbox, <strong>Housing type</strong>, and the <strong>Move in / Move out</strong> dates.</li>
+          <li>Button only appears when the destination has <strong>zero addresses</strong> &mdash; it never appends to a co-borrower who already has rows, so you can&rsquo;t accidentally duplicate.</li>
+          <li>Works for files with 3+ borrowers: the button appears next to every empty co-borrower and copies from the primary borrower&rsquo;s list.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Bulk-delete unsent tasks ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Bulk-delete unsent tasks</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_taskBulkDelete" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/task-bulk-delete.svg" alt="LOP Unsent tasks table with a checkbox column added on the left, three rows checked, and a red Delete Selected button next to the Unsent heading" />
+        </div>
+        <ul class="module-features">
+          <li>Adds a checkbox column to the <strong>Unsent tasks</strong> table in the LOP Tasks tab so you can pick multiple tasks at once.</li>
+          <li>A red <strong>Delete Selected</strong> button next to the &ldquo;Unsent&rdquo; heading deletes every checked task in one pass — LOP&rsquo;s per-task confirm dialog is dismissed automatically for each.</li>
+          <li>Header checkbox toggles all rows. Auto-hides itself and the button when the section is empty so the page looks like stock LOP.</li>
+          <li>Only touches the Unsent section &mdash; sent / completed tasks are untouched.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Bulk-download completed-task docs ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Bulk-download completed-task documents</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> + <code>zillowdocs.com</code></p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_taskBulkDownload" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/task-bulk-download.svg" alt="LOP Completed-tasks table with a '⬇ Download all' button at the top; an arrow points to a Test Docs folder on the right showing all 21 PDFs (V8663, V8881, 2026 ss-kathy, W2, ally statements, BINDING PS-6, etc.) saved silently with a green '✓ all saved silently' tick." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>⬇ Download all docs</strong> button next to the <em>Completed</em> heading on LOP's Tasks tab. Walks every Zillow Docs link in the Completed table, opens each one in a background tab, auto-clicks the viewer's Download button, then closes the tab.</li>
+          <li>Sequential &mdash; one document at a time &mdash; so Chrome's "this site wants to download multiple files" prompt only fires once and you can watch live progress in a small modal that shows the current document name and a progress bar.</li>
+          <li>Files land in your browser's default Downloads folder with whatever filename Zillow Docs assigns them. The "Done" modal lists every downloaded file with its task name so you can rename / move them after.</li>
+          <li>The background-tab content script is armed-flag gated: opening a Zillow Docs document manually doesn't trigger the auto-click. Only this feature's bulk flow can arm it.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Net Proceeds Calc ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Net Proceeds from Sale Calculator</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> — Financial Information page</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_netProceedsCalc" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/net-proceeds-calc.svg" alt="Net Proceeds from Sale modal: sale price $500,000, listing fee -$15k (3%), buyer fee -$15k (3%), closing costs -$5k (1%), Mortgage JPMCB -$211,087 and HELOC CENLAR -$47,280 pre-checked from the Liabilities table, NET PROCEEDS $206,633 in big green." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>🏠 Net proceeds calc</strong> button next to the <em>Add asset or credit</em> button in the Assets section.</li>
+          <li>Opens a modal with line items: <em>Sale price</em>, <em>Listing agent fee</em> (default 3%), <em>Buyer's agent fee</em> (default 3%), <em>Closing costs</em> (auto-fills at 1% of sale price), <em>Mortgage/Loans/HELOC payoffs</em>, and <em>Other</em>. Live-computes net proceeds as you type.</li>
+          <li><strong>Copy summary</strong> button copies a plain-text breakdown to clipboard so you can paste it into notes or Slack.</li>
+          <li>Last values persist via <code>localStorage</code> on this tab.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Pricing Exception Workflow ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Pricing Exception Workflow</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> &mdash; loan toolbar</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_pricingExceptionWorkflow" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/pricing-exception-workflow.svg" alt="Pricing Exception Workflow modal: 'Is this loan locked?' branches into a green Yes path (4 checked prerequisites + PE size) and a yellow No path (enter ZHL vs Comp pricing, auto-calc PE $ and points, capture reason, plus 3 justification questions if &gt;2.5 pts). Bottom blue bar shows the generated email ready to open in Gmail." />
+        </div>
+        <ul class="module-features">
+          <li>Adds a <strong>⚖ Pricing Exception Workflow</strong> button to the loan toolbar (near <em>Copy LOP file / Stage / Paste from staged</em>). Click to walk through your manager&rsquo;s PE submission checklist.</li>
+          <li><strong>Branched flow:</strong> first asks whether the loan is locked, then walks the appropriate prerequisite checks (locked: import pricing → Comp PE fields → no lock-diff alert → Comp LE in eFolder; unlocked: scenario assigned → Comp LE on tasks → enter ZHL + comp pricing).</li>
+          <li><strong>Auto-computes PE $ and points</strong> on the unlocked path: <em>PE $ = (ZHL Box A − ZHL credits) − (Comp Box A − Comp credits)</em>; <em>PE points = PE $ / loan amount × 100</em>.</li>
+          <li><strong>&gt; 2.5 pts branch</strong> surfaces the three justification questions your manager requires (reason for PE, expectations set with borrower, relationship with agent/partner) and includes them in the generated email.</li>
+          <li><strong>Email output:</strong> editable subject + body, with <em>Open in Gmail</em> (uses Gmail&rsquo;s compose URL so it opens directly in Gmail, not your OS default mail client) and <em>Copy body / Copy subject</em> buttons. Attachments still have to be added manually after the email opens.</li>
+          <li><strong>RM email auto-saves</strong> the moment you type it and tab out (or click any of the email actions). Once saved, it pre-fills on every future PE workflow until you change it.</li>
+          <li><strong>Auto-fills</strong> Purchase price / Loan amount / Interest rate / Loan type / FRM/ARM from LOP's <em>Loan Details</em> right-rail card. ZHL Box A and Lender credits are auto-filled by silently opening the <em>Total closing costs</em> popup and scraping the <em>Lender costs Total</em> + <em>Lender credit</em>. New <strong>Competitor lender name</strong> field flows through to the email subject and the comparison table header.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Add Co-Borrower to Salesforce ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Add Co-Borrower to Salesforce</h2>
+          <p class="module-runs-on">Runs on: <code>operator.zillowhomeloans.com/loan-officer-portal</code> + Salesforce</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-feature="feature_coborrowerToSf" />
+          <span class="slider"></span>
+          <span class="switch-label">Enabled</span>
+        </label>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/coborrower-to-sf.svg" alt="LOP co-borrower header with an 'Add Co-Borrower to Salesforce' button, an arrow to a Salesforce New Contact modal pre-filled with First name, Last name, Phone, Email, and Role set to Co-Borrower." />
+        </div>
+        <ul class="module-features">
+          <li>Adds an <strong>Add Co-Borrower to Salesforce</strong> button next to the co-borrower&rsquo;s <em>Resend Link</em> on the Full Application page. Reads the co-borrower&rsquo;s first name, last name, cell phone, and email.</li>
+          <li>Switches to your open <strong>Salesforce</strong> tab, confirms the lead matches the primary borrower (by name), clicks <strong>New Contact</strong>, and fills First name / Last name / Phone / Email. Sets <strong>Role = Co-Borrower</strong>; Company auto-fills from the name.</li>
+          <li><strong>Stops before saving</strong> &mdash; the New Contact modal is left filled and on screen so you review it and click Next / Save yourself. Nothing is written to Salesforce automatically.</li>
+          <li>If no Salesforce tab is open, or the open lead doesn&rsquo;t match the borrower, you get an inline message and nothing is changed.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Module: Anonymous Telemetry ============== -->
+    <section class="module-card" data-module>
+      <div class="module-head">
+        <div class="module-title-block">
+          <h2>Anonymous usage telemetry</h2>
+          <p class="module-runs-on">Runs in: background — no page-level UI</p>
+        </div>
+        <span title="Telemetry is always on — anonymous tool-usage counts only, no borrower PII." style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:13px;font-weight:600;white-space:nowrap;">
+          <span aria-hidden="true">🔒</span> Always on
+        </span>
+      </div>
+
+      <div class="module-body">
+        <div class="module-screenshot">
+          <img src="images/telemetry.svg" alt="Diagram: LOP tab fires events ('VA calc opened', 'Bulk DL 21 files', 'PE Workflow sent', 'Net Proceeds calc'), an arrow points to a Background queue+flush worker, which sends to an Apps Script. Below, a dashboard shows three tiles: Active LOs 150+, Time saved 142d 3h, $ recouped $256k. Footer reads 'Anonymous — no borrower PII. Tool name + duration + email only.'" />
+        </div>
+        <ul class="module-features">
+          <li>Sends a small event ping to the extension admin (Justin) when you use a tool — which feature, which version, when. Helps decide which modules to invest in.</li>
+          <li>Identifies you by your work Gmail address (read once from the Google account button when you have Gmail open) so the admin can see who's using what without anything else to set up.</li>
+          <li>No email contents, no SMS contents, no Salesforce record contents — just feature names and counts.</li>
+          <li><strong>Always on.</strong> This is how the admin decides which modules to keep building and improving — since it carries no borrower PII (tool name + duration + work email only), it can't be turned off.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============== Section: Admin Controls (Justin only) ============== -->
+    <!-- Hidden by default. setup.js reveals it when lo_email matches the admin
+         address. Anyone can technically inspect the page and flip styles, but
+         the kill switch's source of truth is kill-switch.json in the repo,
+         which only the admin can edit — so visibility here is just convenience. -->
+    <section id="admin-controls-card" class="module-card" data-module style="display:none;border:2px solid #f59e0b;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);">
+      <div class="module-head">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:20px;">🛠️</span>
+            <h2 style="margin:0;">Admin Controls</h2>
+            <span style="background:#f59e0b;color:#fff;font:700 10px Arial,sans-serif;padding:2px 8px;border-radius:10px;letter-spacing:0.5px;">JUSTIN ONLY</span>
+          </div>
+          <p class="module-sub">Remote kill switch + admin diagnostics. Visible only when the LO email matches the admin address.</p>
+        </div>
+      </div>
+      <div class="module-body">
+        <div style="background:#fff;border:1px solid #fbbf24;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+          <div style="font:700 13px Arial,sans-serif;color:#78350f;margin-bottom:8px;">Current kill switch state</div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div id="ks-state-badge" style="font:700 14px Arial,sans-serif;padding:6px 14px;border-radius:6px;background:#dcfce7;color:#166534;">OFF — features running</div>
+            <button type="button" id="ks-poll-now-btn" style="background:#0b5cab;color:#fff;border:none;border-radius:6px;padding:8px 14px;font:600 12px Arial,sans-serif;cursor:pointer;">Force poll now</button>
+            <span id="ks-poll-status" style="font:12px Arial,sans-serif;color:#6b7280;"></span>
+          </div>
+          <div style="margin-top:10px;font:12px/1.4 Arial,sans-serif;color:#78350f;">
+            <div><strong>Last poll:</strong> <span id="ks-last-poll">never</span></div>
+            <div><strong>Source updated:</strong> <span id="ks-source-updated">unknown</span></div>
+            <div style="margin-top:4px;"><strong>Message:</strong> <span id="ks-message" style="color:#6b7280;font-style:italic;">(none)</span></div>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #fbbf24;border-radius:8px;padding:14px 16px;">
+          <div style="font:700 13px Arial,sans-serif;color:#78350f;margin-bottom:6px;">How to flip the switch</div>
+          <ol style="margin:0 0 8px 18px;padding:0;font:12px/1.5 Arial,sans-serif;color:#78350f;">
+            <li>Open <a id="ks-edit-link" href="https://github.com/case2392/zhlextensions/edit/main/kill-switch.json" target="_blank" rel="noopener" style="color:#0b5cab;font-weight:700;">kill-switch.json on GitHub</a>.</li>
+            <li>Change <code>"killSwitch"</code> to <code>true</code> (or back to <code>false</code>).</li>
+            <li>Update the <code>"updated"</code> ISO timestamp.</li>
+            <li>Commit to <code>main</code>. Every installed copy picks it up within 10 minutes.</li>
+          </ol>
+          <div style="font:11px/1.5 Arial,sans-serif;color:#6b7280;font-style:italic;">Fail-open: if the fetch fails (offline, GitHub down), the previous state is kept — installs are never disabled by a transient network issue.</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="page-footer">
+    <p>Toggle changes save automatically. Reload any open tab on the affected site for changes to take effect.</p>
+    <div class="page-credit">
+      <img class="page-credit-avatar" src="images/justin-case.png" alt="Justin Case" onerror="this.outerHTML='<span class=&quot;page-credit-avatar fallback&quot;>JC</span>'" />
+      <div class="page-credit-text">
+        <div><strong>ZHL Productivity Pack</strong></div>
+        <div>Built by <strong>Justin Case</strong></div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="setup.js"></script>
+</body>
+</html>

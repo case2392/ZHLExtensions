@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" font-family="Arial, sans-serif">
+  <rect width="360" height="220" fill="#f4f6f9"/>
+
+  <!-- Pill above the card -->
+  <rect x="14" y="14" width="120" height="20" rx="10" fill="#dcfce7" stroke="#86efac"/>
+  <text x="74" y="28" text-anchor="middle" font-size="9" font-weight="700" fill="#14532d">✓ FHA Manual Eligible</text>
+
+  <rect x="138" y="14" width="80" height="20" rx="4" fill="#0b5cab"/>
+  <text x="178" y="28" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff">Analyze Manual UW</text>
+
+  <!-- Analyzer panel -->
+  <rect x="14" y="42" width="332" height="164" rx="8" fill="#ffffff" stroke="#d9dee5"/>
+  <text x="22" y="58" font-size="10" font-weight="700" fill="#1f2937">FHA Manual UW eligibility</text>
+
+  <!-- Checklist -->
+  <g font-size="9" fill="#374151">
+    <text x="32" y="80">FICO ≥ 580</text>
+    <text x="336" y="80" text-anchor="end" font-weight="700" fill="#15803d">✓ 745</text>
+
+    <text x="32" y="98">Housing payment history (12 mo)</text>
+    <text x="336" y="98" text-anchor="end" font-weight="700" fill="#15803d">✓ 0×30</text>
+
+    <text x="32" y="116">Reserves (≥ 1 mo PITI)</text>
+    <text x="336" y="116" text-anchor="end" font-weight="700" fill="#15803d">✓ 3.2 mo</text>
+
+    <text x="32" y="134">No collections &gt; $2,000 (open)</text>
+    <text x="336" y="134" text-anchor="end" font-weight="700" fill="#15803d">✓ $0</text>
+
+    <text x="32" y="152">No bankruptcy &lt; 2 yrs / FC &lt; 3 yrs</text>
+    <text x="336" y="152" text-anchor="end" font-weight="700" fill="#15803d">✓</text>
+
+    <text x="32" y="170">DTI ≤ 40/50 (with comp. factors)</text>
+    <text x="336" y="170" text-anchor="end" font-weight="700" fill="#15803d">✓ 36/45</text>
+  </g>
+
+  <!-- Verdict -->
+  <rect x="22" y="180" width="316" height="20" rx="4" fill="#dcfce7"/>
+  <text x="180" y="194" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">All Handbook 4000.1 conditions met</text>
+</svg>
