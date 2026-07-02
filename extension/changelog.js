@@ -13,6 +13,20 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.37",
+    category: "bugfix",
+    headline: "VA Entitlement Calculator — down payment is now based on the PURCHASE PRICE, not the loan amount. Using the loan amount overstated the required down payment whenever the VA funding fee was financed (loan = purchase + fee). The calculator now matches the standard VA entitlement math exactly.",
+    highlights: [
+      "Bug: the third input was 'Target loan amount' and the down payment was computed as 25% × loan − available guaranty. But VA down payment is 25% × PURCHASE PRICE (technically the lesser of purchase price and appraised value) − available guaranty. Since the financed VA funding fee sits on top of the loan (loan ≈ purchase × 1.0215), feeding the loan amount in inflated the down payment. Example: $610k purchase, $63,333 used entitlement, $832,750 county limit → correct down is $7,646, but entering the $623,115 loan produced ~$10,924.",
+      "Fix: the input is now 'Purchase price ($)', prefilled from the page's purchase/sales price (falling back to loan amount only if none is visible). Down payment = max(25% × purchase − available guaranty, 0).",
+      "'Max loan with $0 down' relabeled to 'Max purchase price with $0 down' — the 4 × available-guaranty figure is a purchase-price cap, not a loan cap.",
+      "The down-payment result box now also shows the resulting base VA loan (purchase − down) and notes the financed funding fee is added on top.",
+      "Verified against a reference VA entitlement calculator: $610k purchase / $63,333 used / Rice County $832,750 limit now reproduces exactly — available entitlement $144,854.50, max $0-down purchase $579,418, down $7,646, base loan $602,354.",
+      "Note on the earlier screenshot: the county loan limit had been manually overridden to $610,000 (Rice County's real limit is $832,750). The ZIP auto-fill already defaults to the correct 2026 baseline of $832,750 — clear the county-limit field or re-enter the ZIP to reset it."
+    ],
+    sections: ["va-calc"]
+  },
+  {
     version: "1.64.36",
     category: "bugfix",
     headline: "Privacy — Hard Pull Guardrail no longer sends a borrower's raw credit score in its telemetry event. The score is now bucketed into a coarse band (e.g. '680-699') before the event leaves the browser, so no borrower financial PII is transmitted to the analytics endpoint.",

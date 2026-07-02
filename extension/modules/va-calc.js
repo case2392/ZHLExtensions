@@ -1705,6 +1705,21 @@
       || 0;
   }
 
+  // Purchase price (a.k.a. sales price / contract price). The VA
+  // down-payment and no-down-max calcs are based on the PURCHASE PRICE
+  // (technically the lesser of purchase price and appraised value),
+  // NOT the loan amount — the financed VA funding fee sits on top of
+  // the loan and must not inflate the required down payment.
+  function getPurchasePrice() {
+    return getPanelNumber('Purchase price')
+      || getPanelNumber('Sales price')
+      || getPanelNumber('Sale price')
+      || getPanelNumber('Purchase Price')
+      || getPanelNumber('Contract price')
+      || getPanelNumber('Appraised value')
+      || 0;
+  }
+
   function readPageInputs() {
     const grossIncome = getGrossMonthlyIncome();
     const nonTaxableIncome = detectNonTaxableIncome();
@@ -2231,15 +2246,20 @@
     const zip = getZipCode();
     const units = getUnitCount();
     const hintIdx = highCostIndexForZip(zip);
-    const pageLoan = getLoanAmount() || 0;
+    // Prefill the purchase-price input from the page's purchase/sales
+    // price, falling back to the loan amount only if no purchase price
+    // is visible (the LO can correct it either way).
+    const pagePurchase = getPurchasePrice() || getLoanAmount() || 0;
 
-    // state
+    // state. `purchase` is the PURCHASE PRICE (not the loan amount) —
+    // the VA down-payment and no-down-max math is based on purchase
+    // price, so the financed funding fee doesn't inflate the down.
     const st = {
       zip: zip || '',
       units: units,
       limitOverride: null,         // null = auto from ZIP/units; number = manual
       used: 0,
-      target: pageLoan
+      purchase: pagePurchase
     };
 
     // Auto county loan limit from the ZIP (high-cost table) + unit count,
@@ -2374,15 +2394,15 @@
       }
     });
 
-    // Target loan
-    const targetVal = labeledRow('Target loan amount ($) — optional');
+    // Purchase price (the down-payment basis — NOT the loan amount).
+    const targetVal = labeledRow('Purchase price ($) — optional');
     const targetInput = document.createElement('input');
     targetInput.type = 'text';
-    targetInput.value = pageLoan ? String(Math.round(pageLoan)) : '';
+    targetInput.value = st.purchase ? String(Math.round(st.purchase)) : '';
     targetInput.style.cssText = 'font:inherit;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;width:140px;text-align:right;';
     targetInput.addEventListener('input', function () {
       const n = parseMoney(targetInput.value);
-      st.target = isFinite(n) && n > 0 ? n : 0;
+      st.purchase = isFinite(n) && n > 0 ? n : 0;
       renderOutputs();
     });
     targetVal.appendChild(targetInput);
@@ -2394,9 +2414,15 @@
       const used = st.used;
       const fullEntitlement = used <= 0;
       const availableGuaranty = Math.max(0.25 * limit - used, 0);
+      // Max PURCHASE PRICE that still qualifies for $0 down: 4 ×
+      // available guaranty (guaranty + down must equal 25% of the
+      // purchase price; with $0 down the guaranty alone must cover 25%,
+      // so purchase = available / 0.25 = available × 4).
       const maxNoDown = availableGuaranty * 4;
-      const target = st.target;
-      const downForTarget = (target > 0) ? Math.max(0.25 * target - availableGuaranty, 0) : null;
+      const purchase = st.purchase;
+      // VA down payment is based on the PURCHASE PRICE, not the loan
+      // amount: down = max(25% × purchase − available guaranty, 0).
+      const downForTarget = (purchase > 0) ? Math.max(0.25 * purchase - availableGuaranty, 0) : null;
 
       const lines = [];
       lines.push('<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #e5e7eb;"><span>Available guaranty (25% × limit − used)</span><strong>' +
@@ -2408,20 +2434,22 @@
           '<div style="font-size:12.5px;">Full entitlement (nothing used). Post-2020, there is no VA loan limit and no down payment is required at any loan amount, subject to lender / investor maximums and the borrower qualifying.</div></div>');
       } else {
         lines.push('<div style="margin-top:8px;padding:12px 14px;border-radius:8px;background:#f0f6ff;border:1px solid #006aff;color:#0b3a6b;">' +
-          '<div style="font-weight:700;font-size:14px;">Max loan with $0 down: ' + money(maxNoDown) + '</div>' +
+          '<div style="font-weight:700;font-size:14px;">Max purchase price with $0 down: ' + money(maxNoDown) + '</div>' +
           '<div style="font-size:12px;margin-top:4px;">= 4 × available guaranty (' + money(availableGuaranty) + '). Reduced entitlement is capped by the county limit (' + money(limit) + ').</div></div>');
       }
 
-      if (target > 0) {
-        const overMax = !fullEntitlement && target > maxNoDown;
+      if (purchase > 0) {
+        // Base loan = purchase − down. The financed VA funding fee is
+        // added on TOP of this and doesn't affect the down payment.
+        const baseLoan = purchase - (downForTarget || 0);
         lines.push('<div style="margin-top:8px;padding:12px 14px;border-radius:8px;background:' +
           (downForTarget > 0 ? '#fef3c7;border:1px solid #d97706;color:#78350f' : '#dcfce7;border:1px solid #16a34a;color:#14532d') + ';">' +
-          '<div style="font-weight:700;font-size:14px;">Down payment for a ' + money(target) + ' loan: ' + money(downForTarget) + '</div>' +
+          '<div style="font-weight:700;font-size:14px;">Down payment on a ' + money(purchase) + ' purchase: ' + money(downForTarget) + '</div>' +
           '<div style="font-size:12px;margin-top:4px;">' +
           (fullEntitlement
             ? '$0 down (full entitlement, subject to lender / investor max).'
             : (downForTarget > 0
-              ? 'Required = 25% × loan − available guaranty. This loan exceeds the $0-down max of ' + money(maxNoDown) + '.'
+              ? 'Required = 25% × purchase price − available guaranty. This purchase exceeds the $0-down max of ' + money(maxNoDown) + '. Base VA loan ≈ ' + money(baseLoan) + ' (before the financed funding fee).'
               : 'Within the $0-down max of ' + money(maxNoDown) + ' — no down payment required.')) +
           '</div></div>');
       }
