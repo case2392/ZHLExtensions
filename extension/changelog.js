@@ -13,6 +13,18 @@
 
 window.ZHL_CHANGELOG = [
   {
+    version: "1.64.38",
+    category: "improvement",
+    headline: "Sunset the ZHL Loan Amount Field on the Pricing & Scenarios page — LOP now has an editable loan amount field natively, so ours is retired to avoid a duplicate field. All other pricing features are unchanged.",
+    highlights: [
+      "LOP added a native editable loan-amount input beneath purchase price / down payment, which is exactly what our module provided. Keeping ours would show two loan-amount fields on the same screen.",
+      "Removed: the loan-amount content script (modules/loan-amount.js), its Setup toggle (feature_loanAmount), its walkthrough entry, and its SVG. No more injection on the scenarios page.",
+      "No action needed — the field simply stops appearing. Use LOP's built-in loan-amount field going forward; it behaves the same way (edit loan amount → down payment recalculates).",
+      "Every other LOP pricing feature (DTI Max Estimator, Loan Comparison PDF, Pricing Exception Workflow, Scenario Sort, Print Buyer Worksheet, etc.) is untouched."
+    ],
+    sections: []
+  },
+  {
     version: "1.64.37",
     category: "bugfix",
     headline: "VA Entitlement Calculator — down payment is now based on the PURCHASE PRICE, not the loan amount. Using the loan amount overstated the required down payment whenever the VA funding fee was financed (loan = purchase + fee). The calculator now matches the standard VA entitlement math exactly.",

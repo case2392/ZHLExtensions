@@ -6,7 +6,6 @@ const FEATURE_KEYS = [
   "feature_gmailTweaks",
   "feature_salesforcePromotions",
   "feature_contactSms",
-  "feature_loanAmount",
   "feature_vaCalc",
   "feature_buydownCalc",
   "feature_callerId",
